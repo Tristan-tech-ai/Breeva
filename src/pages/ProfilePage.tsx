@@ -31,7 +31,7 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24">
       {/* Gradient Header */}
       <div className="relative gradient-primary pb-20 pt-12 px-6">
-        <div className="absolute inset-0 bg-white dark:bg-gray-900/5 backdrop-blur-sm" />
+        <div className="absolute inset-0 bg-white/10 dark:bg-gray-900/20 backdrop-blur-sm" />
 
         <div className="max-w-2xl mx-auto relative z-10">
           <motion.button
