@@ -1,11 +1,9 @@
 @import "tailwindcss";
 
-/* Block device-level dark mode — only allow our explicit .dark class toggle */
-@media (prefers-color-scheme: dark) {
-  :root:not(.dark) {
-    color-scheme: light;
-  }
-}
+/* Override Tailwind v4 dark mode: use class-based (.dark on <html>) instead of
+   prefers-color-scheme media query. This lets our app control dark/light mode
+   independently of the browser/OS setting. */
+@custom-variant dark (&:is(.dark *));
 
 /* Breeva Custom Theme */
 @theme {
