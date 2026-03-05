@@ -13,6 +13,20 @@ export interface User {
   updated_at: string;
 }
 
+// Transport Modes
+export type TransportMode = 'walking' | 'cycling' | 'ebike' | 'motorcycle' | 'car';
+
+export interface TransportModeInfo {
+  id: TransportMode;
+  label: string;
+  icon: string;
+  orsProfile: string;              // ORS routing profile
+  co2PerKm: number;                // grams CO2 per km
+  ecoPointsMultiplier: number;     // multiplier for EcoPoints
+  speedFactor: number;             // relative speed compared to walking
+  color: string;
+}
+
 // Route Types
 export interface Coordinate {
   lat: number;
@@ -24,18 +38,34 @@ export interface RoutePoint extends Coordinate {
   timestamp?: string;
 }
 
+export interface RouteInstruction {
+  text: string;
+  distance: number; // meters
+  duration: number; // seconds
+  type: number; // ORS instruction type code
+  waypoint_index: number;
+}
+
 export interface Route {
   id: string;
   user_id: string;
   start_point: Coordinate;
   end_point: Coordinate;
   waypoints: RoutePoint[];
+  instructions: RouteInstruction[];
   distance_meters: number;
   duration_seconds: number;
   avg_aqi: number;
   eco_points_earned: number;
   route_type: 'eco' | 'fast' | 'balanced';
   created_at: string;
+
+  // Route environment analysis (populated during smart route calculation)
+  traffic_level?: 'low' | 'moderate' | 'high' | 'very-high';
+  green_score?: number;        // 0-100: how green/pedestrian-friendly the route is
+  aqi_confidence?: number;     // 0-100: confidence in estimated AQI
+  road_summary?: string;       // e.g. "Through parks and green areas"
+  aqi_factors?: string[];      // e.g. ["Near major roads (+20%)", "Park area (-15%)"]
 }
 
 // Air Quality Types
@@ -130,6 +160,27 @@ export interface ApiResponse<T> {
   data: T | null;
   error: string | null;
   status: number;
+}
+
+// Saved Places
+export interface SavedPlace {
+  id: string;
+  name: string;
+  address?: string;
+  coordinate: Coordinate;
+  category: 'home' | 'work' | 'favorite' | 'custom';
+  icon?: string;
+  createdAt: string;
+}
+
+// Place Report
+export interface PlaceReport {
+  id: string;
+  name: string;
+  category: string;
+  coordinate: Coordinate;
+  description?: string;
+  createdAt: string;
 }
 
 export interface PaginatedResponse<T> {

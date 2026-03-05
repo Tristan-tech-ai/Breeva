@@ -44,11 +44,11 @@ export function formatNumber(num: number): string {
 
 /**
  * Calculate CO2 saved based on distance walked (vs driving)
- * Average car emits ~120g CO2 per km
+ * Average car emits ~170g CO2 per km
  */
 export function calculateCO2Saved(distanceMeters: number): number {
   const distanceKm = distanceMeters / 1000;
-  const co2GramsPerKm = 120;
+  const co2GramsPerKm = 170;
   return Math.round(distanceKm * co2GramsPerKm);
 }
 
