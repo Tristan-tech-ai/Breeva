@@ -16,7 +16,7 @@ export default function BottomNavigation() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 safe-area-bottom">
-      <div className="glass-nav border-t border-white/10 dark:border-white/5">
+      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl border-t border-white/20 dark:border-white/10">
         <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
           {tabs.map((tab) => {
             const isActive =
