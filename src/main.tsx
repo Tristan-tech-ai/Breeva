@@ -3,12 +3,12 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 
-// Initialize dark mode from localStorage
-const darkMode = localStorage.getItem('breeva_dark_mode') === 'true';
-if (darkMode) {
+// Force light mode as default. Only enable dark if user explicitly toggled it.
+// This overrides device-level dark mode (prefers-color-scheme: dark).
+const userExplicitlySetDark = localStorage.getItem('breeva_dark_mode') === 'true';
+document.documentElement.classList.remove('dark');
+if (userExplicitlySetDark) {
   document.documentElement.classList.add('dark');
-} else {
-  document.documentElement.classList.remove('dark');
 }
 
 // Error boundary for debugging

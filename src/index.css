@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Block device-level dark mode — only allow our explicit .dark class toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not(.dark) {
+    color-scheme: light;
+  }
+}
+
 /* Breeva Custom Theme */
 @theme {
   /* Colors - Primary (Eco Green) */

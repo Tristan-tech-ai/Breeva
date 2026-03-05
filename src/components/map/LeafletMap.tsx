@@ -41,10 +41,11 @@ const destinationIcon = L.divIcon({
   iconAnchor: [18, 48],
 });
 
-// Map controller to sync state
+// Map controller to sync state — only moves camera when `center` is explicitly changed,
+// NOT on every GPS location update (which caused constant jittering).
 function MapController() {
   const map = useMap();
-  const { center, zoom, userLocation } = useMapStore();
+  const { center, zoom } = useMapStore();
   const prevCenter = useRef(center);
 
   useEffect(() => {
@@ -56,12 +57,6 @@ function MapController() {
       prevCenter.current = center;
     }
   }, [center, zoom, map]);
-
-  useEffect(() => {
-    if (userLocation) {
-      map.flyTo([userLocation.lat, userLocation.lng], 16, { duration: 1 });
-    }
-  }, [userLocation, map]);
 
   return null;
 }

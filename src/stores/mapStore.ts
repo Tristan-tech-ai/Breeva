@@ -116,9 +116,7 @@ export const useMapStore = create<MapState>()((set, get) => ({
   setZoom: (zoom) => set({ zoom }),
   setUserLocation: (location) => {
     set({ userLocation: location });
-    if (location) {
-      set({ center: location });
-    }
+    // Do NOT auto-set center here — that causes constant camera jitter
   },
 
   startLocating: () => {
