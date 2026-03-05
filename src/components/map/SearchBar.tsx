@@ -52,15 +52,15 @@ export default function SearchBar() {
       <div
         className={`
           flex items-center gap-3 px-4 py-2.5 h-11 rounded-2xl transition-all duration-200
-          bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl
+          bg-white dark:bg-gray-900/70 backdrop-blur-xl
           border shadow-sm
           ${isFocused
             ? 'border-primary-400/60 shadow-primary-500/10 shadow-md ring-1 ring-primary-400/20'
-            : 'border-gray-200/60 dark:border-gray-700/40 hover:border-gray-300 dark:hover:border-gray-600'
+            : 'border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600'
           }
         `}
       >
-        <Search className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={2} />
+        <Search className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" strokeWidth={2} />
         <input
           ref={inputRef}
           type="text"
@@ -79,7 +79,7 @@ export default function SearchBar() {
             }}
             className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
           >
-            <X className="w-3.5 h-3.5 text-gray-400" />
+            <X className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
           </button>
         )}
         {isSearching && <Loader2 className="w-4 h-4 text-primary-500 animate-spin" />}
@@ -93,7 +93,7 @@ export default function SearchBar() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-full left-0 right-0 mt-2 overflow-hidden z-50 max-h-72 overflow-y-auto rounded-2xl bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl"
+            className="absolute top-full left-0 right-0 mt-2 overflow-hidden z-50 max-h-72 overflow-y-auto rounded-2xl bg-white dark:bg-gray-900/90 backdrop-blur-xl border border-gray-200 dark:border-gray-700/50 shadow-xl"
           >
             {/* Search results */}
             {searchResults.length > 0 && (
@@ -114,7 +114,7 @@ export default function SearchBar() {
                         {result.name}
                       </p>
                       {userLocation && (
-                        <p className="text-xs text-gray-400 mt-0.5">
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                           {getDistanceText(userLocation, result.coordinate)}
                         </p>
                       )}
@@ -129,14 +129,14 @@ export default function SearchBar() {
               <div className="px-4 py-8 text-center">
                 <MapPin className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
                 <p className="text-sm text-gray-500 dark:text-gray-400">No places found</p>
-                <p className="text-xs text-gray-400 mt-0.5">Try a different search term</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Try a different search term</p>
               </div>
             )}
 
             {/* Recent searches */}
             {!searchQuery && recentSearches.length > 0 && (
               <div className="py-1">
-                <p className="px-4 pt-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                <p className="px-4 pt-2 pb-1 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
                   Recent
                 </p>
                 {recentSearches.map((result, i) => (
@@ -145,10 +145,10 @@ export default function SearchBar() {
                     onClick={() =>
                       handleSelect(result.name, result.coordinate.lat, result.coordinate.lng)
                     }
-                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50/80 dark:hover:bg-gray-800/50 transition-colors text-left"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:bg-gray-950/80 dark:hover:bg-gray-800/50 transition-colors text-left"
                   >
                     <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800/80 flex items-center justify-center flex-shrink-0">
-                      <Clock className="w-3.5 h-3.5 text-gray-400" />
+                      <Clock className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
                     </div>
                     <p className="text-sm text-gray-600 dark:text-gray-300 truncate flex-1">
                       {result.name}

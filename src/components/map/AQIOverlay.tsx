@@ -120,7 +120,7 @@ export function AQIOverlayToggle({ currentAQI: _currentAQI, userLocation: _userL
             className="absolute top-12 right-0 glass-card p-3 min-w-[140px]"
           >
             <div className="flex items-center gap-2 mb-2">
-              {visible ? <Eye className="w-3.5 h-3.5 text-primary-500" /> : <EyeOff className="w-3.5 h-3.5 text-gray-400" />}
+              {visible ? <Eye className="w-3.5 h-3.5 text-primary-500" /> : <EyeOff className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />}
               <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">AQI Zones</span>
             </div>
             <div className="space-y-1.5">
@@ -137,7 +137,7 @@ export function AQIOverlayToggle({ currentAQI: _currentAQI, userLocation: _userL
                     style={{ backgroundColor: item.color }}
                   />
                   <span className="text-[10px] text-gray-600 dark:text-gray-400 flex-1">{item.label}</span>
-                  <span className="text-[10px] text-gray-400 font-mono">{item.range}</span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">{item.range}</span>
                 </div>
               ))}
             </div>

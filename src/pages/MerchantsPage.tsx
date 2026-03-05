@@ -77,8 +77,8 @@ export default function MerchantsPage() {
 
         {/* Search */}
         <div className="px-4 mb-4">
-          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/30 dark:border-gray-700/20 shadow-sm">
-            <Search size={18} className="text-gray-400" />
+          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm">
+            <Search size={18} className="text-gray-400 dark:text-gray-500" />
             <input
               type="text"
               placeholder="Search merchants..."
@@ -98,7 +98,7 @@ export default function MerchantsPage() {
               className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-medium transition ${
                 cat === selectedCategory
                   ? 'gradient-primary text-white shadow-sm shadow-primary-500/25'
-                  : 'bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-gray-200/30 dark:border-gray-700/20 text-gray-600 dark:text-gray-300 hover:bg-white/80 dark:hover:bg-gray-800/60'
+                  : 'bg-white dark:bg-gray-900/60 backdrop-blur-sm border border-gray-200 dark:border-gray-700/30 text-gray-600 dark:text-gray-300 hover:bg-white dark:bg-gray-900/80 dark:hover:bg-gray-800/60'
               }`}
             >
               {cat}
@@ -111,7 +111,7 @@ export default function MerchantsPage() {
           {isLoading ? (
             <div className="py-16 flex flex-col items-center gap-3">
               <div className="w-8 h-8 border-[3px] border-primary-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-xs text-gray-400">Loading merchants...</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">Loading merchants...</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="py-16 flex flex-col items-center gap-3 text-center">
@@ -119,7 +119,7 @@ export default function MerchantsPage() {
               <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400">
                 {merchants.length === 0 ? 'No Merchants Yet' : 'No Matches'}
               </h3>
-              <p className="text-xs text-gray-400 max-w-xs">
+              <p className="text-xs text-gray-400 dark:text-gray-500 max-w-xs">
                 {merchants.length === 0
                   ? 'Eco-merchants will appear here once partners are onboarded. You can suggest a merchant from the Contribute page!'
                   : 'Try a different search or category.'}
@@ -132,7 +132,7 @@ export default function MerchantsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/30 dark:border-gray-700/20 shadow-sm p-4 flex gap-3 cursor-pointer hover:shadow-md transition-shadow"
+                className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-4 flex gap-3 cursor-pointer hover:shadow-md transition-shadow"
               >
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary-100 to-secondary-100 dark:from-primary-900/30 dark:to-secondary-900/30 flex items-center justify-center text-2xl flex-shrink-0">
                   {merchant.logo_url ? (
@@ -148,13 +148,13 @@ export default function MerchantsPage() {
                       <BadgeCheck size={14} className="text-primary-500 flex-shrink-0" />
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 mt-0.5">{merchant.category || 'General'} · {merchant.address || 'No address'}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{merchant.category || 'General'} · {merchant.address || 'No address'}</p>
                   <div className="flex items-center gap-2 mt-1.5">
                     <div className="flex items-center gap-0.5">
                       <Star size={11} className="text-amber-400" fill="currentColor" />
                       <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{merchant.rating?.toFixed(1) || '—'}</span>
                     </div>
-                    <span className="text-[10px] text-gray-400">({merchant.review_count || 0})</span>
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500">({merchant.review_count || 0})</span>
                   </div>
                 </div>
               </motion.div>

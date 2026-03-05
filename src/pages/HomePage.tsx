@@ -121,7 +121,7 @@ export default function HomePage() {
                 {/* Hamburger menu */}
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-all flex-shrink-0"
+                  className="w-11 h-11 rounded-2xl flex items-center justify-center bg-white dark:bg-gray-900/70 backdrop-blur-xl border border-gray-200 dark:border-gray-700/50 shadow-sm hover:shadow-md transition-all flex-shrink-0"
                 >
                   <Menu className="w-5 h-5 text-gray-700 dark:text-gray-300" strokeWidth={1.8} />
                 </button>
@@ -133,7 +133,7 @@ export default function HomePage() {
 
                 {/* Profile avatar */}
                 <a href="/profile" className="relative flex-shrink-0 group">
-                  <div className="w-11 h-11 rounded-2xl overflow-hidden bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/40 shadow-sm group-hover:shadow-md transition-all">
+                  <div className="w-11 h-11 rounded-2xl overflow-hidden bg-white dark:bg-gray-900/70 backdrop-blur-xl border border-gray-200 dark:border-gray-700/50 shadow-sm group-hover:shadow-md transition-all">
                     {profile?.avatar_url ? (
                       <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
                     ) : (
@@ -216,7 +216,7 @@ export default function HomePage() {
           {/* Minimal header */}
           <div className="absolute top-0 left-0 right-0 z-30 safe-area-top">
             <div className="px-4 pt-3 pb-2">
-              <div className="max-w-2xl mx-auto flex items-center justify-between bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl px-4 py-2.5 border border-gray-200/40 dark:border-gray-700/30 shadow-lg">
+              <div className="max-w-2xl mx-auto flex items-center justify-between bg-white dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl px-4 py-2.5 border border-gray-200 dark:border-gray-700/40 shadow-lg">
                 <button
                   onClick={cancelWalk}
                   className="text-sm text-red-500 font-medium flex items-center gap-1 hover:text-red-600 transition"
@@ -225,7 +225,7 @@ export default function HomePage() {
                   Cancel
                 </button>
                 <div className="text-center">
-                  <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Walking to</p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-medium">Walking to</p>
                   <p className="text-sm font-semibold text-gray-900 dark:text-white truncate max-w-[180px]">
                     {destinationName || 'Destination'}
                   </p>
@@ -255,7 +255,7 @@ export default function HomePage() {
           {/* Walk stats panel */}
           <div className="absolute bottom-6 left-0 right-0 z-30 px-4">
             <div className="max-w-2xl mx-auto">
-              <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-3xl p-5 border border-gray-200/40 dark:border-gray-700/30 shadow-xl">
+              <div className="bg-white dark:bg-gray-900/80 backdrop-blur-xl rounded-3xl p-5 border border-gray-200 dark:border-gray-700/40 shadow-xl">
                 {/* Progress bar */}
                 {selectedRoute && (
                   <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full mb-4 overflow-hidden">
@@ -274,14 +274,14 @@ export default function HomePage() {
                     <p className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">
                       {(distanceMeters / 1000).toFixed(2)}
                     </p>
-                    <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">km</p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wider">km</p>
                   </div>
                   <div className="w-px h-10 bg-gray-200 dark:bg-gray-700" />
                   <div className="text-center">
                     <p className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">
                       {formatTime(durationSeconds)}
                     </p>
-                    <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">time</p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wider">time</p>
                   </div>
                   <div className="w-px h-10 bg-gray-200 dark:bg-gray-700" />
                   <div className="text-center">
@@ -293,7 +293,7 @@ export default function HomePage() {
                     >
                       {pointsEarned}
                     </motion.p>
-                    <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">points</p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wider">points</p>
                   </div>
                 </div>
 
@@ -388,7 +388,7 @@ export default function HomePage() {
                     <MapPin className="w-5 h-5 text-red-500" />
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Navigate to</p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-medium">Navigate to</p>
                     <p className="text-sm font-semibold text-gray-900 dark:text-white truncate max-w-[180px]">
                       {destinationName}
                     </p>
@@ -405,7 +405,7 @@ export default function HomePage() {
                     className={`p-2 rounded-xl transition-colors ${
                       destination && isPlaceSaved(destination)
                         ? 'text-amber-500'
-                        : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                        : 'text-gray-400 dark:text-gray-500 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
                     }`}
                     title="Save place"
                   >
@@ -417,7 +417,7 @@ export default function HomePage() {
                   </button>
                   <button
                     onClick={clearDestination}
-                    className="p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-colors"
+                    className="p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -456,7 +456,7 @@ export default function HomePage() {
                 </h3>
                 <button
                   onClick={clearDestination}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400 transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>

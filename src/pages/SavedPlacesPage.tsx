@@ -80,7 +80,7 @@ export default function SavedPlacesPage() {
       <div className="max-w-2xl mx-auto px-4 pt-4 pb-12">
         {/* Search */}
         <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl glass-card mb-4">
-          <Search className="w-4 h-4 text-gray-400" />
+          <Search className="w-4 h-4 text-gray-400 dark:text-gray-500" />
           <input
             type="text"
             placeholder="Search saved places..."
@@ -99,7 +99,7 @@ export default function SavedPlacesPage() {
               className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition capitalize ${
                 filter === cat
                   ? 'gradient-primary text-white shadow-sm'
-                  : 'bg-white/60 dark:bg-gray-900/60 border border-gray-200/30 dark:border-gray-700/20 text-gray-600 dark:text-gray-400'
+                  : 'bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700/30 text-gray-600 dark:text-gray-400'
               }`}
             >
               {cat}
@@ -123,7 +123,7 @@ export default function SavedPlacesPage() {
                   placeholder="Place name (e.g. Home, Gym, Office)"
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none border border-gray-200/50 dark:border-gray-700/30 focus:border-primary-500 mb-3"
+                  className="w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none border border-gray-200 dark:border-gray-700/50 focus:border-primary-500 mb-3"
                 />
                 <div className="flex gap-2 mb-3">
                   {(['home', 'work', 'favorite', 'custom'] as const).map((cat) => (
@@ -189,7 +189,7 @@ export default function SavedPlacesPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{place.name}</h4>
-                  <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">
                     {place.address || `${place.coordinate.lat.toFixed(4)}, ${place.coordinate.lng.toFixed(4)}`}
                   </p>
                 </div>
@@ -203,7 +203,7 @@ export default function SavedPlacesPage() {
                   </button>
                   <button
                     onClick={() => removePlace(place.id)}
-                    className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+                    className="p-2 rounded-lg text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
                     title="Remove"
                   >
                     <Trash2 className="w-4 h-4" />

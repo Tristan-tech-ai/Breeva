@@ -75,7 +75,7 @@ export default function WalkHistoryPage() {
       case 'eco': return { label: '🌿 Eco', color: 'text-primary-500' };
       case 'fast': return { label: '🚀 Fast', color: 'text-secondary-500' };
       case 'balanced': return { label: '⚡ Balanced', color: 'text-accent-500' };
-      default: return { label: '🚶 Walk', color: 'text-gray-500' };
+      default: return { label: '🚶 Walk', color: 'text-gray-500 dark:text-gray-400' };
     }
   };
 
@@ -127,7 +127,7 @@ export default function WalkHistoryPage() {
                   className="glass-card p-4"
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
                       {formatDate(walk.completed_at || walk.created_at)}
                     </span>
                     <span className={`text-xs font-medium ${routeType.color}`}>
@@ -139,19 +139,19 @@ export default function WalkHistoryPage() {
                       <div className="text-sm font-bold text-gray-900 dark:text-white">
                         {formatDistance(walk.distance_km * 1000)}
                       </div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">Distance</div>
+                      <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Distance</div>
                     </div>
                     <div>
                       <div className="text-sm font-bold text-gray-900 dark:text-white">
                         {formatDuration(walk.duration_minutes * 60)}
                       </div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">Duration</div>
+                      <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Duration</div>
                     </div>
                     <div>
                       <div className="text-sm font-bold text-accent-500">
                         +{formatNumber(walk.ecopoints_earned)}
                       </div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">Points</div>
+                      <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Points</div>
                     </div>
                   </div>
                 </motion.div>

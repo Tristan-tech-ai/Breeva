@@ -157,7 +157,7 @@ export default function LoginPage() {
               {/* Divider (future auth methods) */}
               <div className="my-6 flex items-center gap-3">
                 <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                <span className="text-xs text-gray-400 uppercase tracking-wider">Secure login</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wider">Secure login</span>
                 <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
               </div>
 

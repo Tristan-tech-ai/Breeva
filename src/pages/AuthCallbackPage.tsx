@@ -59,7 +59,7 @@ export default function AuthCallbackPage() {
             Authentication Failed
           </h2>
           <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">{error}</p>
-          <p className="text-xs text-gray-400">Redirecting to login...</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">Redirecting to login...</p>
         </div>
       </div>
     );

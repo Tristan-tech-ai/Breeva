@@ -182,7 +182,7 @@ export default function ContributePage() {
             {/* Report Type Selection */}
             {!selectedType && (
               <div className="space-y-2.5">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-1">
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 px-1">
                   What would you like to add?
                 </h3>
                 {reportTypes.map((type, i) => (
@@ -202,7 +202,7 @@ export default function ContributePage() {
                     </div>
                     <div>
                       <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{type.label}</h4>
-                      <p className="text-[11px] text-gray-400 mt-0.5">{type.description}</p>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">{type.description}</p>
                     </div>
                   </motion.button>
                 ))}
@@ -233,7 +233,7 @@ export default function ContributePage() {
                     placeholder="e.g. Taman Kota Baru"
                     value={placeName}
                     onChange={e => setPlaceName(e.target.value)}
-                    className="w-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none border border-gray-200/50 dark:border-gray-700/30 focus:border-primary-500 transition"
+                    className="w-full bg-white dark:bg-gray-900/80 backdrop-blur-sm rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none border border-gray-200 dark:border-gray-700/50 focus:border-primary-500 transition"
                   />
                 </div>
 
@@ -274,7 +274,7 @@ export default function ContributePage() {
                     value={placeDescription}
                     onChange={e => setPlaceDescription(e.target.value)}
                     rows={3}
-                    className="w-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none border border-gray-200/50 dark:border-gray-700/30 focus:border-primary-500 transition resize-none"
+                    className="w-full bg-white dark:bg-gray-900/80 backdrop-blur-sm rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none border border-gray-200 dark:border-gray-700/50 focus:border-primary-500 transition resize-none"
                   />
                 </div>
 
@@ -304,7 +304,7 @@ export default function ContributePage() {
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
                     Photo (optional)
                   </label>
-                  <button className="flex flex-col items-center gap-2 w-full py-6 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 hover:border-primary-300 hover:text-primary-500 transition">
+                  <button className="flex flex-col items-center gap-2 w-full py-6 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-primary-300 hover:text-primary-500 transition">
                     <Camera className="w-6 h-6" />
                     <span className="text-xs font-medium">Tap to add photo</span>
                   </button>

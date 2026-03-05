@@ -41,7 +41,7 @@ const menuSections = [
     title: 'Preferences',
     items: [
       { icon: Globe, label: 'Language', path: '/profile/settings', color: 'text-cyan-500', badge: 'EN' },
-      { icon: Settings, label: 'Settings', path: '/profile/settings', color: 'text-gray-500' },
+      { icon: Settings, label: 'Settings', path: '/profile/settings', color: 'text-gray-500 dark:text-gray-400' },
     ],
   },
   {
@@ -49,7 +49,7 @@ const menuSections = [
     items: [
       { icon: Lightbulb, label: 'Eco Tips & Tricks', path: '#tips', color: 'text-amber-500' },
       { icon: HelpCircle, label: 'Help & Feedback', path: '/help', color: 'text-blue-500' },
-      { icon: Info, label: 'About Breeva', path: '/about', color: 'text-gray-500' },
+      { icon: Info, label: 'About Breeva', path: '/about', color: 'text-gray-500 dark:text-gray-400' },
     ],
   },
 ];
@@ -128,19 +128,19 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed top-0 left-0 bottom-0 z-[61] w-[300px] max-w-[85vw] bg-white/95 dark:bg-gray-900/95 backdrop-blur-2xl shadow-2xl flex flex-col"
+            className="fixed top-0 left-0 bottom-0 z-[61] w-[300px] max-w-[85vw] bg-white dark:bg-gray-900/95 backdrop-blur-2xl shadow-2xl flex flex-col"
           >
             {/* User Header */}
             <div className="gradient-primary p-5 pt-12">
               <button
                 onClick={onClose}
-                className="absolute top-4 right-4 p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition"
+                className="absolute top-4 right-4 p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white dark:bg-gray-900/10 transition"
               >
                 <X className="w-5 h-5" />
               </button>
 
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-14 h-14 rounded-full border-2 border-white/30 overflow-hidden bg-white/20 shadow-lg flex-shrink-0">
+                <div className="w-14 h-14 rounded-full border-2 border-white/30 overflow-hidden bg-white dark:bg-gray-900/20 shadow-lg flex-shrink-0">
                   {profile?.avatar_url ? (
                     <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
@@ -173,7 +173,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               {menuSections.map((section, sIdx) => (
                 <div key={sIdx}>
                   {section.title && (
-                    <p className="px-5 pt-4 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                    <p className="px-5 pt-4 pb-1 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                       {section.title}
                     </p>
                   )}
@@ -186,7 +186,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                           {item.label}
                         </span>
                         {(item as { badge?: string }).badge && (
-                          <span className="text-[10px] font-medium text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
                             {(item as { badge?: string }).badge}
                           </span>
                         )}

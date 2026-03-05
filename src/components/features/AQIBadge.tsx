@@ -43,7 +43,7 @@ export default function AQIBadge({ aqi, size = 'md', showLabel = true, confidenc
     <div
       className={`
         inline-flex items-center rounded-full backdrop-blur-xl
-        bg-white/80 dark:bg-gray-900/80 border border-gray-200/30 dark:border-gray-700/20
+        bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700/30
         shadow-sm
         ${sizeClasses[size]}
       `}
@@ -58,7 +58,7 @@ export default function AQIBadge({ aqi, size = 'md', showLabel = true, confidenc
         </>
       )}
       {confidence !== undefined && (
-        <span className="text-gray-400 text-[10px] ml-1">
+        <span className="text-gray-400 dark:text-gray-500 text-[10px] ml-1">
           {confidence >= 0.7 ? '●●●' : confidence >= 0.4 ? '●●○' : '●○○'}
         </span>
       )}

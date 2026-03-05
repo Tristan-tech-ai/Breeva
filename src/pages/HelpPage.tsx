@@ -112,8 +112,8 @@ export default function HelpPage() {
 
       <div className="max-w-2xl mx-auto px-4 pt-4 pb-12 space-y-5">
         {/* Search */}
-        <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/30 dark:border-gray-700/20 shadow-sm">
-          <Search size={18} className="text-gray-400" />
+        <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm">
+          <Search size={18} className="text-gray-400 dark:text-gray-500" />
           <input
             type="text"
             placeholder="Search for help..."
@@ -132,7 +132,7 @@ export default function HelpPage() {
               className={`flex-shrink-0 px-3.5 py-2 rounded-full text-xs font-medium transition flex items-center gap-1.5 ${
                 cat === selectedCategory
                   ? 'gradient-primary text-white shadow-sm shadow-primary-500/25'
-                  : 'bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-gray-200/30 dark:border-gray-700/20 text-gray-600 dark:text-gray-300'
+                  : 'bg-white dark:bg-gray-900/60 backdrop-blur-sm border border-gray-200 dark:border-gray-700/30 text-gray-600 dark:text-gray-300'
               }`}
             >
               {cat !== 'All' && categoryIcons[cat]}
@@ -147,7 +147,7 @@ export default function HelpPage() {
             <div className="py-12 text-center">
               <Search size={32} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
               <p className="text-sm text-gray-500 dark:text-gray-400">No matching questions found</p>
-              <p className="text-xs text-gray-400 mt-1">Try different keywords or contact us below</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Try different keywords or contact us below</p>
             </div>
           ) : (
             filtered.map((faq, i) => (
@@ -169,7 +169,7 @@ export default function HelpPage() {
                     <span className="text-sm font-medium text-gray-900 dark:text-white">{faq.question}</span>
                   </div>
                   <ChevronRight
-                    className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${
+                    className={`w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0 transition-transform ${
                       openIdx === i ? 'rotate-90' : ''
                     }`}
                   />
@@ -198,42 +198,42 @@ export default function HelpPage() {
           <div className="space-y-2">
             <a
               href="mailto:support@breeva.app?subject=Breeva%20Support%20Request"
-              className="glass-card flex items-center gap-3 px-4 py-3.5 hover:bg-white/60 dark:hover:bg-gray-800/60 transition-colors"
+              className="glass-card flex items-center gap-3 px-4 py-3.5 hover:bg-white dark:bg-gray-900/60 dark:hover:bg-gray-800/60 transition-colors"
             >
               <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
                 <Mail className="w-4 h-4 text-blue-500" />
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900 dark:text-white">Email Support</p>
-                <p className="text-[10px] text-gray-400">support@breeva.app</p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500">support@breeva.app</p>
               </div>
-              <ExternalLink className="w-4 h-4 text-gray-300" />
+              <ExternalLink className="w-4 h-4 text-gray-300 dark:text-gray-600" />
             </a>
             <button
               onClick={() => navigate('/contribute')}
-              className="glass-card flex items-center gap-3 px-4 py-3.5 hover:bg-white/60 dark:hover:bg-gray-800/60 transition-colors w-full text-left"
+              className="glass-card flex items-center gap-3 px-4 py-3.5 hover:bg-white dark:bg-gray-900/60 dark:hover:bg-gray-800/60 transition-colors w-full text-left"
             >
               <div className="w-9 h-9 rounded-xl bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center">
                 <MessageCircle className="w-4 h-4 text-primary-500" />
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900 dark:text-white">Report an Issue</p>
-                <p className="text-[10px] text-gray-400">Help improve Breeva for everyone</p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500">Help improve Breeva for everyone</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-gray-300" />
+              <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600" />
             </button>
             <button
               onClick={() => navigate('/about')}
-              className="glass-card flex items-center gap-3 px-4 py-3.5 hover:bg-white/60 dark:hover:bg-gray-800/60 transition-colors w-full text-left"
+              className="glass-card flex items-center gap-3 px-4 py-3.5 hover:bg-white dark:bg-gray-900/60 dark:hover:bg-gray-800/60 transition-colors w-full text-left"
             >
               <div className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                <FileText className="w-4 h-4 text-gray-500" />
+                <FileText className="w-4 h-4 text-gray-500 dark:text-gray-400" />
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900 dark:text-white">About Breeva</p>
-                <p className="text-[10px] text-gray-400">Learn more about our mission</p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500">Learn more about our mission</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-gray-300" />
+              <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600" />
             </button>
           </div>
         </div>

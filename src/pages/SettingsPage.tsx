@@ -183,7 +183,7 @@ export default function SettingsPage() {
                 <button
                   key={item.label}
                   onClick={item.action}
-                  className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white/50 dark:hover:bg-white/5 transition-colors text-left"
+                  className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white dark:bg-gray-900/50 dark:hover:bg-white dark:bg-gray-900/5 transition-colors text-left"
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-lg">{item.icon}</span>
@@ -196,7 +196,7 @@ export default function SettingsPage() {
                         {item.label}
                       </div>
                       {item.description && (
-                        <div className="text-[10px] text-gray-400 mt-0.5">
+                        <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
                           {item.description}
                         </div>
                       )}
@@ -212,7 +212,7 @@ export default function SettingsPage() {
                       }`}
                     >
                       <div
-                        className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                        className={`absolute top-0.5 w-5 h-5 rounded-full bg-white dark:bg-gray-900 shadow-sm transition-transform duration-200 ${
                           item.value ? 'translate-x-[22px]' : 'translate-x-[2px]'
                         }`}
                       />
@@ -220,11 +220,11 @@ export default function SettingsPage() {
                   )}
 
                   {item.type === 'link' && !item.action && (
-                    <span className="text-xs text-gray-400">{item.description}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{item.description}</span>
                   )}
 
                   {item.type === 'link' && item.action && (
-                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   )}

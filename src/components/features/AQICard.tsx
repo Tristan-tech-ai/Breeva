@@ -20,7 +20,7 @@ export default function AQICard({ data, className = '' }: AQICardProps) {
   return (
     <motion.div
       layout
-      className={`rounded-2xl overflow-hidden bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/30 dark:border-gray-700/20 shadow-sm cursor-pointer select-none ${className}`}
+      className={`rounded-2xl overflow-hidden bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm cursor-pointer select-none ${className}`}
       onClick={() => {
         if (level === 'glance') setLevel('detail');
         else if (level === 'detail') setLevel('expert');
@@ -133,13 +133,13 @@ export default function AQICard({ data, className = '' }: AQICardProps) {
 
 function PollutantCard({ label, value, unit, icon }: { label: string; value: number; unit: string; icon: React.ReactNode }) {
   return (
-    <div className="bg-gray-50/80 dark:bg-gray-800/40 rounded-xl p-2.5 text-center">
+    <div className="bg-gray-50 dark:bg-gray-950/80 rounded-xl p-2.5 text-center">
       <div className="flex items-center justify-center gap-1 mb-1">
-        <span className="text-gray-400">{icon}</span>
-        <p className="text-[10px] text-gray-400 font-medium">{label}</p>
+        <span className="text-gray-400 dark:text-gray-500">{icon}</span>
+        <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">{label}</p>
       </div>
       <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">{value.toFixed(1)}</p>
-      <p className="text-[10px] text-gray-400">{unit}</p>
+      <p className="text-[10px] text-gray-400 dark:text-gray-500">{unit}</p>
     </div>
   );
 }

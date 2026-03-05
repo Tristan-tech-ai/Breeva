@@ -76,7 +76,7 @@ export default function RewardsPage() {
               className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-medium transition ${
                 cat === selectedCategory
                   ? 'gradient-primary text-white shadow-sm shadow-primary-500/25'
-                  : 'bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-gray-200/30 dark:border-gray-700/20 text-gray-600 dark:text-gray-300 hover:bg-white/80 dark:hover:bg-gray-800/60'
+                  : 'bg-white dark:bg-gray-900/60 backdrop-blur-sm border border-gray-200 dark:border-gray-700/30 text-gray-600 dark:text-gray-300 hover:bg-white dark:bg-gray-900/80 dark:hover:bg-gray-800/60'
               }`}
             >
               {cat}
@@ -89,13 +89,13 @@ export default function RewardsPage() {
           {isLoading ? (
             <div className="py-16 flex flex-col items-center gap-3">
               <div className="w-8 h-8 border-[3px] border-primary-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-xs text-gray-400">Loading rewards...</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">Loading rewards...</p>
             </div>
           ) : rewards.length === 0 ? (
             <div className="py-16 flex flex-col items-center gap-3 text-center">
               <Gift size={40} className="text-gray-300 dark:text-gray-600" />
               <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400">No Rewards Available Yet</h3>
-              <p className="text-xs text-gray-400 max-w-xs">
+              <p className="text-xs text-gray-400 dark:text-gray-500 max-w-xs">
                 Rewards from eco-merchants will appear here soon. Keep walking to earn EcoPoints!
               </p>
             </div>
@@ -107,21 +107,21 @@ export default function RewardsPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/30 dark:border-gray-700/20 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                  className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
                 >
                   <div className="h-24 flex items-center justify-center text-3xl bg-gradient-to-br from-primary-100 to-secondary-100 dark:from-primary-900/30 dark:to-secondary-900/30">
                     {reward.discount_percentage ? `${reward.discount_percentage}%` : '🎁'}
                   </div>
                   <div className="p-3">
                     <h3 className="text-xs font-bold text-gray-900 dark:text-white line-clamp-2">{reward.title}</h3>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{(reward.merchant as { name: string } | null)?.name || 'Breeva'}</p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{(reward.merchant as { name: string } | null)?.name || 'Breeva'}</p>
                     <div className="flex items-center justify-between mt-2">
                       <div className="flex items-center gap-1">
                         <Star size={10} className="text-amber-400" fill="currentColor" />
                         <span className="text-xs font-bold text-amber-600 dark:text-amber-400 tabular-nums">{reward.points_required}</span>
                       </div>
                       {reward.remaining_stock != null && (
-                        <span className="text-[10px] text-gray-400">{reward.remaining_stock} left</span>
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500">{reward.remaining_stock} left</span>
                       )}
                     </div>
                   </div>

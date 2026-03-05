@@ -151,7 +151,7 @@ export default function TransactionsPage() {
         ) : (
           Object.entries(grouped).map(([date, items]) => (
             <div key={date} className="mb-4">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">
+              <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 px-1">
                 {date}
               </h3>
               <div className="glass-card overflow-hidden divide-y divide-gray-100 dark:divide-gray-800">
@@ -171,7 +171,7 @@ export default function TransactionsPage() {
                         <div className="text-sm font-medium text-gray-900 dark:text-white">
                           {tx.description || tx.transaction_type.replace(/_/g, ' ')}
                         </div>
-                        <div className="text-[10px] text-gray-400 mt-0.5">
+                        <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
                           {formatTime(tx.created_at)}
                         </div>
                       </div>

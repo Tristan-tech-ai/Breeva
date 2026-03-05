@@ -43,7 +43,7 @@ export default function WalkComplete({ session, onClose }: WalkCompleteProps) {
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.9 }}
-        className="rounded-3xl overflow-hidden bg-white/90 dark:bg-gray-900/90 backdrop-blur-2xl border border-gray-200/30 dark:border-gray-700/20 shadow-2xl p-6 max-w-sm w-full"
+        className="rounded-3xl overflow-hidden bg-white dark:bg-gray-900/90 backdrop-blur-2xl border border-gray-200 dark:border-gray-700/30 shadow-2xl p-6 max-w-sm w-full"
       >
         {/* Celebration header */}
         <div className="text-center mb-6">
@@ -116,7 +116,7 @@ export default function WalkComplete({ session, onClose }: WalkCompleteProps) {
           </button>
           <button
             onClick={() => { onClose(); navigate('/profile/history'); }}
-            className="text-sm text-gray-500 dark:text-gray-400 py-2 hover:text-gray-700 dark:hover:text-gray-200 transition"
+            className="text-sm text-gray-500 dark:text-gray-400 py-2 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-200 dark:text-gray-700 transition"
           >
             View Walk History
           </button>

@@ -24,7 +24,7 @@ export default function PostWalkRating({ onSubmit, onSkip }: PostWalkRatingProps
       initial={{ opacity: 0, scale: 0.95, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="rounded-3xl overflow-hidden bg-white/90 dark:bg-gray-900/90 backdrop-blur-2xl border border-gray-200/30 dark:border-gray-700/20 shadow-2xl p-6 max-w-sm w-full"
+      className="rounded-3xl overflow-hidden bg-white dark:bg-gray-900/90 backdrop-blur-2xl border border-gray-200 dark:border-gray-700/30 shadow-2xl p-6 max-w-sm w-full"
     >
       <h3 className="text-lg font-bold text-gray-900 dark:text-white text-center mb-2">
         How was the air quality?
@@ -51,7 +51,7 @@ export default function PostWalkRating({ onSubmit, onSkip }: PostWalkRatingProps
             <span className={`text-[10px] font-medium ${
               selectedRating === option.value
                 ? 'text-primary-600 dark:text-primary-400'
-                : 'text-gray-400'
+                : 'text-gray-400 dark:text-gray-500'
             }`}>
               {option.label}
             </span>
@@ -68,8 +68,8 @@ export default function PostWalkRating({ onSubmit, onSkip }: PostWalkRatingProps
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <label className="flex items-center gap-2.5 rounded-xl border border-gray-200/50 dark:border-gray-700/30 bg-gray-50/50 dark:bg-gray-800/30 px-4 py-3 cursor-pointer mb-4 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors">
-              <Camera size={18} className="text-gray-400" />
+            <label className="flex items-center gap-2.5 rounded-xl border border-gray-200 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-950/50 px-4 py-3 cursor-pointer mb-4 hover:bg-gray-100 dark:bg-gray-800/50 dark:hover:bg-gray-800/50 transition-colors">
+              <Camera size={18} className="text-gray-400 dark:text-gray-500" />
               <span className="text-sm text-gray-600 dark:text-gray-300 flex-1 truncate">
                 {photo ? photo.name : 'Add a photo (optional)'}
               </span>
@@ -105,7 +105,7 @@ export default function PostWalkRating({ onSubmit, onSkip }: PostWalkRatingProps
             flex-1 py-3 text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2
             ${selectedRating
               ? 'gradient-primary text-white shadow-lg shadow-primary-500/25 hover:shadow-xl'
-              : 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
             }
           `}
         >

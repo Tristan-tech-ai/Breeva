@@ -200,7 +200,7 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
           <Marker position={[userLocation.lat, userLocation.lng]} icon={userIcon}>
             <Popup className="glass-popup">
               <div className="text-center text-sm">
-                <p className="font-semibold text-gray-900">You are here</p>
+                <p className="font-semibold text-gray-900 dark:text-white">You are here</p>
                 {currentAQI && (
                   <p className="text-xs mt-1">
                     AQI:{' '}
@@ -219,7 +219,7 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
           <Marker position={[destination.lat, destination.lng]} icon={destinationIcon}>
             <Popup>
               <div className="text-sm">
-                <p className="font-semibold text-gray-900">{destinationName || 'Destination'}</p>
+                <p className="font-semibold text-gray-900 dark:text-white">{destinationName || 'Destination'}</p>
               </div>
             </Popup>
           </Marker>

@@ -86,7 +86,7 @@ export default function EcoImpactPage() {
           <p className="text-white/60 text-xs mt-1">{totalWalks} eco-walks completed</p>
 
           {/* Streak */}
-          <div className="flex items-center justify-center gap-2 mt-3 bg-white/10 rounded-xl py-2 px-4">
+          <div className="flex items-center justify-center gap-2 mt-3 bg-white dark:bg-gray-900/10 rounded-xl py-2 px-4">
             <Flame className="w-4 h-4 text-amber-300" />
             <span className="text-white text-sm font-medium">{currentStreak} day streak</span>
           </div>
@@ -104,7 +104,7 @@ export default function EcoImpactPage() {
               <TrendingUp className="w-4 h-4 text-primary-500" />
               Weekly Goal
             </h3>
-            <span className="text-xs text-gray-400">{(totalKm % weeklyGoal).toFixed(1)} / {weeklyGoal} km</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">{(totalKm % weeklyGoal).toFixed(1)} / {weeklyGoal} km</span>
           </div>
           <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
             <motion.div
@@ -114,7 +114,7 @@ export default function EcoImpactPage() {
               className="h-full gradient-primary rounded-full"
             />
           </div>
-          <p className="text-[10px] text-gray-400 mt-1.5">
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5">
             {weeklyProgress >= 100 ? '🎉 Goal achieved! Keep going!' : `${(weeklyGoal - (totalKm % weeklyGoal)).toFixed(1)} km to go`}
           </p>
         </motion.div>
@@ -133,7 +133,7 @@ export default function EcoImpactPage() {
                 <card.icon className="w-4.5 h-4.5 text-primary-600 dark:text-primary-400" />
               </div>
               <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">{card.value}</p>
-              <p className="text-[10px] text-gray-400 font-medium">{card.label}</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">{card.label}</p>
               <p className="text-[9px] text-gray-300 dark:text-gray-600 mt-0.5">{card.description}</p>
             </motion.div>
           ))}
@@ -153,15 +153,15 @@ export default function EcoImpactPage() {
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>
               <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">{caloriesBurned.toLocaleString()}</p>
-              <p className="text-[10px] text-gray-400">Calories Burned</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500">Calories Burned</p>
             </div>
             <div>
               <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">{Math.round(totalKm * 1312).toLocaleString()}</p>
-              <p className="text-[10px] text-gray-400">Approx Steps</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500">Approx Steps</p>
             </div>
             <div>
               <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">{Math.round(totalKm / 5 * 30)}</p>
-              <p className="text-[10px] text-gray-400">Minutes Active</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500">Minutes Active</p>
             </div>
           </div>
         </motion.div>
@@ -186,12 +186,12 @@ export default function EcoImpactPage() {
                 <div className="text-2xl">{milestone.icon}</div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">{milestone.label}</p>
-                  <p className="text-[10px] text-gray-400">{milestone.distance} km total</p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">{milestone.distance} km total</p>
                 </div>
                 {milestone.unlocked ? (
                   <div className="text-primary-500 text-xs font-bold">✓ Unlocked</div>
                 ) : (
-                  <div className="text-[10px] text-gray-400">
+                  <div className="text-[10px] text-gray-400 dark:text-gray-500">
                     {(milestone.distance - totalKm).toFixed(1)} km left
                   </div>
                 )}

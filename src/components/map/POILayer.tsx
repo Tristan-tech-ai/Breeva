@@ -76,7 +76,7 @@ export default function POILayer({ center, radiusMeters = 1000, categories, visi
               
               {poi.address && (
                 <div className="flex items-start gap-1.5 mb-1">
-                  <MapPin size={12} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                  <MapPin size={12} className="text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
                   <p className="text-xs text-gray-600 dark:text-gray-300">{poi.address}</p>
                 </div>
               )}
@@ -92,7 +92,7 @@ export default function POILayer({ center, radiusMeters = 1000, categories, visi
 
               {poi.phone && (
                 <div className="flex items-center gap-1.5 mb-1">
-                  <Phone size={12} className="text-gray-400" />
+                  <Phone size={12} className="text-gray-400 dark:text-gray-500" />
                   <a
                     href={`tel:${poi.phone}`}
                     className="text-xs text-primary-600 hover:underline"
@@ -104,7 +104,7 @@ export default function POILayer({ center, radiusMeters = 1000, categories, visi
 
               {poi.website && (
                 <div className="flex items-center gap-1.5 mb-1">
-                  <Globe size={12} className="text-gray-400" />
+                  <Globe size={12} className="text-gray-400 dark:text-gray-500" />
                   <a
                     href={poi.website}
                     target="_blank"
@@ -117,7 +117,7 @@ export default function POILayer({ center, radiusMeters = 1000, categories, visi
               )}
 
               {poi.distance && (
-                <p className="text-[10px] text-gray-400 mt-2">
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2">
                   {poi.distance < 1000
                     ? `${Math.round(poi.distance)} m away`
                     : `${(poi.distance / 1000).toFixed(1)} km away`}

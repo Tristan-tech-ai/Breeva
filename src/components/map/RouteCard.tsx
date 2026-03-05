@@ -56,10 +56,10 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
       whileTap={{ scale: 0.98 }}
       className={`
         w-full text-left rounded-2xl p-4 transition-all duration-200 relative overflow-hidden
-        bg-white/70 dark:bg-gray-900/60 backdrop-blur-xl border
+        bg-white dark:bg-gray-900/70 backdrop-blur-xl border
         ${isSelected
           ? 'border-primary-400/60 shadow-lg shadow-primary-500/10 ring-1 ring-primary-400/20'
-          : 'border-gray-200/40 dark:border-gray-700/30 hover:border-gray-300 dark:hover:border-gray-600 shadow-sm'
+          : 'border-gray-200 dark:border-gray-700/40 hover:border-gray-300 dark:hover:border-gray-600 shadow-sm'
         }
       `}
     >
@@ -79,7 +79,7 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
         </div>
         <div className="flex-1">
           <span className="text-sm font-bold text-gray-900 dark:text-white">{info.label}</span>
-          <span className="text-[11px] text-gray-400 ml-2">{info.desc}</span>
+          <span className="text-[11px] text-gray-400 dark:text-gray-500 ml-2">{info.desc}</span>
         </div>
         {isSelected && (
           <div className="w-6 h-6 rounded-full bg-primary-500 flex items-center justify-center shadow-sm">
@@ -91,13 +91,13 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
       {/* Stats row */}
       <div className="flex items-center gap-4 flex-wrap">
         <div className="flex items-center gap-1.5">
-          <Clock className="w-3.5 h-3.5 text-gray-400" />
+          <Clock className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
           <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
             {formatDuration(route.duration_seconds)}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <RouteIcon className="w-3.5 h-3.5 text-gray-400" />
+          <RouteIcon className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
           <span className="text-sm text-gray-600 dark:text-gray-300">
             {formatDistance(route.distance_meters)}
           </span>
@@ -132,7 +132,7 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
             </span>
           )}
           {route.road_summary && (
-            <span className="text-[10px] text-gray-400 italic ml-auto truncate max-w-[160px]">
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 italic ml-auto truncate max-w-[160px]">
               {route.road_summary}
             </span>
           )}

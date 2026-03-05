@@ -16,7 +16,7 @@ export default function TermsPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-5 pt-6 space-y-6">
-        <p className="text-xs text-gray-400">Last updated: June 2025</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500">Last updated: June 2025</p>
 
         <Section title="1. Acceptance of Terms">
           By downloading, installing, or using the Breeva application ("Service"), you agree to be bound by
@@ -102,8 +102,8 @@ export default function TermsPage() {
         </Section>
 
         <div className="pt-2 pb-8">
-          <div className="h-px bg-gray-200/40 dark:bg-gray-700/40" />
-          <p className="text-[10px] text-gray-400 mt-3 text-center">
+          <div className="h-px bg-gray-200 dark:bg-gray-700/40" />
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-3 text-center">
             © 2025 Breeva. All rights reserved.
           </p>
         </div>

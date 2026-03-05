@@ -36,7 +36,7 @@ export default function TransportModeSelector() {
                 transition-all duration-200 flex-shrink-0 whitespace-nowrap
                 ${isActive
                   ? 'text-white shadow-md'
-                  : 'bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-gray-200/30 dark:border-gray-700/20 text-gray-600 dark:text-gray-400 hover:bg-white/80 dark:hover:bg-gray-800/60'
+                  : 'bg-white dark:bg-gray-900/60 backdrop-blur-sm border border-gray-200 dark:border-gray-700/30 text-gray-600 dark:text-gray-400 hover:bg-white dark:bg-gray-900/80 dark:hover:bg-gray-800/60'
                 }
               `}
               style={isActive ? { background: mode.color } : undefined}

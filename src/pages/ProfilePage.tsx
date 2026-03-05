@@ -22,7 +22,7 @@ export default function ProfilePage() {
     { icon: <BarChart3 size={18} />, label: 'Walk History', path: '/profile/history', color: 'text-blue-500' },
     { icon: <Trophy size={18} />, label: 'Achievements', path: '/profile/achievements', color: 'text-amber-500' },
     { icon: <Coins size={18} />, label: 'Point Transactions', path: '/profile/transactions', color: 'text-emerald-500' },
-    { icon: <Settings size={18} />, label: 'Settings', path: '/profile/settings', color: 'text-gray-500' },
+    { icon: <Settings size={18} />, label: 'Settings', path: '/profile/settings', color: 'text-gray-500 dark:text-gray-400' },
     { icon: <HelpCircle size={18} />, label: 'Help & Support', path: '/help', color: 'text-violet-500' },
     { icon: <Info size={18} />, label: 'About Breeva', path: '/about', color: 'text-cyan-500' },
   ];
@@ -31,7 +31,7 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24">
       {/* Gradient Header */}
       <div className="relative gradient-primary pb-20 pt-12 px-6">
-        <div className="absolute inset-0 bg-white/5 backdrop-blur-sm" />
+        <div className="absolute inset-0 bg-white dark:bg-gray-900/5 backdrop-blur-sm" />
 
         <div className="max-w-2xl mx-auto relative z-10">
           <motion.button
@@ -49,7 +49,7 @@ export default function ProfilePage() {
             transition={{ delay: 0.1 }}
             className="flex flex-col items-center"
           >
-            <div className="w-24 h-24 rounded-full border-4 border-white/30 overflow-hidden bg-white/20 backdrop-blur-sm shadow-xl">
+            <div className="w-24 h-24 rounded-full border-4 border-white/30 overflow-hidden bg-white dark:bg-gray-900/20 backdrop-blur-sm shadow-xl">
               {profile?.avatar_url ? (
                 <img src={profile.avatar_url} alt={profile.name || 'Profile'} className="w-full h-full object-cover" />
               ) : (
@@ -79,7 +79,7 @@ export default function ProfilePage() {
           transition={{ delay: 0.2 }}
           className="mx-4 -mt-12 relative z-10"
         >
-          <div className="rounded-2xl bg-white/90 dark:bg-gray-900/90 backdrop-blur-2xl border border-gray-200/30 dark:border-gray-700/20 shadow-lg p-5">
+          <div className="rounded-2xl bg-white dark:bg-gray-900/90 backdrop-blur-2xl border border-gray-200 dark:border-gray-700/30 shadow-lg p-5">
             <div className="grid grid-cols-4 gap-3 text-center">
               <div>
                 <div className="text-lg font-bold tabular-nums text-accent-500">{formatNumber(profile?.ecopoints_balance || 0)}</div>
@@ -108,7 +108,7 @@ export default function ProfilePage() {
           transition={{ delay: 0.3 }}
           className="mx-4 mt-4"
         >
-          <div className="rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/30 dark:border-gray-700/20 shadow-sm p-5">
+          <div className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
               Your Environmental Impact
             </h3>
@@ -145,18 +145,18 @@ export default function ProfilePage() {
           transition={{ delay: 0.4 }}
           className="mx-4 mt-4"
         >
-          <div className="rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/30 dark:border-gray-700/20 shadow-sm overflow-hidden divide-y divide-gray-100 dark:divide-gray-800/50">
+          <div className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm overflow-hidden divide-y divide-gray-100 dark:divide-gray-800/50">
             {menuItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
-                className="flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors"
+                className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:bg-gray-950/50 dark:hover:bg-white dark:bg-gray-900/5 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <span className={item.color}>{item.icon}</span>
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
                 </div>
-                <ChevronRight size={16} className="text-gray-400" />
+                <ChevronRight size={16} className="text-gray-400 dark:text-gray-500" />
               </Link>
             ))}
           </div>
@@ -171,7 +171,7 @@ export default function ProfilePage() {
         >
           <button
             onClick={handleSignOut}
-            className="rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/30 dark:border-gray-700/20 shadow-sm w-full py-4 px-5 flex items-center justify-center gap-2 text-red-500 hover:bg-red-50/50 dark:hover:bg-red-900/10 transition-colors"
+            className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm w-full py-4 px-5 flex items-center justify-center gap-2 text-red-500 hover:bg-red-50/50 dark:hover:bg-red-900/10 transition-colors"
           >
             <LogOut size={18} />
             <span className="text-sm font-medium">Sign Out</span>

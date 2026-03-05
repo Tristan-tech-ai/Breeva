@@ -67,7 +67,7 @@ export default function EditProfilePage() {
               {avatarPreview ? (
                 <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-4xl text-gray-400">
+                <div className="w-full h-full flex items-center justify-center text-4xl text-gray-400 dark:text-gray-500">
                   {name?.[0]?.toUpperCase() || '?'}
                 </div>
               )}
@@ -124,7 +124,7 @@ export default function EditProfilePage() {
               Username
             </label>
             <div className="flex items-center gap-0">
-              <span className="glass-input rounded-r-none border-r-0 px-3 py-3 text-sm text-gray-400">@</span>
+              <span className="glass-input rounded-r-none border-r-0 px-3 py-3 text-sm text-gray-400 dark:text-gray-500">@</span>
               <input
                 type="text"
                 value={profile?.email?.split('@')[0] || ''}
@@ -132,7 +132,7 @@ export default function EditProfilePage() {
                 className="glass-input rounded-l-none flex-1 px-3 py-3 text-sm text-gray-500 dark:text-gray-400 cursor-not-allowed"
               />
             </div>
-            <p className="mt-1 text-[10px] text-gray-400">Username is derived from your email</p>
+            <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Username is derived from your email</p>
           </div>
 
           {/* Status Message */}

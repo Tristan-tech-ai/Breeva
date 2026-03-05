@@ -66,7 +66,7 @@ export default function BottomSheet({ children }: BottomSheetProps) {
         dragElastic={0.15}
         onDragEnd={handleDragEnd}
         style={{ y, borderTopLeftRadius: borderRadius, borderTopRightRadius: borderRadius }}
-        className="h-full flex flex-col overflow-hidden shadow-[0_-8px_40px_rgba(0,0,0,0.08)] bg-white/90 dark:bg-gray-900/90 backdrop-blur-2xl border-t border-gray-200/30 dark:border-gray-700/20"
+        className="h-full flex flex-col overflow-hidden shadow-[0_-8px_40px_rgba(0,0,0,0.08)] bg-white dark:bg-gray-900/90 backdrop-blur-2xl border-t border-gray-200 dark:border-gray-700/30"
       >
         {/* Drag handle */}
         <div className="flex justify-center py-3 cursor-grab active:cursor-grabbing">

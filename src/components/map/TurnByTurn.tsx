@@ -107,16 +107,16 @@ export default function TurnByTurn({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="mt-2 flex items-center gap-3 px-4 py-2 rounded-xl bg-gray-50/80 dark:bg-gray-800/50"
+          className="mt-2 flex items-center gap-3 px-4 py-2 rounded-xl bg-gray-50 dark:bg-gray-950/80"
         >
-          <span className="text-xs text-gray-400 font-medium">Then</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">Then</span>
           <span className="text-gray-500 dark:text-gray-400">
             {getInstructionIcon(next.type)}
           </span>
           <p className="text-xs text-gray-500 dark:text-gray-400 flex-1 truncate">
             {next.text}
           </p>
-          <span className="text-xs text-gray-400 font-mono">
+          <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
             {formatInstructionDistance(next.distance)}
           </span>
         </motion.div>

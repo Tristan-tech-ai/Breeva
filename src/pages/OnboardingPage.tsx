@@ -94,7 +94,7 @@ export default function OnboardingPage() {
       <div className="flex justify-end p-4">
         <button
           onClick={handleFinish}
-          className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+          className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 dark:text-gray-600 transition-colors"
         >
           Skip
         </button>
@@ -210,7 +210,7 @@ export default function OnboardingPage() {
                 </button>
                 <button
                   onClick={goNext}
-                  className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 dark:text-gray-600 transition-colors"
                 >
                   Skip for now
                 </button>
@@ -263,7 +263,7 @@ export default function OnboardingPage() {
                 </button>
                 <button
                   onClick={goNext}
-                  className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 dark:text-gray-600 transition-colors"
                 >
                   Skip for now
                 </button>
@@ -318,7 +318,7 @@ export default function OnboardingPage() {
                 </button>
                 <button
                   onClick={handleFinish}
-                  className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 dark:text-gray-600 transition-colors"
                 >
                   I'll do it later
                 </button>

@@ -31,7 +31,7 @@ export default function AboutPage() {
           animate={{ opacity: 1, scale: 1 }}
           className="flex flex-col items-center text-center"
         >
-          <div className="w-20 h-20 rounded-2xl bg-white shadow-lg flex items-center justify-center mb-4 ring-2 ring-primary-100">
+          <div className="w-20 h-20 rounded-2xl bg-white dark:bg-gray-900 shadow-lg flex items-center justify-center mb-4 ring-2 ring-primary-100">
             <img src={logoBreeva} alt="Breeva" className="w-12 h-12 object-contain" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Breeva</h2>
@@ -116,7 +116,7 @@ export default function AboutPage() {
                 <span className="text-lg">{f.icon}</span>
                 <div>
                   <p className="text-xs font-semibold text-gray-900 dark:text-white">{f.label}</p>
-                  <p className="text-[10px] text-gray-400">{f.desc}</p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">{f.desc}</p>
                 </div>
               </div>
             ))}
@@ -171,7 +171,7 @@ export default function AboutPage() {
 
         {/* Footer */}
         <div className="text-center pt-2">
-          <p className="text-[10px] text-gray-400">
+          <p className="text-[10px] text-gray-400 dark:text-gray-500">
             © 2026 Breeva. All rights reserved.
           </p>
           <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-1">
