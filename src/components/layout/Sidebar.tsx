@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   X,
   Bookmark,
@@ -56,7 +56,6 @@ const menuSections = [
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { profile, signOut } = useAuthStore();
-  const navigate = useNavigate();
 
   const handleItemClick = (path: string) => {
     if (path.startsWith('#')) {

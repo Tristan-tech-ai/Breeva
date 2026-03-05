@@ -1,12 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Leaf, Globe, Shield, Heart, Users, Github, Mail, ExternalLink } from 'lucide-react';
+import { ChevronLeft, Leaf, Globe, Shield, Heart, Github, Mail, ExternalLink } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import logoBreeva from '../assets/logo-breeva.svg';
-
-const teamMembers = [
-  { name: 'Breeva Team', role: 'Development & Design', emoji: '🌿' },
-];
 
 const stats = [
   { label: 'Launch Year', value: '2026' },
