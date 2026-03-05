@@ -187,6 +187,8 @@
 
   .dark .glass-nav {
     background: rgba(15, 23, 42, 0.9);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border-top-color: rgba(255, 255, 255, 0.1);
   }
 
