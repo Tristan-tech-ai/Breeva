@@ -14,10 +14,16 @@ import {
   getPerpendicularWaypoint,
   routeGeometrySimilar,
 } from '../lib/api';
+import { fsqAutocomplete } from '../lib/foursquare-api';
 
 export interface SearchResult {
   name: string;
   coordinate: Coordinate;
+  address?: string;
+  category?: string;
+  categoryEmoji?: string;
+  fsqId?: string;
+  distance?: number;
 }
 
 type BottomSheetState = 'peek' | 'half' | 'full' | 'hidden';
@@ -182,6 +188,32 @@ export const useMapStore = create<MapState>()((set, get) => ({
 
     set({ isSearching: true });
     const { userLocation } = get();
+
+    // Try Foursquare autocomplete first (richer results)
+    try {
+      const fsqResults = await fsqAutocomplete(query, userLocation || undefined);
+      const mapped: SearchResult[] = fsqResults
+        .filter((r) => r.place?.geocodes?.main)
+        .map((r) => {
+          const p = r.place!;
+          const cat = p.categories?.[0];
+          return {
+            name: p.name || r.text.primary,
+            coordinate: { lat: p.geocodes.main.latitude, lng: p.geocodes.main.longitude },
+            address: r.text.secondary || p.location?.formatted_address,
+            category: cat?.short_name || cat?.name,
+            fsqId: p.fsq_id,
+            distance: p.distance,
+          };
+        });
+
+      if (mapped.length > 0) {
+        set({ searchResults: mapped, isSearching: false });
+        return;
+      }
+    } catch { /* fallback to ORS */ }
+
+    // Fallback: ORS geocoding
     const { places } = await searchPlaces(query, userLocation || undefined);
     set({ searchResults: places, isSearching: false });
   },

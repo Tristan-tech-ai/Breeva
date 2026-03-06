@@ -1,45 +1,61 @@
-import { useEffect, useState } from 'react';
-import { Marker, Popup } from 'react-leaflet';
+import { useEffect, useState, useMemo } from 'react';
+import { Marker } from 'react-leaflet';
 import L from 'leaflet';
-import { MapPin, Phone, Globe, Star } from 'lucide-react';
 import type { Coordinate } from '../../types';
 import type { POI } from '../../lib/poi-api';
 import { getNearbyPOIs } from '../../lib/poi-api';
+import { getCategoryStyle } from '../../lib/foursquare-api';
 
 interface POILayerProps {
   center: Coordinate;
   radiusMeters?: number;
   categories?: string[];
   visible?: boolean;
+  onPlaceSelect?: (poi: POI) => void;
 }
 
-// Custom icon for POI markers
-const poiIcon = L.divIcon({
-  className: 'custom-poi-marker',
-  html: `
-    <div style="
-      width: 24px;
-      height: 24px;
-      background: #3b82f6;
-      border: 2px solid white;
-      border-radius: 50%;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 12px;
-    ">
-      📍
-    </div>
-  `,
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-});
+// Build a colored divIcon for a category
+function makePOIIcon(emoji: string, color: string) {
+  return L.divIcon({
+    className: 'custom-poi-marker',
+    html: `<div style="
+      width:30px;height:30px;
+      background:${color};
+      border:2.5px solid white;
+      border-radius:50%;
+      box-shadow:0 2px 8px rgba(0,0,0,0.25);
+      display:flex;align-items:center;justify-content:center;
+      font-size:14px;line-height:1;
+      cursor:pointer;
+    ">${emoji}</div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+  });
+}
 
-export default function POILayer({ center, radiusMeters = 1000, categories, visible = true }: POILayerProps) {
+// Cache icons so we don't recreate them every render
+const iconCache = new Map<string, L.DivIcon>();
+function getIcon(category: string): L.DivIcon {
+  if (iconCache.has(category)) return iconCache.get(category)!;
+  const { emoji, color } = getCategoryStyle(category);
+  const icon = makePOIIcon(emoji, color);
+  iconCache.set(category, icon);
+  return icon;
+}
+
+export default function POILayer({
+  center,
+  radiusMeters = 1500,
+  categories,
+  visible = true,
+  onPlaceSelect,
+}: POILayerProps) {
   const [pois, setPOIs] = useState<POI[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Round center to ~200m grid to avoid re-fetching on tiny moves
+  const gridLat = Math.round(center.lat * 500) / 500;
+  const gridLng = Math.round(center.lng * 500) / 500;
 
   useEffect(() => {
     if (!visible) {
@@ -47,86 +63,40 @@ export default function POILayer({ center, radiusMeters = 1000, categories, visi
       return;
     }
 
+    let cancelled = false;
     const fetchPOIs = async () => {
       setLoading(true);
-      const { pois: results } = await getNearbyPOIs(center, radiusMeters, categories);
-      setPOIs(results);
-      setLoading(false);
+      const { pois: results } = await getNearbyPOIs(
+        { lat: gridLat, lng: gridLng },
+        radiusMeters,
+        categories,
+      );
+      if (!cancelled) {
+        setPOIs(results);
+        setLoading(false);
+      }
     };
 
     fetchPOIs();
-  }, [center.lat, center.lng, radiusMeters, categories?.join(','), visible]);
+    return () => { cancelled = true; };
+  }, [gridLat, gridLng, radiusMeters, categories?.join(','), visible]);
 
-  if (!visible || loading) return null;
+  // Memoize markers to avoid unnecessary re-renders
+  const markers = useMemo(() => {
+    if (!visible || loading) return null;
+    return pois.map((poi) => (
+      <Marker
+        key={poi.id}
+        position={[poi.coordinate.lat, poi.coordinate.lng]}
+        icon={getIcon(poi.category)}
+        eventHandlers={
+          onPlaceSelect
+            ? { click: () => onPlaceSelect(poi) }
+            : undefined
+        }
+      />
+    ));
+  }, [pois, visible, loading, onPlaceSelect]);
 
-  return (
-    <>
-      {pois.map((poi) => (
-        <Marker
-          key={poi.id}
-          position={[poi.coordinate.lat, poi.coordinate.lng]}
-          icon={poiIcon}
-        >
-          <Popup>
-            <div className="p-2 min-w-[200px]">
-              <h3 className="font-bold text-sm text-gray-900 dark:text-white mb-1">
-                {poi.name}
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{poi.category}</p>
-              
-              {poi.address && (
-                <div className="flex items-start gap-1.5 mb-1">
-                  <MapPin size={12} className="text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
-                  <p className="text-xs text-gray-600 dark:text-gray-300">{poi.address}</p>
-                </div>
-              )}
-
-              {poi.rating && (
-                <div className="flex items-center gap-1 mb-1">
-                  <Star size={12} className="text-amber-400" fill="currentColor" />
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    {poi.rating.toFixed(1)}
-                  </span>
-                </div>
-              )}
-
-              {poi.phone && (
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Phone size={12} className="text-gray-400 dark:text-gray-500" />
-                  <a
-                    href={`tel:${poi.phone}`}
-                    className="text-xs text-primary-600 hover:underline"
-                  >
-                    {poi.phone}
-                  </a>
-                </div>
-              )}
-
-              {poi.website && (
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Globe size={12} className="text-gray-400 dark:text-gray-500" />
-                  <a
-                    href={poi.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-primary-600 hover:underline"
-                  >
-                    Visit website
-                  </a>
-                </div>
-              )}
-
-              {poi.distance && (
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2">
-                  {poi.distance < 1000
-                    ? `${Math.round(poi.distance)} m away`
-                    : `${(poi.distance / 1000).toFixed(1)} km away`}
-                </p>
-              )}
-            </div>
-          </Popup>
-        </Marker>
-      ))}
-    </>
-  );
+  return <>{markers}</>;
 }

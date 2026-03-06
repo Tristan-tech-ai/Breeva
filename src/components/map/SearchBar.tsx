@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, MapPin, Clock, Loader2 } from 'lucide-react';
 import { useMapStore } from '../../stores/mapStore';
+import { getCategoryStyle } from '../../lib/foursquare-api';
 
 export default function SearchBar() {
   const {
@@ -98,29 +99,59 @@ export default function SearchBar() {
             {/* Search results */}
             {searchResults.length > 0 && (
               <div className="py-1">
-                {searchResults.map((result, i) => (
-                  <button
-                    key={i}
-                    onClick={() =>
-                      handleSelect(result.name, result.coordinate.lat, result.coordinate.lng)
-                    }
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-primary-50/60 dark:hover:bg-primary-900/20 transition-colors text-left"
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center flex-shrink-0">
-                      <MapPin className="w-4 h-4 text-primary-600 dark:text-primary-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        {result.name}
-                      </p>
-                      {userLocation && (
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                          {getDistanceText(userLocation, result.coordinate)}
+                {searchResults.map((result, i) => {
+                  const catStyle = result.category ? getCategoryStyle(result.category) : null;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() =>
+                        handleSelect(result.name, result.coordinate.lat, result.coordinate.lng)
+                      }
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-primary-50/60 dark:hover:bg-primary-900/20 transition-colors text-left"
+                    >
+                      <div
+                        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-lg"
+                        style={catStyle ? { backgroundColor: catStyle.color + '15' } : undefined}
+                      >
+                        {catStyle ? (
+                          <span>{catStyle.emoji}</span>
+                        ) : (
+                          <MapPin className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {result.name}
                         </p>
-                      )}
-                    </div>
-                  </button>
-                ))}
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {result.category && (
+                            <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500">
+                              {result.category}
+                            </span>
+                          )}
+                          {result.category && (result.address || result.distance != null) && (
+                            <span className="text-gray-300 dark:text-gray-600">·</span>
+                          )}
+                          {result.distance != null ? (
+                            <span className="text-xs text-gray-400 dark:text-gray-500">
+                              {result.distance < 1000
+                                ? `${Math.round(result.distance)}m`
+                                : `${(result.distance / 1000).toFixed(1)}km`}
+                            </span>
+                          ) : result.address ? (
+                            <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                              {result.address}
+                            </span>
+                          ) : userLocation ? (
+                            <span className="text-xs text-gray-400 dark:text-gray-500">
+                              {getDistanceText(userLocation, result.coordinate)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
 

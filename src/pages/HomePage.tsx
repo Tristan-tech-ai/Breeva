@@ -34,7 +34,9 @@ import AQIBadge from '../components/features/AQIBadge';
 import AQICard from '../components/features/AQICard';
 import WalkComplete from '../components/features/WalkComplete';
 import TurnByTurn from '../components/map/TurnByTurn';
+import PlaceDetailSheet from '../components/map/PlaceDetailSheet';
 import { AQIOverlayToggle } from '../components/map/AQIOverlay';
+import type { POI } from '../lib/poi-api';
 
 export default function HomePage() {
   const {
@@ -50,6 +52,7 @@ export default function HomePage() {
     calculateRoutes,
     selectRoute,
     clearDestination,
+    setDestination,
     setBottomSheetState,
     setCenter,
   } = useMapStore();
@@ -76,6 +79,7 @@ export default function HomePage() {
   const [showPOIs, setShowPOIs] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'voyager' | 'osm' | 'satellite'>('voyager');
+  const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
 
   useEffect(() => {
     startLocating();
@@ -106,7 +110,14 @@ export default function HomePage() {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-950">
       {/* Map */}
-      <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay={showAQIOverlay} showPOIs={showPOIs} mapStyle={mapStyle} />
+      <LeafletMap
+        className="absolute inset-0"
+        isDarkMode={isDark}
+        showAQIOverlay={showAQIOverlay}
+        showPOIs={showPOIs}
+        mapStyle={mapStyle}
+        onPlaceSelect={(poi) => setSelectedPOI(poi)}
+      />
 
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -504,6 +515,21 @@ export default function HomePage() {
 
       {/* Bottom Navigation */}
       {!isTracking && <BottomNavigation />}
+
+      {/* Place Detail Sheet */}
+      <PlaceDetailSheet
+        poi={selectedPOI}
+        onClose={() => setSelectedPOI(null)}
+        onNavigate={(coord, name) => {
+          setDestination(coord, name);
+          setSelectedPOI(null);
+        }}
+        onSave={(name, coord) => {
+          if (!isPlaceSaved(coord)) addPlace(name, coord, 'favorite');
+        }}
+        isSaved={selectedPOI ? isPlaceSaved(selectedPOI.coordinate) : false}
+        userLocation={userLocation}
+      />
 
       {/* Walk Complete modal */}
       <AnimatePresence>

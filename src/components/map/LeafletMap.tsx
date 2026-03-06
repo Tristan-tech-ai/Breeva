@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { useMapStore } from '../../stores/mapStore';
 import { AQICircles, generateAQIZones } from './AQIOverlay';
 import POILayer from './POILayer';
+import type { POI } from '../../lib/poi-api';
 import type { Route } from '../../types';
 
 // Fix Leaflet default icon issue with bundlers
@@ -123,9 +124,10 @@ interface LeafletMapProps {
   showAQIOverlay?: boolean;
   showPOIs?: boolean;
   mapStyle?: 'voyager' | 'osm' | 'satellite';
+  onPlaceSelect?: (poi: POI) => void;
 }
 
-export default function LeafletMap({ className = '', isDarkMode = false, showAQIOverlay = false, showPOIs = false, mapStyle = 'voyager' }: LeafletMapProps) {
+export default function LeafletMap({ className = '', isDarkMode = false, showAQIOverlay = false, showPOIs = false, mapStyle = 'voyager', onPlaceSelect }: LeafletMapProps) {
   const {
     center,
     userLocation,
@@ -192,6 +194,7 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
             center={userLocation}
             radiusMeters={2000}
             visible={showPOIs}
+            onPlaceSelect={onPlaceSelect}
           />
         )}
 
