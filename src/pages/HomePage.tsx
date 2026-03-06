@@ -13,7 +13,6 @@ import {
   Trophy,
   Footprints,
   ChevronRight,
-  Store,
   Menu,
   Bookmark,
   BookmarkCheck,
@@ -35,7 +34,7 @@ import AQICard from '../components/features/AQICard';
 import WalkComplete from '../components/features/WalkComplete';
 import TurnByTurn from '../components/map/TurnByTurn';
 import PlaceDetailSheet from '../components/map/PlaceDetailSheet';
-import { AQIOverlayToggle } from '../components/map/AQIOverlay';
+import MapLayersSheet from '../components/map/MapLayersSheet';
 import type { POI } from '../lib/poi-api';
 
 export default function HomePage() {
@@ -75,11 +74,12 @@ export default function HomePage() {
   const { addPlace, isPlaceSaved } = useSavedPlacesStore();
   const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
   const [showWalkComplete, setShowWalkComplete] = useState(false);
-  const [showAQIOverlay] = useState(false);
+  const [showAQIOverlay, setShowAQIOverlay] = useState(false);
   const [showPOIs, setShowPOIs] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'voyager' | 'osm' | 'satellite'>('voyager');
   const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
+  const [showLayersSheet, setShowLayersSheet] = useState(false);
 
   useEffect(() => {
     startLocating();
@@ -139,7 +139,7 @@ export default function HomePage() {
 
                 {/* Search bar */}
                 <div className="flex-1">
-                  <SearchBar />
+                  <SearchBar onPlaceSelect={(poi) => setSelectedPOI(poi)} />
                 </div>
 
                 {/* Profile avatar */}
@@ -170,40 +170,11 @@ export default function HomePage() {
 
           {/* Right side controls */}
           <div className="absolute right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-2">
-            {/* AQI overlay toggle */}
-            <div className="relative">
-              <AQIOverlayToggle
-                currentAQI={currentAQI}
-                userLocation={userLocation}
-              />
-            </div>
-
-            {/* POI layer toggle */}
+            {/* Layers button */}
             <button
-              onClick={() => setShowPOIs(!showPOIs)}
-              className={`
-                w-10 h-10 rounded-xl flex items-center justify-center
-                transition-all duration-200 shadow-md
-                ${
-                  showPOIs
-                    ? 'bg-primary-500 text-white shadow-primary-500/30'
-                    : 'glass-card text-gray-600 dark:text-gray-400 hover:text-primary-500'
-                }
-              `}
-              title={showPOIs ? 'Hide nearby places' : 'Show nearby places'}
-            >
-              <Store className="w-4.5 h-4.5" />
-            </button>
-
-            {/* Map style toggle */}
-            <button
-              onClick={() => {
-                const styles: Array<'voyager' | 'osm' | 'satellite'> = ['voyager', 'osm', 'satellite'];
-                const idx = styles.indexOf(mapStyle);
-                setMapStyle(styles[(idx + 1) % styles.length]);
-              }}
+              onClick={() => setShowLayersSheet(true)}
               className="w-10 h-10 rounded-xl glass-card flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all text-gray-600 dark:text-gray-400"
-              title={`Map: ${mapStyle}`}
+              title="Map layers"
             >
               <Layers className="w-4.5 h-4.5" />
             </button>
@@ -529,6 +500,19 @@ export default function HomePage() {
         }}
         isSaved={selectedPOI ? isPlaceSaved(selectedPOI.coordinate) : false}
         userLocation={userLocation}
+      />
+
+      {/* Map Layers Sheet */}
+      <MapLayersSheet
+        isOpen={showLayersSheet}
+        onClose={() => setShowLayersSheet(false)}
+        mapStyle={mapStyle}
+        onMapStyleChange={setMapStyle}
+        showAQIOverlay={showAQIOverlay}
+        onAQIOverlayToggle={() => setShowAQIOverlay(!showAQIOverlay)}
+        showPOIs={showPOIs}
+        onPOIsToggle={() => setShowPOIs(!showPOIs)}
+        currentAQI={currentAQI}
       />
 
       {/* Walk Complete modal */}

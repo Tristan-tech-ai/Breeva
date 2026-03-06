@@ -150,9 +150,9 @@ export default function PlaceDetailSheet({
                   )}
                 </div>
               ) : (
-                <div className="w-full h-32 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 flex items-center justify-center">
-                  <span className="text-5xl">{catStyle.emoji}</span>
-                </div>
+                <div className="w-full h-32 bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/30 dark:to-primary-950/50 flex items-center justify-center">
+                <MapPin className="w-10 h-10 text-primary-400 dark:text-primary-600" />
+              </div>
               )}
 
               {/* Content */}
@@ -169,7 +169,7 @@ export default function PlaceDetailSheet({
                           className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full"
                           style={{ backgroundColor: catStyle.color + '18', color: catStyle.color }}
                         >
-                          {catStyle.emoji} {poi.category}
+                          {poi.category}
                         </span>
                         {verified && (
                           <span className="inline-flex items-center gap-0.5 text-xs text-blue-600 dark:text-blue-400">

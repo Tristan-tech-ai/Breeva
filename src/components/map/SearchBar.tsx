@@ -2,9 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, MapPin, Clock, Loader2 } from 'lucide-react';
 import { useMapStore } from '../../stores/mapStore';
-import { getCategoryStyle } from '../../lib/foursquare-api';
+import type { POI } from '../../lib/poi-api';
 
-export default function SearchBar() {
+interface SearchBarProps {
+  onPlaceSelect?: (poi: POI) => void;
+}
+
+export default function SearchBar({ onPlaceSelect }: SearchBarProps) {
   const {
     searchQuery,
     setSearchQuery,
@@ -38,8 +42,21 @@ export default function SearchBar() {
     };
   }, []);
 
-  const handleSelect = (name: string, lat: number, lng: number) => {
-    setDestination({ lat, lng }, name);
+  const handleSelect = (result: typeof searchResults[number]) => {
+    // If we have a Foursquare place and onPlaceSelect, open detail sheet first
+    if (result.fsqId && onPlaceSelect) {
+      const poi: POI = {
+        id: `fsq-${result.fsqId}`,
+        name: result.name,
+        category: result.category || 'Place',
+        coordinate: result.coordinate,
+        distance: result.distance,
+        address: result.address,
+      };
+      onPlaceSelect(poi);
+    } else {
+      setDestination(result.coordinate, result.name);
+    }
     clearSearch();
     setIsFocused(false);
     inputRef.current?.blur();
@@ -99,25 +116,14 @@ export default function SearchBar() {
             {/* Search results */}
             {searchResults.length > 0 && (
               <div className="py-1">
-                {searchResults.map((result, i) => {
-                  const catStyle = result.category ? getCategoryStyle(result.category) : null;
-                  return (
+                {searchResults.map((result, i) => (
                     <button
                       key={i}
-                      onClick={() =>
-                        handleSelect(result.name, result.coordinate.lat, result.coordinate.lng)
-                      }
+                      onClick={() => handleSelect(result)}
                       className="w-full flex items-center gap-3 px-4 py-3 hover:bg-primary-50/60 dark:hover:bg-primary-900/20 transition-colors text-left"
                     >
-                      <div
-                        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-lg"
-                        style={catStyle ? { backgroundColor: catStyle.color + '15' } : undefined}
-                      >
-                        {catStyle ? (
-                          <span>{catStyle.emoji}</span>
-                        ) : (
-                          <MapPin className="w-4 h-4 text-primary-600 dark:text-primary-400" />
-                        )}
+                      <div className="w-9 h-9 rounded-xl bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center flex-shrink-0">
+                        <MapPin className="w-4 h-4 text-primary-600 dark:text-primary-400" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
@@ -150,8 +156,7 @@ export default function SearchBar() {
                         </div>
                       </div>
                     </button>
-                  );
-                })}
+                ))}
               </div>
             )}
 
@@ -173,9 +178,7 @@ export default function SearchBar() {
                 {recentSearches.map((result, i) => (
                   <button
                     key={i}
-                    onClick={() =>
-                      handleSelect(result.name, result.coordinate.lat, result.coordinate.lng)
-                    }
+                    onClick={() => handleSelect(result)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:bg-gray-950/80 dark:hover:bg-gray-800/50 transition-colors text-left"
                   >
                     <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800/80 flex items-center justify-center flex-shrink-0">
