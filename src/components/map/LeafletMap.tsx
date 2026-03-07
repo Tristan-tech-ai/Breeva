@@ -197,7 +197,6 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
             visible={showPOIs}
             activeFilter={activeFilter}
             onPlaceSelect={onPlaceSelect}
-            mapStyle={mapStyle}
           />
         )}
 

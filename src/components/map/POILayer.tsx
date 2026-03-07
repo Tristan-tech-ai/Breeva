@@ -9,7 +9,6 @@ interface POILayerProps {
   visible?: boolean;
   activeFilter?: string | null;
   onPlaceSelect?: (poi: POI) => void;
-  mapStyle?: string;
 }
 
 // ── Category filter → Geoapify categories & matching ─────────────────
@@ -42,123 +41,24 @@ export function matchesFilter(poi: POI, filter: string): boolean {
   return synonyms.some(syn => targets.some(t => t.includes(syn)));
 }
 
-// ── Geoapify Marker Icon API ─────────────────────────────────────────
-
-const GEOAPIFY_KEY = '983da66a10e14f909057351679defe36';
-
-const CATEGORY_ICON_MAP: Record<string, { fa: string; color: string }> = {
-  restaurant: { fa: 'utensils', color: 'f97316' },
-  fast_food: { fa: 'utensils', color: 'ef4444' },
-  cafe: { fa: 'coffee', color: '92400e' },
-  coffee_shop: { fa: 'coffee', color: '92400e' },
-  coffee: { fa: 'coffee', color: '92400e' },
-  bakery: { fa: 'birthday-cake', color: 'd97706' },
-  bar: { fa: 'glass-martini-alt', color: '7c3aed' },
-  pub: { fa: 'beer', color: '7c3aed' },
-  hotel: { fa: 'bed', color: '6366f1' },
-  guest_house: { fa: 'bed', color: '6366f1' },
-  hostel: { fa: 'bed', color: '6366f1' },
-  accommodation: { fa: 'bed', color: '6366f1' },
-  park: { fa: 'tree', color: '16a34a' },
-  playground: { fa: 'child', color: '16a34a' },
-  garden: { fa: 'tree', color: '16a34a' },
-  commercial: { fa: 'shopping-bag', color: 'eab308' },
-  shop: { fa: 'shopping-bag', color: 'eab308' },
-  store: { fa: 'store', color: 'eab308' },
-  supermarket: { fa: 'shopping-cart', color: '22c55e' },
-  convenience: { fa: 'store', color: '22c55e' },
-  clothes: { fa: 'tshirt', color: 'ec4899' },
-  mosque: { fa: 'mosque', color: '10b981' },
-  islam: { fa: 'mosque', color: '10b981' },
-  church: { fa: 'church', color: '8b5cf6' },
-  place_of_worship: { fa: 'praying-hands', color: '8b5cf6' },
-  atm: { fa: 'money-bill-alt', color: '6366f1' },
-  bank: { fa: 'university', color: '6366f1' },
-  financial: { fa: 'money-bill-alt', color: '6366f1' },
-  fuel: { fa: 'gas-pump', color: 'f59e0b' },
-  gas: { fa: 'gas-pump', color: 'f59e0b' },
-  pharmacy: { fa: 'pills', color: 'ef4444' },
-  hospital: { fa: 'hospital', color: 'ef4444' },
-  clinic: { fa: 'clinic-medical', color: 'ef4444' },
-  cinema: { fa: 'film', color: 'ec4899' },
-  museum: { fa: 'landmark', color: '8b5cf6' },
-  library: { fa: 'book', color: '6366f1' },
-  school: { fa: 'graduation-cap', color: '3b82f6' },
-  university: { fa: 'university', color: '3b82f6' },
-  gym: { fa: 'dumbbell', color: '14b8a6' },
-  spa: { fa: 'spa', color: '14b8a6' },
-  salon: { fa: 'cut', color: 'ec4899' },
-  parking: { fa: 'parking', color: '6b7280' },
-  tourism: { fa: 'camera', color: 'f59e0b' },
-  entertainment: { fa: 'star', color: 'ec4899' },
-  default: { fa: 'map-marker-alt', color: '6b7280' },
-};
-
-function findCategoryIcon(category: string, types?: string[]): { fa: string; color: string } {
-  const lower = category.toLowerCase();
-  if (CATEGORY_ICON_MAP[lower]) return CATEGORY_ICON_MAP[lower];
-  if (types) {
-    for (const t of types) {
-      if (CATEGORY_ICON_MAP[t.toLowerCase()]) return CATEGORY_ICON_MAP[t.toLowerCase()];
-    }
-  }
-  for (const [key, val] of Object.entries(CATEGORY_ICON_MAP)) {
-    if (key !== 'default' && lower.includes(key)) return val;
-  }
-  if (types) {
-    for (const t of types) {
-      for (const [key, val] of Object.entries(CATEGORY_ICON_MAP)) {
-        if (key !== 'default' && t.toLowerCase().includes(key)) return val;
-      }
-    }
-  }
-  return CATEGORY_ICON_MAP.default;
-}
-
-// ── Geoapify marker icon factory ─────────────────────────────────────
+// ── Invisible click-target icons ─────────────────────────────────────
+// The Geoapify map tiles already render POI icons visually.
+// We overlay transparent hit areas so users can tap them to see details.
 
 const iconCache = new Map<string, L.DivIcon>();
 
-// Pin dimensions per Geoapify size
-const PIN_DIMS: Record<string, [number, number]> = {
-  small: [25, 37],
-  medium: [31, 46],
-  large: [38, 56],
-};
-
-function getIcon(
-  category: string,
-  zoom: number,
-  dimmed: boolean,
-  types?: string[],
-  isSatellite = false,
-): L.DivIcon {
-  const { fa, color } = findCategoryIcon(category, types);
-  const size: 'small' | 'medium' | 'large' =
-    zoom >= 16 ? 'large' : zoom >= 14 ? 'medium' : 'small';
-
-  const satKey = isSatellite ? 's' : 'n';
-  const cacheKey = `${fa}_${color}_${size}_${dimmed ? 1 : 0}_${satKey}`;
+function getHitIcon(zoom: number, dimmed: boolean): L.DivIcon {
+  // Larger hit area at higher zoom for easier tapping
+  const size = zoom >= 16 ? 40 : zoom >= 14 ? 32 : 24;
+  const cacheKey = `hit_${size}_${dimmed ? 1 : 0}`;
   if (iconCache.has(cacheKey)) return iconCache.get(cacheKey)!;
-
-  const pinColor = isSatellite && !dimmed ? 'ffffff' : color;
-  const strokeColor = isSatellite ? '333333' : 'ffffff';
-  const url = `https://api.geoapify.com/v1/icon/?type=material&color=%23${pinColor}&size=${size}&icon=${fa}&iconType=awesome&strokeColor=%23${strokeColor}&apiKey=${GEOAPIFY_KEY}`;
-
-  const [w, h] = PIN_DIMS[size];
-  const opacity = dimmed ? 0.3 : 1;
-  const filter = dimmed
-    ? 'grayscale(60%)'
-    : isSatellite
-      ? 'drop-shadow(0 0 6px rgba(255,255,255,0.85)) drop-shadow(0 2px 4px rgba(0,0,0,0.6))'
-      : 'drop-shadow(0 1px 3px rgba(0,0,0,0.4))';
 
   const icon = L.divIcon({
     className: '',
-    html: `<img src="${url}" width="${w}" height="${h}" style="opacity:${opacity};filter:${filter};transition:transform .12s ease,opacity .2s ease;cursor:pointer;" onmouseover="this.style.transform='scale(1.18)'" onmouseout="this.style.transform='scale(1)'" loading="lazy" />`,
-    iconSize: [w, h],
-    iconAnchor: [w / 2, h],
-    tooltipAnchor: [0, -h + 8],
+    html: `<div style="width:${size}px;height:${size}px;cursor:pointer;border-radius:50%;" />`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    tooltipAnchor: [0, -(size / 2) + 4],
   });
 
   iconCache.set(cacheKey, icon);
@@ -183,7 +83,6 @@ export default function POILayer({
   visible = true,
   activeFilter = null,
   onPlaceSelect,
-  mapStyle = 'voyager',
 }: POILayerProps) {
   const map = useMap();
   const [pois, setPOIs] = useState<POI[]>([]);
@@ -295,7 +194,6 @@ export default function POILayer({
     return visiblePois.map((poi) => {
       const isDimmed = activeFilter ? !matchesFilter(poi, activeFilter) : false;
       const isHighlighted = activeFilter ? matchesFilter(poi, activeFilter) : false;
-      const isSat = mapStyle === 'satellite';
       // Highlighted POIs show labels at lower zoom, dimmed ones never show labels
       const showLabel = isHighlighted ? zoom >= 13 : !isDimmed && zoom >= 15;
       const showRating = isHighlighted ? zoom >= 15 : zoom >= 17;
@@ -304,7 +202,7 @@ export default function POILayer({
         <Marker
           key={poi.id}
           position={[poi.coordinate.lat, poi.coordinate.lng]}
-          icon={getIcon(poi.category, zoom, isDimmed, poi.types, isSat)}
+          icon={getHitIcon(zoom, isDimmed)}
           zIndexOffset={isHighlighted ? 1000 : isDimmed ? -1000 : 0}
           eventHandlers={{ click: () => handleClick(poi) }}
         >
@@ -313,7 +211,7 @@ export default function POILayer({
               permanent
               direction="bottom"
               offset={[0, 6]}
-              className={`poi-label-tooltip${isSat ? ' poi-satellite' : ''}`}
+              className="poi-label-tooltip"
             >
               <span className="poi-label-name">{truncName(poi.name)}</span>
               {showRating && poi.rating != null && (
