@@ -47,18 +47,25 @@ export function matchesFilter(poi: POI, filter: string): boolean {
 
 const iconCache = new Map<string, L.DivIcon>();
 
-function getHitIcon(zoom: number, dimmed: boolean): L.DivIcon {
-  // Larger hit area at higher zoom for easier tapping
-  const size = zoom >= 16 ? 40 : zoom >= 14 ? 32 : 24;
-  const cacheKey = `hit_${size}_${dimmed ? 1 : 0}`;
+function getHitIcon(zoom: number): L.DivIcon {
+  // Circle for icon + tall rectangle below for label text
+  const circle = zoom >= 16 ? 52 : zoom >= 14 ? 42 : 32;
+  const textW = zoom >= 16 ? 80 : zoom >= 14 ? 70 : 56;
+  const textH = zoom >= 16 ? 28 : zoom >= 14 ? 22 : 18;
+  const totalW = Math.max(circle, textW);
+  const totalH = circle + textH + 2; // 2px gap
+
+  const cacheKey = `hit_${circle}_${textW}`;
   if (iconCache.has(cacheKey)) return iconCache.get(cacheKey)!;
 
   const icon = L.divIcon({
     className: '',
-    html: `<div style="width:${size}px;height:${size}px;cursor:pointer;border-radius:50%;" />`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-    tooltipAnchor: [0, -(size / 2) + 4],
+    html: `<div style="width:${totalW}px;height:${totalH}px;cursor:pointer;display:flex;flex-direction:column;align-items:center;">
+      <div style="width:${circle}px;height:${circle}px;border-radius:50%;" />
+      <div style="width:${textW}px;height:${textH}px;border-radius:4px;" />
+    </div>`,
+    iconSize: [totalW, totalH],
+    iconAnchor: [totalW / 2, circle / 2],
   });
 
   iconCache.set(cacheKey, icon);
@@ -164,7 +171,7 @@ export default function POILayer({
       <Marker
         key={poi.id}
         position={[poi.coordinate.lat, poi.coordinate.lng]}
-        icon={getHitIcon(zoom, false)}
+        icon={getHitIcon(zoom)}
         zIndexOffset={0}
         eventHandlers={{ click: () => handleClick(poi) }}
       />
