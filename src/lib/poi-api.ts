@@ -27,53 +27,89 @@ export interface POI {
 export async function getNearbyPOIs(
   center: Coordinate,
   radiusMeters: number = 1500,
-  _categories?: string[],
+  searchQueries?: string[],
 ): Promise<{ pois: POI[]; error: string | null }> {
   try {
-    const zoom = radiusMeters <= 500 ? 16 : radiusMeters <= 1000 ? 15 : 14;
-
-    const results = await searchGoogleMaps(
-      'tempat menarik restoran kafe toko taman',
-      center,
-      zoom,
-    );
+    const zoom = radiusMeters <= 500 ? 16 : radiusMeters <= 1000 ? 15 : radiusMeters <= 3000 ? 14 : 13;
+    const queries = searchQueries && searchQueries.length > 0
+      ? searchQueries
+      : ['tempat menarik restoran kafe toko taman masjid hotel'];
 
     const pois: POI[] = [];
     const seen = new Set<string>();
 
-    for (const place of results) {
-      if (!place.gps_coordinates) continue;
+    const allResults = await Promise.all(
+      queries.map(q => searchGoogleMaps(q, center, zoom)),
+    );
 
-      const coord: Coordinate = {
-        lat: place.gps_coordinates.latitude,
-        lng: place.gps_coordinates.longitude,
-      };
+    for (const results of allResults) {
+      for (const place of results) {
+        if (!place.gps_coordinates) continue;
 
-      const dist = getDistance(center, coord);
-      if (dist > radiusMeters * 1.5) continue;
+        const coord: Coordinate = {
+          lat: place.gps_coordinates.latitude,
+          lng: place.gps_coordinates.longitude,
+        };
 
-      const key = place.place_id || place.title.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
+        const dist = getDistance(center, coord);
+        if (dist > radiusMeters * 1.5) continue;
 
-      pois.push({
-        id: place.place_id ? `gmap-${place.place_id}` : `gmap-${place.data_id || String(Date.now())}`,
-        name: place.title,
-        category: place.type || place.types?.[0] || 'Place',
-        coordinate: coord,
-        distance: dist,
-        address: place.address,
-        rating: place.rating,
-        reviewCount: place.reviews,
-        phone: place.phone,
-        website: place.website,
-        thumbnail: place.thumbnail,
-        placeId: place.place_id,
-        dataId: place.data_id,
-        openState: place.open_state || place.hours,
-        types: place.types,
-        price: place.price,
-      });
+        const key = place.place_id || place.title.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        pois.push({
+          id: place.place_id ? `gmap-${place.place_id}` : `gmap-${place.data_id || String(Date.now())}`,
+          name: place.title,
+          category: place.type || place.types?.[0] || 'Place',
+          coordinate: coord,
+          distance: dist,
+          address: place.address,
+          rating: place.rating,
+          reviewCount: place.reviews,
+          phone: place.phone,
+          website: place.website,
+          thumbnail: place.thumbnail,
+          placeId: place.place_id,
+          dataId: place.data_id,
+          openState: place.open_state || place.hours,
+          types: place.types,
+          price: place.price,
+        });
+      }
+    }
+
+    // Fallback: if too few results, try broader search
+    if (pois.length < 3) {
+      try {
+        const broader = await searchGoogleMaps('tempat terdekat', center, Math.max(zoom - 2, 10));
+        for (const place of broader) {
+          if (!place.gps_coordinates) continue;
+          const coord: Coordinate = {
+            lat: place.gps_coordinates.latitude,
+            lng: place.gps_coordinates.longitude,
+          };
+          const key = place.place_id || place.title.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          pois.push({
+            id: place.place_id ? `gmap-${place.place_id}` : `gmap-${place.data_id || String(Date.now())}`,
+            name: place.title,
+            category: place.type || place.types?.[0] || 'Place',
+            coordinate: coord,
+            distance: getDistance(center, coord),
+            address: place.address,
+            rating: place.rating,
+            reviewCount: place.reviews,
+            thumbnail: place.thumbnail,
+            placeId: place.place_id,
+            dataId: place.data_id,
+            openState: place.open_state || place.hours,
+            types: place.types,
+            price: place.price,
+          });
+        }
+      } catch { /* ignore fallback failure */ }
     }
 
     pois.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));

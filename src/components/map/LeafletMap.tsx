@@ -124,10 +124,11 @@ interface LeafletMapProps {
   showAQIOverlay?: boolean;
   showPOIs?: boolean;
   mapStyle?: 'voyager' | 'osm' | 'satellite';
+  activeFilter?: string | null;
   onPlaceSelect?: (poi: POI) => void;
 }
 
-export default function LeafletMap({ className = '', isDarkMode = false, showAQIOverlay = false, showPOIs = false, mapStyle = 'voyager', onPlaceSelect }: LeafletMapProps) {
+export default function LeafletMap({ className = '', isDarkMode = false, showAQIOverlay = false, showPOIs = false, mapStyle = 'voyager', activeFilter = null, onPlaceSelect }: LeafletMapProps) {
   const {
     center,
     userLocation,
@@ -188,12 +189,11 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
           <AQICircles zones={zones} />
         )}
 
-        {/* POI markers */}
-        {showPOIs && userLocation && (
+        {/* POI markers — viewport-based, no center needed */}
+        {showPOIs && (
           <POILayer
-            center={userLocation}
-            radiusMeters={2000}
             visible={showPOIs}
+            activeFilter={activeFilter}
             onPlaceSelect={onPlaceSelect}
           />
         )}

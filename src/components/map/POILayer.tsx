@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import type { POI } from '../../lib/poi-api';
@@ -6,11 +6,39 @@ import { getNearbyPOIs } from '../../lib/poi-api';
 import type { Coordinate } from '../../types';
 
 interface POILayerProps {
-  center: Coordinate;
-  radiusMeters?: number;
-  categories?: string[];
   visible?: boolean;
+  activeFilter?: string | null;
   onPlaceSelect?: (poi: POI) => void;
+}
+
+// ── Category filter queries & matching ───────────────────────────────
+
+export const FILTER_QUERIES: Record<string, string> = {
+  restaurant: 'restoran rumah makan restaurant food',
+  cafe: 'kafe coffee shop cafe kedai kopi',
+  hotel: 'hotel penginapan hostel resort',
+  park: 'taman park ruang terbuka hijau',
+  shop: 'toko belanja mall shopping store',
+  mosque: 'masjid musholla mosque',
+  atm: 'ATM bank finance',
+  gas: 'SPBU pom bensin gas station',
+};
+
+const FILTER_SYNONYMS: Record<string, string[]> = {
+  restaurant: ['restaurant', 'restoran', 'rumah makan', 'food', 'dining', 'fast food', 'seafood', 'steak', 'nasi', 'mie', 'sate'],
+  cafe: ['cafe', 'coffee', 'kafe', 'kedai', 'tea', 'bakery', 'dessert'],
+  hotel: ['hotel', 'inn', 'penginapan', 'lodging', 'hostel', 'motel', 'resort', 'villa'],
+  park: ['park', 'taman', 'garden', 'recreation', 'playground', 'nature'],
+  shop: ['shop', 'store', 'mall', 'toko', 'market', 'supermarket', 'convenience', 'shopping', 'retail'],
+  mosque: ['mosque', 'masjid', 'musholla', 'islamic'],
+  atm: ['atm', 'bank', 'finance'],
+  gas: ['gas', 'fuel', 'spbu', 'petrol', 'gas_station', 'filling'],
+};
+
+export function matchesFilter(poi: POI, filter: string): boolean {
+  const synonyms = FILTER_SYNONYMS[filter] || [filter];
+  const targets = [poi.category, ...(poi.types || [])].map(s => s.toLowerCase());
+  return synonyms.some(syn => targets.some(t => t.includes(syn)));
 }
 
 // ── Professional SVG icons per category ──────────────────────────────
@@ -162,13 +190,24 @@ function getSvgIcon(category: string): { path: string; color: string } {
 
 const iconCache = new Map<string, L.DivIcon>();
 
-function getIcon(category: string, zoom: number): L.DivIcon {
-  // Size scales with zoom
-  const size = zoom >= 17 ? 38 : zoom >= 15 ? 32 : zoom >= 13 ? 26 : 20;
-  const cacheKey = `${category.toLowerCase()}_${size}`;
+function getIcon(category: string, zoom: number, dimmed = false, types?: string[]): L.DivIcon {
+  const baseSize = zoom >= 17 ? 38 : zoom >= 15 ? 32 : zoom >= 13 ? 26 : 20;
+  const size = dimmed ? Math.max(baseSize - 6, 16) : baseSize;
+  const opacity = dimmed ? 0.4 : 1;
+
+  // Find best matching icon from category + types
+  let matched = getSvgIcon(category);
+  if (matched === SVG_ICONS.default && types) {
+    for (const t of types) {
+      const found = getSvgIcon(t);
+      if (found !== SVG_ICONS.default) { matched = found; break; }
+    }
+  }
+
+  const cacheKey = `${matched.color}_${size}_${dimmed ? 1 : 0}`;
   if (iconCache.has(cacheKey)) return iconCache.get(cacheKey)!;
 
-  const { path, color } = getSvgIcon(category);
+  const { path, color } = matched;
   const svgSize = Math.round(size * 0.48);
 
   const icon = L.divIcon({
@@ -181,7 +220,8 @@ function getIcon(category: string, zoom: number): L.DivIcon {
       box-shadow:0 1px 5px rgba(0,0,0,0.35);
       display:flex;align-items:center;justify-content:center;
       cursor:pointer;
-      transition:transform 0.12s ease;
+      transition:transform 0.12s ease, opacity 0.2s ease;
+      opacity:${opacity};
     " onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'">
       <svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" fill="white"><path d="${path}"/></svg>
     </div>`,
@@ -208,24 +248,51 @@ function truncName(name: string, maxLen = 18): string {
 // ── Component ────────────────────────────────────────────────────────
 
 export default function POILayer({
-  center,
-  radiusMeters = 1500,
-  categories,
   visible = true,
+  activeFilter = null,
   onPlaceSelect,
 }: POILayerProps) {
   const map = useMap();
   const [pois, setPOIs] = useState<POI[]>([]);
   const [loading, setLoading] = useState(false);
   const [zoom, setZoom] = useState(map.getZoom());
+  const [viewCenter, setViewCenter] = useState<Coordinate>(() => {
+    const c = map.getCenter();
+    return { lat: c.lat, lng: c.lng };
+  });
+  const fetchRef = useRef(0);
 
   useMapEvents({
-    zoomend: () => setZoom(map.getZoom()),
+    zoomend: () => {
+      setZoom(map.getZoom());
+      const c = map.getCenter();
+      setViewCenter({ lat: c.lat, lng: c.lng });
+    },
+    moveend: () => {
+      const c = map.getCenter();
+      setViewCenter({ lat: c.lat, lng: c.lng });
+    },
   });
 
-  // Round center to ~200m grid to avoid re-fetching on tiny moves
-  const gridLat = Math.round(center.lat * 500) / 500;
-  const gridLng = Math.round(center.lng * 500) / 500;
+  // Calculate viewport radius from map bounds
+  const viewportRadius = useMemo(() => {
+    const bounds = map.getBounds();
+    const center = bounds.getCenter();
+    const ne = bounds.getNorthEast();
+    const R = 6371e3;
+    const dLat = ((ne.lat - center.lat) * Math.PI) / 180;
+    const dLng = ((ne.lng - center.lng) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((center.lat * Math.PI) / 180) * Math.cos((ne.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    return Math.min(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)), 5000);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoom, viewCenter]);
+
+  // Grid snap — coarser when zoomed out to reduce re-fetches during panning
+  const gridSize = zoom >= 15 ? 500 : zoom >= 13 ? 300 : 200;
+  const gridLat = Math.round(viewCenter.lat * gridSize) / gridSize;
+  const gridLng = Math.round(viewCenter.lng * gridSize) / gridSize;
 
   useEffect(() => {
     if (!visible) {
@@ -233,27 +300,29 @@ export default function POILayer({
       return;
     }
 
-    let cancelled = false;
+    const fetchId = ++fetchRef.current;
     const fetchPOIs = async () => {
       setLoading(true);
       try {
+        const queries = ['tempat menarik restoran kafe toko taman masjid hotel'];
+        if (activeFilter && FILTER_QUERIES[activeFilter]) {
+          queries.push(FILTER_QUERIES[activeFilter]);
+        }
         const { pois: results } = await getNearbyPOIs(
           { lat: gridLat, lng: gridLng },
-          radiusMeters,
-          categories,
+          Math.min(viewportRadius, 5000),
+          queries,
         );
-        if (!cancelled) setPOIs(results);
+        if (fetchRef.current === fetchId) setPOIs(results);
       } catch {
         // silently fail
       }
-      if (!cancelled) setLoading(false);
+      if (fetchRef.current === fetchId) setLoading(false);
     };
 
     fetchPOIs();
-    return () => {
-      cancelled = true;
-    };
-  }, [gridLat, gridLng, radiusMeters, visible]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gridLat, gridLng, viewportRadius, visible, activeFilter]);
 
   const handleClick = useCallback(
     (poi: POI) => {
@@ -262,14 +331,21 @@ export default function POILayer({
     [onPlaceSelect],
   );
 
-  // Filter & render markers based on zoom
+  // Render markers with hierarchy: filter matches on top, then by importance
   const markers = useMemo(() => {
     if (!visible || loading || pois.length === 0) return null;
 
-    // Sort by importance — higher rated/reviewed places render first
-    const sorted = [...pois].sort((a, b) => getImportance(b) - getImportance(a));
+    // Sort: filter matches first, then by importance
+    const sorted = [...pois].sort((a, b) => {
+      if (activeFilter) {
+        const aMatch = matchesFilter(a, activeFilter);
+        const bMatch = matchesFilter(b, activeFilter);
+        if (aMatch !== bMatch) return aMatch ? -1 : 1;
+      }
+      return getImportance(b) - getImportance(a);
+    });
 
-    // Limit visible count based on zoom level
+    // Limit visible count by zoom (famous places only when zoomed out)
     const maxCount =
       zoom >= 17 ? sorted.length
       : zoom >= 15 ? Math.min(sorted.length, 30)
@@ -278,34 +354,40 @@ export default function POILayer({
 
     const visiblePois = sorted.slice(0, maxCount);
 
-    const showLabel = zoom >= 15;
-    const showRating = zoom >= 17;
+    return visiblePois.map((poi) => {
+      const isDimmed = activeFilter ? !matchesFilter(poi, activeFilter) : false;
+      const isHighlighted = activeFilter ? matchesFilter(poi, activeFilter) : false;
+      // Highlighted POIs show labels at lower zoom, dimmed ones never show labels
+      const showLabel = isHighlighted ? zoom >= 13 : !isDimmed && zoom >= 15;
+      const showRating = isHighlighted ? zoom >= 15 : zoom >= 17;
 
-    return visiblePois.map((poi) => (
-      <Marker
-        key={poi.id}
-        position={[poi.coordinate.lat, poi.coordinate.lng]}
-        icon={getIcon(poi.category, zoom)}
-        eventHandlers={{ click: () => handleClick(poi) }}
-      >
-        {showLabel && (
-          <Tooltip
-            permanent
-            direction="bottom"
-            offset={[0, 6]}
-            className="poi-label-tooltip"
-          >
-            <span className="poi-label-name">{truncName(poi.name)}</span>
-            {showRating && poi.rating != null && (
-              <span className="poi-label-rating">
-                {'★'} {poi.rating.toFixed(1)}
-              </span>
-            )}
-          </Tooltip>
-        )}
-      </Marker>
-    ));
-  }, [pois, visible, loading, zoom, handleClick]);
+      return (
+        <Marker
+          key={poi.id}
+          position={[poi.coordinate.lat, poi.coordinate.lng]}
+          icon={getIcon(poi.category, zoom, isDimmed, poi.types)}
+          zIndexOffset={isHighlighted ? 1000 : isDimmed ? -1000 : 0}
+          eventHandlers={{ click: () => handleClick(poi) }}
+        >
+          {showLabel && (
+            <Tooltip
+              permanent
+              direction="bottom"
+              offset={[0, 6]}
+              className="poi-label-tooltip"
+            >
+              <span className="poi-label-name">{truncName(poi.name)}</span>
+              {showRating && poi.rating != null && (
+                <span className="poi-label-rating">
+                  {'★'} {poi.rating.toFixed(1)}
+                </span>
+              )}
+            </Tooltip>
+          )}
+        </Marker>
+      );
+    });
+  }, [pois, visible, loading, zoom, activeFilter, handleClick]);
 
   return <>{markers}</>;
 }

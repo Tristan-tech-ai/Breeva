@@ -198,9 +198,10 @@ export const useMapStore = create<MapState>()((set, get) => ({
     const { userLocation } = get();
 
     // Try Google Maps via SearchAPI first (richest data)
+    let googleResults: SearchResult[] = [];
     try {
       const gResults = await searchGoogleMaps(query, userLocation || undefined);
-      const mapped: SearchResult[] = gResults
+      googleResults = gResults
         .filter((r) => r.gps_coordinates)
         .map((r) => ({
           name: r.title,
@@ -218,16 +219,27 @@ export const useMapStore = create<MapState>()((set, get) => ({
           description: r.description,
           hours: r.hours,
         }));
+    } catch { /* ignore */ }
 
-      if (mapped.length > 0) {
-        set({ searchResults: mapped, isSearching: false });
-        return;
+    // If Google returned enough results, use them directly
+    if (googleResults.length >= 3) {
+      set({ searchResults: googleResults, isSearching: false });
+      return;
+    }
+
+    // Otherwise, also try ORS geocoding and merge for sparse areas
+    try {
+      const { places } = await searchPlaces(query, userLocation || undefined);
+      const seen = new Set(googleResults.map(r => `${r.coordinate.lat.toFixed(4)},${r.coordinate.lng.toFixed(4)}`));
+      const merged = [...googleResults];
+      for (const p of places) {
+        const key = `${p.coordinate.lat.toFixed(4)},${p.coordinate.lng.toFixed(4)}`;
+        if (!seen.has(key)) { merged.push(p); seen.add(key); }
       }
-    } catch { /* fallback to ORS */ }
-
-    // Fallback: ORS geocoding
-    const { places } = await searchPlaces(query, userLocation || undefined);
-    set({ searchResults: places, isSearching: false });
+      set({ searchResults: merged, isSearching: false });
+    } catch {
+      set({ searchResults: googleResults, isSearching: false });
+    }
   },
 
   clearSearch: () => set({ searchQuery: '', searchResults: [] }),

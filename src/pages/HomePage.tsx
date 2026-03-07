@@ -37,6 +37,17 @@ import PlaceDetailSheet from '../components/map/PlaceDetailSheet';
 import MapLayersSheet from '../components/map/MapLayersSheet';
 import type { POI } from '../lib/poi-api';
 
+const FILTER_CHIPS = [
+  { key: 'restaurant', label: 'Restaurants', emoji: '🍽️' },
+  { key: 'cafe', label: 'Cafes', emoji: '☕' },
+  { key: 'hotel', label: 'Hotels', emoji: '🏨' },
+  { key: 'park', label: 'Parks', emoji: '🌳' },
+  { key: 'shop', label: 'Shopping', emoji: '🛍️' },
+  { key: 'mosque', label: 'Mosques', emoji: '🕌' },
+  { key: 'atm', label: 'ATMs', emoji: '🏧' },
+  { key: 'gas', label: 'Gas', emoji: '⛽' },
+];
+
 export default function HomePage() {
   const {
     userLocation,
@@ -75,11 +86,12 @@ export default function HomePage() {
   const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
   const [showWalkComplete, setShowWalkComplete] = useState(false);
   const [showAQIOverlay, setShowAQIOverlay] = useState(false);
-  const [showPOIs, setShowPOIs] = useState(false);
+  const [showPOIs, setShowPOIs] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'voyager' | 'osm' | 'satellite'>('voyager');
   const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
   const [showLayersSheet, setShowLayersSheet] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
   useEffect(() => {
     startLocating();
@@ -116,6 +128,7 @@ export default function HomePage() {
         showAQIOverlay={showAQIOverlay}
         showPOIs={showPOIs}
         mapStyle={mapStyle}
+        activeFilter={activeFilter}
         onPlaceSelect={(poi) => setSelectedPOI(poi)}
       />
 
@@ -165,6 +178,26 @@ export default function HomePage() {
                   <AQIBadge aqi={currentAQI.aqi} size="sm" />
                 </div>
               )}
+
+              {/* Filter chips */}
+              <div className="mt-2 max-w-2xl mx-auto">
+                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                  {FILTER_CHIPS.map(chip => (
+                    <button
+                      key={chip.key}
+                      onClick={() => setActiveFilter(activeFilter === chip.key ? null : chip.key)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
+                        activeFilter === chip.key
+                          ? 'bg-primary-500 text-white shadow-md scale-105'
+                          : 'bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-300 shadow-sm border border-gray-200 dark:border-gray-700/50 backdrop-blur-xl'
+                      }`}
+                    >
+                      <span className="text-sm">{chip.emoji}</span>
+                      <span>{chip.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
