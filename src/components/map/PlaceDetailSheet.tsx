@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, MapPin, Star, Clock, Phone, Globe, Navigation,
   Bookmark, BookmarkCheck, ChevronLeft, ChevronRight,
-  ExternalLink, MessageSquare,
+  ExternalLink, Share2, Copy, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import {
   getGooglePlaceDetails,
@@ -36,6 +36,7 @@ export default function PlaceDetailSheet({
   const [reviews, setReviews] = useState<GMapReview[]>([]);
   const [loading, setLoading] = useState(false);
   const [photoIdx, setPhotoIdx] = useState(0);
+  const [showAllHours, setShowAllHours] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function PlaceDetailSheet({
       setDetails(null);
       setPhotos([]);
       setReviews([]);
+      setShowAllHours(false);
       return;
     }
 
@@ -66,7 +68,7 @@ export default function PlaceDetailSheet({
 
   if (!poi) return null;
 
-  const allPhotos = photos.length > 0 ? photos : [];
+  const allPhotos = photos;
   const rating = details?.rating ?? poi.rating;
   const reviewCount = details?.reviews ?? poi.reviewCount;
   const phone = details?.phone ?? poi.phone;
@@ -76,6 +78,7 @@ export default function PlaceDetailSheet({
   const openState = details?.open_state ?? poi.openState;
   const openHours = details?.open_hours;
   const address = details?.address ?? poi.address;
+  const histogram = details?.reviews_histogram;
 
   const distText = poi.distance
     ? poi.distance < 1000
@@ -85,251 +88,341 @@ export default function PlaceDetailSheet({
       ? formatDist(userLocation, poi.coordinate)
       : null;
 
+  const isOpen = openState ? openState.toLowerCase().includes('open') : null;
+
   return (
     <AnimatePresence>
       {poi && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-black/40"
             onClick={onClose}
           />
 
-          {/* Sheet */}
           <motion.div
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 max-h-[85vh] flex flex-col bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl overflow-hidden"
+            className="fixed bottom-0 left-0 right-0 z-50 max-h-[90vh] flex flex-col bg-white dark:bg-gray-950 rounded-t-3xl shadow-2xl overflow-hidden"
           >
             {/* Drag handle */}
-            <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
-              <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full" />
+            <div className="flex justify-center pt-2.5 pb-1 flex-shrink-0">
+              <div className="w-9 h-1 bg-gray-300 dark:bg-gray-700 rounded-full" />
             </div>
 
-            {/* Close button */}
-            <button
-              onClick={onClose}
-              className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/60 transition"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            {/* Scrollable content */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain">
-              {/* Photo carousel */}
+              {/* ── Photo Carousel ── */}
               {allPhotos.length > 0 ? (
-                <div className="relative w-full h-52 bg-gray-100 dark:bg-gray-800 flex-shrink-0">
+                <div className="relative w-full h-56 bg-gray-100 dark:bg-gray-900">
                   <img
                     src={allPhotos[photoIdx].image || allPhotos[photoIdx].thumbnail}
                     alt={poi.name}
                     className="w-full h-full object-cover"
-                    loading="eager"
                   />
+                  {/* Close */}
+                  <button
+                    onClick={onClose}
+                    className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                  {/* Photo count badge */}
+                  <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full bg-black/60 text-white text-xs font-medium">
+                    {photoIdx + 1} / {allPhotos.length}
+                  </div>
+                  {/* Nav arrows */}
                   {allPhotos.length > 1 && (
                     <>
                       <button
                         onClick={() => setPhotoIdx((i) => (i - 1 + allPhotos.length) % allPhotos.length)}
-                        className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/60"
+                        className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/90 dark:bg-gray-900/90 flex items-center justify-center shadow-md"
                       >
-                        <ChevronLeft className="w-4 h-4" />
+                        <ChevronLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
                       </button>
                       <button
                         onClick={() => setPhotoIdx((i) => (i + 1) % allPhotos.length)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/60"
+                        className="absolute right-12 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/90 dark:bg-gray-900/90 flex items-center justify-center shadow-md"
                       >
-                        <ChevronRight className="w-4 h-4" />
+                        <ChevronRight className="w-5 h-5 text-gray-700 dark:text-gray-300" />
                       </button>
-                      {/* Dots */}
-                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                        {allPhotos.slice(0, 8).map((_, i) => (
-                          <div
-                            key={i}
-                            className={`w-1.5 h-1.5 rounded-full transition ${
-                              i === photoIdx ? 'bg-white' : 'bg-white/40'
-                            }`}
-                          />
-                        ))}
-                      </div>
                     </>
                   )}
                 </div>
+              ) : loading ? (
+                <div className="w-full h-44 bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+                  <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                </div>
               ) : (
-                <div className="w-full h-32 bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/30 dark:to-primary-950/50 flex items-center justify-center">
-                <MapPin className="w-10 h-10 text-primary-400 dark:text-primary-600" />
-              </div>
+                <div className="w-full h-36 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-950/30 dark:to-gray-900 flex items-center justify-center relative">
+                  <button
+                    onClick={onClose}
+                    className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/30 flex items-center justify-center text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                  <MapPin className="w-12 h-12 text-primary-300 dark:text-primary-700" />
+                </div>
               )}
 
-              {/* Content */}
-              <div className="px-5 pt-4 pb-6 space-y-4">
-                {/* Header */}
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <h2 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">
-                        {poi.name}
-                      </h2>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span
-                          className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
-                        >
-                          {poi.category}
-                        </span>
-                        {openState && (
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                            openState.toLowerCase().includes('open')
-                              ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'
-                              : 'bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400'
-                          }`}>
-                            {openState}
-                          </span>
-                        )}
-                        {distText && (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">{distText} away</span>
-                        )}
+              {/* ── Main Content ── */}
+              <div className="px-5 pt-4 pb-6">
+                {/* Title + Rating */}
+                <h2 className="text-[22px] font-bold text-gray-900 dark:text-white leading-tight">
+                  {poi.name}
+                </h2>
+
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                  {rating != null && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm font-bold text-gray-900 dark:text-white">{rating.toFixed(1)}</span>
+                      <div className="flex">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star
+                            key={s}
+                            className="w-3.5 h-3.5"
+                            fill={s <= Math.round(rating) ? '#facc15' : 'none'}
+                            stroke={s <= Math.round(rating) ? '#facc15' : '#d1d5db'}
+                            strokeWidth={1.5}
+                          />
+                        ))}
                       </div>
+                      {reviewCount != null && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">({reviewCount})</span>
+                      )}
                     </div>
-
-                    {/* Save button */}
-                    {onSave && (
-                      <button
-                        onClick={() => onSave(poi.name, poi.coordinate)}
-                        className={`p-2 rounded-xl transition ${
-                          isSaved
-                            ? 'text-amber-500'
-                            : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                        }`}
-                      >
-                        {isSaved ? (
-                          <BookmarkCheck className="w-5 h-5" />
-                        ) : (
-                          <Bookmark className="w-5 h-5" />
-                        )}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Rating + Price */}
-                  <div className="flex items-center gap-3 mt-2">
-                    {rating != null && (
-                      <div className="flex items-center gap-1">
-                        <Star className="w-4 h-4 text-amber-400" fill="currentColor" />
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {rating.toFixed(1)}
-                        </span>
-                        {reviewCount != null && (
-                          <span className="text-xs text-gray-400">({reviewCount})</span>
-                        )}
-                      </div>
-                    )}
-                    {price && (
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {price}
-                      </span>
-                    )}
-                  </div>
+                  )}
+                  {price && (
+                    <>
+                      <span className="text-gray-300 dark:text-gray-600">·</span>
+                      <span className="text-sm text-gray-500">{price}</span>
+                    </>
+                  )}
+                  {poi.category && (
+                    <>
+                      <span className="text-gray-300 dark:text-gray-600">·</span>
+                      <span className="text-sm text-gray-500">{poi.category}</span>
+                    </>
+                  )}
                 </div>
 
-                {/* Description */}
+                {/* Open state */}
+                {openState && (
+                  <p className={`text-sm font-medium mt-1 ${
+                    isOpen
+                      ? 'text-green-600 dark:text-green-400'
+                      : 'text-red-500 dark:text-red-400'
+                  }`}>
+                    {openState}
+                  </p>
+                )}
+
+                {/* ── Action Buttons Row (Google Maps style) ── */}
+                <div className="flex gap-2 mt-4 overflow-x-auto pb-1 -mx-1 px-1">
+                  <button
+                    onClick={() => {
+                      onNavigate(poi.coordinate, poi.name);
+                      onClose();
+                    }}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary-500 text-white text-sm font-semibold shadow-md shadow-primary-500/20 hover:bg-primary-600 active:scale-95 transition-all flex-shrink-0"
+                  >
+                    <Navigation className="w-4 h-4" />
+                    Directions
+                  </button>
+                  {onSave && (
+                    <button
+                      onClick={() => onSave(poi.name, poi.coordinate)}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium border transition-all flex-shrink-0 ${
+                        isSaved
+                          ? 'bg-amber-50 border-amber-200 text-amber-600 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400'
+                          : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      {isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                      {isSaved ? 'Saved' : 'Save'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      const url = `https://www.google.com/maps/place/?q=place_id:${poi.placeId || ''}`;
+                      navigator.clipboard?.writeText(url);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium border bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all flex-shrink-0"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Share
+                  </button>
+                </div>
+
+                {/* ── Description ── */}
                 {description && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mt-4">
                     {description}
                   </p>
                 )}
 
-                {/* Info rows */}
-                <div className="space-y-2.5">
+                {/* ── Info Section ── */}
+                <div className="mt-4 space-y-0 divide-y divide-gray-100 dark:divide-gray-800">
                   {/* Address */}
                   {address && (
-                    <div className="flex items-start gap-3">
-                      <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
-                      <p className="text-sm text-gray-600 dark:text-gray-300">
-                        {address}
-                      </p>
-                    </div>
+                    <button
+                      onClick={() => navigator.clipboard?.writeText(address)}
+                      className="flex items-center gap-3 py-3 w-full text-left group"
+                    >
+                      <MapPin className="w-5 h-5 text-primary-500 flex-shrink-0" />
+                      <span className="text-sm text-gray-700 dark:text-gray-300 flex-1">{address}</span>
+                      <Copy className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-500 transition flex-shrink-0" />
+                    </button>
                   )}
 
-                  {/* Hours */}
+                  {/* Hours (collapsible) */}
                   {openHours && Object.keys(openHours).length > 0 && (
-                    <div className="flex items-start gap-3">
-                      <Clock className="w-4 h-4 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
-                      <div className="text-sm text-gray-600 dark:text-gray-300 space-y-0.5">
-                        {Object.entries(openHours).map(([day, time]) => (
-                          <div key={day} className="flex gap-2">
-                            <span className="font-medium w-24 flex-shrink-0">{day}</span>
-                            <span>{time}</span>
-                          </div>
-                        ))}
-                      </div>
+                    <div className="py-3">
+                      <button
+                        onClick={() => setShowAllHours(!showAllHours)}
+                        className="flex items-center gap-3 w-full text-left"
+                      >
+                        <Clock className="w-5 h-5 text-primary-500 flex-shrink-0" />
+                        <span className="text-sm text-gray-700 dark:text-gray-300 flex-1">
+                          {openState || 'Opening hours'}
+                        </span>
+                        {showAllHours ? (
+                          <ChevronUp className="w-4 h-4 text-gray-400" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+                      <AnimatePresence>
+                        {showAllHours && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="pl-8 pt-2 space-y-1">
+                              {Object.entries(openHours).map(([day, time]) => (
+                                <div key={day} className="flex text-sm">
+                                  <span className="w-28 text-gray-500 dark:text-gray-400 flex-shrink-0">{day}</span>
+                                  <span className="text-gray-700 dark:text-gray-300">{time}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   )}
 
                   {/* Phone */}
                   {phone && (
-                    <div className="flex items-start gap-3">
-                      <Phone className="w-4 h-4 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
-                      <a href={`tel:${phone}`} className="text-sm text-primary-600 dark:text-primary-400 hover:underline">
-                        {phone}
-                      </a>
-                    </div>
+                    <a href={`tel:${phone}`} className="flex items-center gap-3 py-3">
+                      <Phone className="w-5 h-5 text-primary-500 flex-shrink-0" />
+                      <span className="text-sm text-primary-600 dark:text-primary-400">{phone}</span>
+                    </a>
                   )}
 
                   {/* Website */}
                   {website && (
-                    <div className="flex items-start gap-3">
-                      <Globe className="w-4 h-4 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
-                      <a
-                        href={website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-1 truncate max-w-[250px]"
-                      >
+                    <a
+                      href={website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 py-3"
+                    >
+                      <Globe className="w-5 h-5 text-primary-500 flex-shrink-0" />
+                      <span className="text-sm text-primary-600 dark:text-primary-400 truncate flex-1">
                         {website.replace(/^https?:\/\/(www\.)?/, '')}
-                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                      </a>
+                      </span>
+                      <ExternalLink className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                    </a>
+                  )}
+
+                  {distText && (
+                    <div className="flex items-center gap-3 py-3">
+                      <Navigation className="w-5 h-5 text-primary-500 flex-shrink-0" />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{distText} from you</span>
                     </div>
                   )}
                 </div>
 
-                {/* Google Reviews */}
+                {/* ── Rating Histogram ── */}
+                {histogram && rating != null && reviewCount != null && reviewCount > 0 && (
+                  <div className="mt-5 p-4 rounded-2xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
+                    <div className="flex items-center gap-4">
+                      <div className="text-center">
+                        <p className="text-4xl font-bold text-gray-900 dark:text-white">{rating.toFixed(1)}</p>
+                        <div className="flex justify-center mt-1">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <Star key={s} className="w-3 h-3" fill={s <= Math.round(rating) ? '#facc15' : 'none'} stroke={s <= Math.round(rating) ? '#facc15' : '#d1d5db'} strokeWidth={1.5} />
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">{reviewCount} reviews</p>
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        {[5, 4, 3, 2, 1].map((star) => {
+                          const count = histogram[String(star)] || 0;
+                          const pct = reviewCount > 0 ? (count / reviewCount) * 100 : 0;
+                          return (
+                            <div key={star} className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500 w-2">{star}</span>
+                              <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-amber-400 rounded-full transition-all"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Reviews ── */}
                 {reviews.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-1.5">
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      Reviews ({reviews.length})
+                  <div className="mt-5">
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-3">
+                      Reviews
                     </h3>
-                    <div className="space-y-2">
-                      {reviews.slice(0, 5).map((review, i) => (
-                        <div
-                          key={review.review_id || i}
-                          className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800"
-                        >
-                          <div className="flex items-center gap-2 mb-1.5">
-                            {review.user?.thumbnail && (
-                              <img src={review.user.thumbnail} alt="" className="w-6 h-6 rounded-full" />
+                    <div className="space-y-3">
+                      {reviews.slice(0, 6).map((review, i) => (
+                        <div key={review.review_id || i}>
+                          <div className="flex items-center gap-2.5">
+                            {review.user?.thumbnail ? (
+                              <img src={review.user.thumbnail} alt="" className="w-8 h-8 rounded-full" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-xs font-bold text-gray-500">
+                                {(review.user?.name || 'A').charAt(0)}
+                              </div>
                             )}
-                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                              {review.user?.name || 'Anonymous'}
-                            </span>
-                            {review.user?.is_local_guide && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400">
-                                Local Guide
-                              </span>
-                            )}
-                            <div className="flex items-center gap-0.5 ml-auto">
-                              <Star className="w-3 h-3 text-amber-400" fill="currentColor" />
-                              <span className="text-xs text-gray-500">{review.rating}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {review.user?.name || 'Anonymous'}
+                              </p>
+                              <div className="flex items-center gap-1.5">
+                                <div className="flex">
+                                  {[1, 2, 3, 4, 5].map((s) => (
+                                    <Star key={s} className="w-2.5 h-2.5" fill={s <= review.rating ? '#facc15' : 'none'} stroke={s <= review.rating ? '#facc15' : '#d1d5db'} strokeWidth={1.5} />
+                                  ))}
+                                </div>
+                                {review.date && (
+                                  <span className="text-[10px] text-gray-400">{review.date}</span>
+                                )}
+                                {review.user?.is_local_guide && (
+                                  <span className="text-[10px] font-medium text-blue-500">Local Guide</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed line-clamp-4">
-                            {review.snippet || review.text || review.description || ''}
-                          </p>
-                          {review.date && (
-                            <p className="text-[10px] text-gray-400 mt-1">{review.date}</p>
+                          {(review.snippet || review.text || review.description) && (
+                            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mt-1.5 ml-[42px] line-clamp-3">
+                              {review.snippet || review.text || review.description}
+                            </p>
                           )}
                         </div>
                       ))}
@@ -337,44 +430,39 @@ export default function PlaceDetailSheet({
                   </div>
                 )}
 
-                {/* Loading state for details */}
+                {/* Loading indicator */}
                 {loading && (
-                  <div className="flex items-center justify-center py-4">
-                    <div className="w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-xs text-gray-400 ml-2">Loading details...</span>
+                  <div className="flex items-center justify-center py-8">
+                    <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm text-gray-400 ml-3">Loading details...</span>
                   </div>
                 )}
 
-                {/* OSM tags for non-Google places */}
-                {poi.tags && !poi.id.startsWith('gmap-') && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {Object.entries(poi.tags)
-                      .filter(([k]) => ['cuisine', 'opening_hours', 'internet_access', 'wheelchair'].includes(k))
-                      .map(([k, v]) => (
-                        <span
-                          key={k}
-                          className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                {/* Photo thumbnails strip */}
+                {allPhotos.length > 1 && (
+                  <div className="mt-5">
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-3">Photos</h3>
+                    <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                      {allPhotos.slice(0, 10).map((photo, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            setPhotoIdx(i);
+                            scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className={`flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border-2 transition ${
+                            i === photoIdx
+                              ? 'border-primary-500'
+                              : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'
+                          }`}
                         >
-                          {k}: {v}
-                        </span>
+                          <img src={photo.thumbnail || photo.image} alt="" className="w-full h-full object-cover" />
+                        </button>
                       ))}
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Bottom action bar */}
-            <div className="flex-shrink-0 px-5 pb-5 pt-2 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
-              <button
-                onClick={() => {
-                  onNavigate(poi.coordinate, poi.name);
-                  onClose();
-                }}
-                className="w-full gradient-primary text-white py-3.5 rounded-2xl text-sm font-semibold shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all flex items-center justify-center gap-2"
-              >
-                <Navigation className="w-4 h-4" />
-                Navigate Here
-              </button>
             </div>
           </motion.div>
         </>

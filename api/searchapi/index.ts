@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const SEARCHAPI_KEY = process.env.SEARCHAPI_KEY || '';
+const SEARCHAPI_KEY = (process.env.SEARCHAPI_KEY || '').trim();
 const SEARCHAPI_BASE = 'https://www.searchapi.io/api/v1/search';
 
 // Allowed engines to prevent abuse
