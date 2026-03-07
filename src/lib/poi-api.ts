@@ -1,5 +1,6 @@
 import type { Coordinate } from '../types';
-import { searchGoogleMaps } from './searchapi';
+
+const GEOAPIFY_KEY = '983da66a10e14f909057351679defe36';
 
 export interface POI {
   id: string;
@@ -68,77 +69,89 @@ function setCachedPOIs(key: string, pois: POI[]): void {
   }
 }
 
-// ─── Google Maps via SearchAPI ───────────────────────────────────────
+// ─── Geoapify Places API ─────────────────────────────────────────────
+
+const DEFAULT_CATEGORIES = 'catering,accommodation,commercial,tourism,leisure.park,religion,service.financial.atm,service.vehicle.fuel,entertainment,healthcare';
 
 export async function getNearbyPOIs(
   center: Coordinate,
   radiusMeters: number = 1500,
-  searchQueries?: string[],
+  categories?: string[],
 ): Promise<{ pois: POI[]; error: string | null }> {
-  const queries = searchQueries && searchQueries.length > 0
-    ? searchQueries
-    : ['tempat menarik restoran kafe toko taman masjid hotel'];
+  const cats = categories && categories.length > 0
+    ? categories.join(',')
+    : DEFAULT_CATEGORIES;
 
   // Check localStorage cache first
-  const cacheK = poiCacheKey(center.lat, center.lng, queries.join('|'));
+  const cacheK = poiCacheKey(center.lat, center.lng, cats);
   const cached = getCachedPOIs(cacheK);
   if (cached) {
-    // Recalculate distances from current center
     for (const p of cached) p.distance = getDistance(center, p.coordinate);
     cached.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
     return { pois: cached, error: null };
   }
 
   try {
-    const zoom = radiusMeters <= 500 ? 16 : radiusMeters <= 1000 ? 15 : radiusMeters <= 3000 ? 14 : 13;
+    const radius = Math.min(Math.round(radiusMeters), 5000);
+    const limit = 100; // 1 credit per 20 results = 5 credits per call
+
+    const url = `https://api.geoapify.com/v2/places?categories=${encodeURIComponent(cats)}&filter=circle:${center.lng},${center.lat},${radius}&bias=proximity:${center.lng},${center.lat}&limit=${limit}&lang=id&apiKey=${GEOAPIFY_KEY}`;
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Geoapify ${res.status}: ${res.statusText}`);
+
+    const data = await res.json() as {
+      features: Array<{
+        properties: {
+          place_id: string;
+          name?: string;
+          formatted?: string;
+          categories?: string[];
+          distance?: number;
+          website?: string;
+          phone?: string;
+          opening_hours?: string;
+          lat: number;
+          lon: number;
+        };
+        geometry: { coordinates: [number, number] };
+      }>;
+    };
 
     const pois: POI[] = [];
-    const seen = new Set<string>();
 
-    const allResults = await Promise.all(
-      queries.map(q => searchGoogleMaps(q, center, zoom)),
-    );
+    for (const feature of data.features) {
+      const props = feature.properties;
+      if (!props.name) continue; // skip unnamed POIs
 
-    for (const results of allResults) {
-      for (const place of results) {
-        if (!place.gps_coordinates) continue;
+      const coord: Coordinate = {
+        lat: props.lat,
+        lng: props.lon,
+      };
 
-        const coord: Coordinate = {
-          lat: place.gps_coordinates.latitude,
-          lng: place.gps_coordinates.longitude,
-        };
+      const dist = props.distance ?? getDistance(center, coord);
 
-        const dist = getDistance(center, coord);
-        if (dist > radiusMeters * 1.5) continue;
+      // Extract primary category from Geoapify categories array
+      const primaryCat = props.categories?.[0]?.split('.').pop() || 'place';
+      const allTypes = props.categories?.map(c => c.split('.').pop() || c) || [];
 
-        const key = place.place_id || place.title.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-
-        pois.push({
-          id: place.place_id ? `gmap-${place.place_id}` : `gmap-${place.data_id || String(Date.now())}`,
-          name: place.title,
-          category: place.type || place.types?.[0] || 'Place',
-          coordinate: coord,
-          distance: dist,
-          address: place.address,
-          rating: place.rating,
-          reviewCount: place.reviews,
-          phone: place.phone,
-          website: place.website,
-          thumbnail: place.thumbnail,
-          placeId: place.place_id,
-          dataId: place.data_id,
-          openState: place.open_state || place.hours,
-          types: place.types,
-          price: place.price,
-        });
-      }
+      pois.push({
+        id: `geo-${props.place_id}`,
+        name: props.name,
+        category: primaryCat,
+        coordinate: coord,
+        distance: dist,
+        address: props.formatted,
+        phone: props.phone,
+        website: props.website,
+        placeId: props.place_id,
+        openState: props.opening_hours,
+        types: allTypes,
+      });
     }
 
     pois.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
 
-    // Persist to localStorage for future visits
     if (pois.length > 0) setCachedPOIs(cacheK, pois);
 
     return { pois, error: null };

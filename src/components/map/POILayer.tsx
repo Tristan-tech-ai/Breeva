@@ -11,28 +11,28 @@ interface POILayerProps {
   onPlaceSelect?: (poi: POI) => void;
 }
 
-// ── Category filter queries & matching ───────────────────────────────
+// ── Category filter → Geoapify categories & matching ─────────────────
 
-export const FILTER_QUERIES: Record<string, string> = {
-  restaurant: 'restoran rumah makan restaurant food',
-  cafe: 'kafe coffee shop cafe kedai kopi',
-  hotel: 'hotel penginapan hostel resort',
-  park: 'taman park ruang terbuka hijau',
-  shop: 'toko belanja mall shopping store',
-  mosque: 'masjid musholla mosque',
-  atm: 'ATM bank finance',
-  gas: 'SPBU pom bensin gas station',
+export const FILTER_CATEGORIES: Record<string, string> = {
+  restaurant: 'catering.restaurant,catering.fast_food',
+  cafe: 'catering.cafe,catering.coffee_shop',
+  hotel: 'accommodation.hotel,accommodation.guest_house,accommodation.hostel',
+  park: 'leisure.park,leisure.playground,national_park',
+  shop: 'commercial',
+  mosque: 'religion.place_of_worship.islam',
+  atm: 'service.financial.atm,service.financial.bank',
+  gas: 'service.vehicle.fuel',
 };
 
 const FILTER_SYNONYMS: Record<string, string[]> = {
-  restaurant: ['restaurant', 'restoran', 'rumah makan', 'food', 'dining', 'fast food', 'seafood', 'steak', 'nasi', 'mie', 'sate'],
-  cafe: ['cafe', 'coffee', 'kafe', 'kedai', 'tea', 'bakery', 'dessert'],
-  hotel: ['hotel', 'inn', 'penginapan', 'lodging', 'hostel', 'motel', 'resort', 'villa'],
-  park: ['park', 'taman', 'garden', 'recreation', 'playground', 'nature'],
-  shop: ['shop', 'store', 'mall', 'toko', 'market', 'supermarket', 'convenience', 'shopping', 'retail'],
-  mosque: ['mosque', 'masjid', 'musholla', 'islamic'],
-  atm: ['atm', 'bank', 'finance'],
-  gas: ['gas', 'fuel', 'spbu', 'petrol', 'gas_station', 'filling'],
+  restaurant: ['restaurant', 'fast_food', 'food_court', 'seafood', 'steak', 'pizza', 'sushi', 'noodle', 'bbq', 'dining', 'bistro'],
+  cafe: ['cafe', 'coffee', 'coffee_shop', 'tea', 'bakery', 'dessert', 'ice_cream'],
+  hotel: ['hotel', 'guest_house', 'hostel', 'motel', 'resort', 'villa', 'lodging', 'accommodation'],
+  park: ['park', 'garden', 'recreation', 'playground', 'nature', 'national_park'],
+  shop: ['shop', 'store', 'mall', 'market', 'supermarket', 'convenience', 'shopping', 'retail', 'commercial', 'clothes', 'electronics'],
+  mosque: ['mosque', 'islam', 'place_of_worship'],
+  atm: ['atm', 'bank', 'financial'],
+  gas: ['fuel', 'gas_station', 'charging_station'],
 };
 
 export function matchesFilter(poi: POI, filter: string): boolean {
@@ -309,14 +309,14 @@ export default function POILayer({
     const fetchPOIs = async () => {
       setLoading(true);
       try {
-        // Single comprehensive query for speed; filter-specific query only when filter active
-        const query = activeFilter && FILTER_QUERIES[activeFilter]
-          ? FILTER_QUERIES[activeFilter]
-          : 'tempat menarik restoran kafe toko taman masjid hotel';
+        // Use Geoapify category strings; when filter active, use specific categories
+        const cats = activeFilter && FILTER_CATEGORIES[activeFilter]
+          ? [FILTER_CATEGORIES[activeFilter]]
+          : undefined; // undefined = use default broad categories
         const { pois: results } = await getNearbyPOIs(
           { lat: gridLat, lng: gridLng },
           Math.min(viewportRadius, 5000),
-          [query],
+          cats,
         );
         if (fetchRef.current === fetchId) setPOIs(results);
       } catch {

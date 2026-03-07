@@ -144,16 +144,18 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
   );
 
   // Tile URLs by style
+  const geoapifyKey = '983da66a10e14f909057351679defe36';
+  const retina = window.devicePixelRatio >= 2 ? '@2x' : '';
   const tileUrls: Record<string, { light: string; dark: string; attribution: string }> = {
     voyager: {
-      light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png',
-      dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
+      light: `https://maps.geoapify.com/v1/tile/osm-bright-smooth/{z}/{x}/{y}${retina}.png?apiKey=${geoapifyKey}`,
+      dark: `https://maps.geoapify.com/v1/tile/dark-matter/{z}/{x}/{y}${retina}.png?apiKey=${geoapifyKey}`,
+      attribution: 'Powered by <a href="https://www.geoapify.com/">Geoapify</a> | &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
     },
     osm: {
-      light: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-      dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      attribution: '&copy; <a href="https://openstreetmap.org/copyright">OSM</a> HOT',
+      light: `https://maps.geoapify.com/v1/tile/osm-liberty/{z}/{x}/{y}${retina}.png?apiKey=${geoapifyKey}`,
+      dark: `https://maps.geoapify.com/v1/tile/dark-matter-brown/{z}/{x}/{y}${retina}.png?apiKey=${geoapifyKey}`,
+      attribution: 'Powered by <a href="https://www.geoapify.com/">Geoapify</a> | &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
     },
     satellite: {
       light: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -178,7 +180,7 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
           key={`${mapStyle}-${isDarkMode}`}
           url={tileUrl}
           attribution={currentTiles.attribution}
-          maxZoom={19}
+          maxZoom={20}
         />
 
         <MapController />
