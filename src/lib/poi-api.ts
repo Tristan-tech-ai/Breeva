@@ -22,6 +22,52 @@ export interface POI {
   description?: string;
 }
 
+// ─── localStorage POI cache (persists across page reloads) ──────────
+
+const POI_CACHE_PREFIX = 'breeva_poi_';
+const POI_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+function poiCacheKey(lat: number, lng: number, query: string): string {
+  // Grid-rounded coords are already passed in, so key is stable
+  return `${POI_CACHE_PREFIX}${lat.toFixed(2)}_${lng.toFixed(2)}_${query.slice(0, 40)}`;
+}
+
+function getCachedPOIs(key: string): POI[] | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { ts, pois } = JSON.parse(raw) as { ts: number; pois: POI[] };
+    if (Date.now() - ts > POI_CACHE_TTL) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return pois;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedPOIs(key: string, pois: POI[]): void {
+  try {
+    localStorage.setItem(key, JSON.stringify({ ts: Date.now(), pois }));
+  } catch {
+    // Storage full — evict oldest POI cache entries
+    try {
+      const keys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith(POI_CACHE_PREFIX)) keys.push(k);
+      }
+      // Remove oldest half
+      keys.sort();
+      for (const k of keys.slice(0, Math.ceil(keys.length / 2))) {
+        localStorage.removeItem(k);
+      }
+      localStorage.setItem(key, JSON.stringify({ ts: Date.now(), pois }));
+    } catch { /* give up */ }
+  }
+}
+
 // ─── Google Maps via SearchAPI ───────────────────────────────────────
 
 export async function getNearbyPOIs(
@@ -29,11 +75,22 @@ export async function getNearbyPOIs(
   radiusMeters: number = 1500,
   searchQueries?: string[],
 ): Promise<{ pois: POI[]; error: string | null }> {
+  const queries = searchQueries && searchQueries.length > 0
+    ? searchQueries
+    : ['tempat menarik restoran kafe toko taman masjid hotel'];
+
+  // Check localStorage cache first
+  const cacheK = poiCacheKey(center.lat, center.lng, queries.join('|'));
+  const cached = getCachedPOIs(cacheK);
+  if (cached) {
+    // Recalculate distances from current center
+    for (const p of cached) p.distance = getDistance(center, p.coordinate);
+    cached.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+    return { pois: cached, error: null };
+  }
+
   try {
     const zoom = radiusMeters <= 500 ? 16 : radiusMeters <= 1000 ? 15 : radiusMeters <= 3000 ? 14 : 13;
-    const queries = searchQueries && searchQueries.length > 0
-      ? searchQueries
-      : ['tempat menarik restoran kafe toko taman masjid hotel'];
 
     const pois: POI[] = [];
     const seen = new Set<string>();
@@ -80,6 +137,10 @@ export async function getNearbyPOIs(
     }
 
     pois.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+
+    // Persist to localStorage for future visits
+    if (pois.length > 0) setCachedPOIs(cacheK, pois);
+
     return { pois, error: null };
   } catch (error) {
     console.error('POI fetch error:', error);
