@@ -1,6 +1,5 @@
 import type { Coordinate } from '../types';
-
-const FOURSQUARE_API_KEY = import.meta.env.VITE_FOURSQUARE_API_KEY || '';
+import { searchGoogleMaps } from './searchapi';
 
 // Overpass API endpoint (public, no key needed)
 const OVERPASS_API = 'https://overpass-api.de/api/interpreter';
@@ -13,11 +12,18 @@ export interface POI {
   distance?: number; // meters from user
   address?: string;
   rating?: number;
+  reviewCount?: number;
   phone?: string;
   website?: string;
   icon?: string;
   tags?: Record<string, string>; // OpenStreetMap tags
   isVerified?: boolean;
+  placeId?: string;   // Google place_id
+  dataId?: string;    // Google data_id
+  thumbnail?: string;
+  openState?: string; // e.g. "Open ⋅ Closes 10 PM"
+  types?: string[];
+  price?: string;
 }
 
 /**
@@ -99,135 +105,104 @@ export async function getNearbyPOIsOverpass(
 }
 
 /**
- * Foursquare Places API - Get nearby places with ratings, photos, and details
- * Requires API key (100k free calls/month)
+ * Google Maps via SearchAPI — Get nearby places with photos, ratings, reviews
  */
-export async function getNearbyPOIsFoursquare(
+export async function getNearbyPOIsGoogle(
   center: Coordinate,
-  radiusMeters: number = 1000,
-  categories?: string[]
+  radiusMeters: number = 1500,
+  _categories?: string[]
 ): Promise<{ pois: POI[]; error: string | null }> {
-  if (!FOURSQUARE_API_KEY || FOURSQUARE_API_KEY === 'YOUR_FOURSQUARE_API_KEY_HERE') {
-    return {
-      pois: [],
-      error: 'Foursquare API key not configured. Sign up at https://location.foursquare.com/developer/',
-    };
-  }
-
   try {
-    // Foursquare category IDs (subset)
-    const categoryMap: Record<string, string> = {
-      cafe: '13032',
-      restaurant: '13065',
-      shop: '17000',
-      park: '16000',
-      gym: '18021',
-      pharmacy: '17084',
-    };
+    // Search for general "places" nearby, or use specific categories
+    const queries = ['restoran kafe tempat menarik taman toko'];
+    const allPlaces: POI[] = [];
 
-    const categoryIds = categories?.map((c) => categoryMap[c] || '').filter(Boolean).join(',');
+    for (const q of queries) {
+      const zoom = radiusMeters <= 500 ? 16 : radiusMeters <= 1000 ? 15 : 14;
+      const results = await searchGoogleMaps(q, center, zoom);
 
-    const params = new URLSearchParams({
-      ll: `${center.lat},${center.lng}`,
-      radius: radiusMeters.toString(),
-      limit: '50',
-      ...(categoryIds && { categories: categoryIds }),
-    });
+      for (const place of results) {
+        if (!place.gps_coordinates) continue;
+        const coord: Coordinate = {
+          lat: place.gps_coordinates.latitude,
+          lng: place.gps_coordinates.longitude,
+        };
+        // Filter by radius
+        const dist = getDistance(center, coord);
+        if (dist > radiusMeters * 1.5) continue;
 
-    const response = await fetch(
-      `https://api.foursquare.com/v3/places/search?${params.toString()}`,
-      {
-        headers: {
-          Authorization: FOURSQUARE_API_KEY,
-          Accept: 'application/json',
-        },
+        allPlaces.push({
+          id: place.place_id ? `gmap-${place.place_id}` : `gmap-${place.data_id || place.title}`,
+          name: place.title,
+          category: place.type || place.types?.[0] || 'Place',
+          coordinate: coord,
+          distance: dist,
+          address: place.address,
+          rating: place.rating,
+          reviewCount: place.reviews,
+          phone: place.phone,
+          website: place.website,
+          thumbnail: place.thumbnail,
+          placeId: place.place_id,
+          dataId: place.data_id,
+          openState: place.open_state || place.hours,
+          types: place.types,
+          price: place.price,
+        });
       }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Foursquare API error: ${response.status}`);
     }
 
-    const data = await response.json();
-
-    const pois: POI[] = (data.results || []).map((place: {
-      fsq_id: string;
-      name: string;
-      location: { address?: string; formatted_address?: string };
-      geocodes: { main: { latitude: number; longitude: number } };
-      categories: Array<{ name: string; icon: { prefix: string; suffix: string } }>;
-      distance?: number;
-      rating?: number;
-      tel?: string;
-      website?: string;
-      verified?: boolean;
-    }) => ({
-      id: `fsq-${place.fsq_id}`,
-      name: place.name,
-      category: place.categories?.[0]?.name || 'Place',
-      coordinate: {
-        lat: place.geocodes.main.latitude,
-        lng: place.geocodes.main.longitude,
-      },
-      address: place.location.formatted_address || place.location.address,
-      distance: place.distance,
-      rating: place.rating ? place.rating / 2 : undefined, // FSQ is 0-10, normalize to 0-5
-      phone: place.tel,
-      website: place.website,
-      icon: place.categories?.[0]?.icon
-        ? `${place.categories[0].icon.prefix}32${place.categories[0].icon.suffix}`
-        : undefined,
-      isVerified: place.verified,
-    }));
-
-    return { pois, error: null };
+    return { pois: allPlaces, error: null };
   } catch (error) {
-    console.error('Foursquare API error:', error);
+    console.error('Google Maps SearchAPI error:', error);
     return {
       pois: [],
-      error: error instanceof Error ? error.message : 'Failed to fetch POIs from Foursquare',
+      error: error instanceof Error ? error.message : 'Failed to fetch from Google Maps',
     };
   }
 }
 
 /**
- * Get nearby POIs from both sources (merged and deduplicated)
+ * Get nearby POIs — tries Google Maps (SearchAPI) first, Overpass fallback
  */
 export async function getNearbyPOIs(
   center: Coordinate,
   radiusMeters: number = 1000,
   categories?: string[]
 ): Promise<{ pois: POI[]; error: string | null }> {
-  // Fetch from both APIs in parallel
-  const [overpassResult, foursquareResult] = await Promise.all([
-    getNearbyPOIsOverpass(center, radiusMeters, categories),
-    getNearbyPOIsFoursquare(center, radiusMeters, categories),
-  ]);
+  // Try Google Maps first (richer data)
+  const googleResult = await getNearbyPOIsGoogle(center, radiusMeters, categories);
 
-  // Merge results
-  const allPOIs = [...overpassResult.pois, ...foursquareResult.pois];
+  // If Google returned results, use them as primary
+  if (googleResult.pois.length > 0) {
+    // Supplement with Overpass for extra coverage
+    const overpassResult = await getNearbyPOIsOverpass(center, radiusMeters, categories).catch(() => ({
+      pois: [] as POI[],
+      error: null,
+    }));
 
-  // Simple deduplication: group by name and proximity (within 50m)
-  const deduplicated: POI[] = [];
-  for (const poi of allPOIs) {
-    const isDuplicate = deduplicated.some(
-      (existing) =>
-        existing.name.toLowerCase() === poi.name.toLowerCase() &&
-        getDistance(existing.coordinate, poi.coordinate) < 50
-    );
-    if (!isDuplicate) {
-      deduplicated.push(poi);
+    const allPOIs = [...googleResult.pois, ...overpassResult.pois];
+
+    // Deduplicate by name + proximity (50m)
+    const deduplicated: POI[] = [];
+    for (const poi of allPOIs) {
+      const isDuplicate = deduplicated.some(
+        (existing) =>
+          existing.name.toLowerCase() === poi.name.toLowerCase() &&
+          getDistance(existing.coordinate, poi.coordinate) < 50
+      );
+      if (!isDuplicate) {
+        deduplicated.push(poi);
+      }
     }
+
+    deduplicated.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+
+    return { pois: deduplicated, error: null };
   }
 
-  // Sort by distance if available
-  deduplicated.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
-
-  const errors = [overpassResult.error, foursquareResult.error].filter(Boolean);
-  return {
-    pois: deduplicated,
-    error: errors.length > 0 ? errors.join('; ') : null,
-  };
+  // Fallback to Overpass only
+  return getNearbyPOIsOverpass(center, radiusMeters, categories);
 }
 
 /**

@@ -3,10 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, MapPin, Star, Clock, Phone, Globe, Navigation,
   Bookmark, BookmarkCheck, ChevronLeft, ChevronRight,
-  ExternalLink, ShieldCheck,
+  ExternalLink, MessageSquare,
 } from 'lucide-react';
-import { fsqPlaceDetails, fsqPlacePhotos, fsqPhotoUrl, getCategoryStyle } from '../../lib/foursquare-api';
-import type { FSQPlace, FSQPhoto } from '../../lib/foursquare-api';
+import {
+  getGooglePlaceDetails,
+  getGooglePlacePhotos,
+  getGooglePlaceReviews,
+} from '../../lib/searchapi';
+import type { GMapPlaceDetail, GMapPhoto, GMapReview } from '../../lib/searchapi';
 import type { POI } from '../../lib/poi-api';
 import type { Coordinate } from '../../types';
 
@@ -27,8 +31,9 @@ export default function PlaceDetailSheet({
   isSaved = false,
   userLocation,
 }: PlaceDetailSheetProps) {
-  const [details, setDetails] = useState<FSQPlace | null>(null);
-  const [photos, setPhotos] = useState<FSQPhoto[]>([]);
+  const [details, setDetails] = useState<GMapPlaceDetail | null>(null);
+  const [photos, setPhotos] = useState<GMapPhoto[]>([]);
+  const [reviews, setReviews] = useState<GMapReview[]>([]);
   const [loading, setLoading] = useState(false);
   const [photoIdx, setPhotoIdx] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -37,36 +42,40 @@ export default function PlaceDetailSheet({
     if (!poi) {
       setDetails(null);
       setPhotos([]);
+      setReviews([]);
       return;
     }
 
-    const fsqId = poi.id.startsWith('fsq-') ? poi.id.replace('fsq-', '') : null;
-    if (!fsqId) return;
+    const placeId = poi.placeId || poi.dataId || (poi.id.startsWith('gmap-') ? poi.id.replace('gmap-', '') : null);
+    if (!placeId) return;
 
     setLoading(true);
     setPhotoIdx(0);
 
-    Promise.all([fsqPlaceDetails(fsqId), fsqPlacePhotos(fsqId, 10)]).then(
-      ([place, placePhotos]) => {
-        setDetails(place);
-        setPhotos(placePhotos);
-        setLoading(false);
-      },
-    );
+    Promise.all([
+      getGooglePlaceDetails(placeId),
+      getGooglePlacePhotos(placeId),
+      getGooglePlaceReviews(placeId),
+    ]).then(([place, placePhotos, reviewData]) => {
+      setDetails(place);
+      setPhotos(placePhotos);
+      setReviews(reviewData.reviews || []);
+      setLoading(false);
+    });
   }, [poi?.id]);
 
   if (!poi) return null;
 
-  const catStyle = getCategoryStyle(poi.category);
-  const allPhotos = photos.length > 0 ? photos : details?.photos || [];
+  const allPhotos = photos.length > 0 ? photos : [];
   const rating = details?.rating ?? poi.rating;
-  const hours = details?.hours;
-  const phone = details?.tel ?? poi.phone;
+  const reviewCount = details?.reviews ?? poi.reviewCount;
+  const phone = details?.phone ?? poi.phone;
   const website = details?.website ?? poi.website;
-  const tips = details?.tips || [];
   const description = details?.description;
-  const verified = details?.verified;
-  const price = details?.price;
+  const price = details?.price || poi.price;
+  const openState = details?.open_state ?? poi.openState;
+  const openHours = details?.open_hours;
+  const address = details?.address ?? poi.address;
 
   const distText = poi.distance
     ? poi.distance < 1000
@@ -116,7 +125,7 @@ export default function PlaceDetailSheet({
               {allPhotos.length > 0 ? (
                 <div className="relative w-full h-52 bg-gray-100 dark:bg-gray-800 flex-shrink-0">
                   <img
-                    src={fsqPhotoUrl(allPhotos[photoIdx], '600x400')}
+                    src={allPhotos[photoIdx].image || allPhotos[photoIdx].thumbnail}
                     alt={poi.name}
                     className="w-full h-full object-cover"
                     loading="eager"
@@ -166,14 +175,17 @@ export default function PlaceDetailSheet({
                       </h2>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <span
-                          className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full"
-                          style={{ backgroundColor: catStyle.color + '18', color: catStyle.color }}
+                          className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
                         >
                           {poi.category}
                         </span>
-                        {verified && (
-                          <span className="inline-flex items-center gap-0.5 text-xs text-blue-600 dark:text-blue-400">
-                            <ShieldCheck className="w-3 h-3" /> Verified
+                        {openState && (
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            openState.toLowerCase().includes('open')
+                              ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'
+                              : 'bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400'
+                          }`}>
+                            {openState}
                           </span>
                         )}
                         {distText && (
@@ -207,27 +219,16 @@ export default function PlaceDetailSheet({
                       <div className="flex items-center gap-1">
                         <Star className="w-4 h-4 text-amber-400" fill="currentColor" />
                         <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {rating >= 10 ? (rating / 2).toFixed(1) : rating.toFixed(1)}
+                          {rating.toFixed(1)}
                         </span>
-                        {details?.stats?.total_ratings != null && (
-                          <span className="text-xs text-gray-400">({details.stats.total_ratings})</span>
+                        {reviewCount != null && (
+                          <span className="text-xs text-gray-400">({reviewCount})</span>
                         )}
                       </div>
                     )}
-                    {price != null && (
+                    {price && (
                       <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {'$'.repeat(price)}
-                      </span>
-                    )}
-                    {hours && (
-                      <span
-                        className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          hours.open_now
-                            ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'
-                            : 'bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400'
-                        }`}
-                      >
-                        {hours.open_now ? 'Open Now' : 'Closed'}
+                        {price}
                       </span>
                     )}
                   </div>
@@ -243,22 +244,27 @@ export default function PlaceDetailSheet({
                 {/* Info rows */}
                 <div className="space-y-2.5">
                   {/* Address */}
-                  {(details?.location?.formatted_address || poi.address) && (
+                  {address && (
                     <div className="flex items-start gap-3">
                       <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
                       <p className="text-sm text-gray-600 dark:text-gray-300">
-                        {details?.location?.formatted_address || poi.address}
+                        {address}
                       </p>
                     </div>
                   )}
 
                   {/* Hours */}
-                  {hours?.display && (
+                  {openHours && Object.keys(openHours).length > 0 && (
                     <div className="flex items-start gap-3">
                       <Clock className="w-4 h-4 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
-                      <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-line">
-                        {hours.display}
-                      </p>
+                      <div className="text-sm text-gray-600 dark:text-gray-300 space-y-0.5">
+                        {Object.entries(openHours).map(([day, time]) => (
+                          <div key={day} className="flex gap-2">
+                            <span className="font-medium w-24 flex-shrink-0">{day}</span>
+                            <span>{time}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -289,25 +295,41 @@ export default function PlaceDetailSheet({
                   )}
                 </div>
 
-                {/* Tips / Reviews */}
-                {tips.length > 0 && (
+                {/* Google Reviews */}
+                {reviews.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                      Tips & Reviews
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-1.5">
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      Reviews ({reviews.length})
                     </h3>
                     <div className="space-y-2">
-                      {tips.slice(0, 5).map((tip) => (
+                      {reviews.slice(0, 5).map((review, i) => (
                         <div
-                          key={tip.id}
+                          key={review.review_id || i}
                           className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800"
                         >
-                          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                            "{tip.text}"
+                          <div className="flex items-center gap-2 mb-1.5">
+                            {review.user?.thumbnail && (
+                              <img src={review.user.thumbnail} alt="" className="w-6 h-6 rounded-full" />
+                            )}
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                              {review.user?.name || 'Anonymous'}
+                            </span>
+                            {review.user?.is_local_guide && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400">
+                                Local Guide
+                              </span>
+                            )}
+                            <div className="flex items-center gap-0.5 ml-auto">
+                              <Star className="w-3 h-3 text-amber-400" fill="currentColor" />
+                              <span className="text-xs text-gray-500">{review.rating}</span>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed line-clamp-4">
+                            {review.snippet || review.text || review.description || ''}
                           </p>
-                          {tip.agree_count != null && tip.agree_count > 0 && (
-                            <p className="text-[10px] text-gray-400 mt-1">
-                              👍 {tip.agree_count} agree
-                            </p>
+                          {review.date && (
+                            <p className="text-[10px] text-gray-400 mt-1">{review.date}</p>
                           )}
                         </div>
                       ))}
@@ -323,8 +345,8 @@ export default function PlaceDetailSheet({
                   </div>
                 )}
 
-                {/* OSM tags for non-Foursquare places */}
-                {poi.tags && !poi.id.startsWith('fsq-') && (
+                {/* OSM tags for non-Google places */}
+                {poi.tags && !poi.id.startsWith('gmap-') && (
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(poi.tags)
                       .filter(([k]) => ['cuisine', 'opening_hours', 'internet_access', 'wheelchair'].includes(k))

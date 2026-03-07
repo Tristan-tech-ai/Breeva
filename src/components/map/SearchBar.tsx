@@ -43,15 +43,23 @@ export default function SearchBar({ onPlaceSelect }: SearchBarProps) {
   }, []);
 
   const handleSelect = (result: typeof searchResults[number]) => {
-    // If we have a Foursquare place and onPlaceSelect, open detail sheet first
-    if (result.fsqId && onPlaceSelect) {
+    // If we have a Google place and onPlaceSelect, open detail sheet first
+    if ((result.placeId || result.dataId) && onPlaceSelect) {
       const poi: POI = {
-        id: `fsq-${result.fsqId}`,
+        id: `gmap-${result.placeId || result.dataId}`,
         name: result.name,
         category: result.category || 'Place',
         coordinate: result.coordinate,
         distance: result.distance,
         address: result.address,
+        placeId: result.placeId,
+        dataId: result.dataId,
+        rating: result.rating,
+        reviewCount: result.reviewCount,
+        thumbnail: result.thumbnail,
+        openState: result.openState,
+        types: result.types,
+        price: result.price,
       };
       onPlaceSelect(poi);
     } else {

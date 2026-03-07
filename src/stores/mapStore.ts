@@ -14,16 +14,22 @@ import {
   getPerpendicularWaypoint,
   routeGeometrySimilar,
 } from '../lib/api';
-import { fsqAutocomplete } from '../lib/foursquare-api';
+import { searchGoogleMaps } from '../lib/searchapi';
 
 export interface SearchResult {
   name: string;
   coordinate: Coordinate;
   address?: string;
   category?: string;
-  categoryEmoji?: string;
-  fsqId?: string;
+  placeId?: string;
+  dataId?: string;
   distance?: number;
+  rating?: number;
+  reviewCount?: number;
+  thumbnail?: string;
+  openState?: string;
+  types?: string[];
+  price?: string;
 }
 
 type BottomSheetState = 'peek' | 'half' | 'full' | 'hidden';
@@ -189,23 +195,25 @@ export const useMapStore = create<MapState>()((set, get) => ({
     set({ isSearching: true });
     const { userLocation } = get();
 
-    // Try Foursquare autocomplete first (richer results)
+    // Try Google Maps via SearchAPI first (richest data)
     try {
-      const fsqResults = await fsqAutocomplete(query, userLocation || undefined);
-      const mapped: SearchResult[] = fsqResults
-        .filter((r) => r.place?.geocodes?.main)
-        .map((r) => {
-          const p = r.place!;
-          const cat = p.categories?.[0];
-          return {
-            name: p.name || r.text.primary,
-            coordinate: { lat: p.geocodes.main.latitude, lng: p.geocodes.main.longitude },
-            address: r.text.secondary || p.location?.formatted_address,
-            category: cat?.short_name || cat?.name,
-            fsqId: p.fsq_id,
-            distance: p.distance,
-          };
-        });
+      const gResults = await searchGoogleMaps(query, userLocation || undefined);
+      const mapped: SearchResult[] = gResults
+        .filter((r) => r.gps_coordinates)
+        .map((r) => ({
+          name: r.title,
+          coordinate: { lat: r.gps_coordinates!.latitude, lng: r.gps_coordinates!.longitude },
+          address: r.address,
+          category: r.type || r.types?.[0],
+          placeId: r.place_id,
+          dataId: r.data_id,
+          rating: r.rating,
+          reviewCount: r.reviews,
+          thumbnail: r.thumbnail,
+          openState: r.open_state || r.hours,
+          types: r.types,
+          price: r.price,
+        }));
 
       if (mapped.length > 0) {
         set({ searchResults: mapped, isSearching: false });
