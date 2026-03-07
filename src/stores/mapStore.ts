@@ -30,6 +30,8 @@ export interface SearchResult {
   openState?: string;
   types?: string[];
   price?: string;
+  description?: string;
+  hours?: string;
 }
 
 type BottomSheetState = 'peek' | 'half' | 'full' | 'hidden';
@@ -213,6 +215,8 @@ export const useMapStore = create<MapState>()((set, get) => ({
           openState: r.open_state || r.hours,
           types: r.types,
           price: r.price,
+          description: r.description,
+          hours: r.hours,
         }));
 
       if (mapped.length > 0) {

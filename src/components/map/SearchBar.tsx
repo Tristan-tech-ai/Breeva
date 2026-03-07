@@ -174,7 +174,7 @@ export default function SearchBar({ onPlaceSelect }: SearchBarProps) {
                         )}
                       </div>
 
-                      {/* Address + distance */}
+                      {/* Open state + hours + address */}
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {result.openState && (
                           <span className={`text-[10px] font-medium ${
@@ -182,7 +182,7 @@ export default function SearchBar({ onPlaceSelect }: SearchBarProps) {
                               ? 'text-green-600 dark:text-green-400'
                               : 'text-red-500 dark:text-red-400'
                           }`}>
-                            {result.openState}
+                            {result.hours || result.openState}
                           </span>
                         )}
                         {result.openState && result.address && (
@@ -194,6 +194,13 @@ export default function SearchBar({ onPlaceSelect }: SearchBarProps) {
                           </span>
                         )}
                       </div>
+
+                      {/* Description snippet */}
+                      {result.description && (
+                        <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 line-clamp-1">
+                          {result.description}
+                        </p>
+                      )}
                     </div>
 
                     {/* Distance badge */}

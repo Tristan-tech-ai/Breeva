@@ -19,6 +19,7 @@ export interface POI {
   openState?: string;
   types?: string[];
   price?: string;
+  description?: string;
 }
 
 // ─── Google Maps via SearchAPI ───────────────────────────────────────

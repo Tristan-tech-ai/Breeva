@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Marker } from 'react-leaflet';
+import { Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import type { Coordinate } from '../../types';
 import type { POI } from '../../lib/poi-api';
 import { getNearbyPOIs } from '../../lib/poi-api';
+import type { Coordinate } from '../../types';
 
 interface POILayerProps {
   center: Coordinate;
@@ -158,31 +158,54 @@ function getSvgIcon(category: string): { path: string; color: string } {
   return SVG_ICONS.default;
 }
 
-// Cache icons
+// ── Zoom-adaptive icon factory ───────────────────────────────────────
+
 const iconCache = new Map<string, L.DivIcon>();
 
-function getIcon(category: string): L.DivIcon {
-  const cacheKey = category.toLowerCase();
+function getIcon(category: string, zoom: number): L.DivIcon {
+  // Size scales with zoom
+  const size = zoom >= 17 ? 38 : zoom >= 15 ? 32 : zoom >= 13 ? 26 : 20;
+  const cacheKey = `${category.toLowerCase()}_${size}`;
   if (iconCache.has(cacheKey)) return iconCache.get(cacheKey)!;
 
   const { path, color } = getSvgIcon(category);
+  const svgSize = Math.round(size * 0.48);
+
   const icon = L.divIcon({
     className: '',
     html: `<div style="
-      width:32px;height:32px;
+      width:${size}px;height:${size}px;
       background:${color};
-      border:2.5px solid white;
+      border:2px solid white;
       border-radius:50%;
-      box-shadow:0 2px 8px rgba(0,0,0,0.3);
+      box-shadow:0 1px 5px rgba(0,0,0,0.35);
       display:flex;align-items:center;justify-content:center;
       cursor:pointer;
-    "><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="${path}"/></svg></div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
+      transition:transform 0.12s ease;
+    " onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'">
+      <svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" fill="white"><path d="${path}"/></svg>
+    </div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   });
+
   iconCache.set(cacheKey, icon);
   return icon;
 }
+
+// ── Importance score for priority rendering ──────────────────────────
+
+function getImportance(poi: POI): number {
+  const ratingScore = (poi.rating || 0) * 2;
+  const reviewScore = Math.log10(1 + (poi.reviewCount || 0));
+  return ratingScore + reviewScore;
+}
+
+function truncName(name: string, maxLen = 18): string {
+  return name.length <= maxLen ? name : name.substring(0, maxLen - 1) + '\u2026';
+}
+
+// ── Component ────────────────────────────────────────────────────────
 
 export default function POILayer({
   center,
@@ -191,8 +214,14 @@ export default function POILayer({
   visible = true,
   onPlaceSelect,
 }: POILayerProps) {
+  const map = useMap();
   const [pois, setPOIs] = useState<POI[]>([]);
   const [loading, setLoading] = useState(false);
+  const [zoom, setZoom] = useState(map.getZoom());
+
+  useMapEvents({
+    zoomend: () => setZoom(map.getZoom()),
+  });
 
   // Round center to ~200m grid to avoid re-fetching on tiny moves
   const gridLat = Math.round(center.lat * 500) / 500;
@@ -221,7 +250,9 @@ export default function POILayer({
     };
 
     fetchPOIs();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [gridLat, gridLng, radiusMeters, visible]);
 
   const handleClick = useCallback(
@@ -231,17 +262,50 @@ export default function POILayer({
     [onPlaceSelect],
   );
 
+  // Filter & render markers based on zoom
   const markers = useMemo(() => {
     if (!visible || loading || pois.length === 0) return null;
-    return pois.map((poi) => (
+
+    // Sort by importance — higher rated/reviewed places render first
+    const sorted = [...pois].sort((a, b) => getImportance(b) - getImportance(a));
+
+    // Limit visible count based on zoom level
+    const maxCount =
+      zoom >= 17 ? sorted.length
+      : zoom >= 15 ? Math.min(sorted.length, 30)
+      : zoom >= 13 ? Math.min(sorted.length, 15)
+      : Math.min(sorted.length, 8);
+
+    const visiblePois = sorted.slice(0, maxCount);
+
+    const showLabel = zoom >= 15;
+    const showRating = zoom >= 17;
+
+    return visiblePois.map((poi) => (
       <Marker
         key={poi.id}
         position={[poi.coordinate.lat, poi.coordinate.lng]}
-        icon={getIcon(poi.category)}
+        icon={getIcon(poi.category, zoom)}
         eventHandlers={{ click: () => handleClick(poi) }}
-      />
+      >
+        {showLabel && (
+          <Tooltip
+            permanent
+            direction="bottom"
+            offset={[0, 6]}
+            className="poi-label-tooltip"
+          >
+            <span className="poi-label-name">{truncName(poi.name)}</span>
+            {showRating && poi.rating != null && (
+              <span className="poi-label-rating">
+                {'★'} {poi.rating.toFixed(1)}
+              </span>
+            )}
+          </Tooltip>
+        )}
+      </Marker>
     ));
-  }, [pois, visible, loading, handleClick]);
+  }, [pois, visible, loading, zoom, handleClick]);
 
   return <>{markers}</>;
 }
