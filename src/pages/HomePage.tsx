@@ -17,6 +17,14 @@ import {
   Bookmark,
   BookmarkCheck,
   Layers,
+  UtensilsCrossed,
+  Coffee,
+  Hotel,
+  TreePine,
+  ShoppingBag,
+  Landmark,
+  CreditCard,
+  Fuel,
 } from 'lucide-react';
 import { useMapStore } from '../stores/mapStore';
 import { useWalkStore } from '../stores/walkStore';
@@ -38,14 +46,14 @@ import MapLayersSheet from '../components/map/MapLayersSheet';
 import type { POI } from '../lib/poi-api';
 
 const FILTER_CHIPS = [
-  { key: 'restaurant', label: 'Restaurants', emoji: '🍽️' },
-  { key: 'cafe', label: 'Cafes', emoji: '☕' },
-  { key: 'hotel', label: 'Hotels', emoji: '🏨' },
-  { key: 'park', label: 'Parks', emoji: '🌳' },
-  { key: 'shop', label: 'Shopping', emoji: '🛍️' },
-  { key: 'mosque', label: 'Mosques', emoji: '🕌' },
-  { key: 'atm', label: 'ATMs', emoji: '🏧' },
-  { key: 'gas', label: 'Gas', emoji: '⛽' },
+  { key: 'restaurant', label: 'Restaurants', icon: UtensilsCrossed },
+  { key: 'cafe', label: 'Cafes', icon: Coffee },
+  { key: 'hotel', label: 'Hotels', icon: Hotel },
+  { key: 'park', label: 'Parks', icon: TreePine },
+  { key: 'shop', label: 'Shopping', icon: ShoppingBag },
+  { key: 'mosque', label: 'Mosques', icon: Landmark },
+  { key: 'atm', label: 'ATMs', icon: CreditCard },
+  { key: 'gas', label: 'Gas', icon: Fuel },
 ];
 
 export default function HomePage() {
@@ -182,20 +190,23 @@ export default function HomePage() {
               {/* Filter chips */}
               <div className="mt-2 max-w-2xl mx-auto">
                 <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
-                  {FILTER_CHIPS.map(chip => (
-                    <button
-                      key={chip.key}
-                      onClick={() => setActiveFilter(activeFilter === chip.key ? null : chip.key)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
-                        activeFilter === chip.key
-                          ? 'bg-primary-500 text-white shadow-md scale-105'
-                          : 'bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-300 shadow-sm border border-gray-200 dark:border-gray-700/50 backdrop-blur-xl'
-                      }`}
-                    >
-                      <span className="text-sm">{chip.emoji}</span>
-                      <span>{chip.label}</span>
-                    </button>
-                  ))}
+                  {FILTER_CHIPS.map(chip => {
+                    const Icon = chip.icon;
+                    return (
+                      <button
+                        key={chip.key}
+                        onClick={() => setActiveFilter(activeFilter === chip.key ? null : chip.key)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
+                          activeFilter === chip.key
+                            ? 'bg-primary-500 text-white shadow-md scale-105'
+                            : 'bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-300 shadow-sm border border-gray-200 dark:border-gray-700/50 backdrop-blur-xl'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" strokeWidth={2} />
+                        <span>{chip.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>

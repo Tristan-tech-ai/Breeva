@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import {
+  Moon, Bell, MapPin, CalendarDays, BarChart3,
+  User, Trash2, Smartphone, FileText, Lock,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 
 interface SettingSection {
@@ -9,7 +14,7 @@ interface SettingSection {
 }
 
 interface SettingItem {
-  icon: string;
+  icon: LucideIcon;
   label: string;
   description?: string;
   type: 'toggle' | 'select' | 'link' | 'danger';
@@ -58,7 +63,7 @@ export default function SettingsPage() {
       title: 'Appearance',
       items: [
         {
-          icon: '🌙',
+          icon: Moon,
           label: 'Dark Mode',
           description: 'Switch between light and dark themes',
           type: 'toggle',
@@ -71,7 +76,7 @@ export default function SettingsPage() {
       title: 'Notifications',
       items: [
         {
-          icon: '🔔',
+          icon: Bell,
           label: 'Push Notifications',
           description: 'Receive walk and quest reminders',
           type: 'toggle',
@@ -79,7 +84,7 @@ export default function SettingsPage() {
           action: () => setPushNotifications(!pushNotifications),
         },
         {
-          icon: '📍',
+          icon: MapPin,
           label: 'Location Updates',
           description: 'Notify about nearby merchants',
           type: 'toggle',
@@ -87,7 +92,7 @@ export default function SettingsPage() {
           action: () => setLocationTracking(!locationTracking),
         },
         {
-          icon: '📅',
+          icon: CalendarDays,
           label: 'Quest Reminders',
           description: 'Daily quest availability alerts',
           type: 'toggle',
@@ -100,7 +105,7 @@ export default function SettingsPage() {
       title: 'Privacy',
       items: [
         {
-          icon: '📊',
+          icon: BarChart3,
           label: 'Anonymous Data',
           description: 'Share anonymized usage data to improve Breeva',
           type: 'toggle',
@@ -108,7 +113,7 @@ export default function SettingsPage() {
           action: () => setAnonymousData(!anonymousData),
         },
         {
-          icon: '👤',
+          icon: User,
           label: 'Profile Visibility',
           description: 'Show your profile on leaderboards',
           type: 'toggle',
@@ -116,7 +121,7 @@ export default function SettingsPage() {
           action: () => setProfileVisible(!profileVisible),
         },
         {
-          icon: '🗑️',
+          icon: Trash2,
           label: 'Delete My Data',
           description: 'Permanently delete all your data',
           type: 'danger',
@@ -133,19 +138,19 @@ export default function SettingsPage() {
       title: 'About',
       items: [
         {
-          icon: '📱',
+          icon: Smartphone,
           label: 'App Version',
           description: 'v0.1.0 (Beta)',
           type: 'link',
         },
         {
-          icon: '📄',
+          icon: FileText,
           label: 'Terms of Service',
           type: 'link',
           action: () => navigate('/terms'),
         },
         {
-          icon: '🔒',
+          icon: Lock,
           label: 'Privacy Policy',
           type: 'link',
           action: () => navigate('/privacy'),
@@ -186,7 +191,7 @@ export default function SettingsPage() {
                   className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white dark:bg-gray-900/50 dark:hover:bg-white dark:bg-gray-900/5 transition-colors text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-lg">{item.icon}</span>
+                    {(() => { const Icon = item.icon; return <Icon className={`w-5 h-5 ${item.type === 'danger' ? 'text-red-400' : 'text-primary-500'}`} strokeWidth={1.8} />; })()}
                     <div>
                       <div className={`text-sm font-medium ${
                         item.type === 'danger'

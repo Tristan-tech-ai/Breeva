@@ -261,6 +261,7 @@ export default function POILayer({
     return { lat: c.lat, lng: c.lng };
   });
   const fetchRef = useRef(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useMapEvents({
     zoomend: () => {
@@ -269,8 +270,12 @@ export default function POILayer({
       setViewCenter({ lat: c.lat, lng: c.lng });
     },
     moveend: () => {
-      const c = map.getCenter();
-      setViewCenter({ lat: c.lat, lng: c.lng });
+      // Debounce pan movements to avoid rapid re-fetches during scrolling
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        const c = map.getCenter();
+        setViewCenter({ lat: c.lat, lng: c.lng });
+      }, 400);
     },
   });
 
@@ -289,10 +294,9 @@ export default function POILayer({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom, viewCenter]);
 
-  // Grid snap — coarser when zoomed out to reduce re-fetches during panning
-  const gridSize = zoom >= 15 ? 500 : zoom >= 13 ? 300 : 200;
-  const gridLat = Math.round(viewCenter.lat * gridSize) / gridSize;
-  const gridLng = Math.round(viewCenter.lng * gridSize) / gridSize;
+  // Coarser grid snap to drastically reduce re-fetches
+  const gridLat = Math.round(viewCenter.lat * 200) / 200;
+  const gridLng = Math.round(viewCenter.lng * 200) / 200;
 
   useEffect(() => {
     if (!visible) {
@@ -304,14 +308,14 @@ export default function POILayer({
     const fetchPOIs = async () => {
       setLoading(true);
       try {
-        const queries = ['tempat menarik restoran kafe toko taman masjid hotel'];
-        if (activeFilter && FILTER_QUERIES[activeFilter]) {
-          queries.push(FILTER_QUERIES[activeFilter]);
-        }
+        // Single comprehensive query for speed; filter-specific query only when filter active
+        const query = activeFilter && FILTER_QUERIES[activeFilter]
+          ? FILTER_QUERIES[activeFilter]
+          : 'tempat menarik restoran kafe toko taman masjid hotel';
         const { pois: results } = await getNearbyPOIs(
           { lat: gridLat, lng: gridLng },
           Math.min(viewportRadius, 5000),
-          queries,
+          [query],
         );
         if (fetchRef.current === fetchId) setPOIs(results);
       } catch {
