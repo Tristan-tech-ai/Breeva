@@ -143,29 +143,47 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
     currentAQI && userLocation ? generateAQIZones(userLocation, currentAQI.aqi) : []
   );
 
-  // Tile URLs by style
-  const geoapifyKey = '983da66a10e14f909057351679defe36';
-  const retina = window.devicePixelRatio >= 2 ? '@2x' : '';
-  const tileUrls: Record<string, { light: string; dark: string; attribution: string }> = {
+  // Tile URLs by style — base (nolabels) + label overlay (streets only, no POI icons)
+  const tileUrls: Record<string, { base: string; labels?: string; attribution: string }> = {
     voyager: {
-      light: `https://maps.geoapify.com/v1/tile/osm-bright-smooth/{z}/{x}/{y}${retina}.png?apiKey=${geoapifyKey}`,
-      dark: `https://maps.geoapify.com/v1/tile/dark-matter/{z}/{x}/{y}${retina}.png?apiKey=${geoapifyKey}`,
-      attribution: 'Powered by <a href="https://www.geoapify.com/">Geoapify</a> | &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
+      base: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png',
+      labels: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
     },
     osm: {
-      light: `https://maps.geoapify.com/v1/tile/osm-liberty/{z}/{x}/{y}${retina}.png?apiKey=${geoapifyKey}`,
-      dark: `https://maps.geoapify.com/v1/tile/dark-matter-brown/{z}/{x}/{y}${retina}.png?apiKey=${geoapifyKey}`,
-      attribution: 'Powered by <a href="https://www.geoapify.com/">Geoapify</a> | &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
+      base: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png',
+      labels: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
     },
     satellite: {
-      light: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      dark: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      attribution: '&copy; Esri',
+      base: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      labels: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+      attribution: '&copy; Esri &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
     },
   };
 
-  const currentTiles = tileUrls[mapStyle] || tileUrls.voyager;
-  const tileUrl = isDarkMode ? currentTiles.dark : currentTiles.light;
+  // Dark mode overrides
+  const darkTiles: Record<string, { base: string; labels?: string; attribution: string }> = {
+    voyager: {
+      base: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+      labels: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
+    },
+    osm: {
+      base: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+      labels: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
+    },
+    satellite: {
+      base: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      labels: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
+      attribution: '&copy; Esri &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
+    },
+  };
+
+  const tiles = isDarkMode
+    ? (darkTiles[mapStyle] || darkTiles.voyager)
+    : (tileUrls[mapStyle] || tileUrls.voyager);
 
   return (
     <div className={className} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
@@ -177,11 +195,19 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
         style={{ width: '100%', height: '100%', background: isDarkMode ? '#0f172a' : '#f8fafc' }}
       >
         <TileLayer
-          key={`${mapStyle}-${isDarkMode}`}
-          url={tileUrl}
-          attribution={currentTiles.attribution}
+          key={`base-${mapStyle}-${isDarkMode}`}
+          url={tiles.base}
+          attribution={tiles.attribution}
           maxZoom={20}
         />
+        {tiles.labels && (
+          <TileLayer
+            key={`labels-${mapStyle}-${isDarkMode}`}
+            url={tiles.labels}
+            maxZoom={20}
+            pane="overlayPane"
+          />
+        )}
 
         <MapController />
         <MapClickHandler />
