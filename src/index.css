@@ -350,6 +350,29 @@
     -1px 1px 0 #111827,
     1px 1px 0 #111827;
 }
+/* Satellite mode labels: white text with strong dark shadow */
+.poi-satellite .poi-label-name {
+  color: #ffffff;
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000,
+    0 -1px 0 #000,
+    0 1px 0 #000,
+    -1px 0 0 #000,
+    1px 0 0 #000,
+    0 0 6px rgba(0,0,0,0.7);
+}
+.poi-satellite .poi-label-rating {
+  color: #d1d5db;
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000,
+    0 0 6px rgba(0,0,0,0.7);
+}
 
 /* User marker pulsing animation */
 .user-marker {
