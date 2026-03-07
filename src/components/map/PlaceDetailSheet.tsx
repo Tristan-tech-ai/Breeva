@@ -59,17 +59,28 @@ export default function PlaceDetailSheet({
     setLoading(true);
     setPhotoIdx(0);
 
-    Promise.all([
-      getGooglePlaceDetails(placeId),
-      getGooglePlacePhotos(placeId),
-      getGooglePlaceReviews(placeId),
-    ]).then(([place, placePhotos, reviewData]) => {
+    // Only fetch details on open — photos & reviews are lazy-loaded per tab
+    getGooglePlaceDetails(placeId).then((place) => {
       setDetails(place);
-      setPhotos(placePhotos);
-      setReviews(reviewData.reviews || []);
       setLoading(false);
     });
   }, [poi?.id]);
+
+  // Lazy-load photos only when Photos tab is opened
+  useEffect(() => {
+    if (activeTab !== 'photos' || photos.length > 0 || !poi) return;
+    const placeId = poi.placeId || poi.dataId || (poi.id.startsWith('gmap-') ? poi.id.replace('gmap-', '') : null);
+    if (!placeId) return;
+    getGooglePlacePhotos(placeId).then(setPhotos);
+  }, [activeTab, poi?.id]);
+
+  // Lazy-load reviews only when Reviews tab is opened
+  useEffect(() => {
+    if (activeTab !== 'reviews' || reviews.length > 0 || !poi) return;
+    const placeId = poi.placeId || poi.dataId || (poi.id.startsWith('gmap-') ? poi.id.replace('gmap-', '') : null);
+    if (!placeId) return;
+    getGooglePlaceReviews(placeId).then((data) => setReviews(data.reviews || []));
+  }, [activeTab, poi?.id]);
 
   if (!poi) return null;
 

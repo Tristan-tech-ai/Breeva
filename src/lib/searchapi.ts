@@ -80,6 +80,11 @@ export interface GMapPhoto {
   thumbnail: string;
 }
 
+// ─── In-memory cache (avoids repeat API calls for same data) ─────────
+
+const apiCache = new Map<string, { data: unknown; ts: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 // ─── Low-level fetch ─────────────────────────────────────────────────
 
 async function searchApi<T = Record<string, unknown>>(
@@ -91,10 +96,26 @@ async function searchApi<T = Record<string, unknown>>(
   for (const [k, v] of Object.entries(params)) {
     if (v) url.searchParams.set(k, v);
   }
+
+  const cacheKey = url.toString();
+  const cached = apiCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return cached.data as T;
+  }
+
   try {
     const res = await fetch(url.toString());
     if (!res.ok) return null;
-    return await res.json();
+    const data = await res.json();
+    apiCache.set(cacheKey, { data, ts: Date.now() });
+    // Evict old entries when cache grows too large
+    if (apiCache.size > 200) {
+      const now = Date.now();
+      for (const [k, v] of apiCache) {
+        if (now - v.ts > CACHE_TTL) apiCache.delete(k);
+      }
+    }
+    return data;
   } catch {
     return null;
   }

@@ -79,39 +79,6 @@ export async function getNearbyPOIs(
       }
     }
 
-    // Fallback: if too few results, try broader search
-    if (pois.length < 3) {
-      try {
-        const broader = await searchGoogleMaps('tempat terdekat', center, Math.max(zoom - 2, 10));
-        for (const place of broader) {
-          if (!place.gps_coordinates) continue;
-          const coord: Coordinate = {
-            lat: place.gps_coordinates.latitude,
-            lng: place.gps_coordinates.longitude,
-          };
-          const key = place.place_id || place.title.toLowerCase();
-          if (seen.has(key)) continue;
-          seen.add(key);
-          pois.push({
-            id: place.place_id ? `gmap-${place.place_id}` : `gmap-${place.data_id || String(Date.now())}`,
-            name: place.title,
-            category: place.type || place.types?.[0] || 'Place',
-            coordinate: coord,
-            distance: getDistance(center, coord),
-            address: place.address,
-            rating: place.rating,
-            reviewCount: place.reviews,
-            thumbnail: place.thumbnail,
-            placeId: place.place_id,
-            dataId: place.data_id,
-            openState: place.open_state || place.hours,
-            types: place.types,
-            price: place.price,
-          });
-        }
-      } catch { /* ignore fallback failure */ }
-    }
-
     pois.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
     return { pois, error: null };
   } catch (error) {

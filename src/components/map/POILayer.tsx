@@ -295,8 +295,9 @@ export default function POILayer({
   }, [zoom, viewCenter]);
 
   // Coarser grid snap to drastically reduce re-fetches
-  const gridLat = Math.round(viewCenter.lat * 200) / 200;
-  const gridLng = Math.round(viewCenter.lng * 200) / 200;
+  // Grid snap at ~1km resolution to minimize API calls
+  const gridLat = Math.round(viewCenter.lat * 100) / 100;
+  const gridLng = Math.round(viewCenter.lng * 100) / 100;
 
   useEffect(() => {
     if (!visible) {
