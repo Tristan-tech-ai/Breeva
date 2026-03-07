@@ -132,7 +132,7 @@ export default function AboutPage() {
         >
           <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">Built With</h3>
           <div className="flex flex-wrap gap-2">
-            {['React 19', 'TypeScript', 'Vite', 'Tailwind CSS v4', 'Leaflet', 'Supabase', 'OpenRouteService', 'Open-Meteo AQI', 'Framer Motion', 'Zustand'].map(tech => (
+            {['React 19', 'TypeScript', 'Vite', 'Tailwind CSS v4', 'MapLibre GL', 'Supabase', 'OpenRouteService', 'Open-Meteo AQI', 'Framer Motion', 'Zustand'].map(tech => (
               <span key={tech} className="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-[10px] font-medium text-gray-600 dark:text-gray-400">
                 {tech}
               </span>

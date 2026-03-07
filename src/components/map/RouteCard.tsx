@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Clock, Route as RouteIcon, Wind, Star, Leaf, Zap, Scale, Check, TreePine, Car } from 'lucide-react';
 import type { Route } from '../../types';
-import { getAQIColor } from './LeafletMap';
+import { getAQIColor } from './MapLibreMap';
 
 interface RouteCardProps {
   route: Route;

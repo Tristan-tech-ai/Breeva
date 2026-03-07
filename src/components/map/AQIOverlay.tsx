@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Circle, LayerGroup, useMap } from 'react-leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Eye, EyeOff } from 'lucide-react';
 import type { AirQualityData, Coordinate } from '../../types';
@@ -66,28 +65,8 @@ function generateAQIZones(center: Coordinate, baseAQI: number): AQIZone[] {
   return zones;
 }
 
-// Map inner component for AQI circles
-function AQICircles({ zones }: { zones: AQIZone[] }) {
-  useMap(); // ensure component is inside MapContainer
-  return (
-    <LayerGroup>
-      {zones.map((zone, i) => (
-        <Circle
-          key={i}
-          center={[zone.center.lat, zone.center.lng]}
-          radius={zone.radius}
-          pathOptions={{
-            color: getAQIColor(zone.aqi),
-            fillColor: getAQIColor(zone.aqi),
-            fillOpacity: 0.15,
-            weight: 1,
-            opacity: 0.3,
-          }}
-        />
-      ))}
-    </LayerGroup>
-  );
-}
+// AQI zone type export for MapLibreMap
+export type { AQIZone };
 
 export function AQIOverlayToggle({ currentAQI: _currentAQI, userLocation: _userLocation }: AQIOverlayProps) {
   const [visible, setVisible] = useState(false);
@@ -148,4 +127,4 @@ export function AQIOverlayToggle({ currentAQI: _currentAQI, userLocation: _userL
   );
 }
 
-export { AQICircles, generateAQIZones, getAQIColor as getOverlayAQIColor };
+export { generateAQIZones, getAQIColor as getOverlayAQIColor };

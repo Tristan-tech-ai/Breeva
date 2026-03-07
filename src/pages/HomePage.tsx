@@ -30,7 +30,7 @@ import { useMapStore } from '../stores/mapStore';
 import { useWalkStore } from '../stores/walkStore';
 import { useAuthStore } from '../stores/authStore';
 import { useSavedPlacesStore } from '../stores/savedPlacesStore';
-import LeafletMap from '../components/map/LeafletMap';
+import MapLibreMap from '../components/map/MapLibreMap';
 import SearchBar from '../components/map/SearchBar';
 import BottomSheet from '../components/map/BottomSheet';
 import RouteCard from '../components/map/RouteCard';
@@ -130,7 +130,7 @@ export default function HomePage() {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-950">
       {/* Map */}
-      <LeafletMap
+      <MapLibreMap
         className="absolute inset-0"
         isDarkMode={isDark}
         showAQIOverlay={showAQIOverlay}

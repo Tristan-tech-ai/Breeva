@@ -216,84 +216,77 @@
   }
 }
 
-/* Leaflet overrides — fix Tailwind v4 preflight conflict */
-.leaflet-container {
+/* MapLibre GL overrides */
+.maplibregl-map {
   font-family: var(--font-sans) !important;
-}
-
-/* Tailwind v4 sets img { max-width:100%; height:auto } which breaks Leaflet tiles */
-.leaflet-container img {
-  max-width: none !important;
-  max-height: none !important;
-  height: auto;
-}
-
-.leaflet-tile-pane,
-.leaflet-pane,
-.leaflet-tile,
-.leaflet-marker-icon,
-.leaflet-marker-shadow,
-.leaflet-tile-container,
-.leaflet-map-pane {
-  max-width: none !important;
-}
-
-/* Ensure map fills its container */
-.leaflet-container {
   width: 100% !important;
   height: 100% !important;
 }
 
-.leaflet-popup-content-wrapper {
+/* Glass-styled popup */
+.glass-popup-ml .maplibregl-popup-content {
   background: rgba(255, 255, 255, 0.85) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
   border-radius: 12px !important;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
   border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  padding: 8px 12px;
 }
 
-.dark .leaflet-popup-content-wrapper {
+.dark .glass-popup-ml .maplibregl-popup-content {
   background: rgba(15, 23, 42, 0.9) !important;
   border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #e5e7eb;
 }
 
-.leaflet-popup-tip {
-  background: rgba(255, 255, 255, 0.85) !important;
+.glass-popup-ml .maplibregl-popup-tip {
+  border-top-color: rgba(255, 255, 255, 0.85) !important;
 }
 
-.dark .leaflet-popup-tip {
-  background: rgba(15, 23, 42, 0.9) !important;
+.dark .glass-popup-ml .maplibregl-popup-tip {
+  border-top-color: rgba(15, 23, 42, 0.9) !important;
 }
 
-.leaflet-control-zoom {
-  border: none !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
-}
-
-.leaflet-control-zoom a {
+/* Navigation controls — glass styling */
+.maplibregl-ctrl-group {
   background: rgba(255, 255, 255, 0.85) !important;
   backdrop-filter: blur(8px) !important;
   -webkit-backdrop-filter: blur(8px) !important;
   border: 1px solid rgba(255, 255, 255, 0.3) !important;
-  color: #374151 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  overflow: hidden;
 }
 
-.dark .leaflet-control-zoom a {
+.dark .maplibregl-ctrl-group {
   background: rgba(15, 23, 42, 0.85) !important;
   border-color: rgba(255, 255, 255, 0.1) !important;
-  color: #e5e7eb !important;
 }
 
-
-
-/* User marker pulsing animation */
-.user-marker {
-  background: none !important;
-  border: none !important;
+.maplibregl-ctrl-group button {
+  width: 36px !important;
+  height: 36px !important;
 }
 
-.destination-marker {
-  background: none !important;
-  border: none !important;
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+.dark .maplibregl-ctrl-group button + button {
+  border-top-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.maplibregl-ctrl-group button span {
+  filter: none !important;
+}
+
+.dark .maplibregl-ctrl-group button span {
+  filter: invert(1) !important;
+}
+
+/* Custom marker resets */
+.user-marker-ml,
+.dest-marker-ml {
+  cursor: default;
 }

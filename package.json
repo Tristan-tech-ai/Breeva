@@ -17,13 +17,13 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.31.0",
-    "leaflet": "^1.9.4",
     "lucide-react": "^0.563.0",
+    "maplibre-gl": "^5.19.0",
     "openmeteo": "^1.2.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-hot-toast": "^2.6.0",
-    "react-leaflet": "^5.0.0",
+    "react-map-gl": "^8.1.0",
     "react-router-dom": "^7.13.0",
     "tailwind-merge": "^3.4.0",
     "zustand": "^5.0.11"
@@ -31,7 +31,6 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@tailwindcss/vite": "^4.1.18",
-    "@types/leaflet": "^1.9.21",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",

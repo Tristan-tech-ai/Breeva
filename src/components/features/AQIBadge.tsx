@@ -1,5 +1,5 @@
 import { Wind } from 'lucide-react';
-import { getAQIColor } from '../map/LeafletMap';
+import { getAQIColor } from '../map/MapLibreMap';
 
 interface AQIBadgeProps {
   aqi: number;
