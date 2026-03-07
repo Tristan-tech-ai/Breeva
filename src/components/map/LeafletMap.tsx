@@ -188,40 +188,35 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
     currentAQI && userLocation ? generateAQIZones(userLocation, currentAQI.aqi) : []
   );
 
-  // Tile URLs by style — base (nolabels) + label overlay (streets only, no POI icons)
-  const tileUrls: Record<string, { base: string; labels?: string; attribution: string }> = {
+  // Tile URLs — full tiles with labels & POI names (visuals handled by tiles,
+  // interactivity handled by tap-to-identify API lookup)
+  const tileUrls: Record<string, { url: string; attribution: string }> = {
     voyager: {
-      base: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png',
-      labels: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
       attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
     },
     osm: {
-      base: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png',
-      labels: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
       attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
     },
     satellite: {
-      base: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      labels: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       attribution: '&copy; Esri &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
     },
   };
 
   // Dark mode overrides
-  const darkTiles: Record<string, { base: string; labels?: string; attribution: string }> = {
+  const darkTiles: Record<string, { url: string; attribution: string }> = {
     voyager: {
-      base: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
-      labels: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
+      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
       attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
     },
     osm: {
-      base: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
-      labels: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
+      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
       attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
     },
     satellite: {
-      base: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      labels: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       attribution: '&copy; Esri &copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
     },
   };
@@ -240,19 +235,11 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
         style={{ width: '100%', height: '100%', background: isDarkMode ? '#0f172a' : '#f8fafc' }}
       >
         <TileLayer
-          key={`base-${mapStyle}-${isDarkMode}`}
-          url={tiles.base}
+          key={`tile-${mapStyle}-${isDarkMode}`}
+          url={tiles.url}
           attribution={tiles.attribution}
           maxZoom={20}
         />
-        {tiles.labels && (
-          <TileLayer
-            key={`labels-${mapStyle}-${isDarkMode}`}
-            url={tiles.labels}
-            maxZoom={20}
-            pane="overlayPane"
-          />
-        )}
 
         <MapController />
         <MapClickHandler poisRef={poisRef} onPlaceSelect={onPlaceSelect} />
@@ -262,12 +249,11 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
           <AQICircles zones={zones} />
         )}
 
-        {/* POI markers — viewport-based, no center needed */}
+        {/* POI data layer — fetches POIs for tap-to-identify, no visual rendering */}
         {showPOIs && (
           <POILayer
             visible={showPOIs}
             activeFilter={activeFilter}
-            onPlaceSelect={onPlaceSelect}
             poisRef={poisRef}
           />
         )}
