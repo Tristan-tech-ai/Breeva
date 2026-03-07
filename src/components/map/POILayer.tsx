@@ -87,7 +87,8 @@ function getCategoryColor(category: string, types?: string[]): string {
 const iconCache = new Map<string, L.DivIcon>();
 
 function getPoiIcon(color: string, zoom: number, dimmed: boolean): L.DivIcon {
-  const dotSize = zoom >= 17 ? 10 : zoom >= 15 ? 8 : 6;
+  // Larger dots so they're visible next to CARTO tile labels
+  const dotSize = zoom >= 18 ? 12 : zoom >= 17 ? 10 : 8;
   const opacity = dimmed ? 0.25 : 1;
   const cacheKey = `${color}_${dotSize}_${dimmed ? 1 : 0}`;
   if (iconCache.has(cacheKey)) return iconCache.get(cacheKey)!;
@@ -103,16 +104,16 @@ function getPoiIcon(color: string, zoom: number, dimmed: boolean): L.DivIcon {
   return icon;
 }
 
-// ── Zoom-based visibility (mimics native tile POI rendering) ─────────
-// Higher zoom = more POIs visible.
+// ── Zoom-based visibility synced with CARTO tile labels ──────────────
+// CARTO voyager_only_labels renders POI text starting at ~z16.
+// We match that: no markers below z16, gradual increase above.
+// (POIs are still fetched at z15+ for the tap-fallback handler.)
 
 function getMaxVisible(zoom: number): number {
-  if (zoom >= 17) return 500;
-  if (zoom >= 16) return 300;
-  if (zoom >= 15) return 200;
-  if (zoom >= 14) return 100;
-  if (zoom >= 13) return 50;
-  return 20;
+  if (zoom >= 18) return 500;
+  if (zoom >= 17) return 300;
+  if (zoom >= 16) return 150;
+  return 0; // below z16: CARTO tiles show no POI labels → no markers
 }
 
 function truncName(name: string, maxLen = 16): string {
@@ -265,8 +266,9 @@ export default function POILayer({
     });
 
     const maxCount = getMaxVisible(zoom);
+    if (maxCount === 0) return null; // below CARTO POI label threshold
     const visible_ = sorted.slice(0, maxCount);
-    const showLabel = zoom >= 15;
+    const showLabel = zoom >= 17; // match CARTO dense-label zoom
 
     return visible_.map((poi) => {
       const dimmed = activeFilter ? !matchesFilter(poi, activeFilter) : false;
