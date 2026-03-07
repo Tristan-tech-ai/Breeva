@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import type { POI } from '../../lib/poi-api';
 import { getNearbyPOIs } from '../../lib/poi-api';
@@ -63,18 +63,6 @@ function getHitIcon(zoom: number, dimmed: boolean): L.DivIcon {
 
   iconCache.set(cacheKey, icon);
   return icon;
-}
-
-// ── Importance score for priority rendering ──────────────────────────
-
-function getImportance(poi: POI): number {
-  const ratingScore = (poi.rating || 0) * 2;
-  const reviewScore = Math.log10(1 + (poi.reviewCount || 0));
-  return ratingScore + reviewScore;
-}
-
-function truncName(name: string, maxLen = 18): string {
-  return name.length <= maxLen ? name : name.substring(0, maxLen - 1) + '\u2026';
 }
 
 // ── Component ────────────────────────────────────────────────────────
@@ -168,63 +156,20 @@ export default function POILayer({
     [onPlaceSelect],
   );
 
-  // Render markers with hierarchy: filter matches on top, then by importance
+  // Pure invisible hit areas — no visual, just clickable targets over tile icons
   const markers = useMemo(() => {
     if (!visible || loading || pois.length === 0) return null;
 
-    // Sort: filter matches first, then by importance
-    const sorted = [...pois].sort((a, b) => {
-      if (activeFilter) {
-        const aMatch = matchesFilter(a, activeFilter);
-        const bMatch = matchesFilter(b, activeFilter);
-        if (aMatch !== bMatch) return aMatch ? -1 : 1;
-      }
-      return getImportance(b) - getImportance(a);
-    });
-
-    // Limit visible count by zoom (famous places only when zoomed out)
-    const maxCount =
-      zoom >= 17 ? sorted.length
-      : zoom >= 15 ? Math.min(sorted.length, 30)
-      : zoom >= 13 ? Math.min(sorted.length, 15)
-      : Math.min(sorted.length, 8);
-
-    const visiblePois = sorted.slice(0, maxCount);
-
-    return visiblePois.map((poi) => {
-      const isDimmed = activeFilter ? !matchesFilter(poi, activeFilter) : false;
-      const isHighlighted = activeFilter ? matchesFilter(poi, activeFilter) : false;
-      // Highlighted POIs show labels at lower zoom, dimmed ones never show labels
-      const showLabel = isHighlighted ? zoom >= 13 : !isDimmed && zoom >= 15;
-      const showRating = isHighlighted ? zoom >= 15 : zoom >= 17;
-
-      return (
-        <Marker
-          key={poi.id}
-          position={[poi.coordinate.lat, poi.coordinate.lng]}
-          icon={getHitIcon(zoom, isDimmed)}
-          zIndexOffset={isHighlighted ? 1000 : isDimmed ? -1000 : 0}
-          eventHandlers={{ click: () => handleClick(poi) }}
-        >
-          {showLabel && (
-            <Tooltip
-              permanent
-              direction="bottom"
-              offset={[0, 6]}
-              className="poi-label-tooltip"
-            >
-              <span className="poi-label-name">{truncName(poi.name)}</span>
-              {showRating && poi.rating != null && (
-                <span className="poi-label-rating">
-                  {'★'} {poi.rating.toFixed(1)}
-                </span>
-              )}
-            </Tooltip>
-          )}
-        </Marker>
-      );
-    });
-  }, [pois, visible, loading, zoom, activeFilter, handleClick]);
+    return pois.map((poi) => (
+      <Marker
+        key={poi.id}
+        position={[poi.coordinate.lat, poi.coordinate.lng]}
+        icon={getHitIcon(zoom, false)}
+        zIndexOffset={0}
+        eventHandlers={{ click: () => handleClick(poi) }}
+      />
+    ));
+  }, [pois, visible, loading, zoom, handleClick]);
 
   return <>{markers}</>;
 }
