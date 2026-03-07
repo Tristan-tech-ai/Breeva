@@ -9,6 +9,7 @@ interface POILayerProps {
   visible?: boolean;
   activeFilter?: string | null;
   onPlaceSelect?: (poi: POI) => void;
+  poisRef?: React.MutableRefObject<POI[]>;
 }
 
 // ── Category filter → Geoapify categories & matching ─────────────────
@@ -106,13 +107,12 @@ function getPoiIcon(color: string, zoom: number, dimmed: boolean): L.DivIcon {
 // Higher zoom = more POIs visible.
 
 function getMaxVisible(zoom: number): number {
-  if (zoom >= 18) return 200;
-  if (zoom >= 17) return 80;
-  if (zoom >= 16) return 50;
-  if (zoom >= 15) return 30;
-  if (zoom >= 14) return 15;
-  if (zoom >= 13) return 8;
-  return 4;
+  if (zoom >= 17) return 500;
+  if (zoom >= 16) return 300;
+  if (zoom >= 15) return 200;
+  if (zoom >= 14) return 100;
+  if (zoom >= 13) return 50;
+  return 20;
 }
 
 function truncName(name: string, maxLen = 16): string {
@@ -125,6 +125,7 @@ export default function POILayer({
   visible = true,
   activeFilter = null,
   onPlaceSelect,
+  poisRef,
 }: POILayerProps) {
   const map = useMap();
   const [pois, setPOIs] = useState<POI[]>([]);
@@ -168,10 +169,13 @@ export default function POILayer({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom, viewCenter]);
 
-  // Coarser grid snap to drastically reduce re-fetches
-  // Grid snap at ~1km resolution to minimize API calls
-  const gridLat = Math.round(viewCenter.lat * 100) / 100;
-  const gridLng = Math.round(viewCenter.lng * 100) / 100;
+  // Grid snap — finer at high zoom for better multi-cell coverage
+  const gridSnap = zoom >= 15 ? 200 : 100; // 0.005° (~500m) or 0.01° (~1km)
+  const gridLat = Math.round(viewCenter.lat * gridSnap) / gridSnap;
+  const gridLng = Math.round(viewCenter.lng * gridSnap) / gridSnap;
+
+  // Stable key for fetch cells to avoid unnecessary re-fetches
+  const cellsKey = `${zoom >= 15 ? 4 : 1}_${gridLat}_${gridLng}_${Math.round(viewportRadius)}`;
 
   useEffect(() => {
     if (!visible) {
@@ -183,16 +187,47 @@ export default function POILayer({
     const fetchPOIs = async () => {
       setLoading(true);
       try {
-        // Use Geoapify category strings; when filter active, use specific categories
         const cats = activeFilter && FILTER_CATEGORIES[activeFilter]
           ? [FILTER_CATEGORIES[activeFilter]]
-          : undefined; // undefined = use default broad categories
-        const { pois: results } = await getNearbyPOIs(
-          { lat: gridLat, lng: gridLng },
-          Math.min(viewportRadius, 5000),
-          cats,
-        );
-        if (fetchRef.current === fetchId) setPOIs(results);
+          : undefined;
+
+        let allPOIs: POI[];
+
+        if (zoom >= 15) {
+          // 2×2 grid fetch for wider POI coverage at high zoom
+          const off = 0.003; // ~330m offset from center
+          const cellRadius = Math.min(viewportRadius * 0.8, 5000);
+          const centers = [
+            { lat: gridLat + off, lng: gridLng - off },
+            { lat: gridLat + off, lng: gridLng + off },
+            { lat: gridLat - off, lng: gridLng - off },
+            { lat: gridLat - off, lng: gridLng + off },
+          ];
+          const results = await Promise.all(
+            centers.map(c => getNearbyPOIs(c, cellRadius, cats))
+          );
+          // Deduplicate by ID
+          const seen = new Set<string>();
+          allPOIs = [];
+          for (const { pois: cellPois } of results) {
+            for (const poi of cellPois) {
+              if (!seen.has(poi.id)) {
+                seen.add(poi.id);
+                allPOIs.push(poi);
+              }
+            }
+          }
+        } else {
+          // Single cell for lower zoom — wider radius
+          const { pois: results } = await getNearbyPOIs(
+            { lat: gridLat, lng: gridLng },
+            Math.min(viewportRadius * 1.3, 5000),
+            cats,
+          );
+          allPOIs = results;
+        }
+
+        if (fetchRef.current === fetchId) setPOIs(allPOIs);
       } catch {
         // silently fail
       }
@@ -201,7 +236,12 @@ export default function POILayer({
 
     fetchPOIs();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gridLat, gridLng, viewportRadius, visible, activeFilter]);
+  }, [cellsKey, visible, activeFilter]);
+
+  // Sync POIs to ref for map click fallback handler
+  useEffect(() => {
+    if (poisRef) poisRef.current = pois;
+  }, [pois, poisRef]);
 
   const handleClick = useCallback(
     (poi: POI) => {

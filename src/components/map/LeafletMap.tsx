@@ -6,6 +6,7 @@ import { useMapStore } from '../../stores/mapStore';
 import { AQICircles, generateAQIZones } from './AQIOverlay';
 import POILayer from './POILayer';
 import type { POI } from '../../lib/poi-api';
+import { getPlaceAtPoint } from '../../lib/poi-api';
 import type { Route } from '../../types';
 
 // Fix Leaflet default icon issue with bundlers
@@ -62,13 +63,54 @@ function MapController() {
   return null;
 }
 
-// Map click handler
-function MapClickHandler() {
+// Map click handler — with POI tap fallback
+// When user taps a tile-rendered POI label (raster text), there may be no
+// Breeva marker on top. This handler checks local POIs first (instant,
+// pixel-based) then falls back to a quick API lookup before setting destination.
+function MapClickHandler({ poisRef, onPlaceSelect }: {
+  poisRef: React.MutableRefObject<POI[]>;
+  onPlaceSelect?: (poi: POI) => void;
+}) {
   const { setDestination, isCalculatingRoutes } = useMapStore();
+  const map = useMap();
 
   useMapEvents({
-    click: (e) => {
+    click: async (e) => {
       if (isCalculatingRoutes) return;
+
+      // 1. Check local fetched POIs within 40px of tap (instant)
+      if (onPlaceSelect && poisRef.current.length > 0) {
+        const clickPt = map.latLngToContainerPoint(e.latlng);
+        let nearest: POI | null = null;
+        let nearestDist = 40; // px
+        for (const poi of poisRef.current) {
+          const poiPt = map.latLngToContainerPoint(
+            L.latLng(poi.coordinate.lat, poi.coordinate.lng)
+          );
+          const dist = Math.hypot(clickPt.x - poiPt.x, clickPt.y - poiPt.y);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearest = poi;
+          }
+        }
+        if (nearest) {
+          onPlaceSelect(nearest);
+          return;
+        }
+      }
+
+      // 2. API fallback at z16+ — catch tile POIs missing from local dataset
+      if (onPlaceSelect && map.getZoom() >= 16) {
+        try {
+          const poi = await getPlaceAtPoint({ lat: e.latlng.lat, lng: e.latlng.lng });
+          if (poi) {
+            onPlaceSelect(poi);
+            return;
+          }
+        } catch { /* fall through */ }
+      }
+
+      // 3. No POI found → set destination
       setDestination({ lat: e.latlng.lat, lng: e.latlng.lng });
     },
   });
@@ -138,6 +180,9 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
     selectedRoute,
     currentAQI,
   } = useMapStore();
+
+  // Shared POI ref for map-click fallback handler
+  const poisRef = useRef<POI[]>([]);
 
   const [zones] = useState(() =>
     currentAQI && userLocation ? generateAQIZones(userLocation, currentAQI.aqi) : []
@@ -210,7 +255,7 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
         )}
 
         <MapController />
-        <MapClickHandler />
+        <MapClickHandler poisRef={poisRef} onPlaceSelect={onPlaceSelect} />
 
         {/* AQI overlay zones */}
         {showAQIOverlay && zones.length > 0 && (
@@ -223,6 +268,7 @@ export default function LeafletMap({ className = '', isDarkMode = false, showAQI
             visible={showPOIs}
             activeFilter={activeFilter}
             onPlaceSelect={onPlaceSelect}
+            poisRef={poisRef}
           />
         )}
 

@@ -164,6 +164,57 @@ export async function getNearbyPOIs(
   }
 }
 
+// ─── Tap-to-identify fallback ────────────────────────────────────────
+// Quick POI lookup at a specific point. Used when user taps a tile-rendered
+// POI label that doesn't have a Breeva marker on top.
+
+export async function getPlaceAtPoint(
+  point: Coordinate,
+): Promise<POI | null> {
+  try {
+    const url = `https://api.geoapify.com/v2/places?categories=${encodeURIComponent(DEFAULT_CATEGORIES)}&filter=circle:${point.lng},${point.lat},100&bias=proximity:${point.lng},${point.lat}&limit=3&lang=id&apiKey=${GEOAPIFY_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      features: Array<{
+        properties: {
+          place_id: string;
+          name?: string;
+          formatted?: string;
+          categories?: string[];
+          distance?: number;
+          website?: string;
+          phone?: string;
+          opening_hours?: string;
+          lat: number;
+          lon: number;
+        };
+      }>;
+    };
+    for (const feature of data.features) {
+      const props = feature.properties;
+      if (!props.name) continue;
+      const primaryCat = props.categories?.[0]?.split('.').pop() || 'place';
+      const allTypes = props.categories?.map(c => c.split('.').pop() || c) || [];
+      return {
+        id: `geo-${props.place_id}`,
+        name: props.name,
+        category: primaryCat,
+        coordinate: { lat: props.lat, lng: props.lon },
+        address: props.formatted,
+        phone: props.phone,
+        website: props.website,
+        placeId: props.place_id,
+        openState: props.opening_hours,
+        types: allTypes,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Haversine distance ──────────────────────────────────────────────
 
 function getDistance(a: Coordinate, b: Coordinate): number {
