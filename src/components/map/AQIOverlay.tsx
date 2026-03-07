@@ -65,7 +65,7 @@ function generateAQIZones(center: Coordinate, baseAQI: number): AQIZone[] {
   return zones;
 }
 
-// AQI zone type export for MapLibreMap
+// AQI zone type export for LeafletMap
 export type { AQIZone };
 
 export function AQIOverlayToggle({ currentAQI: _currentAQI, userLocation: _userLocation }: AQIOverlayProps) {

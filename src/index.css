@@ -216,77 +216,182 @@
   }
 }
 
-/* MapLibre GL overrides */
-.maplibregl-map {
+/* Leaflet overrides */
+.leaflet-container {
   font-family: var(--font-sans) !important;
   width: 100% !important;
   height: 100% !important;
+  z-index: 0 !important;
 }
 
 /* Glass-styled popup */
-.glass-popup-ml .maplibregl-popup-content {
+.glass-popup .leaflet-popup-content-wrapper {
   background: rgba(255, 255, 255, 0.85) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
   border-radius: 12px !important;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
   border: 1px solid rgba(255, 255, 255, 0.3) !important;
-  padding: 8px 12px;
+  padding: 4px 8px;
 }
 
-.dark .glass-popup-ml .maplibregl-popup-content {
+.dark .glass-popup .leaflet-popup-content-wrapper {
   background: rgba(15, 23, 42, 0.9) !important;
   border-color: rgba(255, 255, 255, 0.1) !important;
   color: #e5e7eb;
 }
 
-.glass-popup-ml .maplibregl-popup-tip {
-  border-top-color: rgba(255, 255, 255, 0.85) !important;
+.glass-popup .leaflet-popup-tip {
+  background: rgba(255, 255, 255, 0.85) !important;
 }
 
-.dark .glass-popup-ml .maplibregl-popup-tip {
+.dark .glass-popup .leaflet-popup-tip {
+  background: rgba(15, 23, 42, 0.9) !important;
+}
+
+.glass-popup .leaflet-popup-close-button {
+  display: none;
+}
+
+/* POI marker resets */
+.poi-dot-marker,
+.poi-icon-wrapper,
+.poi-cluster-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Professional POI icon marker — rounded square */
+.poi-icon-marker {
+  width: 28px;
+  height: 28px;
+  background: var(--poi-color, #6b7280);
+  border: 2px solid white;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.poi-icon-marker:hover {
+  transform: scale(1.18);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 0 2px rgba(255, 255, 255, 0.6);
+}
+
+/* Enlarged filtered marker */
+.poi-icon-marker-lg {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border-width: 2.5px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.poi-icon-marker svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--poi-color, #6b7280);
+}
+
+.poi-icon-marker-lg svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Cluster badge */
+.poi-cluster-icon {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: 3px solid white;
+  border-radius: 50%;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.poi-cluster-icon:hover {
+  transform: scale(1.12);
+}
+
+/* POI label tooltip */
+.poi-label-tooltip {
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12) !important;
+  color: #1f2937 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 2px 6px !important;
+  max-width: 140px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+}
+
+.poi-label-fadein {
+  animation: poiLabelFade 0.2s ease-out;
+}
+
+@keyframes poiLabelFade {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* POI filter pop-in animation */
+@keyframes poiFilterPopIn {
+  0%   { transform: scale(0); opacity: 0; }
+  70%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.poi-marker-enter {
+  animation: poiFilterPopIn 250ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* POI fade-out on filter change */
+.poi-marker-exit {
+  opacity: 0 !important;
+  transition: opacity 150ms ease-out;
+}
+
+.dark .poi-label-tooltip {
+  background: rgba(15, 23, 42, 0.9) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #e5e7eb !important;
+}
+
+.poi-label-tooltip::before {
+  border-top-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.dark .poi-label-tooltip::before {
   border-top-color: rgba(15, 23, 42, 0.9) !important;
 }
 
-/* Navigation controls — glass styling */
-.maplibregl-ctrl-group {
-  background: rgba(255, 255, 255, 0.85) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
-  overflow: hidden;
-}
-
-.dark .maplibregl-ctrl-group {
-  background: rgba(15, 23, 42, 0.85) !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.maplibregl-ctrl-group button {
-  width: 36px !important;
-  height: 36px !important;
-}
-
-.maplibregl-ctrl-group button + button {
-  border-top: 1px solid rgba(0, 0, 0, 0.1) !important;
-}
-
-.dark .maplibregl-ctrl-group button + button {
-  border-top-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.maplibregl-ctrl-group button span {
-  filter: none !important;
-}
-
-.dark .maplibregl-ctrl-group button span {
-  filter: invert(1) !important;
+/* POI marker hover: bring to front */
+.poi-marker-hover {
+  z-index: 9000 !important;
+  transform: scale(1.15);
+  transition: transform 0.15s ease;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
 }
 
 /* Custom marker resets */
-.user-marker-ml,
-.dest-marker-ml {
-  cursor: default;
+.user-location-marker,
+.dest-location-marker {
+  background: transparent !important;
+  border: none !important;
 }

@@ -1,15 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, MapPin, Star, Clock, Phone, Globe, Navigation,
   Bookmark, BookmarkCheck, ChevronLeft, ChevronRight,
   ExternalLink, Share2, Copy, ChevronDown, ChevronUp,
-  Check, Image,
+  Check, Image, MessageCircle, Users, BarChart3, Ticket,
 } from 'lucide-react';
 import {
   getGooglePlaceDetails,
   getGooglePlacePhotos,
   getGooglePlaceReviews,
+  resolveGooglePlaceId,
 } from '../../lib/searchapi';
 import type { GMapPlaceDetail, GMapPhoto, GMapReview } from '../../lib/searchapi';
 import type { POI } from '../../lib/poi-api';
@@ -38,10 +39,17 @@ export default function PlaceDetailSheet({
   const [photos, setPhotos] = useState<GMapPhoto[]>([]);
   const [reviews, setReviews] = useState<GMapReview[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [photoIdx, setPhotoIdx] = useState(0);
   const [showAllHours, setShowAllHours] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Resolved Google place_id (bridged from Geoapify if needed)
+  const resolvedIdRef = useRef<string | null>(null);
+
+  // Helper: detect if an ID is already a Google format place_id
+  const isGoogleId = useCallback((id: string) => id.startsWith('ChIJ') || id.includes(':'), []);
 
   useEffect(() => {
     if (!poi) {
@@ -50,36 +58,64 @@ export default function PlaceDetailSheet({
       setReviews([]);
       setShowAllHours(false);
       setActiveTab('overview');
+      resolvedIdRef.current = null;
       return;
     }
 
-    const placeId = poi.placeId || poi.dataId || (poi.id.startsWith('gmap-') ? poi.id.replace('gmap-', '') : null);
-    if (!placeId) return;
-
+    let cancelled = false;
     setLoading(true);
     setPhotoIdx(0);
 
-    // Only fetch details on open — photos & reviews are lazy-loaded per tab
-    getGooglePlaceDetails(placeId).then((place) => {
-      setDetails(place);
-      setLoading(false);
-    });
+    (async () => {
+      // 1. Try existing Google IDs first
+      const raw = poi.placeId || poi.dataId || (poi.id.startsWith('gmap-') ? poi.id.replace('gmap-', '') : null);
+      let googleId: string | null = null;
+
+      if (raw && isGoogleId(raw)) {
+        googleId = raw;
+      } else {
+        // 2. Bridge: resolve Geoapify → Google place_id via name+location search
+        googleId = await resolveGooglePlaceId(
+          poi.name,
+          poi.coordinate,
+          poi.placeId || undefined,
+        );
+      }
+
+      if (cancelled) return;
+      resolvedIdRef.current = googleId;
+
+      if (!googleId) {
+        setLoading(false);
+        return;
+      }
+
+      const place = await getGooglePlaceDetails(googleId);
+      if (!cancelled) {
+        setDetails(place);
+        setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [poi?.id]);
 
   // Lazy-load photos only when Photos tab is opened
   useEffect(() => {
     if (activeTab !== 'photos' || photos.length > 0 || !poi) return;
-    const placeId = poi.placeId || poi.dataId || (poi.id.startsWith('gmap-') ? poi.id.replace('gmap-', '') : null);
-    if (!placeId) return;
-    getGooglePlacePhotos(placeId).then(setPhotos);
+    const gid = resolvedIdRef.current;
+    if (!gid) return;
+    setLoadingPhotos(true);
+    getGooglePlacePhotos(gid).then(setPhotos).finally(() => setLoadingPhotos(false));
   }, [activeTab, poi?.id]);
 
   // Lazy-load reviews only when Reviews tab is opened
   useEffect(() => {
     if (activeTab !== 'reviews' || reviews.length > 0 || !poi) return;
-    const placeId = poi.placeId || poi.dataId || (poi.id.startsWith('gmap-') ? poi.id.replace('gmap-', '') : null);
-    if (!placeId) return;
-    getGooglePlaceReviews(placeId).then((data) => setReviews(data.reviews || []));
+    const gid = resolvedIdRef.current;
+    if (!gid) return;
+    setLoadingReviews(true);
+    getGooglePlaceReviews(gid).then((data) => setReviews(data.reviews || [])).finally(() => setLoadingReviews(false));
   }, [activeTab, poi?.id]);
 
   if (!poi) return null;
@@ -96,6 +132,14 @@ export default function PlaceDetailSheet({
   const address = details?.address ?? poi.address;
   const histogram = details?.reviews_histogram;
   const extensions = details?.extensions;
+  const popularTimes = details?.popular_times;
+  const reviewSummaries = details?.review_results?.summaries;
+  const qna = details?.questions_and_answers;
+  const peopleAlso = details?.people_also_search_for;
+  const atThisPlace = details?.at_this_place;
+  const posts = details?.posts;
+  const admissions = details?.admissions;
+  const experiences = details?.experiences;
 
   const distText = poi.distance
     ? poi.distance < 1000
@@ -405,10 +449,211 @@ export default function PlaceDetailSheet({
                     </button>
                   )}
 
+                  {/* Popular Times */}
+                  {popularTimes && (
+                    <div className="mt-4 p-4 rounded-2xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
+                      <div className="flex items-center gap-2 mb-3">
+                        <BarChart3 className="w-4 h-4 text-gray-500" />
+                        <h4 className="text-sm font-bold text-gray-900 dark:text-white">Popular times</h4>
+                      </div>
+                      {popularTimes.live && (
+                        <div className="mb-3 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                          <span className="text-xs text-gray-600 dark:text-gray-400">{popularTimes.live.info}</span>
+                          {popularTimes.live.typical_time_spent && (
+                            <>
+                              <span className="text-gray-300 dark:text-gray-600">&middot;</span>
+                              <span className="text-xs text-gray-500">{popularTimes.live.typical_time_spent}</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                      {popularTimes.chart && (() => {
+                        const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                        const todayIdx = new Date().getDay();
+                        const todayKey = days[todayIdx];
+                        const todayData = popularTimes.chart[todayKey];
+                        if (!todayData) return null;
+                        return (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-2 capitalize">{todayKey}</p>
+                            <div className="flex items-end gap-[3px] h-12">
+                              {todayData.map((slot, i) => (
+                                <div
+                                  key={i}
+                                  className="flex-1 rounded-sm bg-primary-400/70 dark:bg-primary-500/50 min-h-[2px]"
+                                  style={{ height: `${Math.max(slot.busyness_score, 4)}%` }}
+                                  title={`${slot.time}: ${slot.info || `${slot.busyness_score}%`}`}
+                                />
+                              ))}
+                            </div>
+                            <div className="flex justify-between mt-1">
+                              <span className="text-[9px] text-gray-400">6 AM</span>
+                              <span className="text-[9px] text-gray-400">12 PM</span>
+                              <span className="text-[9px] text-gray-400">6 PM</span>
+                              <span className="text-[9px] text-gray-400">12 AM</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Admissions / Tickets */}
+                  {admissions && admissions.length > 0 && (
+                    <div className="mt-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Ticket className="w-4 h-4 text-gray-500" />
+                        <h4 className="text-sm font-bold text-gray-900 dark:text-white">Tickets</h4>
+                      </div>
+                      {admissions.map((adm, i) => (
+                        <div key={i} className="space-y-2">
+                          {adm.options.map((opt, j) => (
+                            <a
+                              key={j}
+                              href={opt.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition"
+                            >
+                              <div>
+                                <p className="text-sm font-medium text-gray-900 dark:text-white">{opt.title}</p>
+                                {opt.official_site && <span className="text-[10px] text-green-600">Official site</span>}
+                              </div>
+                              {opt.price && <span className="text-sm font-bold text-primary-600 dark:text-primary-400">{opt.price}</span>}
+                            </a>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Experiences / Tours */}
+                  {experiences && experiences.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2">Experiences</h4>
+                      <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+                        {experiences.slice(0, 5).map((exp, i) => (
+                          <a
+                            key={i}
+                            href={exp.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-shrink-0 w-44 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800 hover:shadow-md transition"
+                          >
+                            {exp.images?.[0] && (
+                              <img src={exp.images[0]} alt="" className="w-full h-24 object-cover" />
+                            )}
+                            <div className="p-2.5">
+                              <p className="text-xs font-medium text-gray-900 dark:text-white line-clamp-2 leading-tight">{exp.title}</p>
+                              <div className="flex items-center gap-1 mt-1">
+                                {exp.rating != null && (
+                                  <>
+                                    <Star className="w-3 h-3" fill="#facc15" stroke="#facc15" />
+                                    <span className="text-[10px] text-gray-600 dark:text-gray-400">{exp.rating.toFixed(1)}</span>
+                                  </>
+                                )}
+                                {exp.duration && <span className="text-[10px] text-gray-400">&middot; {exp.duration}</span>}
+                              </div>
+                              <div className="flex items-center justify-between mt-1">
+                                {exp.price && <span className="text-xs font-bold text-gray-900 dark:text-white">{exp.price}</span>}
+                                {exp.source && <span className="text-[9px] text-gray-400">{exp.source}</span>}
+                              </div>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Posts */}
+                  {posts && posts.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2">Updates</h4>
+                      <div className="space-y-2">
+                        {posts.slice(0, 3).map((post, i) => (
+                          <a
+                            key={i}
+                            href={post.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition"
+                          >
+                            {post.media && (
+                              <img src={post.media} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              {post.title && <p className="text-xs font-medium text-gray-900 dark:text-white line-clamp-1">{post.title}</p>}
+                              {post.snippet && <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">{post.snippet}</p>}
+                              {post.date && <p className="text-[10px] text-gray-400 mt-1">{post.date}</p>}
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* People Also Search For */}
+                  {peopleAlso && peopleAlso.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2">People also search for</h4>
+                      <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+                        {peopleAlso.slice(0, 8).map((place, i) => (
+                          <div
+                            key={i}
+                            className="flex-shrink-0 w-28 text-center"
+                          >
+                            {place.thumbnail ? (
+                              <img src={place.thumbnail} alt="" className="w-16 h-16 rounded-xl object-cover mx-auto" />
+                            ) : (
+                              <div className="w-16 h-16 rounded-xl bg-gray-100 dark:bg-gray-800 mx-auto flex items-center justify-center">
+                                <MapPin className="w-5 h-5 text-gray-400" />
+                              </div>
+                            )}
+                            <p className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mt-1.5 line-clamp-2 leading-tight">{place.title}</p>
+                            {place.rating != null && (
+                              <div className="flex items-center justify-center gap-0.5 mt-0.5">
+                                <Star className="w-2.5 h-2.5" fill="#facc15" stroke="#facc15" />
+                                <span className="text-[10px] text-gray-500">{place.rating.toFixed(1)}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {loading && (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm text-gray-400 ml-3">Loading details...</span>
+                    <div className="mt-4 space-y-4 animate-pulse">
+                      {/* Action buttons skeleton */}
+                      <div className="flex gap-2">
+                        <div className="h-10 w-28 rounded-full bg-gray-200 dark:bg-gray-800" />
+                        <div className="h-10 w-20 rounded-full bg-gray-200 dark:bg-gray-800" />
+                        <div className="h-10 w-20 rounded-full bg-gray-200 dark:bg-gray-800" />
+                      </div>
+                      {/* Description skeleton */}
+                      <div className="space-y-2">
+                        <div className="h-3.5 w-full rounded bg-gray-200 dark:bg-gray-800" />
+                        <div className="h-3.5 w-4/5 rounded bg-gray-200 dark:bg-gray-800" />
+                        <div className="h-3.5 w-3/5 rounded bg-gray-200 dark:bg-gray-800" />
+                      </div>
+                      {/* Info rows skeleton */}
+                      <div className="space-y-3 divide-y divide-gray-100 dark:divide-gray-800/50">
+                        {[1, 2, 3].map(i => (
+                          <div key={i} className="flex items-center gap-3 pt-3">
+                            <div className="w-5 h-5 rounded bg-gray-200 dark:bg-gray-800 flex-shrink-0" />
+                            <div className="h-3.5 flex-1 rounded bg-gray-200 dark:bg-gray-800" />
+                          </div>
+                        ))}
+                      </div>
+                      {/* Photo strip skeleton */}
+                      <div className="flex gap-2">
+                        {[1, 2, 3, 4].map(i => (
+                          <div key={i} className="flex-shrink-0 w-28 h-20 rounded-xl bg-gray-200 dark:bg-gray-800" />
+                        ))}
+                      </div>
+                      {/* Rating card skeleton */}
+                      <div className="h-24 w-full rounded-2xl bg-gray-200 dark:bg-gray-800" />
                     </div>
                   )}
                 </div>
@@ -448,8 +693,56 @@ export default function PlaceDetailSheet({
                     </div>
                   )}
 
+                  {/* Review Summaries */}
+                  {reviewSummaries && reviewSummaries.length > 0 && (
+                    <div className="mb-4 space-y-2">
+                      {reviewSummaries.map((summary, i) => (
+                        <p key={i} className="text-sm text-gray-600 dark:text-gray-400 italic leading-relaxed px-3 py-2 rounded-xl bg-primary-50/50 dark:bg-primary-900/10 border border-primary-100/50 dark:border-primary-800/20">
+                          {summary}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Reviews list */}
-                  {reviews.length > 0 ? (
+                  {loading || loadingReviews ? (
+                    <div className="space-y-4 animate-pulse">
+                      {/* Rating card skeleton */}
+                      <div className="p-4 rounded-2xl bg-gray-100 dark:bg-gray-900/50">
+                        <div className="flex items-center gap-4">
+                          <div className="text-center space-y-1.5">
+                            <div className="w-14 h-10 rounded bg-gray-200 dark:bg-gray-800 mx-auto" />
+                            <div className="w-20 h-3 rounded bg-gray-200 dark:bg-gray-800 mx-auto" />
+                          </div>
+                          <div className="flex-1 space-y-2">
+                            {[1, 2, 3, 4, 5].map(i => (
+                              <div key={i} className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded bg-gray-200 dark:bg-gray-800" />
+                                <div className="flex-1 h-2 rounded-full bg-gray-200 dark:bg-gray-800" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Review items skeleton */}
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className="pb-4 border-b border-gray-100 dark:border-gray-800/50">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-800" />
+                            <div className="flex-1 space-y-1.5">
+                              <div className="h-3.5 w-28 rounded bg-gray-200 dark:bg-gray-800" />
+                              <div className="h-3 w-36 rounded bg-gray-200 dark:bg-gray-800" />
+                            </div>
+                          </div>
+                          <div className="mt-2.5 space-y-1.5">
+                            <div className="h-3 w-full rounded bg-gray-200 dark:bg-gray-800" />
+                            <div className="h-3 w-full rounded bg-gray-200 dark:bg-gray-800" />
+                            <div className="h-3 w-3/4 rounded bg-gray-200 dark:bg-gray-800" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : reviews.length > 0 ? (
                     <div className="space-y-4">
                       {reviews.map((review, i) => (
                         <div key={review.review_id || i} className="pb-4 border-b border-gray-100 dark:border-gray-800/50 last:border-b-0">
@@ -501,11 +794,6 @@ export default function PlaceDetailSheet({
                         </div>
                       ))}
                     </div>
-                  ) : loading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <div className="w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm text-gray-400 ml-3">Loading reviews...</span>
-                    </div>
                   ) : (
                     <div className="text-center py-12">
                       <Star className="w-10 h-10 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
@@ -518,7 +806,18 @@ export default function PlaceDetailSheet({
               {/* ═══ PHOTOS TAB ═══ */}
               {activeTab === 'photos' && (
                 <div className="px-5 pt-4 pb-6">
-                  {allPhotos.length > 0 ? (
+                  {loading || loadingPhotos ? (
+                    <div className="animate-pulse">
+                      {/* Hero photo skeleton */}
+                      <div className="w-full h-56 rounded-2xl bg-gray-200 dark:bg-gray-800 mb-3" />
+                      {/* Photo grid skeleton */}
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[1, 2, 3, 4, 5, 6].map(i => (
+                          <div key={i} className="aspect-square rounded-lg bg-gray-200 dark:bg-gray-800" />
+                        ))}
+                      </div>
+                    </div>
+                  ) : allPhotos.length > 0 ? (
                     <>
                       {/* Hero photo with navigation */}
                       <div className="relative w-full h-56 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-900 mb-3">
@@ -563,11 +862,6 @@ export default function PlaceDetailSheet({
                         ))}
                       </div>
                     </>
-                  ) : loading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <div className="w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm text-gray-400 ml-3">Loading photos...</span>
-                    </div>
                   ) : (
                     <div className="text-center py-12">
                       <Image className="w-10 h-10 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
@@ -652,7 +946,91 @@ export default function PlaceDetailSheet({
                     </div>
                   )}
 
-                  {!extensions && !openHours && !(poi.types && poi.types.length > 0) && !loading && (
+                  {/* Q&A */}
+                  {qna && (
+                    <div className="mt-5">
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <MessageCircle className="w-4 h-4 text-gray-500" />
+                        <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                          Questions & Answers
+                          {qna.total_answers != null && <span className="text-xs text-gray-400 font-normal ml-1">({qna.total_answers})</span>}
+                        </h4>
+                      </div>
+                      <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 space-y-2.5">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            {qna.question.user.thumbnail && <img src={qna.question.user.thumbnail} alt="" className="w-5 h-5 rounded-full" />}
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{qna.question.user.name}</span>
+                            {qna.question.date && <span className="text-[10px] text-gray-400">{qna.question.date}</span>}
+                          </div>
+                          <p className="text-sm text-gray-800 dark:text-gray-200 mt-1 font-medium">{qna.question.text}</p>
+                        </div>
+                        {qna.answer && (
+                          <div className="pl-3 border-l-2 border-primary-200 dark:border-primary-800">
+                            <div className="flex items-center gap-2">
+                              {qna.answer.user.thumbnail && <img src={qna.answer.user.thumbnail} alt="" className="w-5 h-5 rounded-full" />}
+                              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{qna.answer.user.name}</span>
+                              {qna.answer.date && <span className="text-[10px] text-gray-400">{qna.answer.date}</span>}
+                            </div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{qna.answer.text}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* At This Place (sub-locations) */}
+                  {atThisPlace && atThisPlace.local_results && atThisPlace.local_results.length > 0 && (
+                    <div className="mt-5">
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <Users className="w-4 h-4 text-gray-500" />
+                        <h4 className="text-sm font-bold text-gray-900 dark:text-white">At this place</h4>
+                      </div>
+                      {atThisPlace.categories && atThisPlace.categories.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {atThisPlace.categories.map((cat, i) => (
+                            <span key={i} className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-[10px] text-gray-600 dark:text-gray-400">
+                              {cat.title} ({cat.places_count})
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        {atThisPlace.local_results.slice(0, 5).map((sub, i) => (
+                          <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
+                            {sub.thumbnail ? (
+                              <img src={sub.thumbnail} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                                <MapPin className="w-4 h-4 text-gray-400" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-gray-900 dark:text-white truncate">{sub.title}</p>
+                              <div className="flex items-center gap-1.5">
+                                {sub.type && <span className="text-[10px] text-gray-500">{sub.type}</span>}
+                                {sub.location && <span className="text-[10px] text-gray-400">&middot; {sub.location}</span>}
+                              </div>
+                              {sub.rating != null && (
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  <Star className="w-2.5 h-2.5" fill="#facc15" stroke="#facc15" />
+                                  <span className="text-[10px] text-gray-500">{sub.rating.toFixed(1)}</span>
+                                  {sub.reviews != null && <span className="text-[10px] text-gray-400">({sub.reviews})</span>}
+                                </div>
+                              )}
+                            </div>
+                            {sub.open_state && (
+                              <span className={`text-[10px] font-medium flex-shrink-0 ${sub.open_state.toLowerCase().includes('open') ? 'text-green-600' : 'text-red-500'}`}>
+                                {sub.open_state.split('⋅')[0].trim()}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {!extensions && !openHours && !(poi.types && poi.types.length > 0) && !qna && !atThisPlace && !loading && (
                     <div className="text-center py-12">
                       <MapPin className="w-10 h-10 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
                       <p className="text-sm text-gray-400">No additional info available</p>
@@ -660,8 +1038,37 @@ export default function PlaceDetailSheet({
                   )}
 
                   {loading && (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="mt-4 space-y-5 animate-pulse">
+                      {/* Extensions skeleton */}
+                      <div>
+                        <div className="h-4 w-24 rounded bg-gray-200 dark:bg-gray-800 mb-2.5" />
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                          {[1, 2, 3, 4].map(i => (
+                            <div key={i} className="flex items-center gap-2">
+                              <div className="w-4 h-4 rounded bg-gray-200 dark:bg-gray-800" />
+                              <div className="h-3 flex-1 rounded bg-gray-200 dark:bg-gray-800" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Hours skeleton */}
+                      <div>
+                        <div className="h-4 w-16 rounded bg-gray-200 dark:bg-gray-800 mb-2.5" />
+                        <div className="space-y-1.5">
+                          {[1, 2, 3, 4, 5].map(i => (
+                            <div key={i} className="flex">
+                              <div className="w-28 h-3 rounded bg-gray-200 dark:bg-gray-800" />
+                              <div className="h-3 w-24 ml-2 rounded bg-gray-200 dark:bg-gray-800" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Categories skeleton */}
+                      <div className="flex flex-wrap gap-2">
+                        {[1, 2, 3].map(i => (
+                          <div key={i} className="h-6 w-20 rounded-full bg-gray-200 dark:bg-gray-800" />
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

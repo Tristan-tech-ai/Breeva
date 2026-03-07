@@ -30,7 +30,7 @@ import { useMapStore } from '../stores/mapStore';
 import { useWalkStore } from '../stores/walkStore';
 import { useAuthStore } from '../stores/authStore';
 import { useSavedPlacesStore } from '../stores/savedPlacesStore';
-import MapLibreMap from '../components/map/MapLibreMap';
+import LeafletMap from '../components/map/LeafletMap';
 import SearchBar from '../components/map/SearchBar';
 import BottomSheet from '../components/map/BottomSheet';
 import RouteCard from '../components/map/RouteCard';
@@ -46,14 +46,14 @@ import MapLayersSheet from '../components/map/MapLayersSheet';
 import type { POI } from '../lib/poi-api';
 
 const FILTER_CHIPS = [
-  { key: 'restaurant', label: 'Restaurants', icon: UtensilsCrossed },
-  { key: 'cafe', label: 'Cafes', icon: Coffee },
-  { key: 'hotel', label: 'Hotels', icon: Hotel },
-  { key: 'park', label: 'Parks', icon: TreePine },
-  { key: 'shop', label: 'Shopping', icon: ShoppingBag },
-  { key: 'mosque', label: 'Mosques', icon: Landmark },
-  { key: 'atm', label: 'ATMs', icon: CreditCard },
-  { key: 'gas', label: 'Gas', icon: Fuel },
+  { key: 'restaurant', label: 'Restaurants', icon: UtensilsCrossed, color: '#ef4444' },
+  { key: 'cafe',       label: 'Cafes',       icon: Coffee,          color: '#92400e' },
+  { key: 'hotel',      label: 'Hotels',       icon: Hotel,           color: '#8b5cf6' },
+  { key: 'park',       label: 'Parks',        icon: TreePine,        color: '#16a34a' },
+  { key: 'shop',       label: 'Shopping',     icon: ShoppingBag,     color: '#f59e0b' },
+  { key: 'mosque',     label: 'Mosques',      icon: Landmark,        color: '#06b6d4' },
+  { key: 'atm',        label: 'ATMs',         icon: CreditCard,      color: '#6366f1' },
+  { key: 'gas',        label: 'Gas',          icon: Fuel,            color: '#ea580c' },
 ];
 
 export default function HomePage() {
@@ -130,7 +130,7 @@ export default function HomePage() {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-950">
       {/* Map */}
-      <MapLibreMap
+      <LeafletMap
         className="absolute inset-0"
         isDarkMode={isDark}
         showAQIOverlay={showAQIOverlay}
@@ -160,7 +160,12 @@ export default function HomePage() {
 
                 {/* Search bar */}
                 <div className="flex-1">
-                  <SearchBar onPlaceSelect={(poi) => setSelectedPOI(poi)} />
+                  <SearchBar
+                    onPlaceSelect={(poi) => setSelectedPOI(poi)}
+                    filterChips={FILTER_CHIPS}
+                    activeFilter={activeFilter}
+                    onFilterChange={setActiveFilter}
+                  />
                 </div>
 
                 {/* Profile avatar */}
@@ -187,28 +192,25 @@ export default function HomePage() {
                 </div>
               )}
 
-              {/* Filter chips */}
-              <div className="mt-2 max-w-2xl mx-auto">
-                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
-                  {FILTER_CHIPS.map(chip => {
-                    const Icon = chip.icon;
-                    return (
-                      <button
-                        key={chip.key}
-                        onClick={() => setActiveFilter(activeFilter === chip.key ? null : chip.key)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
-                          activeFilter === chip.key
-                            ? 'bg-primary-500 text-white shadow-md scale-105'
-                            : 'bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-300 shadow-sm border border-gray-200 dark:border-gray-700/50 backdrop-blur-xl'
-                        }`}
-                      >
-                        <Icon className="w-3.5 h-3.5" strokeWidth={2} />
-                        <span>{chip.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              {/* Active filter pill */}
+              {activeFilter && (() => {
+                const chip = FILTER_CHIPS.find(c => c.key === activeFilter);
+                if (!chip) return null;
+                const Icon = chip.icon;
+                return (
+                  <div className="mt-2 max-w-2xl mx-auto">
+                    <button
+                      onClick={() => setActiveFilter(null)}
+                      className="inline-flex items-center gap-1.5 pl-2.5 pr-2 py-1 rounded-full text-xs font-medium text-white transition-all"
+                      style={{ backgroundColor: chip.color, boxShadow: `0 2px 8px ${chip.color}40` }}
+                    >
+                      <Icon className="w-3 h-3" strokeWidth={2} />
+                      <span>{chip.label}</span>
+                      <X className="w-3 h-3 ml-0.5 opacity-80" strokeWidth={2.5} />
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

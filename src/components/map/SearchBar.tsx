@@ -1,14 +1,25 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, MapPin, Clock, Loader2, Star, Navigation } from 'lucide-react';
+import { Search, X, MapPin, Clock, Loader2, Star, Navigation, SlidersHorizontal } from 'lucide-react';
 import { useMapStore } from '../../stores/mapStore';
 import type { POI } from '../../lib/poi-api';
+import type { LucideIcon } from 'lucide-react';
+
+export interface FilterChip {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  color: string;
+}
 
 interface SearchBarProps {
   onPlaceSelect?: (poi: POI) => void;
+  filterChips?: FilterChip[];
+  activeFilter?: string | null;
+  onFilterChange?: (filter: string | null) => void;
 }
 
-export default function SearchBar({ onPlaceSelect }: SearchBarProps) {
+export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, onFilterChange }: SearchBarProps) {
   const {
     searchQuery,
     setSearchQuery,
@@ -22,7 +33,9 @@ export default function SearchBar({ onPlaceSelect }: SearchBarProps) {
   } = useMapStore();
 
   const [isFocused, setIsFocused] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const handleInputChange = useCallback(
@@ -41,6 +54,22 @@ export default function SearchBar({ onPlaceSelect }: SearchBarProps) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, []);
+
+  // Close filter panel on outside click/tap
+  useEffect(() => {
+    if (!filterOpen) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [filterOpen]);
 
   const handleSelect = (result: (typeof searchResults)[number]) => {
     if ((result.placeId || result.dataId) && onPlaceSelect) {
@@ -69,10 +98,13 @@ export default function SearchBar({ onPlaceSelect }: SearchBarProps) {
     inputRef.current?.blur();
   };
 
-  const showDropdown = isFocused && (searchQuery.length > 0 || recentSearches.length > 0);
+  const showDropdown = isFocused && !filterOpen && (searchQuery.length > 0 || recentSearches.length > 0);
+
+  const hasFilter = filterChips && filterChips.length > 0;
+  const activeChip = hasFilter ? filterChips.find(c => c.key === activeFilter) : undefined;
 
   return (
-    <div className="relative w-full">
+    <div className="relative w-full" ref={filterRef}>
       {/* Search Input */}
       <div
         className={`
@@ -91,7 +123,7 @@ export default function SearchBar({ onPlaceSelect }: SearchBarProps) {
           placeholder="Search here"
           value={searchQuery}
           onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={() => setIsFocused(true)}
+          onFocus={() => { setIsFocused(true); setFilterOpen(false); }}
           onBlur={() => setTimeout(() => setIsFocused(false), 200)}
           className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 outline-none"
         />
@@ -107,7 +139,64 @@ export default function SearchBar({ onPlaceSelect }: SearchBarProps) {
             <X className="w-4 h-4 text-gray-400" />
           </button>
         )}
+
+        {/* Filter icon */}
+        {hasFilter && (
+          <button
+            onClick={() => { setFilterOpen(v => !v); setIsFocused(false); inputRef.current?.blur(); }}
+            className="relative p-1.5 -mr-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition flex-shrink-0"
+          >
+            <SlidersHorizontal className="w-4 h-4 text-gray-500 dark:text-gray-400" strokeWidth={2} />
+            {activeChip && (
+              <span
+                className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full ring-2 ring-white dark:ring-gray-900"
+                style={{ backgroundColor: activeChip.color }}
+              />
+            )}
+          </button>
+        )}
       </div>
+
+      {/* Filter dropdown panel */}
+      <AnimatePresence>
+        {filterOpen && hasFilter && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-full left-0 right-0 mt-2 z-50 rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-100 dark:border-gray-800 p-3"
+          >
+            <div className="grid grid-cols-4 gap-2">
+              {filterChips!.map(chip => {
+                const Icon = chip.icon;
+                const isActive = activeFilter === chip.key;
+                return (
+                  <button
+                    key={chip.key}
+                    onClick={() => {
+                      onFilterChange?.(isActive ? null : chip.key);
+                      setFilterOpen(false);
+                    }}
+                    className={`flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-xl transition-all duration-150 ${
+                      isActive
+                        ? 'text-white shadow-md'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/60'
+                    }`}
+                    style={isActive ? {
+                      backgroundColor: chip.color,
+                      boxShadow: `0 2px 10px ${chip.color}40`,
+                    } : undefined}
+                  >
+                    <Icon className="w-5 h-5" strokeWidth={1.8} />
+                    <span className="text-[10px] font-medium leading-tight">{chip.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Dropdown */}
       <AnimatePresence>

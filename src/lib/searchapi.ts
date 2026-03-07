@@ -43,8 +43,25 @@ export interface GMapPlaceDetail extends GMapPlace {
     chart?: Record<string, Array<{ time: string; busyness_score: number; info?: string }>>;
   };
   review_results?: {
+    hotel_summary?: {
+      rooms?: { rating: number; text: string };
+      location?: { rating: number; text: string };
+      service_and_facilities?: { rating: number; text: string };
+    };
     summaries?: string[];
     reviews?: GMapReview[];
+    web_reviews?: Array<{
+      name: string;
+      rating?: number;
+      reviews?: number;
+      review_results?: Array<{
+        username?: string;
+        link?: string;
+        rating?: number;
+        description?: string;
+        date?: string;
+      }>;
+    }>;
   };
   people_also_search_for?: Array<{
     title: string;
@@ -55,6 +72,63 @@ export interface GMapPlaceDetail extends GMapPlace {
     thumbnail?: string;
     gps_coordinates?: { latitude: number; longitude: number };
   }>;
+  posts?: Array<{
+    media?: string;
+    title?: string;
+    snippet?: string;
+    cta?: string;
+    link?: string;
+    date?: string;
+  }>;
+  admissions?: Array<{
+    title: string;
+    options: Array<{
+      title: string;
+      link?: string;
+      price?: string;
+      official_site?: boolean;
+    }>;
+  }>;
+  experiences?: Array<{
+    title: string;
+    link?: string;
+    rating?: number;
+    reviews?: number;
+    price?: string;
+    source?: string;
+    duration?: string;
+    images?: string[];
+  }>;
+  questions_and_answers?: {
+    question: {
+      user: { name: string; thumbnail?: string };
+      text: string;
+      date?: string;
+    };
+    answer?: {
+      user: { name: string; thumbnail?: string };
+      text: string;
+      date?: string;
+    };
+    total_answers?: number;
+  };
+  at_this_place?: {
+    categories?: Array<{ title: string; places_count: number }>;
+    local_results?: Array<{
+      title: string;
+      data_id?: string;
+      rating?: number;
+      reviews?: number;
+      address?: string;
+      location?: string;
+      type?: string;
+      thumbnail?: string;
+      open_state?: string;
+      price?: string;
+    }>;
+  };
+  hotel_stars?: string;
+  amenities?: string[];
 }
 
 export interface GMapReview {
@@ -182,4 +256,57 @@ export async function getGooglePlacePhotos(
     hl: 'id',
   });
   return data?.photos || [];
+}
+
+// ─── Geoapify → Google Place ID Bridge ───────────────────────────────
+// Geoapify uses hex place_ids that are incompatible with SearchAPI's
+// google_maps_place engine. This bridge resolves a Google place_id/data_id
+// via name+location search, only when the user opens a place detail sheet.
+
+const BRIDGE_PREFIX = 'gbridge_';
+const BRIDGE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+export async function resolveGooglePlaceId(
+  name: string,
+  coordinate: { lat: number; lng: number },
+  geoapifyId?: string,
+): Promise<string | null> {
+  // Check localStorage cache
+  if (geoapifyId) {
+    try {
+      const raw = localStorage.getItem(`${BRIDGE_PREFIX}${geoapifyId}`);
+      if (raw) {
+        const { id, ts } = JSON.parse(raw) as { id: string; ts: number };
+        if (Date.now() - ts < BRIDGE_TTL) return id;
+        localStorage.removeItem(`${BRIDGE_PREFIX}${geoapifyId}`);
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Search by name + precise location
+  const results = await searchGoogleMaps(name, coordinate, 17);
+  if (!results.length) return null;
+
+  // Find best match: prefer exact title match, fall back to first result
+  const nameLower = name.toLowerCase();
+  const match = results.find(r =>
+    r.title?.toLowerCase() === nameLower,
+  ) || results.find(r =>
+    r.title?.toLowerCase().includes(nameLower) ||
+    nameLower.includes(r.title?.toLowerCase() ?? ''),
+  ) || results[0];
+
+  const googleId = match?.place_id || match?.data_id || null;
+
+  // Cache the bridge mapping
+  if (googleId && geoapifyId) {
+    try {
+      localStorage.setItem(
+        `${BRIDGE_PREFIX}${geoapifyId}`,
+        JSON.stringify({ id: googleId, ts: Date.now() }),
+      );
+    } catch { /* storage full */ }
+  }
+
+  return googleId;
 }
