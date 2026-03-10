@@ -1,0 +1,30 @@
+# ============================================
+# VAYU Engine — Python Dependencies
+# ============================================
+
+# --- Core Scientific Computing ---
+numpy>=2.0                     # Matrix operations untuk CALINE3 dispersion
+scipy>=1.12                    # Gaussian function, spatial analysis, interpolation
+
+# --- Geospatial ---
+h3>=4.0                        # Uber H3 hexagonal grid (Python binding)
+shapely>=2.0                   # Geometry operations (LineString, Point, buffer)
+pyproj>=3.6                    # Coordinate transformations (WGS84 ↔ UTM)
+rtree>=1.0                     # R-tree spatial index for nearest-neighbor queries
+
+# --- Database ---
+psycopg2-binary>=2.9           # PostgreSQL driver (untuk Supabase direct connection)
+postgrest>=2.0                 # Supabase PostgREST Python client
+gotrue>=2.0                    # Supabase Auth client
+
+# --- HTTP Clients ---
+httpx>=0.27                    # Async HTTP client (Open-Meteo, TomTom, WAQI)
+requests>=2.31                 # Sync HTTP fallback
+
+# --- Data Processing ---
+pandas>=2.2                    # DataFrame operations untuk calibration data
+pyarrow>=15.0                  # Parquet file read/write (history export)
+
+# --- ML (Phase 0.5+) ---
+xgboost>=2.0                   # Primary ML correction model
+scikit-learn>=1.4              # Feature preprocessing, metrics
