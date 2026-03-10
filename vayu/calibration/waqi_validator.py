@@ -114,7 +114,12 @@ def collect_validation_pairs(waqi_token: str | None = None) -> list[ValidationPa
             continue
 
         iaqi = waqi_data.get("iaqi", {})
-        waqi_aqi = int(waqi_data.get("aqi", 0))
+        raw_aqi = waqi_data.get("aqi", 0)
+        try:
+            waqi_aqi = int(raw_aqi)
+        except (ValueError, TypeError):
+            log.warning("Skipping %s: non-numeric AQI value '%s'", cfg["name"], raw_aqi)
+            continue
         pm25_aqi_val = iaqi.get("pm25", {}).get("v")
         no2_aqi_val = iaqi.get("no2", {}).get("v")
 

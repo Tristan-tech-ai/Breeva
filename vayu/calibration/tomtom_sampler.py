@@ -55,8 +55,8 @@ SAMPLE_POINTS: list[tuple[float, float, str, str]] = [
     (-5.1400, 119.4200, "primary", "makassar"),      # Jl. Urip Sumoharjo
     (-5.1600, 119.4100, "secondary", "makassar"),    # Panakkukang
     # Medan
-    (-3.5900, 98.6700, "primary", "medan"),          # Jl. S. Parman
-    (-3.5800, 98.6900, "secondary", "medan"),        # Simpang Limun
+    (3.5900, 98.6700, "primary", "medan"),           # Jl. S. Parman (North latitude)
+    (3.5800, 98.6900, "secondary", "medan"),         # Simpang Limun (North latitude)
     # Semarang
     (-6.9700, 110.4200, "primary", "semarang"),      # Jl. Pandanaran
     # Yogyakarta
@@ -190,7 +190,7 @@ def upsert_calibration(results: list[SampleResult]) -> int:
         return 0
 
     resp = requests.post(
-        f"{api_base}/traffic_calibration",
+        f"{api_base}/traffic_calibration?on_conflict=road_class,hour_of_day,day_of_week",
         headers=headers,
         json=rows,
         timeout=15,
