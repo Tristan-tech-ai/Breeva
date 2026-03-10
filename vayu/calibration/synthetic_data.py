@@ -68,6 +68,29 @@ LANDUSE_ENCODING: dict[str, int] = {
 
 STABILITY_ENCODING = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4, "F": 5}
 
+# Region bounding boxes for representative sampling (must cover all 14 VAYU regions)
+# Format: (south_lat, west_lon, north_lat, east_lon, weight)
+# Weight controls how many samples each region gets (proportional to road density)
+REGION_BOXES: list[tuple[float, float, float, float, float]] = [
+    # Bali
+    (-8.85, 114.43, -8.06, 115.72, 1.0),
+    # Jawa
+    (-6.30, 106.75, -6.10, 106.95, 2.0),   # Jakarta (dense)
+    (-6.95, 107.57, -6.87, 107.67, 1.0),   # Bandung
+    (-7.33, 112.70, -7.23, 112.80, 1.0),   # Surabaya
+    (-7.02, 110.37, -6.94, 110.47, 1.0),   # Semarang
+    (-7.82, 110.34, -7.74, 110.42, 0.8),   # Yogyakarta
+    (-7.60, 110.79, -7.53, 110.86, 0.8),   # Solo
+    (-8.00, 112.60, -7.94, 112.66, 0.8),   # Malang
+    # Sulawesi
+    (-5.60, 119.25, -2.80, 120.65, 1.0),   # Sulsel (Makassar)
+    (-3.60, 118.70, -1.40, 119.45, 0.5),   # Sulbar
+    (-2.10, 119.60,  0.90, 123.40, 0.5),   # Sulteng (Palu)
+    ( 0.20, 121.80,  0.95, 123.15, 0.5),   # Gorontalo
+    ( 0.30, 123.20,  1.65, 125.30, 0.5),   # Sulut (Manado)
+    (-5.55, 121.30, -3.00, 124.10, 0.5),   # Sultra (Kendari)
+]
+
 
 def _simplified_caline3_pm25(
     traffic_vph: float,
@@ -122,6 +145,10 @@ def generate_synthetic_dataset(
     records = []
     highway_classes = list(TRAFFIC_BASE.keys())
 
+    # Pre-compute region sampling weights
+    total_weight = sum(w for _, _, _, _, w in REGION_BOXES)
+    region_probs = [w / total_weight for _, _, _, _, w in REGION_BOXES]
+
     for _ in range(n_samples):
         # Random conditions
         hour = rng.integers(0, 24)
@@ -134,9 +161,11 @@ def generate_synthetic_dataset(
         temp = rng.uniform(22, 38)
         humidity = rng.uniform(50, 95)
 
-        # Location (Indonesia bounding box)
-        lat = rng.uniform(-8.8, -5.0)
-        lon = rng.uniform(105.0, 120.0)
+        # Location — sample from actual region bounding boxes (weighted)
+        region_idx = rng.choice(len(REGION_BOXES), p=region_probs)
+        s_lat, w_lon, n_lat, e_lon, _ = REGION_BOXES[region_idx]
+        lat = rng.uniform(s_lat, n_lat)
+        lon = rng.uniform(w_lon, e_lon)
 
         # Road
         highway = rng.choice(highway_classes)
