@@ -66,7 +66,7 @@
 
 | # | Task | Status | Command / Detail |
 |---|---|---|---|
-| 1.1 | Install **h3-js** (hexagonal grid) | ✅ Done | h3-js 4.4.0 |
+| 1.1 | ~~Install **h3-js**~~ → removed (WASM fails in Vercel) | ✅ Done | Replaced with inline `latLonToTileId()` ~25m grid |
 | 1.2 | Install **ngeohash** (geohash encoding) | ✅ Done | ngeohash 0.6.3 |
 | 1.3 | Install **@types/ngeohash** | ✅ Done | @types/ngeohash 0.6.8 |
 | 1.4 | Verifikasi **openmeteo** sudah terinstall | ✅ Done | Sudah ada di package.json |
@@ -186,7 +186,7 @@
 | # | Task | Status | Detail |
 |---|---|---|---|
 | 4.1 | Buat file `api/vayu/aqi.ts` | ✅ Done | GET ?lat=&lon= — `api/vayu/aqi.ts` |
-| 4.2 | Implement: lat/lon → H3 tile_id (resolution 11) | ✅ Done | `latLngToCell(lat, lon, 11)` via h3-js |
+| 4.2 | Implement: lat/lon → tile_id (~25m grid) | ✅ Done | `latLonToTileId()` inline — h3-js removed (WASM issue) |
 | 4.3 | Implement: cek Upstash Redis cache (`vayu:tile:{tile_id}`) | ✅ Done | TTL 900s, X-Cache: HIT-REDIS |
 | 4.4 | Implement: cek Supabase `aqi_grid` table | ✅ Done | PostgREST query WHERE valid_until > now, X-Cache: HIT-SUPABASE |
 | 4.5 | Implement: lazy compute jika cache miss | ✅ Done | Calls `computeDispersion()` from dispersion.ts |
@@ -277,14 +277,14 @@
 
 | # | Task | Status | Detail |
 |---|---|---|---|
-| 5.1 | Replace mock AQI di `api/air-quality/index.ts` → call VAYU | ☐ Todo | Remove random mock data |
-| 5.2 | Implement: AQI heatmap layer di Leaflet map | ☐ Todo | Color-coded tiles |
-| 5.3 | Implement: confidence badge di UI | ☐ Todo | layer_source → "Estimasi" / "Akurat" / "ML" |
-| 5.4 | Implement: freshness indicator | ☐ Todo | "Live" / "⚠️ X menit lalu" / "⚠️ Estimasi kasar" |
-| 5.5 | Implement: route comparison UI (AQI per rute) | ☐ Todo | "Tercepat (AQI 85)" vs "Terbersih (AQI 52, +3 min)" |
-| 5.6 | Implement: cumulative exposure result card | ☐ Todo | Total dose + cigarette equivalent + risk level |
-| 5.7 | Implement: multi-vehicle selector | ☐ Todo | 📎 ERD 9.1 — pedestrian, bicycle, motorcycle, car, etc. |
-| 5.8 | Implement: contributor opt-in flow (Tier 0/1/2/3) | ☐ Todo | 📎 ERD 10.2 |
+| 5.1 | Replace mock AQI di `api/air-quality/index.ts` → call VAYU | ✅ Done | 307 redirect → `/api/vayu/aqi`, `getAirQuality()` calls VAYU + Open-Meteo fallback |
+| 5.2 | Implement: AQI heatmap layer di Leaflet map | ✅ Done | `fetchAQIZones()` — real VAYU data, color-coded 7-cell grid |
+| 5.3 | Implement: confidence badge di UI | ✅ Done | 🟢 Akurat (≥0.7) / 🟡 Estimasi (0.4–0.7) / 🔴 Kasar (<0.4) |
+| 5.4 | Implement: freshness indicator | ✅ Done | ⚡ Live / 🕐 Baru / ⚠️ Lama / ⚠️ Fallback |
+| 5.5 | Implement: route comparison UI (AQI per rute) | ✅ Done | AQI per route + confidence dots ●●● / ●●○ in RouteCard |
+| 5.6 | Implement: cumulative exposure result card | ✅ Done | 🚬 cigarette equiv + avg PM2.5 + health risk level in WalkComplete |
+| 5.7 | Implement: multi-vehicle selector | ✅ Done | `getVayuVehicleType()` — walking/cycling/ebike/motorcycle/car mapping |
+| 5.8 | Implement: contributor opt-in flow (Tier 0/1/2/3) | ✅ Done | Auto-contribute in walkStore + VAYU Air Contributor card in ContributePage |
 
 ---
 
@@ -446,13 +446,13 @@
 | **Stage 2** — Database | 14 | ✅ **14 done** |
 | **Stage 3** — OSM Data | 23 | ✅ **23 done** (642,528 segments, 14 regions) |
 | **Stage 4** — Mode A (API) | 48 | ✅ **47 done, 1 deferred** (4.37 → Stage 5) |
-| **Stage 5** — Frontend | 8 | 8 todo |
+| **Stage 5** — Frontend | 8 | ✅ **8 done** |
 | **Stage 6** — Mode B (Python) | 12 | 12 todo |
 | **Stage 7** — GitHub Actions | 10 | 10 todo |
 | **Stage 8** — Testing | 18 | 18 todo |
 | **Stage 9** — Deploy | 9 | 9 todo |
 | **Stages 10–13** — Post-MVP | 17 | 17 todo |
-| **TOTAL** | **190** | **111 done, 1 blocked, 1 deferred, 77 todo** |
+| **TOTAL** | **190** | **119 done, 1 blocked, 1 deferred, 69 todo** |
 
 > **Critical Path (MVP):** Stage 0 → 1 → 2 → 3 → 4A+4B → 4C → 4G → 5 → 8 → 9
 > Stages 4D–4F, 6, 7 bisa paralel setelah 4A+4B selesai.

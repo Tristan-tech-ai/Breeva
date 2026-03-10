@@ -1,5 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { computeDispersion } from '../../src/lib/vayu/dispersion';
+
+/**
+ * VAYU Route Score Endpoint — Self-contained.
+ * Calls Open-Meteo directly for AQI per sample point (no cross-dir imports).
+ */
 
 // Vehicle routing weights (ERD 9.2)
 const VEHICLE_WEIGHTS: Record<string, { aqi: number; time: number }> = {
@@ -9,6 +13,33 @@ const VEHICLE_WEIGHTS: Record<string, { aqi: number; time: number }> = {
   car:         { aqi: 0.40, time: 0.60 },
   public:      { aqi: 0.30, time: 0.70 },
 };
+
+function pm25ToAQI(pm25: number): number {
+  const bp = [
+    [0, 12.0, 0, 50], [12.1, 35.4, 51, 100], [35.5, 55.4, 101, 150],
+    [55.5, 150.4, 151, 200], [150.5, 250.4, 201, 300], [250.5, 500.4, 301, 500],
+  ];
+  const c = Math.max(0, Math.min(pm25, 500.4));
+  for (const [lo, hi, aqiLo, aqiHi] of bp) {
+    if (c <= hi) return Math.round(((aqiHi - aqiLo) / (hi - lo)) * (c - lo) + aqiLo);
+  }
+  return 500;
+}
+
+/** Fetch AQI for a single point via Open-Meteo (lightweight, no import chain) */
+async function getPointAQI(lat: number, lon: number): Promise<{ aqi: number; pm25: number }> {
+  try {
+    const resp = await fetch(
+      `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm2_5&timezone=auto`
+    );
+    if (!resp.ok) return { aqi: 50, pm25: 12 };
+    const json = await resp.json();
+    const pm25 = json.current?.pm2_5 ?? 12;
+    return { aqi: pm25ToAQI(pm25), pm25 };
+  } catch {
+    return { aqi: 50, pm25: 12 };
+  }
+}
 
 interface RouteScoreRequest {
   polyline: [number, number][];  // [lat, lon] pairs
@@ -75,7 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Batch AQI compute for each sample point (parallel)
     const results = await Promise.all(
       samples.map(async ([lat, lon]) => {
-        const r = await computeDispersion(lat, lon);
+        const r = await getPointAQI(lat, lon);
         return { lat, lon, aqi: r.aqi, pm25: r.pm25 };
       })
     );

@@ -82,12 +82,23 @@ function gaussianConc(Q: number, wind: number, dist: number, H: number): number 
 
 // ─── Region detection ───────────────────────────────────────
 function detectRegion(lat: number, lon: number): string {
+  // Bali
   if (lat >= -8.85 && lat <= -8.06 && lon >= 114.43 && lon <= 115.71) return 'bali';
+  // Jawa
   if (lat >= -6.50 && lat <= -6.08 && lon >= 106.60 && lon <= 107.10) return 'jakarta';
   if (lat >= -7.02 && lat <= -6.82 && lon >= 107.45 && lon <= 107.77) return 'bandung';
   if (lat >= -7.40 && lat <= -7.15 && lon >= 112.55 && lon <= 112.85) return 'surabaya';
   if (lat >= -7.10 && lat <= -6.90 && lon >= 110.30 && lon <= 110.50) return 'semarang';
   if (lat >= -7.87 && lat <= -7.72 && lon >= 110.30 && lon <= 110.50) return 'yogyakarta';
+  if (lat >= -7.62 && lat <= -7.50 && lon >= 110.75 && lon <= 110.90) return 'solo';
+  if (lat >= -8.05 && lat <= -7.90 && lon >= 112.58 && lon <= 112.68) return 'malang';
+  // Sulawesi
+  if (lat >= -5.60 && lat <= -2.80 && lon >= 119.25 && lon <= 120.65) return 'sulsel';
+  if (lat >= -3.60 && lat <= -1.40 && lon >= 118.70 && lon <= 119.45) return 'sulbar';
+  if (lat >= -2.10 && lat <= 0.90 && lon >= 119.60 && lon <= 123.40) return 'sulteng';
+  if (lat >= 0.20 && lat <= 0.95 && lon >= 121.80 && lon <= 123.15) return 'gorontalo';
+  if (lat >= 0.30 && lat <= 1.65 && lon >= 123.20 && lon <= 125.30) return 'sulut';
+  if (lat >= -5.55 && lat <= -3.00 && lon >= 121.30 && lon <= 124.10) return 'sultra';
   return 'unknown';
 }
 

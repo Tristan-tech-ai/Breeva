@@ -1,14 +1,25 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { computeDispersion } from '../../src/lib/vayu/dispersion';
 
 /**
- * VAYU Cumulative Exposure Calculator
+ * VAYU Cumulative Exposure Calculator — Self-contained.
  * ERD Section 7.2, 7.3, 7.4
  *
  * Formula: Dose[i] = C[i] × duration[i] × (VR/1000) × IF
  * CE = Σ Dose[i]
  * cigaretteEquivalent = CE / 253
  */
+
+/** Fetch PM2.5 for a single point via Open-Meteo */
+async function getPointPM25(lat: number, lon: number): Promise<number> {
+  try {
+    const resp = await fetch(
+      `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm2_5&timezone=auto`
+    );
+    if (!resp.ok) return 15;
+    const json = await resp.json();
+    return json.current?.pm2_5 ?? 15;
+  } catch { return 15; }
+}
 
 // Ventilation Rate (L/min) and Intake Fraction per vehicle type (ERD 7.3)
 const VEHICLE_PARAMS: Record<string, { vr: number; intakeFraction: number; label: string }> = {
@@ -90,7 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const samples = samplePolyline(body.polyline, 15);
 
     const results = await Promise.all(
-      samples.map(([lat, lon]) => computeDispersion(lat, lon))
+      samples.map(async ([lat, lon]) => ({ pm25: await getPointPM25(lat, lon) }))
     );
 
     const pm25Values = results.map((r) => r.pm25);
