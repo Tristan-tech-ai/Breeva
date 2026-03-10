@@ -118,10 +118,13 @@ export function useRoadPollutionLayer(
       if (coords.length < 2) continue;
 
       const color = getConcentrationColor(getValue(road, pollutant), pollutant);
+      // Scale weight with zoom: thicker lines at higher zoom, like eLichens
+      const zoom = map.getZoom();
+      const zoomScale = zoom >= 16 ? 1.6 : zoom >= 15 ? 1.3 : 1.0;
       L.polyline(coords, {
         color,
-        weight: road.weight,
-        opacity: 0.8,
+        weight: road.weight * zoomScale,
+        opacity: 0.85,
         interactive: false,
         lineCap: 'round',
         lineJoin: 'round',

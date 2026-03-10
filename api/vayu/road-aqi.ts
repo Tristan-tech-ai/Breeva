@@ -45,6 +45,41 @@ const LANDUSE_MODIFIERS: Record<string, number> = {
   residential: 1.00, commercial: 1.10, retail: 1.10, industrial: 1.25,
 };
 
+// ─── Highway class → estimated vehicles/hour (when DB has no calibrated data) ──
+const HIGHWAY_TRAFFIC: Record<string, number> = {
+  motorway: 4000, motorway_link: 2000,
+  trunk: 2500, trunk_link: 1200,
+  primary: 1500, primary_link: 800,
+  secondary: 800, secondary_link: 400,
+  tertiary: 400, tertiary_link: 200,
+  residential: 80, living_street: 20,
+  service: 15, unclassified: 50,
+  pedestrian: 2, footway: 0, cycleway: 0, path: 0,
+};
+
+// ─── Deterministic per-road jitter from osm_way_id ──────────
+// Produces ±20% variation so same-class roads don't appear identical
+function roadJitter(osmWayId: number): number {
+  const hash = ((osmWayId * 2654435761) >>> 0) / 4294967296;
+  return 0.80 + hash * 0.40; // range [0.8, 1.2]
+}
+
+// ─── Estimate traffic from highway class + lanes when no calibrated data ──
+function estimateTraffic(road: RoadRow, diurnal: number): number {
+  // Use calibrated data if available
+  if (road.traffic_base_estimate && road.traffic_base_estimate > 0) {
+    return road.traffic_base_estimate * (road.traffic_calibration_factor || 1.0) * diurnal;
+  }
+  // Derive from highway classification
+  const base = HIGHWAY_TRAFFIC[road.highway] ?? 50;
+  // Lane multiplier: 4-lane primary = 2× traffic of 2-lane primary
+  const defaultLanes = ['motorway', 'trunk'].includes(road.highway) ? 4
+                     : ['primary', 'secondary'].includes(road.highway) ? 2 : 1;
+  const lanes = road.lanes || defaultLanes;
+  const laneFactor = Math.max(1, lanes / defaultLanes);
+  return base * laneFactor * diurnal;
+}
+
 function gaussianConc(Q: number, wind: number, dist: number, H: number): number {
   const u = Math.max(wind, 0.5);
   const x = Math.max(dist, 10);
@@ -78,21 +113,22 @@ const HOURLY_TRAFFIC: Record<number, number> = {
 // ─── Road class → weight for line rendering hint ────────────
 function roadWeight(highway: string): number {
   switch (highway) {
-    case 'motorway': case 'trunk': return 6;
-    case 'primary': return 5;
-    case 'secondary': return 4;
+    case 'motorway': case 'trunk': return 5;
+    case 'primary': return 4;
+    case 'secondary': return 3.5;
     case 'tertiary': return 3;
+    case 'residential': return 2.5;
     default: return 2;
   }
 }
 
 // ─── Zoom-based road limit + filtering ──────────────────────
 function getQueryParams(zoom: number): { limit: number; highways: string[] | null } {
-  if (zoom >= 16) return { limit: 300, highways: null };          // all roads
-  if (zoom >= 15) return { limit: 250, highways: null };          // all roads
-  if (zoom >= 14) return { limit: 200, highways: null };          // all roads
-  if (zoom >= 13) return { limit: 150, highways: ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'] };
-  return { limit: 80, highways: ['motorway', 'trunk', 'primary'] };
+  if (zoom >= 16) return { limit: 500, highways: null };          // all roads
+  if (zoom >= 15) return { limit: 400, highways: null };          // all roads
+  if (zoom >= 14) return { limit: 300, highways: null };          // all roads
+  if (zoom >= 13) return { limit: 200, highways: ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'] };
+  return { limit: 100, highways: ['motorway', 'trunk', 'primary'] };
 }
 
 // ─── Types ──────────────────────────────────────────────────
@@ -164,16 +200,22 @@ function computeRoadAQI(
   baseline: { pm25: number; no2: number; wind_speed: number },
   diurnal: number
 ): { aqi: number; pm25: number; no2: number } {
-  const traffic = (road.traffic_base_estimate || 100) * (road.traffic_calibration_factor || 1.0) * diurnal;
+  const traffic = estimateTraffic(road, diurnal);
+  const jitter = roadJitter(road.osm_way_id);
+
   // Self-road contribution at ~10m distance (on-road exposure)
   const dist = 10;
   const qPM25 = (traffic * FLEET_EMISSION.pm25) / 3600 / 1000;
   const qNOx  = (traffic * FLEET_EMISSION.nox) / 3600 / 1000;
-  const veg = LANDUSE_MODIFIERS[road.landuse_proxy || ''] ?? 1.0;
-  const canyon = 1.0 + (road.canyon_ratio || 0) * 0.3;
 
-  const pm25Delta = gaussianConc(qPM25, baseline.wind_speed, dist, 0.5) * veg * canyon;
-  const no2Delta  = gaussianConc(qNOx, baseline.wind_speed, dist, 0.5) * veg * canyon;
+  const veg = LANDUSE_MODIFIERS[road.landuse_proxy || ''] ?? 1.0;
+  // Canyon effect amplified — street canyons trap pollution significantly
+  const canyon = 1.0 + (road.canyon_ratio || 0) * 0.5;
+  // Narrower roads trap pollution more (8m reference width)
+  const widthFactor = road.width ? Math.max(0.8, Math.min(1.5, 8.0 / road.width)) : 1.0;
+
+  const pm25Delta = gaussianConc(qPM25, baseline.wind_speed, dist, 0.5) * veg * canyon * widthFactor * jitter;
+  const no2Delta  = gaussianConc(qNOx, baseline.wind_speed, dist, 0.5) * veg * canyon * widthFactor * jitter;
 
   const pm25 = Math.max(0, baseline.pm25 + pm25Delta);
   const no2  = Math.max(0, baseline.no2 + no2Delta);
