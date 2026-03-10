@@ -229,6 +229,19 @@ function getAQILevel(aqi: number): AirQualityData['level'] {
   return 'hazardous';
 }
 
+/** Simple PM2.5 → US EPA AQI conversion for fallback path */
+function pm25ToAQISimple(pm25: number): number {
+  const bp = [
+    [0, 12.0, 0, 50], [12.1, 35.4, 51, 100], [35.5, 55.4, 101, 150],
+    [55.5, 150.4, 151, 200], [150.5, 250.4, 201, 300], [250.5, 500.4, 301, 500],
+  ];
+  const c = Math.max(0, Math.min(pm25, 500.4));
+  for (const [lo, hi, aqiLo, aqiHi] of bp) {
+    if (c <= hi) return Math.round(((aqiHi - aqiLo) / (hi - lo)) * (c - lo) + aqiLo);
+  }
+  return 500;
+}
+
 /**
  * Fetch air quality data via VAYU Engine API.
  * Uses H3 tile-based caching with Gaussian dispersion model.
@@ -249,7 +262,8 @@ export async function getAirQuality(
     );
 
     if (!resp.ok) {
-      throw new Error(`VAYU API error: ${resp.status}`);
+      const errBody = await resp.json().catch(() => ({}));
+      throw new Error(`VAYU API error: ${resp.status} — ${errBody.detail || errBody.error || 'unknown'}`);
     }
 
     const json = await resp.json();
@@ -278,11 +292,46 @@ export async function getAirQuality(
 
     return { data, error: null };
   } catch (error) {
-    console.error('Failed to get air quality:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error.message : 'Failed to get AQI',
-    };
+    console.error('VAYU API failed, trying Open-Meteo fallback:', error);
+
+    // Fallback: fetch baseline AQI directly from Open-Meteo
+    try {
+      const fallbackResp = await fetch(
+        `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${coordinate.lat}&longitude=${coordinate.lng}&current=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone,european_aqi&timezone=auto`
+      );
+      if (!fallbackResp.ok) throw new Error(`Open-Meteo ${fallbackResp.status}`);
+      const fb = await fallbackResp.json();
+      const c = fb.current;
+
+      const pm25 = c.pm2_5 ?? 15;
+      const aqi = pm25ToAQISimple(pm25);
+
+      const data: AirQualityData = {
+        aqi,
+        level: getAQILevel(aqi),
+        pm25,
+        pm10: c.pm10 ?? 0,
+        o3: c.ozone ?? 0,
+        no2: c.nitrogen_dioxide ?? 0,
+        co: c.carbon_monoxide ?? 0,
+        so2: 0,
+        timestamp: new Date().toISOString(),
+        location: coordinate,
+        confidence: 0.15,
+        freshness: 'stale' as AQIFreshness,
+        layer_source: 0,
+        tile_id: undefined,
+      };
+
+      aqiCache.set(aqiCacheKey(coordinate.lat, coordinate.lng), { data, fetchedAt: Date.now() });
+      return { data, error: null };
+    } catch (fallbackError) {
+      console.error('Open-Meteo fallback also failed:', fallbackError);
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to get AQI',
+      };
+    }
   }
 }
 

@@ -1,9 +1,18 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import * as h3 from 'h3-js';
 import { computeDispersion } from '../../src/lib/vayu/dispersion';
 import { getFreshness } from '../../src/lib/vayu/circuit-breaker';
 import type { Freshness } from '../../src/lib/vayu/circuit-breaker';
+
+/**
+ * Simple lat/lon → tile ID (replaces h3-js to avoid WASM issues in serverless).
+ * Grid spacing ≈ 25m (1/4000°), similar to H3 resolution 11.
+ */
+function latLonToTileId(lat: number, lon: number): string {
+  const latGrid = Math.round(lat * 4000);
+  const lonGrid = Math.round(lon * 4000);
+  return `tile:${latGrid}:${lonGrid}`;
+}
 
 // -- Supabase admin client --
 function getSupabase() {
@@ -75,8 +84,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Step 1: lat/lon → H3 tile_id (resolution 11 ≈ 25m hexagon)
-    const tileId = h3.latLngToCell(latitude, longitude, 11);
+    // Step 1: lat/lon → tile_id (~25m grid)
+    const tileId = latLonToTileId(latitude, longitude);
     const redisKey = `vayu:tile:${tileId}`;
 
     // Step 2: Check Upstash Redis cache (TTL 900s = 15 min)
@@ -172,6 +181,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ data });
   } catch (error) {
     console.error('VAYU AQI error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({ error: 'Internal server error', detail: message });
   }
 }
