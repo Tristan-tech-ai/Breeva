@@ -331,9 +331,9 @@
 |---|---|---|---|
 | 7.1 | Set `SUPABASE_URL` | ✅ Done | Set di Vercel (1.16) — `SUPABASE_URL` + `VITE_SUPABASE_URL` |
 | 7.2 | Set `SUPABASE_SERVICE_ROLE_KEY` | ✅ Done | Set di Vercel (1.16) |
-| 7.3 | Set `TOMTOM_API_KEY` (Phase 0.5) | ☐ Later | Dari developer.tomtom.com |
-| 7.4 | Set `OPENAQ_API_KEY` (Phase 0.5) | ☐ Later | Dari explore.openaq.org |
-| 7.5 | Set `WAQI_TOKEN` (Phase 0.5) | ☐ Later | Dari aqicn.org |
+| 7.3 | Set `TOMTOM_API_KEY` (Phase 0.5) | ✅ Done | GitHub Actions Secret |
+| 7.4 | Set `OPENAQ_API_KEY` (Phase 0.5) | ⛔ N/A | OpenAQ replaced by WAQI |
+| 7.5 | Set `WAQI_TOKEN` (Phase 0.5) | ✅ Done | GitHub Actions Secret |
 
 ### 7B. Workflow Files
 
@@ -397,9 +397,9 @@
 
 | # | Task | Status | Detail |
 |---|---|---|---|
-| 10.1 | Integrate TomTom Traffic API (sampling calibration) | ✅ Done | `vayu/calibration/tomtom_sampler.py` — 20 sample points, 7 regions |
-| 10.2 | Implement reverse NO₂ calibration dari **WAQI** (bukan OpenAQ) | ✅ Done | `vayu/calibration/no2_reverse.py` — 9 stations, reverse Gaussian |
-| 10.3 | Generate synthetic ML training data | ✅ Done | `vayu/calibration/synthetic_data.py` — 10K samples, 20 features, 6 targets |
+| 10.1 | Integrate TomTom Traffic API (sampling calibration) | ✅ Done | `vayu/calibration/tomtom_sampler.py` — 27 sample points, 14 regions |
+| 10.2 | Implement reverse NO₂ calibration dari **WAQI** (bukan OpenAQ) | ✅ Done | `vayu/calibration/no2_reverse.py` — 18 stations (9 fixed + 9 geo-based) |
+| 10.3 | Generate synthetic ML training data | ✅ Done | `vayu/calibration/synthetic_data.py` — 10K samples, 14 regions, 22 features, 6 targets |
 | 10.4 | Implement on-device map-matching SDK | ✅ Done | `vayu/calibration/map_matching.py` — PostGIS find_nearby_roads RPC |
 | 10.5 | Buat `vayu/calibration/waqi_validator.py` | ✅ Done | RMSE/MAE/R² vs WAQI ground-truth, per-region breakdown |
 
@@ -422,7 +422,7 @@
 | 12.2 | Build feedback loop dari user route choices | ✅ Done | `vayu/ml/feedback_loop.py` — ERD 6.4, EMA accuracy, route_feedback table |
 | 12.3 | Upgrade grid resolution: 25m → 10m (dense areas) | ✅ Done | `vayu/ml/grid_upgrade.py` — H3 res 11→12 for dense urban cells |
 | 12.4 | Launch Verified Local Contributor system | ✅ Done | `vayu/ml/contributor_system.py` — Tier 0-3, ERD 10.2 |
-| 12.5 | Build monthly model retraining pipeline | ✅ Done | `vayu/ml/retrain_monthly.py` + `.github/workflows/vayu-retrain.yml` |
+| 12.5 | Build monthly model retraining pipeline | ✅ Done | `vayu/ml/retrain_monthly.py` + `.github/workflows/vayu-retrain.yml` — tested 5 runs, all passing |
 
 ### Stage 13: Phase 3 — Regional Expansion (Sisa Indonesia)
 
@@ -448,14 +448,14 @@
 | **Stage 4** — Mode A (API) | 48 | ✅ **47 done, 1 deferred** (4.37 → Stage 5) |
 | **Stage 5** — Frontend | 8 | ✅ **8 done** |
 | **Stage 6** — Mode B (Python) | 12 | ✅ **12 done** (63 unit tests pass) |
-| **Stage 7** — GitHub Actions | 10 | ✅ **7 done**, 3 later |
+| **Stage 7** — GitHub Actions | 10 | ✅ **10 done** (7.4 N/A → OpenAQ replaced by WAQI) |
 | **Stage 8** — Testing | 18 | ✅ **14 done**, 4 manual |
 | **Stage 9** — Deploy | 9 | ✅ **7 done**, 2 manual |
 | **Stage 10** — Calibration | 5 | ✅ **5 done** |
 | **Stage 11** — Intelligence Layer | 6 | ✅ **6 done** |
 | **Stage 12** — Self-Improving | 5 | ✅ **5 done** |
 | **Stage 13** — Regional Expansion | 6 | 6 todo (server constraint) |
-| **TOTAL** | **196** | **187 done, 1 blocked, 1 deferred, 6 manual, 6 future** |
+| **TOTAL** | **196** | **190 done, 1 blocked, 1 deferred, 4 manual, 6 future** |
 
 > **Critical Path (MVP):** Stage 0 → 1 → 2 → 3 → 4A+4B → 4C → 4G → 5 → 8 → 9
 > Stages 4D–4F, 6, 7 bisa paralel setelah 4A+4B selesai.

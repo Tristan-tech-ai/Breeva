@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wind, ShieldCheck, ShieldAlert, Cigarette, ChevronUp, ChevronDown } from 'lucide-react';
+import { Wind, ShieldCheck, ShieldAlert, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface LiveExposureTrackerProps {
   /** Current AQI value (updates in real-time) */
@@ -51,7 +51,7 @@ const RISK_CONFIG = {
  * Real-time exposure tracker shown during active walks.
  * Accumulates PM2.5 dose from current AQI readings.
  */
-export default function LiveExposureTracker({ currentAQI, durationSeconds, isPaused }: LiveExposureTrackerProps) {
+export default function LiveExposureTracker({ currentAQI, isPaused }: LiveExposureTrackerProps) {
   const [expanded, setExpanded] = useState(false);
   const cumulativeDoseRef = useRef(0);
   const lastTickRef = useRef(Date.now());

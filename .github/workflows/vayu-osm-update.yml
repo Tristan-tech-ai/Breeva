@@ -1,11 +1,11 @@
 # VAYU — OSM Road Data Update
 # Re-processes OpenStreetMap road segments for all covered regions
-# Runs monthly on the 1st at 02:00 UTC
+# Runs monthly on the 1st at 04:00 UTC (staggered from retrain at 02:00)
 name: VAYU OSM Update
 
 on:
   schedule:
-    - cron: '0 2 1 * *'     # 1st of each month, 02:00 UTC
+    - cron: '0 4 1 * *'     # 1st of each month, 04:00 UTC
   workflow_dispatch:
     inputs:
       region:
@@ -34,8 +34,8 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          REGION: ${{ github.event.inputs.region || 'all' }}
         run: |
-          REGION=${{ github.event.inputs.region || 'all' }}
           echo "Processing OSM data for region: ${REGION}"
           cd vayu
           if [ "$REGION" = "all" ]; then
