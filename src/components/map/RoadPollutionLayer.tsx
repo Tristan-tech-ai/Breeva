@@ -170,8 +170,11 @@ export function useRoadPollutionLayer(
 
 // ── Pollutant selector labels ────────────────────────────────
 
-export const POLLUTANT_OPTIONS: { id: PollutantType; label: string }[] = [
-  { id: 'aqi', label: 'AQI' },
-  { id: 'pm25', label: 'PM₂.₅' },
-  { id: 'no2', label: 'NO₂' },
+export const POLLUTANT_OPTIONS: { id: PollutantType; label: string; unit: string; description: string }[] = [
+  { id: 'aqi', label: 'AQI', unit: '', description: 'Air Quality Index (US EPA)' },
+  { id: 'pm25', label: 'PM₂.₅', unit: 'μg/m³', description: 'Fine particulate matter' },
+  { id: 'no2', label: 'NO₂', unit: 'μg/m³', description: 'Nitrogen dioxide' },
 ];
+
+// Export color stops for legend rendering
+export { getColorStops };

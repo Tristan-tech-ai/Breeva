@@ -1,10 +1,10 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Map, Satellite, Mountain, Wind, Store,
-  TreePine, Waves,
+  TreePine, Activity,
 } from 'lucide-react';
 import type { AirQualityData, PollutantType } from '../../types';
-import { POLLUTANT_OPTIONS } from './RoadPollutionLayer';
+import { POLLUTANT_OPTIONS, getColorStops } from './RoadPollutionLayer';
 
 interface MapLayersSheetProps {
   isOpen: boolean;
@@ -41,16 +41,6 @@ const mapTypes: { id: 'voyager' | 'osm' | 'satellite'; label: string; icon: type
   },
 ];
 
-interface DetailToggle {
-  id: string;
-  label: string;
-  icon: typeof Wind;
-  active: boolean;
-  onToggle: () => void;
-  color: string;
-  description: string;
-}
-
 export default function MapLayersSheet({
   isOpen,
   onClose,
@@ -64,26 +54,13 @@ export default function MapLayersSheet({
   pollutant = 'aqi',
   onPollutantChange,
 }: MapLayersSheetProps) {
-  const details: DetailToggle[] = [
-    {
-      id: 'poi',
-      label: 'Places',
-      icon: Store,
-      active: showPOIs,
-      onToggle: onPOIsToggle,
-      color: '#16a34a',
-      description: 'Nearby restaurants, shops, parks',
-    },
-    {
-      id: 'aqi',
-      label: 'Air Quality',
-      icon: Wind,
-      active: showAQIOverlay,
-      onToggle: onAQIOverlayToggle,
-      color: '#0ea5e9',
-      description: currentAQI ? `AQI ${currentAQI.aqi} — ${currentAQI.level.replace('-', ' ')}` : 'Show AQI zones',
-    },
-  ];
+  const activePollutant = POLLUTANT_OPTIONS.find((o) => o.id === pollutant) || POLLUTANT_OPTIONS[0];
+  const colorStops = getColorStops(pollutant);
+
+  // Build CSS gradient from color stops
+  const gradient = colorStops
+    .map((s, i) => `${s.c} ${Math.round((i / (colorStops.length - 1)) * 100)}%`)
+    .join(', ');
 
   return (
     <AnimatePresence>
@@ -104,7 +81,7 @@ export default function MapLayersSheet({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl max-h-[70vh] overflow-y-auto"
+            className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl max-h-[80vh] overflow-y-auto"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
@@ -175,116 +152,152 @@ export default function MapLayersSheet({
             <div className="mx-5 h-px bg-gray-100 dark:bg-gray-800" />
 
             {/* Map Details section */}
-            <div className="px-5 pt-4 pb-6">
+            <div className="px-5 pt-4 pb-4">
               <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
                 Map Details
               </p>
               <div className="grid grid-cols-2 gap-3">
-                {details.map((detail) => {
-                  const Icon = detail.icon;
-                  return (
-                    <button
-                      key={detail.id}
-                      onClick={detail.onToggle}
-                      className={`
-                        flex flex-col items-start gap-2 p-3.5 rounded-2xl border-2 transition-all text-left
-                        ${detail.active
-                          ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-900/20'
-                          : 'border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700'
-                        }
-                      `}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-9 h-9 rounded-xl flex items-center justify-center"
-                          style={{
-                            backgroundColor: detail.active ? detail.color + '18' : undefined,
-                          }}
-                        >
-                          <Icon
-                            className="w-4.5 h-4.5"
-                            style={{ color: detail.active ? detail.color : '#9ca3af' }}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <p
-                          className={`text-sm font-semibold ${
-                            detail.active
-                              ? 'text-gray-900 dark:text-white'
-                              : 'text-gray-600 dark:text-gray-400'
-                          }`}
-                        >
-                          {detail.label}
-                        </p>
-                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
-                          {detail.description}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
+                {/* Places toggle */}
+                <button
+                  onClick={onPOIsToggle}
+                  className={`
+                    flex flex-col items-start gap-2 p-3.5 rounded-2xl border-2 transition-all text-left
+                    ${showPOIs
+                      ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-900/20'
+                      : 'border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700'
+                    }
+                  `}
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                    style={{ backgroundColor: showPOIs ? '#16a34a18' : undefined }}>
+                    <Store className="w-4.5 h-4.5" style={{ color: showPOIs ? '#16a34a' : '#9ca3af' }} />
+                  </div>
+                  <div>
+                    <p className={`text-sm font-semibold ${showPOIs ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
+                      Places
+                    </p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
+                      Nearby restaurants, shops, parks
+                    </p>
+                  </div>
+                </button>
+
+                {/* Road Pollution toggle */}
+                <button
+                  onClick={onAQIOverlayToggle}
+                  className={`
+                    flex flex-col items-start gap-2 p-3.5 rounded-2xl border-2 transition-all text-left
+                    ${showAQIOverlay
+                      ? 'border-sky-500 bg-sky-50/50 dark:bg-sky-900/20'
+                      : 'border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700'
+                    }
+                  `}
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                    style={{ backgroundColor: showAQIOverlay ? '#0ea5e918' : undefined }}>
+                    <Activity className="w-4.5 h-4.5" style={{ color: showAQIOverlay ? '#0ea5e9' : '#9ca3af' }} />
+                  </div>
+                  <div>
+                    <p className={`text-sm font-semibold ${showAQIOverlay ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
+                      Road Pollution
+                    </p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
+                      {currentAQI ? `AQI ${currentAQI.aqi} — ${currentAQI.level.replace('-', ' ')}` : 'Street-level air quality'}
+                    </p>
+                  </div>
+                </button>
               </div>
             </div>
 
-            {/* AQI Legend when active */}
+            {/* ── Road Pollution Panel (eLichens-style) ── */}
             <AnimatePresence>
               {showAQIOverlay && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25 }}
                   className="overflow-hidden"
                 >
-                  <div className="mx-5 mb-5 p-3.5 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800">
-                    <div className="flex items-center gap-2 mb-2.5">
-                      <Waves className="w-3.5 h-3.5 text-sky-500" />
-                      <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        AQI Legend
-                      </span>
-                    </div>
+                  <div className="mx-5 mb-5 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 overflow-hidden">
                     {/* Pollutant tabs */}
-                    <div className="flex gap-1.5 mb-3">
+                    <div className="flex border-b border-gray-200 dark:border-gray-700">
                       {POLLUTANT_OPTIONS.map((opt) => (
                         <button
                           key={opt.id}
                           onClick={() => onPollutantChange?.(opt.id)}
                           className={`
-                            px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all
+                            flex-1 py-2.5 text-center text-xs font-bold uppercase tracking-wider transition-all relative
                             ${pollutant === opt.id
-                              ? 'bg-sky-500 text-white shadow-sm'
-                              : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                              ? 'text-sky-600 dark:text-sky-400'
+                              : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
                             }
                           `}
                         >
                           {opt.label}
+                          {pollutant === opt.id && (
+                            <motion.div
+                              layoutId="pollutant-indicator"
+                              className="absolute bottom-0 left-2 right-2 h-0.5 bg-sky-500 rounded-full"
+                            />
+                          )}
                         </button>
                       ))}
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { label: 'Good', color: '#22c55e', range: '0-50' },
-                        { label: 'Moderate', color: '#eab308', range: '51-100' },
-                        { label: 'Sensitive', color: '#f97316', range: '101-150' },
-                        { label: 'Unhealthy', color: '#ef4444', range: '151-200' },
-                        { label: 'Very Bad', color: '#a855f7', range: '201-300' },
-                        { label: 'Hazardous', color: '#7f1d1d', range: '300+' },
-                      ].map((item) => (
-                        <div key={item.label} className="flex items-center gap-1.5">
-                          <div
-                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: item.color }}
-                          />
-                          <div>
-                            <p className="text-[10px] font-medium text-gray-600 dark:text-gray-300 leading-none">
-                              {item.label}
-                            </p>
-                            <p className="text-[9px] text-gray-400 dark:text-gray-500 font-mono leading-none mt-0.5">
-                              {item.range}
-                            </p>
-                          </div>
+
+                    {/* Active pollutant info */}
+                    <div className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <p className="text-sm font-bold text-gray-900 dark:text-white">
+                            {activePollutant.label}
+                            {activePollutant.unit && (
+                              <span className="text-xs font-normal text-gray-400 dark:text-gray-500 ml-1">
+                                ({activePollutant.unit})
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                            {activePollutant.description}
+                          </p>
                         </div>
-                      ))}
+                        <div className="flex items-center gap-1.5">
+                          <Wind className="w-3.5 h-3.5 text-sky-500" />
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400">VAYU Engine</span>
+                        </div>
+                      </div>
+
+                      {/* Gradient color bar */}
+                      <div className="mb-2">
+                        <div
+                          className="h-3 rounded-full w-full"
+                          style={{ background: `linear-gradient(to right, ${gradient})` }}
+                        />
+                      </div>
+
+                      {/* Scale labels */}
+                      <div className="flex justify-between px-0.5">
+                        <span className="text-[9px] font-mono text-gray-400 dark:text-gray-500">
+                          {colorStops[0].v}
+                        </span>
+                        <span className="text-[9px] font-mono text-gray-400 dark:text-gray-500">
+                          {colorStops[Math.floor(colorStops.length / 2)].v}
+                        </span>
+                        <span className="text-[9px] font-mono text-gray-400 dark:text-gray-500">
+                          {colorStops[colorStops.length - 1].v}
+                        </span>
+                      </div>
+
+                      {/* Description tip */}
+                      <div className="mt-3 flex items-start gap-2 p-2.5 rounded-xl bg-white dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700/50">
+                        <Activity className="w-3.5 h-3.5 text-sky-500 mt-0.5 flex-shrink-0" />
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                          Road-level pollution overlay powered by VAYU CALINE3 dispersion model.
+                          Colors represent estimated concentration per road segment based on traffic volume,
+                          street canyon effect, and real-time weather conditions.
+                          Zoom in (level 13+) to see road-level detail.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
