@@ -40,6 +40,7 @@ import TransportModeSelector from '../components/map/TransportModeSelector';
 import AQIBadge from '../components/features/AQIBadge';
 import AQICard from '../components/features/AQICard';
 import WalkComplete from '../components/features/WalkComplete';
+import LiveExposureTracker from '../components/features/LiveExposureTracker';
 import TurnByTurn from '../components/map/TurnByTurn';
 import PlaceDetailSheet from '../components/map/PlaceDetailSheet';
 import MapLayersSheet from '../components/map/MapLayersSheet';
@@ -351,6 +352,13 @@ export default function HomePage() {
                     <AQIBadge aqi={currentAQI.aqi} size="sm" confidence={currentAQI.confidence} />
                   </div>
                 )}
+
+                {/* Live exposure tracker */}
+                <LiveExposureTracker
+                  currentAQI={currentAQI?.aqi ?? null}
+                  durationSeconds={durationSeconds}
+                  isPaused={isPaused}
+                />
               </div>
             </div>
           </div>

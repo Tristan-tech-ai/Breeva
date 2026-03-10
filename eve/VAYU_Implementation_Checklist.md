@@ -397,32 +397,32 @@
 
 | # | Task | Status | Detail |
 |---|---|---|---|
-| 10.1 | Integrate TomTom Traffic API (sampling calibration) | ☐ Todo | `vayu/calibration/tomtom_sampler.py` |
-| 10.2 | Implement reverse NO₂ calibration dari **WAQI** (bukan OpenAQ) | ☐ Todo | `vayu/calibration/no2_reverse.py` — endpoint: `api.waqi.info` |
-| 10.3 | Generate synthetic ML training data | ☐ Todo | CALINE3 vs OpenAQ residuals |
-| 10.4 | Implement on-device map-matching SDK | ☐ Todo | Protomaps/PMTiles (~18MB/provinsi) |
-| 10.5 | Buat `vayu/calibration/waqi_validator.py` | ☐ Todo | Ground-truth comparison (pengganti OpenAQ) |
+| 10.1 | Integrate TomTom Traffic API (sampling calibration) | ✅ Done | `vayu/calibration/tomtom_sampler.py` — 20 sample points, 7 regions |
+| 10.2 | Implement reverse NO₂ calibration dari **WAQI** (bukan OpenAQ) | ✅ Done | `vayu/calibration/no2_reverse.py` — 9 stations, reverse Gaussian |
+| 10.3 | Generate synthetic ML training data | ✅ Done | `vayu/calibration/synthetic_data.py` — 10K samples, 20 features, 6 targets |
+| 10.4 | Implement on-device map-matching SDK | ✅ Done | `vayu/calibration/map_matching.py` — PostGIS find_nearby_roads RPC |
+| 10.5 | Buat `vayu/calibration/waqi_validator.py` | ✅ Done | RMSE/MAE/R² vs WAQI ground-truth, per-region breakdown |
 
 ### Stage 11: Phase 1 — Intelligence Layer (🟢 Bulan 3–6)
 
 | # | Task | Status | Detail |
 |---|---|---|---|
-| 11.1 | Train XGBoost ML correction model | ☐ Todo | `vayu/ml/train_xgboost.py` |
-| 11.2 | Implement ML inference layer | ☐ Todo | `vayu/ml/inference.py` |
-| 11.3 | Integrate Copernicus CDSE NDVI (replace OSM proxy) | ☐ Todo | |
-| 11.4 | Implement Ghost Path detection algorithm | ☐ Todo | 📎 ERD 6.3 |
-| 11.5 | Build crowdsource data pipeline | ☐ Todo | |
-| 11.6 | Implement cumulative exposure calculator di frontend | ☐ Todo | |
+| 11.1 | Train XGBoost ML correction model | ✅ Done | `vayu/ml/train_xgboost.py` — correction_factor + PM2.5, hypertuned |
+| 11.2 | Implement ML inference layer | ✅ Done | `vayu/ml/inference.py` — singleton cache, batch predict, layer_source=3 |
+| 11.3 | Integrate Copernicus CDSE NDVI (replace OSM proxy) | ✅ Done | `vayu/calibration/ndvi.py` — CDSE Sentinel-2 + Open-Meteo fallback |
+| 11.4 | Implement Ghost Path detection algorithm | ✅ Done | `vayu/ml/ghost_path.py` — geohash clustering, ERD 6.3 |
+| 11.5 | Build crowdsource data pipeline | ✅ Done | `vayu/ml/crowdsource_pipeline.py` — speed aggregation, congestion detect |
+| 11.6 | Implement cumulative exposure calculator di frontend | ✅ Done | `LiveExposureTracker.tsx` — real-time PM2.5 dose during active walks |
 
 ### Stage 12: Phase 2 — Self-Improving (🟢 Bulan 6–12)
 
 | # | Task | Status | Detail |
 |---|---|---|---|
-| 12.1 | Implement LSTM temporal pattern model | ☐ Todo | |
-| 12.2 | Build feedback loop dari user route choices | ☐ Todo | 📎 ERD 6.4 |
-| 12.3 | Upgrade grid resolution: 25m → 10m (dense areas) | ☐ Todo | |
-| 12.4 | Launch Verified Local Contributor system | ☐ Todo | 📎 ERD 10.2 Tier 3 |
-| 12.5 | Build monthly model retraining pipeline | ☐ Todo | |
+| 12.1 | Implement LSTM temporal pattern model | ✅ Done | `vayu/ml/train_lstm.py` — 2-layer LSTM, 24h→6h forecast, PyTorch |
+| 12.2 | Build feedback loop dari user route choices | ✅ Done | `vayu/ml/feedback_loop.py` — ERD 6.4, EMA accuracy, route_feedback table |
+| 12.3 | Upgrade grid resolution: 25m → 10m (dense areas) | ✅ Done | `vayu/ml/grid_upgrade.py` — H3 res 11→12 for dense urban cells |
+| 12.4 | Launch Verified Local Contributor system | ✅ Done | `vayu/ml/contributor_system.py` — Tier 0-3, ERD 10.2 |
+| 12.5 | Build monthly model retraining pipeline | ✅ Done | `vayu/ml/retrain_monthly.py` + `.github/workflows/vayu-retrain.yml` |
 
 ### Stage 13: Phase 3 — Regional Expansion (Sisa Indonesia)
 
@@ -451,8 +451,11 @@
 | **Stage 7** — GitHub Actions | 10 | ✅ **7 done**, 3 later |
 | **Stage 8** — Testing | 18 | ✅ **14 done**, 4 manual |
 | **Stage 9** — Deploy | 9 | ✅ **7 done**, 2 manual |
-| **Stages 10–13** — Post-MVP | 17 | 17 todo |
-| **TOTAL** | **190** | **171 done, 1 blocked, 1 deferred, 6 manual, 17 future** |
+| **Stage 10** — Calibration | 5 | ✅ **5 done** |
+| **Stage 11** — Intelligence Layer | 6 | ✅ **6 done** |
+| **Stage 12** — Self-Improving | 5 | ✅ **5 done** |
+| **Stage 13** — Regional Expansion | 6 | 6 todo (server constraint) |
+| **TOTAL** | **196** | **187 done, 1 blocked, 1 deferred, 6 manual, 6 future** |
 
 > **Critical Path (MVP):** Stage 0 → 1 → 2 → 3 → 4A+4B → 4C → 4G → 5 → 8 → 9
 > Stages 4D–4F, 6, 7 bisa paralel setelah 4A+4B selesai.

@@ -1,0 +1,48 @@
+name: VAYU Monthly Retrain
+on:
+  schedule:
+    - cron: '0 2 1 * *'   # 1st of every month at 02:00 UTC
+  workflow_dispatch:
+    inputs:
+      skip_calibration:
+        description: 'Skip calibration data collection'
+        type: boolean
+        default: false
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: vayu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run monthly retraining
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          WAQI_TOKEN: ${{ secrets.WAQI_TOKEN }}
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
+        run: python -m ml.retrain_monthly
+
+      - name: Upload model artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vayu-models-${{ github.run_number }}
+          path: |
+            vayu/ml/models/*.joblib
+            vayu/ml/models/*.pt
+            vayu/ml/models/*_meta.json
+            vayu/ml/models/reports/*.json
+          retention-days: 90

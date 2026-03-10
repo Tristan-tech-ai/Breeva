@@ -208,6 +208,36 @@ DO $$ BEGIN
 END $$;
 
 -- ============================================
+-- V6. ROUTE FEEDBACK (Self-Improving Loop — ERD 6.4)
+-- ============================================
+CREATE TABLE IF NOT EXISTS route_feedback (
+    id BIGSERIAL PRIMARY KEY,
+    osm_way_id BIGINT NOT NULL,
+    hour_bucket SMALLINT NOT NULL,           -- 0-23
+    accuracy_score DECIMAL(5,4) DEFAULT 0.5, -- EMA of prediction quality (0.0-1.0)
+    positive_signals INTEGER DEFAULT 0,
+    negative_signals INTEGER DEFAULT 0,
+    last_updated TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (osm_way_id, hour_bucket)
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_way ON route_feedback (osm_way_id);
+
+ALTER TABLE route_feedback ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public read route_feedback') THEN
+    CREATE POLICY "Public read route_feedback" ON route_feedback FOR SELECT USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Service write route_feedback') THEN
+    CREATE POLICY "Service write route_feedback" ON route_feedback FOR ALL USING (auth.role() = 'service_role');
+  END IF;
+END $$;
+
+-- ============================================
 -- DONE! Verifikasi dengan:
 --   SELECT PostGIS_version();
 --   SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE '%aqi%' OR tablename LIKE '%road%' OR tablename LIKE '%ghost%' OR tablename LIKE '%vayu%' OR tablename LIKE '%traffic_calibration%';
