@@ -296,28 +296,28 @@
 
 | # | Task | Status | Detail |
 |---|---|---|---|
-| 6.1 | Buat `vayu/core/caline3.py` — full CALINE3 dispersion | ☐ Todo | numpy + scipy, line-source integration |
-| 6.2 | Buat `vayu/core/grid_manager.py` — H3 + UPSERT ke Supabase | ☐ Todo | h3-py + psycopg2 |
-| 6.3 | Buat `vayu/core/weather.py` — Open-Meteo fetcher | ☐ Todo | httpx async |
-| 6.4 | Buat `vayu/core/traffic.py` — traffic estimation | ☐ Todo | Multi-source: OSM + TomTom sampling |
-| 6.5 | Buat `vayu/core/cultural_calendar.py` — modifiers | ☐ Todo | Mirror TS implementation |
-| 6.6 | Buat `vayu/core/osm_processor.py` — Overpass query | ☐ Todo | Road + landuse extraction |
+| 6.1 | Buat `vayu/core/caline3.py` — full CALINE3 dispersion | ✅ Done | Full line-source integration, PG stability classes, wind-rotated coords, emission factors |
+| 6.2 | Buat `vayu/core/grid_manager.py` — H3 + UPSERT ke Supabase | ✅ Done | h3-py lat_lon_to_h3, k-ring, bbox tiling, REST UPSERT, hot/expiring tile queries |
+| 6.3 | Buat `vayu/core/weather.py` — Open-Meteo fetcher | ✅ Done | httpx async + sync, weather + AQ baseline, fallback defaults |
+| 6.4 | Buat `vayu/core/traffic.py` — traffic estimation | ✅ Done | OSM heuristic + TomTom calibration + diurnal + cultural modifiers |
+| 6.5 | Buat `vayu/core/cultural_calendar.py` — modifiers | ✅ Done | Python mirror of TS: Nyepi, Lebaran, Galungan, New Year, diurnal |
+| 6.6 | Buat `vayu/core/osm_processor.py` — Overpass query | ✅ Done | Query builders, region detection, geometry helpers, Supabase road fetch |
 
 ### 6B. Background Jobs
 
 | # | Task | Status | Detail |
 |---|---|---|---|
-| 6.7 | Buat `vayu/jobs/refresh_hotspots.py` — main cron job | ☐ Todo | Query hot tiles → recompute → UPSERT |
-| 6.8 | Buat `vayu/jobs/ping_supabase.py` — keep-alive | ☐ Todo | Prevent Supabase pause (tiap 6 hari) |
-| 6.9 | Buat `vayu/jobs/export_parquet.py` — history export | ☐ Todo | Weekly: aqi_grid snapshot → Parquet |
+| 6.7 | Buat `vayu/jobs/refresh_hotspots.py` — main cron job | ✅ Done | Full pipeline: hot tiles → weather → roads → CALINE3 → UPSERT (layer_source=2) |
+| 6.8 | Buat `vayu/jobs/ping_supabase.py` — keep-alive | ✅ Done | Simple REST count query to prevent Supabase pause |
+| 6.9 | Buat `vayu/jobs/export_parquet.py` — history export | ✅ Done | Paginated fetch → pandas → PyArrow Parquet (snappy) |
 
 ### 6C. Unit Tests
 
 | # | Task | Status | Detail |
 |---|---|---|---|
-| 6.10 | Buat `vayu/tests/test_caline3.py` | ☐ Todo | Validate dispersion math |
-| 6.11 | Buat `vayu/tests/test_grid.py` | ☐ Todo | H3 indexing correctness |
-| 6.12 | Buat `vayu/tests/test_traffic.py` | ☐ Todo | Traffic estimation logic |
+| 6.10 | Buat `vayu/tests/test_caline3.py` | ✅ Done | 32 tests: AQI, stability, sigma, haversine, line-source, fleet, full dispersion |
+| 6.11 | Buat `vayu/tests/test_grid.py` | ✅ Done | 8 tests: H3 indexing, center roundtrip, k-ring, tile creation |
+| 6.12 | Buat `vayu/tests/test_traffic.py` | ✅ Done | 23 tests: base traffic, diurnal, cultural events, calibration, volume |
 
 ---
 
@@ -447,12 +447,12 @@
 | **Stage 3** — OSM Data | 23 | ✅ **23 done** (642,528 segments, 14 regions) |
 | **Stage 4** — Mode A (API) | 48 | ✅ **47 done, 1 deferred** (4.37 → Stage 5) |
 | **Stage 5** — Frontend | 8 | ✅ **8 done** |
-| **Stage 6** — Mode B (Python) | 12 | 12 todo |
+| **Stage 6** — Mode B (Python) | 12 | ✅ **12 done** (63 unit tests pass) |
 | **Stage 7** — GitHub Actions | 10 | ✅ **7 done**, 3 later |
 | **Stage 8** — Testing | 18 | 9 done, 9 todo |
 | **Stage 9** — Deploy | 9 | 3 done, 6 todo |
 | **Stages 10–13** — Post-MVP | 17 | 17 todo |
-| **TOTAL** | **190** | **138 done, 1 blocked, 1 deferred, 50 todo** |
+| **TOTAL** | **190** | **150 done, 1 blocked, 1 deferred, 38 todo** |
 
 > **Critical Path (MVP):** Stage 0 → 1 → 2 → 3 → 4A+4B → 4C → 4G → 5 → 8 → 9
 > Stages 4D–4F, 6, 7 bisa paralel setelah 4A+4B selesai.
