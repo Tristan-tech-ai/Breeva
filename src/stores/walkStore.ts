@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import type { Coordinate, RoutePoint, WalkSession } from '../types';
+import type { Coordinate, RoutePoint, WalkSession, ExposureResult } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from './authStore';
+import { getVayuExposure, getVayuVehicleType, submitVayuContribution } from '../lib/api';
 
 interface WalkTrackingState {
   // Walk session
@@ -30,8 +31,12 @@ interface WalkTrackingState {
   speedWarnings: number;
   stepCount: number;
 
+  // VAYU exposure result
+  exposureResult: ExposureResult | null;
+  activeTransportMode: string;
+
   // Actions
-  startWalk: (routeId?: string) => void;
+  startWalk: (routeId?: string, transportMode?: string) => void;
   pauseWalk: () => void;
   resumeWalk: () => void;
   endWalk: () => Promise<WalkSession | null>;
@@ -85,8 +90,10 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
   maxSpeed: 1.94, // 7 km/h
   speedWarnings: 0,
   stepCount: 0,
+  exposureResult: null,
+  activeTransportMode: 'walking',
 
-  startWalk: (routeId) => {
+  startWalk: (routeId, transportMode) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
 
@@ -115,6 +122,8 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       stepCount: 0,
       startTime: Date.now(),
       pausedDuration: 0,
+      exposureResult: null,
+      activeTransportMode: transportMode || 'walking',
     });
 
     // Start GPS tracking
@@ -212,6 +221,21 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       eco_points_earned: points,
       status: 'completed',
     };
+
+    // Compute VAYU exposure (non-blocking for UX)
+    const polyline: [number, number][] = routePoints.map(p => [p.lat, p.lng]);
+    if (polyline.length >= 2) {
+      const vehicleType = getVayuVehicleType(get().activeTransportMode);
+      const durationMin = Math.max(1, Math.round(durationSeconds / 60));
+      getVayuExposure(polyline, vehicleType, durationMin).then((result) => {
+        if (result) {
+          set({ exposureResult: result });
+        }
+      });
+
+      // Auto-contribute walk trace to VAYU crowdsource (non-blocking)
+      submitVayuContribution(session.id, vehicleType).catch(() => {});
+    }
 
     // Save to Supabase
     try {

@@ -1,5 +1,4 @@
-import type { Coordinate, AirQualityData, Route, RouteInstruction, TransportModeInfo } from '../types';
-import { fetchWeatherApi } from 'openmeteo';
+import type { Coordinate, AirQualityData, Route, RouteInstruction, TransportModeInfo, AQIFreshness, RouteScoreResult, ExposureResult } from '../types';
 
 // API Configuration
 const ORS_API_KEY = import.meta.env.VITE_OPENROUTESERVICE_API_KEY || '';
@@ -218,7 +217,6 @@ const aqiCache = new Map<string, { data: AirQualityData; fetchedAt: number }>();
 const AQI_CACHE_TTL = 10 * 60 * 1000; // 10-minute TTL
 
 function aqiCacheKey(lat: number, lng: number): string {
-  // Round to ~1 km grid so nearby requests share cache
   return `${lat.toFixed(2)},${lng.toFixed(2)}`;
 }
 
@@ -232,23 +230,9 @@ function getAQILevel(aqi: number): AirQualityData['level'] {
 }
 
 /**
- * Open-Meteo Air Quality variable enum values (from @openmeteo/sdk Variable enum).
- * Used to identify each variable in the flatbuffers binary response.
- */
-const AQ_VAR = {
-  pm10: 75,
-  pm2p5: 76,
-  carbon_monoxide: 79,
-  nitrogen_dioxide: 80,
-  ozone: 82,
-  sulphur_dioxide: 83,
-  us_aqi: 96,
-} as const;
-
-/**
- * Fetch air quality data for a location using the official Open-Meteo SDK.
- * Uses flatbuffers binary protocol for efficient data transfer.
- * https://open-meteo.com/en/docs/air-quality-api
+ * Fetch air quality data via VAYU Engine API.
+ * Uses H3 tile-based caching with Gaussian dispersion model.
+ * Falls back to Open-Meteo direct baseline if VAYU endpoint fails.
  */
 export async function getAirQuality(
   coordinate: Coordinate
@@ -260,44 +244,34 @@ export async function getAirQuality(
       return { data: cached.data, error: null };
     }
 
-    const responses = await fetchWeatherApi(
-      'https://air-quality-api.open-meteo.com/v1/air-quality',
-      {
-        latitude: coordinate.lat,
-        longitude: coordinate.lng,
-        current: ['pm10', 'pm2_5', 'carbon_monoxide', 'nitrogen_dioxide', 'sulphur_dioxide', 'ozone', 'us_aqi'],
-      }
+    const resp = await fetch(
+      `/api/vayu/aqi?lat=${coordinate.lat}&lon=${coordinate.lng}`
     );
 
-    const response = responses[0];
-    const current = response.current();
-    if (!current) {
-      throw new Error('No current AQI data in response');
+    if (!resp.ok) {
+      throw new Error(`VAYU API error: ${resp.status}`);
     }
 
-    // Extract variable values from the flatbuffers response by matching enum IDs
-    const varCount = current.variablesLength();
-    const values: Record<number, number> = {};
-    for (let i = 0; i < varCount; i++) {
-      const v = current.variables(i);
-      if (v) {
-        values[v.variable()] = v.value();
-      }
-    }
+    const json = await resp.json();
+    const d = json.data;
 
-    const aqi = Math.round(values[AQ_VAR.us_aqi] ?? 0);
+    const aqi = Math.round(d.aqi ?? 0);
 
     const data: AirQualityData = {
       aqi,
       level: getAQILevel(aqi),
-      pm25: values[AQ_VAR.pm2p5] ?? 0,
-      pm10: values[AQ_VAR.pm10] ?? 0,
-      o3: values[AQ_VAR.ozone] ?? 0,
-      no2: values[AQ_VAR.nitrogen_dioxide] ?? 0,
-      co: (values[AQ_VAR.carbon_monoxide] ?? 0) / 1000, // µg/m³ → mg/m³ ≈ ppm
-      so2: values[AQ_VAR.sulphur_dioxide] ?? 0,
-      timestamp: new Date().toISOString(),
+      pm25: d.pm25 ?? 0,
+      pm10: d.pm10 ?? 0,
+      o3: d.o3 ?? 0,
+      no2: d.no2 ?? 0,
+      co: d.co ?? 0,
+      so2: 0,
+      timestamp: d.computed_at || new Date().toISOString(),
       location: coordinate,
+      confidence: d.confidence,
+      freshness: d.freshness as AQIFreshness,
+      layer_source: d.layer_source,
+      tile_id: d.tile_id,
     };
 
     aqiCache.set(key, { data, fetchedAt: Date.now() });
@@ -1016,5 +990,97 @@ Return ONLY valid JSON, no other text:
   } catch (error) {
     console.warn('Gemini route planning unavailable:', error);
     return null;
+  }
+}
+
+// ── VAYU Engine API helpers ──
+
+/** Map Breeva transport modes to VAYU vehicle_type enum */
+const VEHICLE_TYPE_MAP: Record<string, string> = {
+  walking: 'pedestrian',
+  cycling: 'cyclist',
+  ebike: 'cyclist',
+  motorcycle: 'motorcycle_open',
+  car: 'car_window_open',
+};
+
+export function getVayuVehicleType(transportMode: string): string {
+  return VEHICLE_TYPE_MAP[transportMode] || 'pedestrian';
+}
+
+/** Get VAYU route score for a polyline */
+export async function getVayuRouteScore(
+  polyline: [number, number][],
+  vehicleType: string,
+  durationSeconds?: number
+): Promise<RouteScoreResult | null> {
+  try {
+    const resp = await fetch('/api/vayu/route-score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        polyline,
+        vehicle_type: vehicleType,
+        duration_seconds: durationSeconds,
+      }),
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    return json.data as RouteScoreResult;
+  } catch {
+    return null;
+  }
+}
+
+/** Get VAYU cumulative exposure after a walk/ride */
+export async function getVayuExposure(
+  polyline: [number, number][],
+  vehicleType: string,
+  durationMinutes: number
+): Promise<ExposureResult | null> {
+  try {
+    const resp = await fetch('/api/vayu/exposure', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        polyline,
+        vehicle_type: vehicleType,
+        duration_minutes: durationMinutes,
+      }),
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    return json.data as ExposureResult;
+  } catch {
+    return null;
+  }
+}
+
+/** Submit a crowdsource contribution to VAYU */
+export async function submitVayuContribution(
+  sessionId: string,
+  vehicleType: string,
+  osmWayId?: number
+): Promise<boolean> {
+  try {
+    const body: Record<string, unknown> = {
+      session_id: sessionId,
+      vehicle_type: vehicleType,
+    };
+    if (osmWayId) {
+      body.osm_way_id = osmWayId;
+    } else {
+      body.is_off_road = true;
+      body.off_road_geohash = 'unknown';
+    }
+
+    const resp = await fetch('/api/vayu/contribute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return resp.ok || resp.status === 201;
+  } catch {
+    return false;
   }
 }

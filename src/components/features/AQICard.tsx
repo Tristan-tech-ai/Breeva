@@ -109,11 +109,39 @@ export default function AQICard({ data, className = '' }: AQICardProps) {
                 )}
               </div>
 
+              {/* VAYU confidence + freshness */}
+              {data.confidence !== undefined && (
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 dark:bg-gray-800">
+                    {data.confidence >= 0.7 ? '🟢' : data.confidence >= 0.4 ? '🟡' : '🔴'}
+                    <span className="text-gray-600 dark:text-gray-300">
+                      {data.confidence >= 0.7 ? 'Akurat' : data.confidence >= 0.4 ? 'Estimasi' : 'Kasar'}
+                    </span>
+                  </span>
+                  {data.freshness && (
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                      data.freshness === 'live' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                      data.freshness === 'recent' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
+                      'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                    }`}>
+                      {data.freshness === 'live' ? '⚡ Live' :
+                       data.freshness === 'recent' ? '🕐 Baru' :
+                       data.freshness === 'stale' ? '⚠️ Lama' : '⚠️ Fallback'}
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* Data source & timestamp */}
-              <div className="mt-3 flex items-center justify-between text-[10px] text-gray-400 dark:text-gray-500">
+              <div className="mt-2 flex items-center justify-between text-[10px] text-gray-400 dark:text-gray-500">
                 <div className="flex items-center gap-1">
                   <Info size={10} />
-                  <span>Traffic estimation, Crowdsourced</span>
+                  <span>
+                    {data.layer_source === 3 ? 'Sensor langsung' :
+                     data.layer_source === 2 ? 'Crowdsource' :
+                     data.layer_source === 4 ? 'ML prediction' :
+                     'VAYU Dispersion Engine'}
+                  </span>
                 </div>
                 <span>
                   {new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

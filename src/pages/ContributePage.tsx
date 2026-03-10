@@ -11,6 +11,8 @@ import {
   Send,
   CheckCircle2,
   LocateFixed,
+  Wind,
+  Footprints,
 } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { supabase } from '../lib/supabase';
@@ -178,6 +180,32 @@ export default function ContributePage() {
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               Help make Breeva's map more complete and accurate. Your contributions improve eco-routing for everyone.
             </p>
+
+            {/* VAYU Air Quality Contributor */}
+            <div className="glass-card p-4 mb-5 border border-primary-200/50 dark:border-primary-800/30 bg-gradient-to-r from-primary-50/50 to-emerald-50/50 dark:from-primary-950/30 dark:to-emerald-950/30">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-emerald-500 flex items-center justify-center shadow-sm">
+                  <Wind className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white">VAYU Air Contributor</h4>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">Otomatis aktif saat kamu jalan</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed mb-3">
+                Setiap kali kamu berjalan dengan Breeva, data pergerakanmu (tanpa identitas) membantu membangun peta kualitas udara real-time untuk semua pengguna. Semakin sering kamu jalan, semakin akurat VAYU Engine.
+              </p>
+              <div className="flex items-center gap-4 text-[10px]">
+                <div className="flex items-center gap-1 text-primary-600 dark:text-primary-400 font-medium">
+                  <Footprints className="w-3 h-3" />
+                  Tier 0: Auto-trace
+                </div>
+                <div className="flex items-center gap-1 text-gray-400 dark:text-gray-500">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Anonim & aman
+                </div>
+              </div>
+            </div>
 
             {/* Report Type Selection */}
             {!selectedType && (

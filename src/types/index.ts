@@ -70,6 +70,7 @@ export interface Route {
 
 // Air Quality Types
 export type AQILevel = 'good' | 'moderate' | 'unhealthy-sensitive' | 'unhealthy' | 'very-unhealthy' | 'hazardous';
+export type AQIFreshness = 'live' | 'recent' | 'stale' | 'fallback';
 
 export interface AirQualityData {
   aqi: number;
@@ -82,6 +83,32 @@ export interface AirQualityData {
   so2: number;
   timestamp: string;
   location: Coordinate;
+  // VAYU Engine fields
+  confidence?: number;        // 0.0-1.0
+  freshness?: AQIFreshness;
+  layer_source?: number;      // 0=cache, 1=computed, 2=crowdsource, 3=sensor, 4=ML
+  tile_id?: string;           // H3 hex id
+}
+
+// VAYU Exposure result
+export interface ExposureResult {
+  total_dose_ug: number;
+  cigarette_equivalent: number;
+  health_risk_level: 'low' | 'moderate' | 'high' | 'very_high';
+  avg_pm25: number;
+  vehicle_type: string;
+  vehicle_label: string;
+  duration_minutes: number;
+  sample_count: number;
+}
+
+// VAYU Route Score result
+export interface RouteScoreResult {
+  avg_aqi: number;
+  max_aqi: number;
+  min_aqi: number;
+  combined_score: number;
+  sample_count: number;
 }
 
 // EcoPoints Types

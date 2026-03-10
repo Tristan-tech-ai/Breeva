@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMapStore } from '../../stores/mapStore';
-import { generateAQIZones } from './AQIOverlay';
+import { fetchAQIZones } from './AQIOverlay';
 import POILayer from './POILayer';
 import type { POI } from '../../lib/poi-api';
 import type { Route } from '../../types';
@@ -234,19 +234,24 @@ function MapController({
     aqiLayerRef.current.clearLayers();
     if (!showAQIOverlay || !currentAQI || !userLocation) return;
 
-    const zones = generateAQIZones(userLocation, currentAQI.aqi);
-    for (const zone of zones) {
-      const color = getAQIColor(zone.aqi);
-      L.circle([zone.center.lat, zone.center.lng], {
-        radius: zone.radius,
-        color,
-        fillColor: color,
-        fillOpacity: 0.15,
-        weight: 1,
-        opacity: 0.3,
-        interactive: false,
-      }).addTo(aqiLayerRef.current);
-    }
+    let cancelled = false;
+    fetchAQIZones(userLocation, currentAQI.aqi).then((zones) => {
+      if (cancelled) return;
+      for (const zone of zones) {
+        const color = getAQIColor(zone.aqi);
+        L.circle([zone.center.lat, zone.center.lng], {
+          radius: zone.radius,
+          color,
+          fillColor: color,
+          fillOpacity: 0.15,
+          weight: 1,
+          opacity: 0.3,
+          interactive: false,
+        }).addTo(aqiLayerRef.current);
+      }
+    });
+
+    return () => { cancelled = true; };
   }, [showAQIOverlay, currentAQI, userLocation]);
 
   return showPOIs ? (

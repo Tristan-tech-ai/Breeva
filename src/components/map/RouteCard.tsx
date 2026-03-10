@@ -107,6 +107,11 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
           <span className="text-sm text-gray-600 dark:text-gray-300">
             AQI {route.avg_aqi} · {getAQILabel(route.avg_aqi)}
           </span>
+          {route.aqi_confidence && route.aqi_confidence >= 80 && (
+            <span className="text-[9px] text-gray-400 dark:text-gray-500" title={`${route.aqi_confidence}% confidence`}>
+              {route.aqi_confidence >= 90 ? '●●●' : '●●○'}
+            </span>
+          )}
         </div>
         <div className="ml-auto flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 px-2.5 py-1 rounded-full border border-amber-200/50 dark:border-amber-700/30">
           <Star className="w-3 h-3 text-amber-500 fill-amber-500" />

@@ -13,6 +13,8 @@ import {
   pickEcoWaypoint,
   getPerpendicularWaypoint,
   routeGeometrySimilar,
+  getVayuRouteScore,
+  getVayuVehicleType,
 } from '../lib/api';
 import { searchGoogleMaps } from '../lib/searchapi';
 
@@ -470,28 +472,45 @@ export const useMapStore = create<MapState>()((set, get) => ({
         );
       } catch { /* heuristic used */ }
 
-      // ── Step 7: Build final routes in display order ──
+      // ── Step 7: Build final routes with VAYU route-score ──
       const labelOrder: Record<string, number> = { fast: 0, balanced: 1, eco: 2 };
       analyzed.sort((a, b) => (labelOrder[a.label] ?? 1) - (labelOrder[b.label] ?? 1));
 
-      const finalRoutes: Route[] = analyzed.map((r, i) => {
-        const estimatedAQI = geminiAQIs?.[i] ?? r.env.estimatedAQI;
+      const vayuVehicle = getVayuVehicleType(transportMode);
 
-        return {
-          ...r.route,
-          id: crypto.randomUUID(),
-          route_type: r.label,
-          avg_aqi: estimatedAQI,
-          eco_points_earned: Math.round(
-            (r.route.distance_meters / 1000) * modeInfo.ecoPointsMultiplier * 10
-          ),
-          traffic_level: r.env.trafficLevel,
-          green_score: r.env.greenScore,
-          aqi_confidence: geminiAQIs ? 85 : 60,
-          road_summary: r.env.summary,
-          aqi_factors: r.env.aqiFactors,
-        };
-      });
+      const finalRoutes: Route[] = await Promise.all(
+        analyzed.map(async (r, i) => {
+          let aqiForRoute = geminiAQIs?.[i] ?? r.env.estimatedAQI;
+          let confidence = geminiAQIs ? 85 : 60;
+
+          // Try VAYU route-score for more accurate AQI
+          const polyline: [number, number][] = r.route.waypoints.map(wp => [wp.lat, wp.lng]);
+          if (polyline.length >= 2) {
+            const vayuScore = await getVayuRouteScore(
+              polyline, vayuVehicle, r.route.duration_seconds
+            );
+            if (vayuScore) {
+              aqiForRoute = vayuScore.avg_aqi;
+              confidence = 90;
+            }
+          }
+
+          return {
+            ...r.route,
+            id: crypto.randomUUID(),
+            route_type: r.label,
+            avg_aqi: aqiForRoute,
+            eco_points_earned: Math.round(
+              (r.route.distance_meters / 1000) * modeInfo.ecoPointsMultiplier * 10
+            ),
+            traffic_level: r.env.trafficLevel,
+            green_score: r.env.greenScore,
+            aqi_confidence: confidence,
+            road_summary: r.env.summary,
+            aqi_factors: r.env.aqiFactors,
+          };
+        })
+      );
 
       set({
         routes: finalRoutes,

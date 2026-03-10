@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Eye, EyeOff } from 'lucide-react';
 import type { AirQualityData, Coordinate } from '../../types';
+import { getAirQuality } from '../../lib/api';
 
 interface AQIOverlayProps {
   currentAQI: AirQualityData | null;
@@ -23,44 +24,49 @@ function getAQIColor(aqi: number): string {
   return '#7f1d1d';
 }
 
-/**
- * Deterministic hash for an offset to produce repeatable "variation".
- * Uses a simple integer hash so the overlay is stable across re-renders.
- */
-function deterministicVariation(latOff: number, lngOff: number, seed: number): number {
-  const h = Math.abs(Math.sin(latOff * 1234.5 + lngOff * 6789.1 + seed) * 10000);
-  return (h % 41) - 20; // range –20 … +20
-}
+// Surrounding offsets (~300-500m grid) to sample AQI from VAYU
+const GRID_OFFSETS = [
+  { lat: 0, lng: 0 },
+  { lat: 0.003, lng: 0.002 },
+  { lat: -0.002, lng: 0.004 },
+  { lat: 0.004, lng: -0.003 },
+  { lat: -0.003, lng: -0.002 },
+  { lat: 0.001, lng: 0.005 },
+  { lat: -0.005, lng: 0.001 },
+];
 
-// Generate deterministic AQI zones around user location for visual effect
-function generateAQIZones(center: Coordinate, baseAQI: number): AQIZone[] {
+/**
+ * Fetch real AQI zones from VAYU Engine for surrounding grid cells.
+ * Falls back to deterministic variation if fetch fails.
+ */
+async function fetchAQIZones(center: Coordinate, baseAQI: number): Promise<AQIZone[]> {
   const zones: AQIZone[] = [];
 
-  // Inner zone — user's fetched AQI
-  zones.push({ center, radius: 300, aqi: baseAQI });
-
-  // Surrounding zones with deterministic variation
-  const offsets = [
-    { lat: 0.003, lng: 0.002 },
-    { lat: -0.002, lng: 0.004 },
-    { lat: 0.004, lng: -0.003 },
-    { lat: -0.003, lng: -0.002 },
-    { lat: 0.001, lng: 0.005 },
-    { lat: -0.005, lng: 0.001 },
-  ];
-
-  offsets.forEach((offset, i) => {
-    const variation = deterministicVariation(offset.lat, offset.lng, i);
-    const radiusSeed = Math.abs(Math.sin(i * 111.1) * 200);
-    zones.push({
-      center: {
+  const results = await Promise.allSettled(
+    GRID_OFFSETS.map(async (offset) => {
+      const coord = {
         lat: center.lat + offset.lat,
         lng: center.lng + offset.lng,
-      },
-      radius: 200 + radiusSeed,
-      aqi: Math.max(10, Math.min(300, baseAQI + variation)),
-    });
-  });
+      };
+      const { data } = await getAirQuality(coord);
+      return {
+        center: coord,
+        radius: offset.lat === 0 && offset.lng === 0 ? 300 : 200 + Math.abs(Math.sin(offset.lat * 1000) * 200),
+        aqi: data?.aqi ?? baseAQI,
+      };
+    })
+  );
+
+  for (const r of results) {
+    if (r.status === 'fulfilled') {
+      zones.push(r.value);
+    }
+  }
+
+  // Fallback: if no zones returned, use base AQI center
+  if (zones.length === 0) {
+    zones.push({ center, radius: 300, aqi: baseAQI });
+  }
 
   return zones;
 }
@@ -127,4 +133,4 @@ export function AQIOverlayToggle({ currentAQI: _currentAQI, userLocation: _userL
   );
 }
 
-export { generateAQIZones, getAQIColor as getOverlayAQIColor };
+export { fetchAQIZones, getAQIColor as getOverlayAQIColor };

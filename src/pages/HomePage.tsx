@@ -65,6 +65,7 @@ export default function HomePage() {
     selectedRoute,
     isCalculatingRoutes,
     currentAQI,
+    transportMode,
     startLocating,
     stopLocating,
     calculateRoutes,
@@ -82,6 +83,7 @@ export default function HomePage() {
     durationSeconds,
     pointsEarned,
     session: walkSession,
+    exposureResult,
     startWalk,
     pauseWalk,
     resumeWalk,
@@ -188,7 +190,7 @@ export default function HomePage() {
               {/* AQI badge */}
               {currentAQI && (
                 <div className="mt-2 max-w-2xl mx-auto">
-                  <AQIBadge aqi={currentAQI.aqi} size="sm" />
+                  <AQIBadge aqi={currentAQI.aqi} size="sm" confidence={currentAQI.confidence} />
                 </div>
               )}
 
@@ -346,7 +348,7 @@ export default function HomePage() {
                 {/* AQI during walk */}
                 {currentAQI && (
                   <div className="mt-3 flex items-center justify-center">
-                    <AQIBadge aqi={currentAQI.aqi} size="sm" />
+                    <AQIBadge aqi={currentAQI.aqi} size="sm" confidence={currentAQI.confidence} />
                   </div>
                 )}
               </div>
@@ -514,7 +516,7 @@ export default function HomePage() {
                   animate={{ opacity: 1, y: 0 }}
                 >
                   <button
-                    onClick={() => startWalk(selectedRoute.id)}
+                    onClick={() => startWalk(selectedRoute.id, transportMode)}
                     className="w-full gradient-primary text-white py-4 rounded-2xl text-base font-semibold shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2.5"
                   >
                     <Footprints className="w-5 h-5" />
@@ -570,6 +572,7 @@ export default function HomePage() {
               setShowWalkComplete(false);
               clearDestination();
             }}
+            exposureResult={exposureResult}
           />
         )}
       </AnimatePresence>

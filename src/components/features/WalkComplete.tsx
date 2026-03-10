@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Clock, Leaf, Flame, Sparkles, Star, Map, ChevronRight } from 'lucide-react';
-import type { WalkSession } from '../../types';
+import { MapPin, Clock, Leaf, Flame, Sparkles, Star, Map, ChevronRight, Wind, Shield } from 'lucide-react';
+import type { WalkSession, ExposureResult } from '../../types';
 import PostWalkRating from './PostWalkRating';
 
 interface WalkCompleteProps {
   session: WalkSession;
   onClose: () => void;
+  exposureResult?: ExposureResult | null;
 }
 
-export default function WalkComplete({ session, onClose }: WalkCompleteProps) {
+export default function WalkComplete({ session, onClose, exposureResult }: WalkCompleteProps) {
   const navigate = useNavigate();
   const [showRating, setShowRating] = useState(false);
   const [rated, setRated] = useState(false);
@@ -70,6 +71,53 @@ export default function WalkComplete({ session, onClose }: WalkCompleteProps) {
           <StatCard icon={<Leaf size={16} />} label="CO₂ Saved" value={`${co2Saved} kg`} color="text-emerald-500" bg="bg-emerald-50 dark:bg-emerald-500/10" />
           <StatCard icon={<Flame size={16} />} label="Calories" value={`${calories}`} color="text-orange-500" bg="bg-orange-50 dark:bg-orange-500/10" />
         </div>
+
+        {/* VAYU Exposure card */}
+        {exposureResult && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="mb-5 rounded-2xl border border-gray-200 dark:border-gray-700/30 overflow-hidden"
+          >
+            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 flex items-center gap-2">
+              <Wind size={14} className="text-blue-500" />
+              <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Air Exposure</span>
+              <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                exposureResult.health_risk_level === 'low' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                exposureResult.health_risk_level === 'moderate' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
+                exposureResult.health_risk_level === 'high' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' :
+                'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+              }`}>
+                {exposureResult.health_risk_level === 'low' ? 'Risiko Rendah' :
+                 exposureResult.health_risk_level === 'moderate' ? 'Risiko Sedang' :
+                 exposureResult.health_risk_level === 'high' ? 'Risiko Tinggi' : 'Risiko Sangat Tinggi'}
+              </span>
+            </div>
+            <div className="px-4 py-3 grid grid-cols-2 gap-3">
+              <div className="text-center">
+                <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">
+                  {exposureResult.cigarette_equivalent.toFixed(2)}
+                </p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">🚬 Setara rokok</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">
+                  {exposureResult.avg_pm25.toFixed(1)}
+                </p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">µg/m³ PM2.5 avg</p>
+              </div>
+            </div>
+            {exposureResult.cigarette_equivalent < 0.5 && (
+              <div className="px-4 pb-3">
+                <div className="flex items-center gap-1.5 text-[10px] text-green-600 dark:text-green-400">
+                  <Shield size={10} />
+                  <span>Paparan udara aman untuk aktivitas ini! 🎉</span>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
 
         {/* Points earned */}
         <motion.div
