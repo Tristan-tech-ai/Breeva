@@ -217,3 +217,28 @@ export interface PaginatedResponse<T> {
   limit: number;
   has_more: boolean;
 }
+
+// VAYU Road-level pollution types
+export type PollutantType = 'aqi' | 'pm25' | 'no2';
+
+export interface RoadAQIFeature {
+  osm_way_id: number;
+  geometry: { type: string; coordinates: number[][] };
+  aqi: number;
+  pm25: number;
+  no2: number;
+  highway: string;
+  weight: number;
+}
+
+export interface RoadAQIResponse {
+  roads: RoadAQIFeature[];
+  meta: {
+    count: number;
+    zoom: number;
+    baseline_pm25: number;
+    baseline_no2: number;
+    wind_speed: number;
+    computed_at: string;
+  };
+}

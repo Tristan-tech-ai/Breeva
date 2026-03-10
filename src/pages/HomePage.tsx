@@ -45,6 +45,7 @@ import TurnByTurn from '../components/map/TurnByTurn';
 import PlaceDetailSheet from '../components/map/PlaceDetailSheet';
 import MapLayersSheet from '../components/map/MapLayersSheet';
 import type { POI } from '../lib/poi-api';
+import type { PollutantType } from '../types';
 
 const FILTER_CHIPS = [
   { key: 'restaurant', label: 'Restaurants', icon: UtensilsCrossed, color: '#ef4444' },
@@ -98,6 +99,7 @@ export default function HomePage() {
   const [showWalkComplete, setShowWalkComplete] = useState(false);
   const [showAQIOverlay, setShowAQIOverlay] = useState(false);
   const [showPOIs, setShowPOIs] = useState(true);
+  const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'voyager' | 'osm' | 'satellite'>('voyager');
   const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
@@ -140,6 +142,7 @@ export default function HomePage() {
         showPOIs={showPOIs}
         mapStyle={mapStyle}
         activeFilter={activeFilter}
+        pollutant={pollutant}
         onPlaceSelect={(poi) => setSelectedPOI(poi)}
       />
 
@@ -569,6 +572,8 @@ export default function HomePage() {
         showPOIs={showPOIs}
         onPOIsToggle={() => setShowPOIs(!showPOIs)}
         currentAQI={currentAQI}
+        pollutant={pollutant}
+        onPollutantChange={setPollutant}
       />
 
       {/* Walk Complete modal */}

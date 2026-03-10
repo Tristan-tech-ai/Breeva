@@ -1,4 +1,4 @@
-import type { Coordinate, AirQualityData, Route, RouteInstruction, TransportModeInfo, AQIFreshness, RouteScoreResult, ExposureResult } from '../types';
+import type { Coordinate, AirQualityData, Route, RouteInstruction, TransportModeInfo, AQIFreshness, RouteScoreResult, ExposureResult, RoadAQIResponse } from '../types';
 
 // API Configuration
 const ORS_API_KEY = import.meta.env.VITE_OPENROUTESERVICE_API_KEY || '';
@@ -1131,5 +1131,29 @@ export async function submitVayuContribution(
     return resp.ok || resp.status === 201;
   } catch {
     return false;
+  }
+}
+
+/** Fetch road-level AQI data for a map viewport bounding box */
+export async function getRoadAQI(
+  south: number,
+  west: number,
+  north: number,
+  east: number,
+  zoom: number
+): Promise<RoadAQIResponse | null> {
+  try {
+    const params = new URLSearchParams({
+      south: south.toFixed(6),
+      west: west.toFixed(6),
+      north: north.toFixed(6),
+      east: east.toFixed(6),
+      zoom: String(Math.round(zoom)),
+    });
+    const resp = await fetch(`/api/vayu/road-aqi?${params}`);
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
   }
 }

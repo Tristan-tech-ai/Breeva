@@ -3,7 +3,8 @@ import {
   X, Map, Satellite, Mountain, Wind, Store,
   TreePine, Waves,
 } from 'lucide-react';
-import type { AirQualityData } from '../../types';
+import type { AirQualityData, PollutantType } from '../../types';
+import { POLLUTANT_OPTIONS } from './RoadPollutionLayer';
 
 interface MapLayersSheetProps {
   isOpen: boolean;
@@ -15,6 +16,8 @@ interface MapLayersSheetProps {
   showPOIs: boolean;
   onPOIsToggle: () => void;
   currentAQI?: AirQualityData | null;
+  pollutant?: PollutantType;
+  onPollutantChange?: (p: PollutantType) => void;
 }
 
 const mapTypes: { id: 'voyager' | 'osm' | 'satellite'; label: string; icon: typeof Map; preview: string }[] = [
@@ -58,6 +61,8 @@ export default function MapLayersSheet({
   showPOIs,
   onPOIsToggle,
   currentAQI,
+  pollutant = 'aqi',
+  onPollutantChange,
 }: MapLayersSheetProps) {
   const details: DetailToggle[] = [
     {
@@ -237,6 +242,24 @@ export default function MapLayersSheet({
                       <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         AQI Legend
                       </span>
+                    </div>
+                    {/* Pollutant tabs */}
+                    <div className="flex gap-1.5 mb-3">
+                      {POLLUTANT_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => onPollutantChange?.(opt.id)}
+                          className={`
+                            px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all
+                            ${pollutant === opt.id
+                              ? 'bg-sky-500 text-white shadow-sm'
+                              : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                            }
+                          `}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       {[

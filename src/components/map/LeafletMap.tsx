@@ -4,9 +4,11 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMapStore } from '../../stores/mapStore';
 import { fetchAQIZones } from './AQIOverlay';
+import { useRoadPollutionLayer } from './RoadPollutionLayer';
 import POILayer from './POILayer';
 import type { POI } from '../../lib/poi-api';
 import type { Route } from '../../types';
+import type { PollutantType } from '../../types';
 
 // ── Route / AQI color helpers ────────────────────────────────────────
 
@@ -96,6 +98,7 @@ interface LeafletMapProps {
   showPOIs?: boolean;
   mapStyle?: 'voyager' | 'osm' | 'satellite';
   activeFilter?: string | null;
+  pollutant?: PollutantType;
   onPlaceSelect?: (poi: POI) => void;
 }
 
@@ -105,8 +108,9 @@ function MapController({
   showAQIOverlay,
   showPOIs,
   activeFilter,
+  pollutant,
   onPlaceSelect,
-}: Pick<LeafletMapProps, 'showAQIOverlay' | 'showPOIs' | 'activeFilter' | 'onPlaceSelect'>) {
+}: Pick<LeafletMapProps, 'showAQIOverlay' | 'showPOIs' | 'activeFilter' | 'pollutant' | 'onPlaceSelect'>) {
   const map = useMap();
   const {
     center,
@@ -229,10 +233,15 @@ function MapController({
     map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true });
   }, [routes, map]);
 
-  // AQI overlay circles
+  // Road pollution overlay (eLichens-style colored polylines)
+  useRoadPollutionLayer(map, !!showAQIOverlay, pollutant || 'aqi');
+
+  // AQI overlay circles (low-zoom fallback when road layer hidden)
   useEffect(() => {
     aqiLayerRef.current.clearLayers();
     if (!showAQIOverlay || !currentAQI || !userLocation) return;
+    // Road layer handles zoom >= 13, circles for zoom < 13
+    if (map.getZoom() >= 13) return;
 
     let cancelled = false;
     fetchAQIZones(userLocation, currentAQI.aqi).then((zones) => {
@@ -252,7 +261,7 @@ function MapController({
     });
 
     return () => { cancelled = true; };
-  }, [showAQIOverlay, currentAQI, userLocation]);
+  }, [showAQIOverlay, currentAQI, userLocation, map]);
 
   return showPOIs ? (
     <POILayer visible={showPOIs} activeFilter={activeFilter} onPlaceSelect={onPlaceSelect} />
@@ -268,6 +277,7 @@ export default function LeafletMap({
   showPOIs = true,
   mapStyle = 'voyager',
   activeFilter = null,
+  pollutant = 'aqi',
   onPlaceSelect,
 }: LeafletMapProps) {
   const { center } = useMapStore();
@@ -298,6 +308,7 @@ export default function LeafletMap({
           showAQIOverlay={showAQIOverlay}
           showPOIs={showPOIs}
           activeFilter={activeFilter}
+          pollutant={pollutant}
           onPlaceSelect={onPlaceSelect}
         />
       </MapContainer>
