@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Eye, EyeOff } from 'lucide-react';
 import type { AirQualityData, Coordinate } from '../../types';
