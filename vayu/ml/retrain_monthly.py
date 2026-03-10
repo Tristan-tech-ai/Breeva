@@ -89,8 +89,25 @@ def step_3_retrain_xgboost(training_path: str | None) -> dict | None:
     """Step 3: Retrain XGBoost correction model."""
     log.info("Step 3: Retraining XGBoost...")
     try:
-        from ml.train_xgboost import train
-        meta = train(training_path)
+        from ml.train_xgboost import load_training_data, train_correction_model, train_pm25_model, save_model
+
+        df = load_training_data(training_path)
+
+        # Train correction factor model
+        model_cf, metrics_cf = train_correction_model(df, target="correction_factor")
+        save_model(model_cf, metrics_cf, name="xgb_correction_v1")
+
+        # Train direct PM2.5 model
+        model_pm25, metrics_pm25 = train_pm25_model(df)
+        save_model(model_pm25, metrics_pm25, name="xgb_pm25_v1")
+
+        meta = {
+            "model_type": "xgboost",
+            "test_rmse_correction": metrics_cf["rmse"],
+            "test_r2_correction": metrics_cf["r2"],
+            "test_rmse_pm25": metrics_pm25["rmse"],
+            "test_r2_pm25": metrics_pm25["r2"],
+        }
         log.info("XGBoost retrained: %s", json.dumps(meta, indent=2))
         return meta
     except Exception as exc:
