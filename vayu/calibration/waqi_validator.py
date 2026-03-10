@@ -37,6 +37,17 @@ from calibration.no2_reverse import (
 log = logging.getLogger("vayu.calibration.waqi_validator")
 
 VAYU_AQI_URL = "https://breeva.site/api/vayu/aqi"
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Approximate distance between two points in km."""
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
+         * math.sin(dlon / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 EXPORT_DIR = Path(__file__).parent.parent / "exports" / "validation"
 REQUEST_TIMEOUT = 15.0
 
@@ -123,10 +134,17 @@ def collect_validation_pairs(waqi_token: str | None = None) -> list[ValidationPa
         pm25_aqi_val = iaqi.get("pm25", {}).get("v")
         no2_aqi_val = iaqi.get("no2", {}).get("v")
 
-        if pm25_aqi_val is None:
-            continue
+        # For geo-based stations, verify nearest station is within 100km
+        if cfg["station"].startswith("geo:"):
+            station_geo = waqi_data.get("city", {}).get("geo", [])
+            if station_geo and len(station_geo) >= 2:
+                dist = _haversine_km(cfg["lat"], cfg["lon"], station_geo[0], station_geo[1])
+                if dist > 100:
+                    log.info("Skipping %s: nearest WAQI station is %.0fkm away", cfg["name"], dist)
+                    continue
 
-        waqi_pm25 = _pm25_aqi_to_ug(pm25_aqi_val)
+        # Use PM2.5 sub-index if available, else derive from AQI
+        waqi_pm25 = _pm25_aqi_to_ug(pm25_aqi_val if pm25_aqi_val is not None else waqi_aqi)
         waqi_no2 = _no2_aqi_to_ug(no2_aqi_val) if no2_aqi_val is not None else 0.0
 
         # Fetch VAYU

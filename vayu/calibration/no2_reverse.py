@@ -58,6 +58,34 @@ STATION_CONFIGS: list[dict] = [
     # Semarang
     {"station": "@11582", "region": "semarang", "highway": "primary",
      "lat": -6.9700, "lon": 110.4200, "name": "Semarang"},
+    # --- Geo-based discovery (nearest WAQI station to region center) ---
+    # Yogyakarta
+    {"station": "geo:-7.78;110.38", "region": "yogyakarta", "highway": "primary",
+     "lat": -7.78, "lon": 110.38, "name": "Yogyakarta"},
+    # Solo
+    {"station": "geo:-7.57;110.82", "region": "solo", "highway": "primary",
+     "lat": -7.57, "lon": 110.82, "name": "Solo"},
+    # Malang
+    {"station": "geo:-7.98;112.63", "region": "malang", "highway": "primary",
+     "lat": -7.98, "lon": 112.63, "name": "Malang"},
+    # Sulawesi Selatan (Makassar)
+    {"station": "geo:-5.14;119.42", "region": "sulsel", "highway": "primary",
+     "lat": -5.14, "lon": 119.42, "name": "Makassar"},
+    # Sulawesi Barat (Mamuju)
+    {"station": "geo:-2.68;118.89", "region": "sulbar", "highway": "primary",
+     "lat": -2.68, "lon": 118.89, "name": "Mamuju"},
+    # Sulawesi Tengah (Palu)
+    {"station": "geo:-0.90;119.87", "region": "sulteng", "highway": "primary",
+     "lat": -0.90, "lon": 119.87, "name": "Palu"},
+    # Gorontalo
+    {"station": "geo:0.54;123.06", "region": "gorontalo", "highway": "primary",
+     "lat": 0.54, "lon": 123.06, "name": "Gorontalo"},
+    # Sulawesi Utara (Manado)
+    {"station": "geo:1.47;124.84", "region": "sulut", "highway": "primary",
+     "lat": 1.47, "lon": 124.84, "name": "Manado"},
+    # Sulawesi Tenggara (Kendari)
+    {"station": "geo:-3.97;122.51", "region": "sultra", "highway": "primary",
+     "lat": -3.97, "lon": 122.51, "name": "Kendari"},
 ]
 
 

@@ -51,9 +51,9 @@ SAMPLE_POINTS: list[tuple[float, float, str, str]] = [
     # Bandung
     (-6.9100, 107.6100, "primary", "bandung"),       # Jl. Asia Afrika
     (-6.9200, 107.6300, "secondary", "bandung"),     # Dago
-    # Makassar
-    (-5.1400, 119.4200, "primary", "makassar"),      # Jl. Urip Sumoharjo
-    (-5.1600, 119.4100, "secondary", "makassar"),    # Panakkukang
+    # Sulawesi Selatan — Makassar
+    (-5.1400, 119.4200, "primary", "sulsel"),        # Jl. Urip Sumoharjo
+    (-5.1600, 119.4100, "secondary", "sulsel"),      # Panakkukang
     # Medan
     (3.5900, 98.6700, "primary", "medan"),           # Jl. S. Parman (North latitude)
     (3.5800, 98.6900, "secondary", "medan"),         # Simpang Limun (North latitude)
@@ -63,6 +63,18 @@ SAMPLE_POINTS: list[tuple[float, float, str, str]] = [
     (-7.7900, 110.3600, "primary", "yogyakarta"),    # Jl. Malioboro
     # Malang
     (-7.9700, 112.6300, "primary", "malang"),        # Jl. Ijen
+    # Solo
+    (-7.5700, 110.8200, "primary", "solo"),          # Jl. Slamet Riyadi
+    # Sulawesi Barat — Mamuju
+    (-2.6800, 118.8900, "primary", "sulbar"),        # Jl. Poros Mamuju
+    # Sulawesi Tengah — Palu
+    (-0.8980, 119.8700, "primary", "sulteng"),       # Jl. Sam Ratulangi, Palu
+    # Gorontalo
+    (0.5400, 123.0600, "primary", "gorontalo"),      # Jl. Ahmad Yani, Gorontalo
+    # Sulawesi Utara — Manado
+    (1.4700, 124.8400, "primary", "sulut"),          # Jl. Sam Ratulangi, Manado
+    # Sulawesi Tenggara — Kendari
+    (-3.9700, 122.5100, "primary", "sultra"),        # Jl. MT Haryono, Kendari
 ]
 
 
