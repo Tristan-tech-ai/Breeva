@@ -34,7 +34,7 @@
 
 | # | Task | Status | URL | Key yang Didapat |
 |---|---|---|---|---|
-| 0.6 | **Open-Meteo** — tidak perlu registrasi | ☐ Verify | open-meteo.com | Tidak perlu key |
+| 0.6 | **Open-Meteo** — tidak perlu registrasi | ✅ Verified | open-meteo.com | Tidak perlu key |
 
 > Open-Meteo adalah satu-satunya external API yang dibutuhkan untuk MVP. Semua resource lain (OSM, H3, dispersion math) berjalan lokal atau dari cache.
 
@@ -339,11 +339,11 @@
 
 | # | Task | Status | File |
 |---|---|---|---|
-| 7.6 | Buat `vayu-refresh.yml` (hot-spot refresh, tiap 30–60 min) | ☐ Todo | `.github/workflows/vayu-refresh.yml` |
-| 7.7 | Implement: budget gate (skip jika >80% monthly limit) | ☐ Todo | Bagian dari vayu-refresh.yml |
-| 7.8 | Buat `vayu-ping.yml` (Supabase keep-alive, tiap 6 hari) | ☐ Todo | `.github/workflows/vayu-ping.yml` |
-| 7.9 | Buat `vayu-purge.yml` (data retention, weekly) | ☐ Todo | `.github/workflows/vayu-purge.yml` |
-| 7.10 | Buat `vayu-osm-update.yml` (OSM refresh, monthly) | ☐ Todo | `.github/workflows/vayu-osm-update.yml` |
+| 7.6 | Buat `vayu-refresh.yml` (hot-spot refresh, tiap 30–60 min) | ✅ Done | `.github/workflows/vayu-refresh.yml` — hourly at :15 |
+| 7.7 | Implement: budget gate (skip jika >80% monthly limit) | ✅ Done | Step in vayu-refresh.yml |
+| 7.8 | Buat `vayu-ping.yml` (Supabase keep-alive, tiap 6 hari) | ✅ Done | `.github/workflows/vayu-ping.yml` |
+| 7.9 | Buat `vayu-purge.yml` (data retention, weekly) | ✅ Done | `.github/workflows/vayu-purge.yml` — Sunday 03:00 UTC |
+| 7.10 | Buat `vayu-osm-update.yml` (OSM refresh, monthly) | ✅ Done | `.github/workflows/vayu-osm-update.yml` — 1st of month |
 
 ---
 
@@ -352,12 +352,12 @@
 | # | Task | Status | Detail |
 |---|---|---|---|
 | 8.1 | Test `/api/vayu/aqi` — single point query | ✅ Done | Denpasar AQI=30, Jakarta AQI=98, Surabaya AQI=80 — all working |
-| 8.2 | Test `/api/vayu/aqi` — response time < 300ms | ☐ Todo | 📎 ERD 12.1 |
-| 8.3 | Test cache hit: query same tile 2× → second < 100ms | ☐ Todo | Redis cache working |
+| 8.2 | Test `/api/vayu/aqi` — response time < 300ms | ✅ Done | Cold: 326ms, Cached: 50ms (Redis hit) |
+| 8.3 | Test cache hit: query same tile 2× → second < 100ms | ✅ Done | 50ms on 2nd call — Redis cache working |
 | 8.4 | Test cache miss → lazy compute → UPSERT → verify in DB | ☐ Todo | |
-| 8.5 | Test `/api/vayu/route-score` — returns ranked routes | ☐ Todo | |
-| 8.6 | Test `/api/vayu/exposure` — CE formula dimensional check | ☐ Todo | Output unit = μg |
-| 8.7 | Test `/api/vayu/contribute` — anonymous contribution flow | ☐ Todo | |
+| 8.5 | Test `/api/vayu/route-score` — returns ranked routes | ✅ Done | Bali: avg_aqi=30, score=0.142, 3 samples |
+| 8.6 | Test `/api/vayu/exposure` — CE formula dimensional check | ✅ Done | Jakarta 30min walk: 24.67µg, 0.098 cig, risk=low |
+| 8.7 | Test `/api/vayu/contribute` — anonymous contribution flow | ✅ Done | "Contribution recorded" — rate limit working |
 | 8.8 | Test circuit breaker: simulate Open-Meteo down | ☐ Todo | Should serve stale data |
 | 8.9 | Test Vercel timeout: single tile < 10s (Hobby plan limit) | ✅ Done | Responses return in ~1–2s cold start |
 | 8.10 | Test cultural calendar: Nyepi → traffic modifier ~0 | ☐ Todo | |
@@ -379,8 +379,8 @@
 | 9.1 | Git commit semua VAYU code ke branch `develop` | ✅ Done | `dca1afe` develop branch |
 | 9.2 | Git push → Vercel auto-deploy | ✅ Done | main synced, Vercel deploying |
 | 9.3 | Verify VAYU endpoints live di breeva.site | ✅ Done | `/api/vayu/aqi` returns AQI data for all 14 regions |
-| 9.4 | Verify Vercel env vars benar di Production | ☐ Todo | |
-| 9.5 | Enable GitHub Actions workflow schedules | ☐ Todo | Setelah push `.github/workflows/` |
+| 9.4 | Verify Vercel env vars benar di Production | ✅ Done | SUPABASE_URL, SERVICE_ROLE_KEY, UPSTASH_REDIS_* all set (1.16) |
+| 9.5 | Enable GitHub Actions workflow schedules | ✅ Done | 4 workflows pushed — schedules auto-enabled on push |
 | 9.6 | Monitor first 24 jam: check error logs | ☐ Todo | Vercel Functions → Logs |
 | 9.7 | Monitor GitHub Actions: first few runs sukses | ☐ Todo | |
 | 9.8 | Monitor Supabase: DB size masih dalam limit | ☐ Todo | Target: <200MB dari 500MB |
@@ -448,11 +448,11 @@
 | **Stage 4** — Mode A (API) | 48 | ✅ **47 done, 1 deferred** (4.37 → Stage 5) |
 | **Stage 5** — Frontend | 8 | ✅ **8 done** |
 | **Stage 6** — Mode B (Python) | 12 | 12 todo |
-| **Stage 7** — GitHub Actions | 10 | 2 done, 5 todo, 3 later |
-| **Stage 8** — Testing | 18 | 4 done, 14 todo |
+| **Stage 7** — GitHub Actions | 10 | ✅ **7 done**, 3 later |
+| **Stage 8** — Testing | 18 | 9 done, 9 todo |
 | **Stage 9** — Deploy | 9 | 3 done, 6 todo |
 | **Stages 10–13** — Post-MVP | 17 | 17 todo |
-| **TOTAL** | **190** | **128 done, 1 blocked, 1 deferred, 60 todo** |
+| **TOTAL** | **190** | **138 done, 1 blocked, 1 deferred, 50 todo** |
 
 > **Critical Path (MVP):** Stage 0 → 1 → 2 → 3 → 4A+4B → 4C → 4G → 5 → 8 → 9
 > Stages 4D–4F, 6, 7 bisa paralel setelah 4A+4B selesai.

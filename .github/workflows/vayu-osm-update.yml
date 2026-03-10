@@ -1,0 +1,46 @@
+# VAYU — OSM Road Data Update
+# Re-processes OpenStreetMap road segments for all covered regions
+# Runs monthly on the 1st at 02:00 UTC
+name: VAYU OSM Update
+
+on:
+  schedule:
+    - cron: '0 2 1 * *'     # 1st of each month, 02:00 UTC
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'Region to update (or "all")'
+        default: 'all'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          cd vayu
+          pip install -r requirements.txt
+
+      - name: Run OSM processor
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          REGION=${{ github.event.inputs.region || 'all' }}
+          echo "Processing OSM data for region: ${REGION}"
+          cd vayu
+          if [ "$REGION" = "all" ]; then
+            python -m jobs.process_osm --all
+          else
+            python -m jobs.process_osm --region "$REGION"
+          fi
+          echo "OSM update complete ✅"

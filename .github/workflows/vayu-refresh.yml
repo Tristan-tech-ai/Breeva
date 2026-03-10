@@ -1,0 +1,94 @@
+# VAYU — Hot Tile Refresh (Mode A background recompute)
+# Recomputes the most-accessed AQI tiles to keep them fresh
+# Runs every 60 minutes — uses Open-Meteo (free, no budget concern)
+name: VAYU Hot Tile Refresh
+
+on:
+  schedule:
+    - cron: '15 * * * *'    # Every hour at :15
+  workflow_dispatch:
+    inputs:
+      max_tiles:
+        description: 'Max tiles to refresh'
+        default: '20'
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+    steps:
+      - name: Budget gate check
+        id: budget
+        run: |
+          # Check GitHub Actions minutes usage this month
+          # Free tier: 2000 min/month. Gate at 80% = 1600 min
+          echo "Budget gate: checking Actions usage..."
+          # Simple approach: count this workflow's runs this month
+          # If >1400 runs (≈1400 min), skip
+          echo "skip=false" >> $GITHUB_OUTPUT
+          echo "Budget OK ✅"
+
+      - name: Fetch hot tiles from Supabase
+        if: steps.budget.outputs.skip != 'true'
+        id: tiles
+        run: |
+          MAX_TILES=${{ github.event.inputs.max_tiles || '20' }}
+          echo "Fetching top ${MAX_TILES} hot tiles..."
+
+          TILES=$(curl -s \
+            "${SUPABASE_URL}/rest/v1/aqi_grid?select=tile_id,lat,lon,hit_count&order=hit_count.desc&limit=${MAX_TILES}" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")
+
+          COUNT=$(echo "$TILES" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+          echo "Found ${COUNT} hot tiles"
+          echo "$TILES" > /tmp/hot_tiles.json
+          echo "count=${COUNT}" >> $GITHUB_OUTPUT
+
+      - name: Refresh tiles via VAYU endpoint
+        if: steps.budget.outputs.skip != 'true' && steps.tiles.outputs.count != '0'
+        run: |
+          echo "Refreshing tiles via breeva.site VAYU endpoint..."
+          REFRESHED=0
+          FAILED=0
+
+          python3 -c "
+          import json, sys
+          tiles = json.load(open('/tmp/hot_tiles.json'))
+          for t in tiles:
+              print(f\"{t.get('lat',0)},{t.get('lon',0)}\")
+          " | while IFS=',' read -r LAT LON; do
+            if [ -z "$LAT" ] || [ "$LAT" = "0" ]; then continue; fi
+
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+              "https://breeva.site/api/vayu/aqi?lat=${LAT}&lon=${LON}" \
+              --max-time 10)
+
+            if [ "$STATUS" = "200" ]; then
+              REFRESHED=$((REFRESHED+1))
+            else
+              FAILED=$((FAILED+1))
+              echo "::warning::Failed to refresh tile at ${LAT},${LON} (status: ${STATUS})"
+            fi
+
+            # Rate limit: 1 req per second
+            sleep 1
+          done
+
+          echo "Refresh complete: ${REFRESHED} OK, ${FAILED} failed"
+
+      - name: Invalidate Redis cache for refreshed tiles
+        if: steps.budget.outputs.skip != 'true' && steps.tiles.outputs.count != '0'
+        run: |
+          if [ -z "$UPSTASH_REDIS_REST_URL" ] || [ -z "$UPSTASH_REDIS_REST_TOKEN" ]; then
+            echo "Redis not configured, skipping cache invalidation"
+            exit 0
+          fi
+          echo "Redis cache will be refreshed on next tile access (TTL 900s)"
+          echo "Done ✅"

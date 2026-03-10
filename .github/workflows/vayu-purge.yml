@@ -1,0 +1,52 @@
+# VAYU — Data Retention Purge
+# Deletes expired aqi_grid tiles and old contributions to keep DB within limits
+# Runs weekly on Sunday at 03:00 UTC
+name: VAYU Data Purge
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'     # Sunday 03:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Purge expired tiles & old contributions
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "=== VAYU Data Purge — $(date -u) ==="
+
+          # 1. Delete expired aqi_grid tiles (valid_until < now)
+          echo "Purging expired aqi_grid tiles..."
+          RESULT=$(curl -s -X DELETE \
+            "${SUPABASE_URL}/rest/v1/aqi_grid?valid_until=lt.$(date -u +%Y-%m-%dT%H:%M:%S)" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Prefer: return=representation" \
+            -w '\n%{http_code}' | tail -1)
+          echo "aqi_grid purge status: ${RESULT}"
+
+          # 2. Delete contributions older than 90 days
+          CUTOFF=$(date -u -d '90 days ago' +%Y-%m-%dT%H:%M:%S 2>/dev/null || date -u -v-90d +%Y-%m-%dT%H:%M:%S)
+          echo "Purging contributions older than ${CUTOFF}..."
+          RESULT2=$(curl -s -X DELETE \
+            "${SUPABASE_URL}/rest/v1/vayu_contributions?created_at=lt.${CUTOFF}" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Prefer: return=representation" \
+            -w '\n%{http_code}' | tail -1)
+          echo "contributions purge status: ${RESULT2}"
+
+          # 3. Report DB size
+          echo "Checking DB size..."
+          curl -s "${SUPABASE_URL}/rest/v1/rpc/pg_database_size" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"db_name":"postgres"}' || echo "(size check skipped)"
+
+          echo "Purge complete ✅"
