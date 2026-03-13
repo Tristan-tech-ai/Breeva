@@ -150,12 +150,14 @@ interface RoadAQIFeature {
   aqi: number;
   pm25: number;
   no2: number;
+  o3: number;
+  pm10: number;
   highway: string;
   weight: number;
 }
 
-// ─── Open-Meteo baseline fetch ──────────────────────────────
-async function fetchBaseline(lat: number, lon: number) {
+// ─── Open-Meteo single-point fetch ──────────────────────────
+async function fetchBaselinePoint(lat: number, lon: number) {
   const [aqResp, wxResp] = await Promise.all([
     fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&timezone=auto`),
     fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=wind_speed_10m&timezone=auto`),
@@ -170,6 +172,47 @@ async function fetchBaseline(lat: number, lon: number) {
     o3: aq?.ozone ?? 30,
     wind_speed: wx?.wind_speed_10m ?? 2.0,
   };
+}
+
+type BaselineData = Awaited<ReturnType<typeof fetchBaselinePoint>>;
+
+// ─── Multi-point baseline grid for spatial interpolation ────
+// Samples 5 points (4 corners + center) to get spatial variation
+// Returns an interpolation function that gives baseline at any lat/lng
+async function fetchBaselineGrid(south: number, west: number, north: number, east: number) {
+  const cLat = (south + north) / 2;
+  const cLon = (west + east) / 2;
+
+  // Fetch 5 points in parallel: center + 4 corners
+  const [center, nw, ne, sw, se] = await Promise.all([
+    fetchBaselinePoint(cLat, cLon),
+    fetchBaselinePoint(north, west),
+    fetchBaselinePoint(north, east),
+    fetchBaselinePoint(south, west),
+    fetchBaselinePoint(south, east),
+  ]);
+
+  // Bilinear interpolation function
+  const interpolate = (lat: number, lon: number): BaselineData => {
+    // Normalize position within bbox [0,1]
+    const latSpan = north - south || 0.001;
+    const lonSpan = east - west || 0.001;
+    const ty = Math.max(0, Math.min(1, (lat - south) / latSpan)); // 0=south, 1=north
+    const tx = Math.max(0, Math.min(1, (lon - west) / lonSpan));  // 0=west, 1=east
+
+    // Weight center point (40%) + bilinear corners (60%) for stability
+    const keys = ['pm25', 'pm10', 'no2', 'co', 'o3', 'wind_speed'] as const;
+    const result = {} as Record<string, number>;
+    for (const k of keys) {
+      const topVal = nw[k] * (1 - tx) + ne[k] * tx;
+      const botVal = sw[k] * (1 - tx) + se[k] * tx;
+      const bilinear = botVal * (1 - ty) + topVal * ty;
+      result[k] = bilinear * 0.6 + center[k] * 0.4;
+    }
+    return result as unknown as BaselineData;
+  };
+
+  return { center, interpolate };
 }
 
 // ─── Supabase RPC: find_roads_in_bbox ───────────────────────
@@ -197,9 +240,9 @@ async function findRoadsInBbox(
 // ─── Compute per-road AQI ───────────────────────────────────
 function computeRoadAQI(
   road: RoadRow,
-  baseline: { pm25: number; no2: number; wind_speed: number },
+  baseline: { pm25: number; pm10: number; no2: number; o3: number; wind_speed: number },
   diurnal: number
-): { aqi: number; pm25: number; no2: number } {
+): { aqi: number; pm25: number; no2: number; o3: number; pm10: number } {
   const traffic = estimateTraffic(road, diurnal);
   const jitter = roadJitter(road.osm_way_id);
 
@@ -217,14 +260,25 @@ function computeRoadAQI(
   const pm25Delta = gaussianConc(qPM25, baseline.wind_speed, dist, 0.5) * veg * canyon * widthFactor * jitter;
   const no2Delta  = gaussianConc(qNOx, baseline.wind_speed, dist, 0.5) * veg * canyon * widthFactor * jitter;
 
+  // PM₁₀ = PM₂.₅ delta + coarse fraction (tire wear, brake dust, road dust)
+  const pm10Delta = pm25Delta * 1.8;
+
+  // O₃ titration: NOx from traffic destroys ozone near roads
+  // Higher traffic → more NOx → more O₃ consumed → lower roadside O₃
+  const o3Titration = no2Delta * 0.4;
+
   const pm25 = Math.max(0, baseline.pm25 + pm25Delta);
   const no2  = Math.max(0, baseline.no2 + no2Delta);
+  const pm10 = Math.max(0, baseline.pm10 + pm10Delta);
+  const o3   = Math.max(0, baseline.o3 - o3Titration);
   const aqi  = pm25ToAQI(pm25);
 
   return {
     aqi,
     pm25: Math.round(pm25 * 100) / 100,
     no2: Math.round(no2 * 100) / 100,
+    o3: Math.round(o3 * 100) / 100,
+    pm10: Math.round(pm10 * 100) / 100,
   };
 }
 
@@ -288,13 +342,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? roads.filter((r) => highways.includes(r.highway))
       : roads;
 
-    // Fetch baseline AQI at bbox center (one call for entire viewport)
-    const centerLat = (s + n) / 2;
-    const centerLon = (w + e) / 2;
-    const baseline = await fetchBaseline(centerLat, centerLon);
+    // Fetch baseline AQI grid (5-point spatial interpolation)
+    const { center: baselineCenter, interpolate: interpBaseline } = await fetchBaselineGrid(s, w, n, e);
     const diurnal = HOURLY_TRAFFIC[new Date().getHours()] ?? 1.0;
 
-    // Compute per-road AQI
+    // Compute per-road AQI with spatially interpolated baseline
     const features: RoadAQIFeature[] = [];
     for (const road of filtered) {
       let geometry: { type: string; coordinates: number[][] };
@@ -302,7 +354,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         geometry = JSON.parse(road.geojson);
       } catch { continue; }
 
-      const { aqi, pm25, no2 } = computeRoadAQI(road, baseline, diurnal);
+      // Get road centroid for baseline interpolation
+      const coords = geometry.coordinates;
+      const mid = coords[Math.floor(coords.length / 2)];
+      const roadLon = mid[0];
+      const roadLat = mid[1];
+      const baseline = interpBaseline(roadLat, roadLon);
+
+      const { aqi, pm25, no2, o3, pm10 } = computeRoadAQI(road, baseline, diurnal);
 
       features.push({
         osm_way_id: road.osm_way_id,
@@ -310,6 +369,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         aqi,
         pm25,
         no2,
+        o3,
+        pm10,
         highway: road.highway,
         weight: roadWeight(road.highway),
       });
@@ -320,9 +381,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       meta: {
         count: features.length,
         zoom: z,
-        baseline_pm25: baseline.pm25,
-        baseline_no2: baseline.no2,
-        wind_speed: baseline.wind_speed,
+        baseline_pm25: baselineCenter.pm25,
+        baseline_no2: baselineCenter.no2,
+        baseline_o3: baselineCenter.o3,
+        baseline_pm10: baselineCenter.pm10,
+        wind_speed: baselineCenter.wind_speed,
         computed_at: new Date().toISOString(),
       },
     };

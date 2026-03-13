@@ -40,6 +40,26 @@ function getColorStops(pollutant: PollutantType): { v: number; c: string }[] {
         { v: 150, c: '#ef4444' },
         { v: 300, c: '#7f1d1d' },
       ];
+    case 'o3':
+      return [
+        { v: 0, c: '#1e3a5f' },
+        { v: 30, c: '#0ea5e9' },
+        { v: 60, c: '#22c55e' },
+        { v: 90, c: '#eab308' },
+        { v: 120, c: '#f97316' },
+        { v: 180, c: '#ef4444' },
+        { v: 240, c: '#7f1d1d' },
+      ];
+    case 'pm10':
+      return [
+        { v: 0, c: '#1e3a5f' },
+        { v: 15, c: '#0ea5e9' },
+        { v: 30, c: '#22c55e' },
+        { v: 50, c: '#eab308' },
+        { v: 80, c: '#f97316' },
+        { v: 120, c: '#ef4444' },
+        { v: 250, c: '#7f1d1d' },
+      ];
     default: // AQI
       return [
         { v: 0, c: '#1e3a5f' },
@@ -72,6 +92,8 @@ function getValue(road: RoadAQIFeature, pollutant: PollutantType): number {
   switch (pollutant) {
     case 'pm25': return road.pm25;
     case 'no2': return road.no2;
+    case 'o3': return road.o3;
+    case 'pm10': return road.pm10;
     default: return road.aqi;
   }
 }
@@ -177,6 +199,8 @@ export const POLLUTANT_OPTIONS: { id: PollutantType; label: string; unit: string
   { id: 'aqi', label: 'AQI', unit: '', description: 'Air Quality Index (US EPA)' },
   { id: 'pm25', label: 'PM₂.₅', unit: 'μg/m³', description: 'Fine particulate matter' },
   { id: 'no2', label: 'NO₂', unit: 'μg/m³', description: 'Nitrogen dioxide' },
+  { id: 'o3', label: 'O₃', unit: 'μg/m³', description: 'Ozone (inverted near traffic)' },
+  { id: 'pm10', label: 'PM₁₀', unit: 'μg/m³', description: 'Coarse particulate matter' },
 ];
 
 // Export color stops for legend rendering
