@@ -100,6 +100,7 @@ export default function HomePage() {
   const [showAQIOverlay, setShowAQIOverlay] = useState(false);
   const [showPOIs, setShowPOIs] = useState(true);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
+  const [forecastHour, setForecastHour] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'voyager' | 'osm' | 'satellite'>('voyager');
   const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
@@ -143,6 +144,7 @@ export default function HomePage() {
         mapStyle={mapStyle}
         activeFilter={activeFilter}
         pollutant={pollutant}
+        forecastHour={forecastHour}
         onPlaceSelect={(poi) => setSelectedPOI(poi)}
       />
 
@@ -574,6 +576,8 @@ export default function HomePage() {
         currentAQI={currentAQI}
         pollutant={pollutant}
         onPollutantChange={setPollutant}
+        forecastHour={forecastHour}
+        onForecastHourChange={setForecastHour}
       />
 
       {/* Walk Complete modal */}

@@ -157,20 +157,41 @@ interface RoadAQIFeature {
 }
 
 // ─── Open-Meteo single-point fetch ──────────────────────────
-async function fetchBaselinePoint(lat: number, lon: number) {
+// forecastHour: 0 = current (default), 1-24 = hours ahead
+async function fetchBaselinePoint(lat: number, lon: number, forecastHour = 0) {
+  if (forecastHour <= 0) {
+    // Current conditions (original behavior)
+    const [aqResp, wxResp] = await Promise.all([
+      fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&timezone=auto`),
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=wind_speed_10m&timezone=auto`),
+    ]);
+    const aq = aqResp.ok ? (await aqResp.json()).current : null;
+    const wx = wxResp.ok ? (await wxResp.json()).current : null;
+    return {
+      pm25: aq?.pm2_5 ?? 15,
+      pm10: aq?.pm10 ?? 25,
+      no2: aq?.nitrogen_dioxide ?? 10,
+      co: aq?.carbon_monoxide ?? 200,
+      o3: aq?.ozone ?? 30,
+      wind_speed: wx?.wind_speed_10m ?? 2.0,
+    };
+  }
+
+  // Forecast mode: fetch hourly data and pick the target hour
   const [aqResp, wxResp] = await Promise.all([
-    fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&timezone=auto`),
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=wind_speed_10m&timezone=auto`),
+    fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&forecast_hours=${forecastHour + 1}&timezone=auto`),
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m&forecast_hours=${forecastHour + 1}&timezone=auto`),
   ]);
-  const aq = aqResp.ok ? (await aqResp.json()).current : null;
-  const wx = wxResp.ok ? (await wxResp.json()).current : null;
+  const aq = aqResp.ok ? await aqResp.json() : null;
+  const wx = wxResp.ok ? await wxResp.json() : null;
+  const idx = forecastHour; // array index = hours from now
   return {
-    pm25: aq?.pm2_5 ?? 15,
-    pm10: aq?.pm10 ?? 25,
-    no2: aq?.nitrogen_dioxide ?? 10,
-    co: aq?.carbon_monoxide ?? 200,
-    o3: aq?.ozone ?? 30,
-    wind_speed: wx?.wind_speed_10m ?? 2.0,
+    pm25: aq?.hourly?.pm2_5?.[idx] ?? 15,
+    pm10: aq?.hourly?.pm10?.[idx] ?? 25,
+    no2: aq?.hourly?.nitrogen_dioxide?.[idx] ?? 10,
+    co: aq?.hourly?.carbon_monoxide?.[idx] ?? 200,
+    o3: aq?.hourly?.ozone?.[idx] ?? 30,
+    wind_speed: wx?.hourly?.wind_speed_10m?.[idx] ?? 2.0,
   };
 }
 
@@ -179,17 +200,17 @@ type BaselineData = Awaited<ReturnType<typeof fetchBaselinePoint>>;
 // ─── Multi-point baseline grid for spatial interpolation ────
 // Samples 5 points (4 corners + center) to get spatial variation
 // Returns an interpolation function that gives baseline at any lat/lng
-async function fetchBaselineGrid(south: number, west: number, north: number, east: number) {
+async function fetchBaselineGrid(south: number, west: number, north: number, east: number, forecastHour = 0) {
   const cLat = (south + north) / 2;
   const cLon = (west + east) / 2;
 
   // Fetch 5 points in parallel: center + 4 corners
   const [center, nw, ne, sw, se] = await Promise.all([
-    fetchBaselinePoint(cLat, cLon),
-    fetchBaselinePoint(north, west),
-    fetchBaselinePoint(north, east),
-    fetchBaselinePoint(south, west),
-    fetchBaselinePoint(south, east),
+    fetchBaselinePoint(cLat, cLon, forecastHour),
+    fetchBaselinePoint(north, west, forecastHour),
+    fetchBaselinePoint(north, east, forecastHour),
+    fetchBaselinePoint(south, west, forecastHour),
+    fetchBaselinePoint(south, east, forecastHour),
   ]);
 
   // Bilinear interpolation function
@@ -283,10 +304,11 @@ function computeRoadAQI(
 }
 
 // ─── Cache key from bbox (quantized to ~500m grid) ──────────
-function bboxCacheKey(south: number, west: number, north: number, east: number, zoom: number): string {
+function bboxCacheKey(south: number, west: number, north: number, east: number, zoom: number, forecastHour = 0): string {
   // Quantize to ~0.005° grid (~550m) for cache deduplication
   const q = (v: number) => (Math.round(v * 200) / 200).toFixed(3);
-  return `vayu:road:${q(south)}:${q(west)}:${q(north)}:${q(east)}:z${zoom}`;
+  const base = `vayu:road:${q(south)}:${q(west)}:${q(north)}:${q(east)}:z${zoom}`;
+  return forecastHour > 0 ? `${base}:fh${forecastHour}` : base;
 }
 
 // ─── Handler ────────────────────────────────────────────────
@@ -295,7 +317,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { south, west, north, east, zoom } = req.query;
+  const { south, west, north, east, zoom, forecast_hour } = req.query;
   if (!south || !west || !north || !east) {
     return res.status(400).json({ error: 'south, west, north, east query parameters required' });
   }
@@ -305,6 +327,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const n = parseFloat(north as string);
   const e = parseFloat(east as string);
   const z = parseInt(zoom as string) || 15;
+  const fh = Math.max(0, Math.min(24, parseInt(forecast_hour as string) || 0));
 
   // Validate coordinates
   if ([s, w, n, e].some(isNaN) || s > n || w > e) {
@@ -317,7 +340,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const cacheKey = bboxCacheKey(s, w, n, e, z);
+    const cacheKey = bboxCacheKey(s, w, n, e, z, fh);
 
     // Check Redis cache first
     const cached = await redisGet(cacheKey);
@@ -343,8 +366,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : roads;
 
     // Fetch baseline AQI grid (5-point spatial interpolation)
-    const { center: baselineCenter, interpolate: interpBaseline } = await fetchBaselineGrid(s, w, n, e);
-    const diurnal = HOURLY_TRAFFIC[new Date().getHours()] ?? 1.0;
+    const { center: baselineCenter, interpolate: interpBaseline } = await fetchBaselineGrid(s, w, n, e, fh);
+    // Use forecast hour for diurnal profile: shift current hour by forecast offset
+    const targetHour = (new Date().getHours() + fh) % 24;
+    const diurnal = HOURLY_TRAFFIC[targetHour] ?? 1.0;
 
     // Compute per-road AQI with spatially interpolated baseline
     const features: RoadAQIFeature[] = [];
@@ -381,6 +406,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       meta: {
         count: features.length,
         zoom: z,
+        forecast_hour: fh,
         baseline_pm25: baselineCenter.pm25,
         baseline_no2: baselineCenter.no2,
         baseline_o3: baselineCenter.o3,
@@ -390,8 +416,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     };
 
-    // Cache for 15 minutes
-    await redisSetEx(cacheKey, 900, JSON.stringify(result));
+    // Cache: 15 min for current, 30 min for forecast (changes less frequently)
+    await redisSetEx(cacheKey, fh > 0 ? 1800 : 900, JSON.stringify(result));
 
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     res.setHeader('X-Cache', 'MISS');

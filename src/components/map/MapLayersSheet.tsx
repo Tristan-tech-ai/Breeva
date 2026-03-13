@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Map, Satellite, Mountain, Wind, Store,
-  TreePine, Activity,
+  TreePine, Activity, Clock,
 } from 'lucide-react';
 import type { AirQualityData, PollutantType } from '../../types';
 import { POLLUTANT_OPTIONS, getColorStops } from './RoadPollutionLayer';
@@ -18,6 +18,8 @@ interface MapLayersSheetProps {
   currentAQI?: AirQualityData | null;
   pollutant?: PollutantType;
   onPollutantChange?: (p: PollutantType) => void;
+  forecastHour?: number;
+  onForecastHourChange?: (h: number) => void;
 }
 
 const mapTypes: { id: 'voyager' | 'osm' | 'satellite'; label: string; icon: typeof Map; preview: string }[] = [
@@ -53,6 +55,8 @@ export default function MapLayersSheet({
   currentAQI,
   pollutant = 'aqi',
   onPollutantChange,
+  forecastHour = 0,
+  onForecastHourChange,
 }: MapLayersSheetProps) {
   const activePollutant = POLLUTANT_OPTIONS.find((o) => o.id === pollutant) || POLLUTANT_OPTIONS[0];
   const colorStops = getColorStops(pollutant);
@@ -286,6 +290,38 @@ export default function MapLayersSheet({
                         <span className="text-[9px] font-mono text-gray-400 dark:text-gray-500">
                           {colorStops[colorStops.length - 1].v}
                         </span>
+                      </div>
+
+                      {/* Forecast time slider */}
+                      <div className="mt-4 p-3 rounded-xl bg-white dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700/50">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-sky-500" />
+                            <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                              Forecast
+                            </span>
+                          </div>
+                          <span className="text-xs font-bold text-sky-600 dark:text-sky-400">
+                            {forecastHour === 0
+                              ? 'Now'
+                              : `+${forecastHour}h — ${new Date(Date.now() + forecastHour * 3600000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                            }
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={24}
+                          step={1}
+                          value={forecastHour}
+                          onChange={(e) => onForecastHourChange?.(parseInt(e.target.value))}
+                          className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-sky-200 to-sky-500 dark:from-sky-800 dark:to-sky-400 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-sky-500"
+                        />
+                        <div className="flex justify-between mt-1">
+                          <span className="text-[9px] text-gray-400 dark:text-gray-500">Now</span>
+                          <span className="text-[9px] text-gray-400 dark:text-gray-500">+12h</span>
+                          <span className="text-[9px] text-gray-400 dark:text-gray-500">+24h</span>
+                        </div>
                       </div>
 
                       {/* Description tip */}

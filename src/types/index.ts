@@ -238,6 +238,7 @@ export interface RoadAQIResponse {
   meta: {
     count: number;
     zoom: number;
+    forecast_hour: number;
     baseline_pm25: number;
     baseline_no2: number;
     baseline_o3: number;

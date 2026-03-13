@@ -107,6 +107,7 @@ export function useRoadPollutionLayer(
   map: L.Map | null,
   visible: boolean,
   pollutant: PollutantType = 'aqi',
+  forecastHour = 0,
 ) {
   const layerRef = useRef<L.LayerGroup>(L.layerGroup());
   const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -128,6 +129,7 @@ export function useRoadPollutionLayer(
       bounds.getNorth(),
       bounds.getEast(),
       zoom,
+      forecastHour,
     );
 
     if (abortRef.current || !data) return;
@@ -152,7 +154,7 @@ export function useRoadPollutionLayer(
         lineJoin: 'round',
       }).addTo(layerRef.current);
     }
-  }, [map, visible, pollutant]);
+  }, [map, visible, pollutant, forecastHour]);
 
   // Attach layer group
   useEffect(() => {

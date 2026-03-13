@@ -1140,7 +1140,8 @@ export async function getRoadAQI(
   west: number,
   north: number,
   east: number,
-  zoom: number
+  zoom: number,
+  forecastHour = 0
 ): Promise<RoadAQIResponse | null> {
   try {
     const params = new URLSearchParams({
@@ -1150,6 +1151,7 @@ export async function getRoadAQI(
       east: east.toFixed(6),
       zoom: String(Math.round(zoom)),
     });
+    if (forecastHour > 0) params.set('forecast_hour', String(forecastHour));
     const resp = await fetch(`/api/vayu/road-aqi?${params}`);
     if (!resp.ok) return null;
     return await resp.json();

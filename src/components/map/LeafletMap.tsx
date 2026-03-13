@@ -99,6 +99,7 @@ interface LeafletMapProps {
   mapStyle?: 'voyager' | 'osm' | 'satellite';
   activeFilter?: string | null;
   pollutant?: PollutantType;
+  forecastHour?: number;
   onPlaceSelect?: (poi: POI) => void;
 }
 
@@ -109,8 +110,9 @@ function MapController({
   showPOIs,
   activeFilter,
   pollutant,
+  forecastHour,
   onPlaceSelect,
-}: Pick<LeafletMapProps, 'showAQIOverlay' | 'showPOIs' | 'activeFilter' | 'pollutant' | 'onPlaceSelect'>) {
+}: Pick<LeafletMapProps, 'showAQIOverlay' | 'showPOIs' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'onPlaceSelect'>) {
   const map = useMap();
   const {
     center,
@@ -234,7 +236,7 @@ function MapController({
   }, [routes, map]);
 
   // Road pollution overlay (eLichens-style colored polylines)
-  useRoadPollutionLayer(map, !!showAQIOverlay, pollutant || 'aqi');
+  useRoadPollutionLayer(map, !!showAQIOverlay, pollutant || 'aqi', forecastHour || 0);
 
   // AQI overlay circles (low-zoom fallback when road layer hidden)
   useEffect(() => {
@@ -278,6 +280,7 @@ export default function LeafletMap({
   mapStyle = 'voyager',
   activeFilter = null,
   pollutant = 'aqi',
+  forecastHour = 0,
   onPlaceSelect,
 }: LeafletMapProps) {
   const { center } = useMapStore();
@@ -309,6 +312,7 @@ export default function LeafletMap({
           showPOIs={showPOIs}
           activeFilter={activeFilter}
           pollutant={pollutant}
+          forecastHour={forecastHour}
           onPlaceSelect={onPlaceSelect}
         />
       </MapContainer>
