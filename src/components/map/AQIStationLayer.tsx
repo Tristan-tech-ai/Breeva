@@ -161,19 +161,23 @@ export function useAQIStationLayer(map: L.Map, visible: boolean): void {
       if (isNaN(val) || val < 0) continue;
 
       const color = aqiColor(val);
-      const marker = L.circleMarker([s.lat, s.lon], {
-        radius: 10,
-        fillColor: color,
-        fillOpacity: 0.9,
-        color: '#fff',
-        weight: 2,
-        bubblingMouseEvents: false,
+      const textColor = val <= 100 ? '#000' : '#fff';
+
+      const icon = L.divIcon({
+        className: 'aqi-badge-wrapper',
+        html: `<div class="aqi-badge" style="background:${color};color:${textColor}">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a7.5 7.5 0 1 0-10.6 10.6L12 23l4.9-4.7a7.5 7.5 0 0 0 .8-10.6z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>${val}</span>
+        </div>`,
+        iconSize: [44, 24],
+        iconAnchor: [22, 12],
+        popupAnchor: [0, -14],
       });
 
-      marker.bindTooltip(String(val), {
-        permanent: true,
-        direction: 'center',
-        className: 'aqi-station-tooltip',
+      const marker = L.marker([s.lat, s.lon], {
+        icon,
+        bubblingMouseEvents: false,
+        zIndexOffset: val, // higher AQI on top
       });
 
       marker.on('click', async () => {
