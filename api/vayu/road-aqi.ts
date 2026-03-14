@@ -169,17 +169,12 @@ function roadWeight(highway: string): number {
   }
 }
 
-// ─── Zoom-based road limit + filtering ──────────────────────
-// All road types visible from z12+ so users see detail without zooming too much.
-// Canvas renderer handles 2000+ polylines at 60fps.
-function getQueryParams(zoom: number): { limit: number; highways: string[] | null } {
-  if (zoom >= 16) return { limit: 3000, highways: null };
-  if (zoom >= 15) return { limit: 2500, highways: null };
-  if (zoom >= 14) return { limit: 2000, highways: null };
-  if (zoom >= 13) return { limit: 1500, highways: null };
-  if (zoom >= 12) return { limit: 1200, highways: null };
-  if (zoom >= 11) return { limit: 800, highways: null };
-  return { limit: 600, highways: null };
+// ─── Zoom-based road query params ────────────────────────
+// No artificial LIMIT: API cost is per-viewport (Open-Meteo/WAQI/IQAir = fixed),
+// NOT per-road. Road count only affects Supabase rows + computation (both fast).
+// Canvas renderer handles 5000+ polylines at 60fps.
+function getQueryParams(_zoom: number): { limit: number; highways: string[] | null } {
+  return { limit: 50000, highways: null };
 }
 
 // ─── Surface type → PM₁₀ coarse fraction multiplier ────────

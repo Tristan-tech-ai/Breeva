@@ -53,7 +53,7 @@ BEGIN
     rs.ai_pollution_factor
   FROM road_segments rs
   WHERE rs.geom && ST_MakeEnvelope(west, south, east, north, 4326)
-  ORDER BY random()
+  ORDER BY rs.osm_way_id
   LIMIT road_limit;
 END;
 $$ LANGUAGE plpgsql STABLE;
