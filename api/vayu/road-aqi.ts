@@ -577,10 +577,11 @@ function computeRoadAQI(
   };
 }
 
-// ─── Cache key from bbox (quantized to ~500m grid) ──────────
+// ─── Cache key from bbox (zoom-dependent coarse grid) ───────
 function bboxCacheKey(south: number, west: number, north: number, east: number, zoom: number, forecastHour = 0): string {
-  // Quantize to ~0.005° grid (~550m) for cache deduplication
-  const q = (v: number) => (Math.round(v * 200) / 200).toFixed(3);
+  // Coarser quantization: ~2km grid (zoom-dependent) → many small pans = same key
+  const step = Math.max(0.005, 0.5 / Math.pow(2, Math.max(0, zoom - 10)));
+  const q = (v: number) => (Math.floor(v / step) * step).toFixed(4);
   const base = `vayu:road:${q(south)}:${q(west)}:${q(north)}:${q(east)}:z${zoom}`;
   return forecastHour > 0 ? `${base}:fh${forecastHour}` : base;
 }
@@ -608,9 +609,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid bounding box' });
   }
 
-  // Limit bbox size based on zoom level to prevent abuse
-  // z11 viewport ≈ 0.5°, z12 ≈ 0.3°, z13+ ≈ 0.15°
-  const maxSpan = z <= 11 ? 0.5 : z <= 12 ? 0.3 : 0.15;
+  // Limit bbox size based on zoom — allow 2× viewport for padding
+  const maxSpan = z <= 11 ? 1.0 : z <= 12 ? 0.6 : 0.3;
   if (n - s > maxSpan || e - w > maxSpan) {
     return res.status(400).json({ error: 'Bounding box too large. Zoom in more.' });
   }
@@ -621,7 +621,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Check Redis cache first
     const cached = await redisGet(cacheKey);
     if (cached) {
-      res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=1800');
+    res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
       res.setHeader('X-Cache', 'HIT');
       return res.status(200).json(JSON.parse(cached));
     }
@@ -729,7 +729,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Cache: 30 min for current, 60 min for forecast (AQ data changes hourly)
     await redisSetEx(cacheKey, fh > 0 ? 3600 : 1800, JSON.stringify(result));
 
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=1800');
+    res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
     res.setHeader('X-Cache', 'MISS');
     return res.status(200).json(result);
 

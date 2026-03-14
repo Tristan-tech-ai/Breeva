@@ -11,8 +11,8 @@ export interface RoadLayerMeta {
   count: number;
 }
 
-// Singleton tile cache (persists across re-renders)
-const roadCache = new SpatialTileCache<RoadAQIResponse>(50, 5);
+// Singleton tile cache: 80 entries, 10-min TTL
+const roadCache = new SpatialTileCache<RoadAQIResponse>(80, 10);
 
 // ── Color scales per pollutant ───────────────────────────────
 
@@ -131,18 +131,21 @@ export function useRoadPollutionLayer(
   pollutant: PollutantType = 'aqi',
   forecastHour = 0,
 ): RoadLayerMeta | null {
+  // Two layer groups for atomic swap: old stays visible until new is ready
   const layerRef = useRef<L.LayerGroup>(L.layerGroup());
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const controllerRef = useRef<AbortController | null>(null);
   const dataRef = useRef<RoadAQIResponse | null>(null);
+  const lastThrottleRef = useRef(0);
+  const trailingRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [meta, setMeta] = useState<RoadLayerMeta | null>(null);
+  // Track the fetched padded bounds to know if viewport still covered
+  const fetchedBoundsRef = useRef<{ s: number; w: number; n: number; e: number; z: number } | null>(null);
 
-  // ── Render polylines from cached data (pure UI, no HTTP) ───
-  const renderFromData = useCallback(
-    (data: RoadAQIResponse, currentPollutant: PollutantType) => {
-      if (!map) return;
-      layerRef.current.clearLayers();
-      const zoom = map.getZoom();
+  // ── Build polylines into a NEW layer group (off-screen) ────
+  const buildLayer = useCallback(
+    (data: RoadAQIResponse, currentPollutant: PollutantType): L.LayerGroup => {
+      const group = L.layerGroup();
+      const zoom = map?.getZoom() ?? 14;
       for (const road of data.roads) {
         const coords = road.geometry.coordinates.map(
           ([lng, lat]) => [lat, lng] as L.LatLngTuple,
@@ -158,8 +161,22 @@ export function useRoadPollutionLayer(
           lineCap: 'round',
           lineJoin: 'round',
           renderer: getCanvasRenderer(),
-        }).addTo(layerRef.current);
+        }).addTo(group);
       }
+      return group;
+    },
+    [map],
+  );
+
+  // ── ATOMIC SWAP: old layer stays until new is added ────────
+  const atomicSwap = useCallback(
+    (data: RoadAQIResponse, currentPollutant: PollutantType) => {
+      if (!map) return;
+      const newGroup = buildLayer(data, currentPollutant);
+      // Add new FIRST, then remove old — never blank
+      newGroup.addTo(map);
+      layerRef.current.remove();
+      layerRef.current = newGroup;
       setMeta({
         wind_speed: data.meta.wind_speed,
         waqi_station: data.meta.waqi_station,
@@ -167,40 +184,61 @@ export function useRoadPollutionLayer(
         count: data.meta.count,
       });
     },
-    [map],
+    [map, buildLayer],
   );
 
-  // ── Fetch data (only when bbox/zoom/forecastHour changes) ──
+  // ── Check if current viewport is still covered by fetched data ──
+  const viewportCovered = useCallback((): boolean => {
+    if (!map || !fetchedBoundsRef.current) return false;
+    const b = map.getBounds();
+    const z = Math.round(map.getZoom());
+    const fb = fetchedBoundsRef.current;
+    return fb.z === z
+      && fb.s <= b.getSouth() && fb.w <= b.getWest()
+      && fb.n >= b.getNorth() && fb.e >= b.getEast();
+  }, [map]);
+
+  // ── Fetch data with viewport padding ───────────────────────
   const fetchData = useCallback(async () => {
     if (!map || !visible) return;
-    const zoom = map.getZoom();
+    const zoom = Math.round(map.getZoom());
     if (zoom < MIN_ZOOM) {
       layerRef.current.clearLayers();
       dataRef.current = null;
+      fetchedBoundsRef.current = null;
       setMeta(null);
       return;
     }
 
-    const bounds = map.getBounds();
+    // If viewport is still covered by last fetch → skip (0 HTTP)
+    if (viewportCovered() && dataRef.current) return;
+
+    // Pad viewport by 50% on each side → fetches 2× area
+    const bounds = map.getBounds().pad(0.5);
     const s = bounds.getSouth(), w = bounds.getWest();
     const n = bounds.getNorth(), e = bounds.getEast();
 
-    // 1. Fresh cache hit → render instantly, skip HTTP
+    // 1. Fresh cache hit → atomic swap, skip HTTP
     const cached = roadCache.get(s, w, n, e, zoom);
     if (cached) {
       dataRef.current = cached;
-      renderFromData(cached, pollutant);
+      fetchedBoundsRef.current = { s, w, n, e, z: zoom };
+      atomicSwap(cached, pollutant);
       return;
     }
 
-    // 2. Stale data → show immediately (stale-while-revalidate)
-    const stale = roadCache.getStale(s, w, n, e, zoom);
-    if (stale) {
-      dataRef.current = stale;
-      renderFromData(stale, pollutant);
+    // 2. Stale / nearest-zoom / any overlapping → show immediately
+    const fallback = roadCache.getStale(s, w, n, e, zoom)
+      ?? roadCache.getNearestZoom(s, w, n, e, zoom)
+      ?? roadCache.getAnyOverlapping(s, w, n, e, zoom);
+    if (fallback) {
+      dataRef.current = fallback;
+      atomicSwap(fallback, pollutant);
+      // Don't update fetchedBoundsRef — this is stale, still need fresh
     }
+    // If no fallback at all, OLD polylines stay visible (no clearLayers)
 
-    // 3. Abort any in-flight request, start new one
+    // 3. Abort in-flight, start new fetch
     controllerRef.current?.abort();
     const ac = new AbortController();
     controllerRef.current = ac;
@@ -209,7 +247,7 @@ export function useRoadPollutionLayer(
       const params = new URLSearchParams({
         south: s.toFixed(6), west: w.toFixed(6),
         north: n.toFixed(6), east: e.toFixed(6),
-        zoom: String(Math.round(zoom)),
+        zoom: String(zoom),
       });
       if (forecastHour > 0) params.set('forecast_hour', String(forecastHour));
 
@@ -220,11 +258,44 @@ export function useRoadPollutionLayer(
 
       roadCache.set(s, w, n, e, zoom, data);
       dataRef.current = data;
-      renderFromData(data, pollutant);
+      fetchedBoundsRef.current = { s, w, n, e, z: zoom };
+      atomicSwap(data, pollutant);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
     }
-  }, [map, visible, forecastHour, pollutant, renderFromData]);
+  }, [map, visible, forecastHour, pollutant, atomicSwap, viewportCovered]);
+
+  // ── Prefetch 4 adjacent tiles during idle ──────────────────
+  const prefetchAdjacent = useCallback(() => {
+    if (!map || !visible || !dataRef.current) return;
+    const zoom = Math.round(map.getZoom());
+    if (zoom < MIN_ZOOM) return;
+
+    const bounds = map.getBounds();
+    const latSpan = bounds.getNorth() - bounds.getSouth();
+    const lngSpan = bounds.getEast() - bounds.getWest();
+    const offsets = [[latSpan, 0], [-latSpan, 0], [0, lngSpan], [0, -lngSpan]];
+
+    for (const [dLat, dLng] of offsets) {
+      const ps = bounds.getSouth() + dLat;
+      const pw = bounds.getWest() + dLng;
+      const pn = bounds.getNorth() + dLat;
+      const pe = bounds.getEast() + dLng;
+      // Skip if already cached
+      if (roadCache.get(ps, pw, pn, pe, zoom)) continue;
+      // Low-priority fetch (no abort tracking — fire-and-forget)
+      const params = new URLSearchParams({
+        south: ps.toFixed(6), west: pw.toFixed(6),
+        north: pn.toFixed(6), east: pe.toFixed(6),
+        zoom: String(zoom),
+      });
+      if (forecastHour > 0) params.set('forecast_hour', String(forecastHour));
+      fetch(`/api/vayu/road-aqi?${params}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) roadCache.set(ps, pw, pn, pe, zoom, data); })
+        .catch(() => {});
+    }
+  }, [map, visible, forecastHour]);
 
   // Attach layer group once
   useEffect(() => {
@@ -236,8 +307,8 @@ export function useRoadPollutionLayer(
   // Pollutant change → re-render from existing data (ZERO HTTP)
   useEffect(() => {
     if (!visible || !dataRef.current) return;
-    renderFromData(dataRef.current, pollutant);
-  }, [pollutant, visible, renderFromData]);
+    atomicSwap(dataRef.current, pollutant);
+  }, [pollutant, visible, atomicSwap]);
 
   // Visibility / forecastHour toggle → may need fetch
   useEffect(() => {
@@ -250,19 +321,41 @@ export function useRoadPollutionLayer(
     return () => { controllerRef.current?.abort(); };
   }, [visible, forecastHour, fetchData]);
 
-  // Map move → debounced fetch (300ms)
+  // ── Map move → LEADING THROTTLE (fires immediately + trailing) ──
   useEffect(() => {
     if (!map || !visible) return;
     const onMove = () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(fetchData, 300);
+      const now = Date.now();
+      // If viewport still covered → skip entirely
+      if (viewportCovered() && dataRef.current) return;
+
+      if (now - lastThrottleRef.current > 500) {
+        // Leading edge: fire immediately
+        fetchData();
+        lastThrottleRef.current = now;
+      } else {
+        // Trailing: schedule for after interval
+        if (trailingRef.current) clearTimeout(trailingRef.current);
+        trailingRef.current = setTimeout(() => {
+          fetchData();
+          lastThrottleRef.current = Date.now();
+        }, 500);
+      }
     };
     map.on('moveend', onMove);
     return () => {
       map.off('moveend', onMove);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (trailingRef.current) clearTimeout(trailingRef.current);
     };
-  }, [map, visible, fetchData]);
+  }, [map, visible, fetchData, viewportCovered]);
+
+  // Prefetch adjacent tiles after data loaded (idle callback)
+  useEffect(() => {
+    if (!dataRef.current || !map || !visible) return;
+    if (typeof requestIdleCallback === 'undefined') return;
+    const id = requestIdleCallback(() => prefetchAdjacent());
+    return () => cancelIdleCallback(id);
+  }, [prefetchAdjacent, map, visible]);
 
   return meta;
 }

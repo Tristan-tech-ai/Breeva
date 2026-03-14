@@ -8,6 +8,14 @@ import { SpatialTileCache } from '../../lib/spatial-tile-cache';
  * Canvas-based AQI heatmap overlay for low zoom levels (z < 11).
  * Fetches gridded AQ data from /api/vayu/grid-aqi, renders bilinear-interpolated
  * canvas overlay via L.ImageOverlay.
+ *
+ * Zero-delay techniques:
+ * - Persistent canvas (reuse instead of createElement each render)
+ * - Atomic overlay swap (setUrl + setBounds on existing overlay)
+ * - Leading throttle instead of debounce
+ * - Viewport padding for over-fetch
+ * - Mip-map fallback across zoom levels
+ * - Old overlay stays until new one is ready
  */
 
 interface GridAQIResponse {
@@ -18,8 +26,8 @@ interface GridAQIResponse {
   pollutant: string;
 }
 
-// Singleton grid cache (persists across re-renders, 10-min TTL)
-const gridCache = new SpatialTileCache<GridAQIResponse>(20, 10);
+// Singleton grid cache: 30 entries, 15-min TTL
+const gridCache = new SpatialTileCache<GridAQIResponse>(30, 15);
 
 // ── Color interpolation using same scales as road layer ──────
 
@@ -69,17 +77,15 @@ function sampleGrid(grid: number[], rows: number, cols: number, fy: number, fx: 
   return top * (1 - ty) + bot * ty;
 }
 
-// ── Render grid to canvas ────────────────────────────────────
+// ── Render grid to persistent canvas ─────────────────────────
 
 function renderHeatmapCanvas(
   data: GridAQIResponse,
   pollutant: PollutantType,
-  width: number,
-  height: number,
+  canvas: HTMLCanvasElement,
 ): string {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  const width = canvas.width;
+  const height = canvas.height;
   const ctx = canvas.getContext('2d');
   if (!ctx) return '';
 
@@ -132,7 +138,6 @@ async function fetchGridAQI(
 // ── Hook ─────────────────────────────────────────────────────
 
 const MAX_ZOOM = 11;
-// Canvas size: larger for less-pixelated output
 const CANVAS_SIZE = 384;
 
 export function useAQIHeatmapLayer(
@@ -141,10 +146,48 @@ export function useAQIHeatmapLayer(
   pollutant: PollutantType = 'aqi',
 ): void {
   const overlayRef = useRef<L.ImageOverlay | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const controllerRef = useRef<AbortController | null>(null);
   const lastPollutantRef = useRef(pollutant);
   const lastGridRef = useRef<GridAQIResponse | null>(null);
+  const lastThrottleRef = useRef(0);
+  const trailingRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const fetchedBoundsRef = useRef<{ s: number; w: number; n: number; e: number; z: number } | null>(null);
+  // Persistent canvas — never recreated
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const getCanvas = useCallback((): HTMLCanvasElement => {
+    if (!canvasRef.current) {
+      canvasRef.current = document.createElement('canvas');
+      canvasRef.current.width = CANVAS_SIZE;
+      canvasRef.current.height = CANVAS_SIZE;
+    }
+    return canvasRef.current;
+  }, []);
+
+  // ── Render data to overlay (reuses canvas + existing overlay) ──
+  const renderOverlay = useCallback(
+    (data: GridAQIResponse, currentPollutant: PollutantType) => {
+      if (!map) return;
+      const dataUrl = renderHeatmapCanvas(data, currentPollutant, getCanvas());
+      if (!dataUrl) return;
+      const imageBounds = L.latLngBounds(
+        [data.bounds.south, data.bounds.west],
+        [data.bounds.north, data.bounds.east],
+      );
+      if (overlayRef.current) {
+        // Atomic update: reuse existing overlay (no flicker)
+        overlayRef.current.setUrl(dataUrl);
+        overlayRef.current.setBounds(imageBounds);
+      } else {
+        overlayRef.current = L.imageOverlay(dataUrl, imageBounds, {
+          opacity: 1,
+          interactive: false,
+          zIndex: 200,
+        }).addTo(map);
+      }
+    },
+    [map, getCanvas],
+  );
 
   const cleanup = useCallback(() => {
     if (overlayRef.current) {
@@ -153,68 +196,56 @@ export function useAQIHeatmapLayer(
     }
   }, []);
 
-  // Re-render existing grid data with new pollutant (0 HTTP)
-  const rerenderCurrent = useCallback(() => {
-    if (!map || !lastGridRef.current) return;
-    const data = lastGridRef.current;
-    const dataUrl = renderHeatmapCanvas(data, pollutant, CANVAS_SIZE, CANVAS_SIZE);
-    if (!dataUrl) return;
-    cleanup();
-    const imageBounds = L.latLngBounds(
-      [data.bounds.south, data.bounds.west],
-      [data.bounds.north, data.bounds.east],
-    );
-    overlayRef.current = L.imageOverlay(dataUrl, imageBounds, {
-      opacity: 1,
-      interactive: false,
-      zIndex: 200,
-    }).addTo(map);
-  }, [map, pollutant, cleanup]);
+  // Check if viewport is still covered
+  const viewportCovered = useCallback((): boolean => {
+    if (!map || !fetchedBoundsRef.current) return false;
+    const b = map.getBounds();
+    const z = Math.round(map.getZoom());
+    const fb = fetchedBoundsRef.current;
+    return fb.z === z
+      && fb.s <= b.getSouth() && fb.w <= b.getWest()
+      && fb.n >= b.getNorth() && fb.e >= b.getEast();
+  }, [map]);
 
   const fetchAndRender = useCallback(async () => {
     if (!map || !visible) return;
-    const zoom = map.getZoom();
+    const zoom = Math.round(map.getZoom());
     if (zoom >= MAX_ZOOM) {
       cleanup();
       lastGridRef.current = null;
+      fetchedBoundsRef.current = null;
       return;
     }
 
-    const bounds = map.getBounds();
+    // If viewport still covered → skip
+    if (viewportCovered() && lastGridRef.current) return;
+
+    // Pad viewport by 50% for over-fetch
+    const bounds = map.getBounds().pad(0.5);
     const s = bounds.getSouth(), w = bounds.getWest();
     const n = bounds.getNorth(), e = bounds.getEast();
 
-    // Fresh cache hit → render instantly
+    // 1. Fresh cache hit → render instantly
     const cached = gridCache.get(s, w, n, e, zoom);
     if (cached) {
       lastGridRef.current = cached;
-      const dataUrl = renderHeatmapCanvas(cached, pollutant, CANVAS_SIZE, CANVAS_SIZE);
-      if (!dataUrl) return;
-      cleanup();
-      overlayRef.current = L.imageOverlay(
-        dataUrl,
-        L.latLngBounds([cached.bounds.south, cached.bounds.west], [cached.bounds.north, cached.bounds.east]),
-        { opacity: 1, interactive: false, zIndex: 200 },
-      ).addTo(map);
+      fetchedBoundsRef.current = { s, w, n, e, z: zoom };
+      renderOverlay(cached, pollutant);
       return;
     }
 
-    // Stale data → show immediately
-    const stale = gridCache.getStale(s, w, n, e, zoom);
-    if (stale) {
-      lastGridRef.current = stale;
-      const dataUrl = renderHeatmapCanvas(stale, pollutant, CANVAS_SIZE, CANVAS_SIZE);
-      if (dataUrl) {
-        cleanup();
-        overlayRef.current = L.imageOverlay(
-          dataUrl,
-          L.latLngBounds([stale.bounds.south, stale.bounds.west], [stale.bounds.north, stale.bounds.east]),
-          { opacity: 1, interactive: false, zIndex: 200 },
-        ).addTo(map);
-      }
+    // 2. Fallback: stale / nearest-zoom / any overlapping → show immediately
+    const fallback = gridCache.getStale(s, w, n, e, zoom)
+      ?? gridCache.getNearestZoom(s, w, n, e, zoom)
+      ?? gridCache.getAnyOverlapping(s, w, n, e, zoom);
+    if (fallback) {
+      lastGridRef.current = fallback;
+      renderOverlay(fallback, pollutant);
+      // Don't update fetchedBoundsRef — still need fresh data
     }
+    // If no fallback: old overlay stays visible (no cleanup)
 
-    // Abort previous, fetch fresh
+    // 3. Fetch fresh
     controllerRef.current?.abort();
     const ac = new AbortController();
     controllerRef.current = ac;
@@ -224,23 +255,16 @@ export function useAQIHeatmapLayer(
 
     gridCache.set(s, w, n, e, zoom, data);
     lastGridRef.current = data;
-
-    const dataUrl = renderHeatmapCanvas(data, pollutant, CANVAS_SIZE, CANVAS_SIZE);
-    if (!dataUrl) return;
-    cleanup();
-    overlayRef.current = L.imageOverlay(
-      dataUrl,
-      L.latLngBounds([data.bounds.south, data.bounds.west], [data.bounds.north, data.bounds.east]),
-      { opacity: 1, interactive: false, zIndex: 200 },
-    ).addTo(map);
-  }, [map, visible, pollutant, cleanup]);
+    fetchedBoundsRef.current = { s, w, n, e, z: zoom };
+    renderOverlay(data, pollutant);
+  }, [map, visible, pollutant, cleanup, renderOverlay, viewportCovered]);
 
   // Pollutant change → re-render from cached grid (0 HTTP)
   useEffect(() => {
     if (lastPollutantRef.current !== pollutant) {
       lastPollutantRef.current = pollutant;
       if (visible && lastGridRef.current) {
-        rerenderCurrent();
+        renderOverlay(lastGridRef.current, pollutant);
         return;
       }
     }
@@ -253,21 +277,37 @@ export function useAQIHeatmapLayer(
     fetchAndRender();
     return () => {
       controllerRef.current?.abort();
-      cleanup();
     };
-  }, [visible, pollutant, fetchAndRender, cleanup, map, rerenderCurrent]);
+  }, [visible, pollutant, fetchAndRender, cleanup, map, renderOverlay]);
 
-  // Map move → debounced 400ms
+  // Cleanup overlay on unmount (but don't on every re-render)
+  useEffect(() => {
+    return () => { cleanup(); };
+  }, [cleanup]);
+
+  // ── Map move → leading throttle (500ms) ────────────────────
   useEffect(() => {
     if (!map || !visible) return;
     const onMove = () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(fetchAndRender, 400);
+      // If viewport still covered → skip
+      if (viewportCovered() && lastGridRef.current) return;
+
+      const now = Date.now();
+      if (now - lastThrottleRef.current > 500) {
+        fetchAndRender();
+        lastThrottleRef.current = now;
+      } else {
+        if (trailingRef.current) clearTimeout(trailingRef.current);
+        trailingRef.current = setTimeout(() => {
+          fetchAndRender();
+          lastThrottleRef.current = Date.now();
+        }, 500);
+      }
     };
     map.on('moveend', onMove);
     return () => {
       map.off('moveend', onMove);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (trailingRef.current) clearTimeout(trailingRef.current);
     };
-  }, [map, visible, fetchAndRender]);
+  }, [map, visible, fetchAndRender, viewportCovered]);
 }

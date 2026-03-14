@@ -6,5 +6,11 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/vayu/road-aqi?south=-6.22&west=106.80&north=-6.15&east=106.87&zoom=14",
+      "schedule": "0 0 * * *"
+    }
   ]
 }

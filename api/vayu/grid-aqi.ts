@@ -70,19 +70,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid bounding box' });
   }
 
-  // Limit bbox span (max 90° for continental views)
-  if (n - s > 90 || e - w > 180) {
+  // Limit bbox span (max 180° for global views, padded)
+  if (n - s > 180 || e - w > 360) {
     return res.status(400).json({ error: 'Bounding box too large' });
   }
 
   try {
-    // Cache key (quantize to 1° grid for dedup)
-    const q = (v: number) => Math.round(v).toFixed(0);
+    // Cache key (quantize to 2° grid for dedup — coarser = more hits)
+    const q = (v: number) => (Math.round(v / 2) * 2).toFixed(0);
     const cacheKey = `vayu:grid:${q(s)}:${q(w)}:${q(n)}:${q(e)}:r${gridRes}`;
 
     const cached = await redisGet(cacheKey);
     if (cached) {
-      res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=3600');
+      res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
       res.setHeader('X-Cache', 'HIT');
       return res.status(200).json(JSON.parse(cached));
     }
@@ -142,7 +142,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Cache 60 min (low-zoom data changes slowly)
     await redisSetEx(cacheKey, 3600, JSON.stringify(result));
 
-    res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=3600');
+    res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
     res.setHeader('X-Cache', 'MISS');
     return res.status(200).json(result);
 
