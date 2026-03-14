@@ -172,21 +172,20 @@ function roadWeight(highway: string): number {
 // ─── Zoom-based road query params (LOD: Level of Detail) ────
 // At low zoom: only major roads (residential is sub-pixel anyway)
 // At high zoom: all roads including gang/lorong
-// This matches how Google Maps / Mapbox render road layers.
+// NO LIMIT at z13+ — LIMIT with non-spatial ORDER causes random spatial gaps.
+// Payload size is controlled by coordinate truncation (5 decimals = ~1.1m).
 function getQueryParams(zoom: number): { limit: number; highways: string[] | null; simplify: number } {
-  if (zoom >= 15) return { limit: 20000, highways: null, simplify: 0 };
-  if (zoom >= 14) return { limit: 15000, highways: null, simplify: 0 };
-  if (zoom >= 13) return { limit: 8000, highways: null, simplify: 0.0001 };
-  if (zoom >= 12) return { limit: 3000, highways: [
+  if (zoom >= 13) return { limit: 50000, highways: null, simplify: 0 };
+  if (zoom >= 12) return { limit: 5000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
     'tertiary', 'tertiary_link',
   ], simplify: 0.0002 };
-  if (zoom >= 11) return { limit: 1500, highways: [
+  if (zoom >= 11) return { limit: 3000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
   ], simplify: 0.0005 };
-  return { limit: 800, highways: [
+  return { limit: 1500, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link',
   ], simplify: 0.0005 };
@@ -1001,12 +1000,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         geometry = JSON.parse(road.geojson);
       } catch { continue; }
 
-      // Round coordinates to 5 decimal places (~1.1m precision)
-      // Reduces JSON payload by ~30% (15 decimal digits → 5)
-      geometry.coordinates = geometry.coordinates.map(([lon, lat]) => [
-        Math.round(lon * 1e5) / 1e5,
-        Math.round(lat * 1e5) / 1e5,
-      ]);
+      // Truncate coordinates to 5 decimals (~1.1m precision)
+      // Reduces payload by ~40% (Supabase returns 15 decimals)
+      geometry.coordinates = geometry.coordinates.map(
+        ([lon, lat, ...rest]) => rest.length > 0
+          ? [Math.round(lon * 1e5) / 1e5, Math.round(lat * 1e5) / 1e5, ...rest]
+          : [Math.round(lon * 1e5) / 1e5, Math.round(lat * 1e5) / 1e5]
+      );
 
       // Get road centroid for baseline interpolation
       const coords = geometry.coordinates;
