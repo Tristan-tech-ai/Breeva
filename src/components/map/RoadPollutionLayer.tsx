@@ -8,6 +8,9 @@ export interface RoadLayerMeta {
   wind_speed: number;
   waqi_station: string | null;
   satellite_no2: boolean;
+  iqair_aqi: number | null;
+  iqair_city: string | null;
+  iqair_validation: 'cross-validated' | 'partially-validated' | 'divergent' | null;
   count: number;
 }
 
@@ -181,6 +184,9 @@ export function useRoadPollutionLayer(
         wind_speed: data.meta.wind_speed,
         waqi_station: data.meta.waqi_station,
         satellite_no2: data.meta.satellite_no2 ?? false,
+        iqair_aqi: data.meta.iqair_aqi ?? null,
+        iqair_city: data.meta.iqair_city ?? null,
+        iqair_validation: data.meta.iqair_validation ?? null,
         count: data.meta.count,
       });
     },

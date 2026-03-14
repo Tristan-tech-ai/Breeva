@@ -497,6 +497,115 @@ function o3AQIToUg(aqi: number): number {
   return 200 * 2.0;
 }
 
+// ─── IQAir daily budget tracker ─────────────────────────────
+// Community plan: 500 req/day, 10K/month. We set budget to 450 with 50 buffer.
+async function canCallIQAir(): Promise<boolean> {
+  const key = `iqair:budget:${new Date().toISOString().slice(0, 10)}`;
+  const raw = await redisGet(key);
+  const used = raw ? parseInt(raw, 10) : 0;
+  return used < 450;
+}
+
+async function recordIQAirCall(): Promise<void> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return;
+  const key = `iqair:budget:${new Date().toISOString().slice(0, 10)}`;
+  try {
+    await fetch(`${url}/incr/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    await fetch(`${url}/expire/${encodeURIComponent(key)}/172800`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch { /* non-fatal */ }
+}
+
+// ─── IQAir cross-validation ─────────────────────────────────
+// Fetches nearest city AQI from IQAir as third-party reference.
+// Cached 1 hour (stations update hourly). Quantized to 0.5° grid (~55km).
+interface IQAirData {
+  aqius: number;
+  aqicn: number;
+  mainus: string;
+  city: string;
+  country: string;
+  ts: string;
+  weather: { tp: number; hu: number; ws: number; wd: number; pr: number } | null;
+}
+
+async function fetchIQAirCity(lat: number, lon: number): Promise<IQAirData | null> {
+  const apiKey = process.env.IQAIR_API_KEY;
+  if (!apiKey) return null;
+
+  const q = (v: number) => (Math.round(v * 2) / 2).toFixed(1);
+  const cacheKey = `iqair:city:${q(lat)}:${q(lon)}`;
+
+  const cached = await redisGet(cacheKey);
+  if (cached) {
+    try { return JSON.parse(cached); } catch { /* fall through */ }
+  }
+
+  if (!(await canCallIQAir())) return null;
+
+  try {
+    const resp = await fetch(
+      `https://api.airvisual.com/v2/nearest_city?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&key=${encodeURIComponent(apiKey)}`
+    );
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    if (json.status !== 'success' || !json.data?.current?.pollution) return null;
+
+    await recordIQAirCall();
+
+    const { pollution, weather } = json.data.current;
+    const result: IQAirData = {
+      aqius: pollution.aqius,
+      aqicn: pollution.aqicn,
+      mainus: pollution.mainus || 'p2',
+      city: json.data.city || '',
+      country: json.data.country || '',
+      ts: pollution.ts || '',
+      weather: weather ? { tp: weather.tp, hu: weather.hu, ws: weather.ws, wd: weather.wd, pr: weather.pr } : null,
+    };
+
+    await redisSetEx(cacheKey, 3600, JSON.stringify(result));
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+// ─── IQAir cross-validation scoring ─────────────────────────
+interface IQAirValidation {
+  iqairAQI: number;
+  iqairCity: string;
+  confidenceAdj: number;
+  validationStatus: 'cross-validated' | 'partially-validated' | 'divergent';
+}
+
+function crossValidateIQAir(vayuAQI: number, iqair: IQAirData): IQAirValidation {
+  const diff = Math.abs(vayuAQI - iqair.aqius);
+  const maxVal = Math.max(vayuAQI, iqair.aqius, 1);
+  const pctDiff = diff / maxVal;
+
+  let confidenceAdj: number;
+  let validationStatus: IQAirValidation['validationStatus'];
+
+  if (pctDiff < 0.10) {
+    confidenceAdj = 1.0;
+    validationStatus = 'cross-validated';
+  } else if (pctDiff < 0.25) {
+    confidenceAdj = 0.85;
+    validationStatus = 'partially-validated';
+  } else {
+    confidenceAdj = 0.65;
+    validationStatus = 'divergent';
+  }
+
+  return { iqairAQI: iqair.aqius, iqairCity: iqair.city, confidenceAdj, validationStatus };
+}
+
 // ─── Supabase RPC: find_roads_in_bbox ───────────────────────
 async function findRoadsInBbox(
   south: number, west: number, north: number, east: number, limit: number
@@ -647,12 +756,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // WAQI station bias correction (only for current conditions, not forecast)
     const cLat = (s + n) / 2;
     const cLon = (w + e) / 2;
-    const [bias, satNO2Interp] = await Promise.all([
+    const [bias, satNO2Interp, iqairData] = await Promise.all([
       fh === 0
         ? fetchWAQIBias(cLat, cLon, baselineCenter)
         : Promise.resolve({ pm25: 0, pm10: 0, no2: 0, o3: 0, stationName: null } as WAQIBias),
       fh === 0
         ? fetchSatelliteNO2(s, w, n, e)
+        : Promise.resolve(null),
+      fh === 0
+        ? fetchIQAirCity(cLat, cLon)
         : Promise.resolve(null),
     ]);
 
@@ -707,6 +819,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // IQAir cross-validation: compare median road AQI vs IQAir city AQI
+    let iqairValidation: IQAirValidation | null = null;
+    if (iqairData && features.length > 0) {
+      const sortedAQIs = features.map(f => f.aqi).sort((a, b) => a - b);
+      const medianAQI = sortedAQIs[Math.floor(sortedAQIs.length / 2)];
+      iqairValidation = crossValidateIQAir(medianAQI, iqairData);
+    }
+
     const result = {
       roads: features,
       meta: {
@@ -722,6 +842,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         waqi_bias_pm25: Math.round(bias.pm25 * 100) / 100,
         waqi_bias_no2: Math.round(bias.no2 * 100) / 100,
         satellite_no2: !!satNO2Interp,
+        iqair_aqi: iqairValidation?.iqairAQI ?? null,
+        iqair_city: iqairValidation?.iqairCity ?? null,
+        iqair_validation: iqairValidation?.validationStatus ?? null,
+        iqair_confidence_adj: iqairValidation?.confidenceAdj ?? null,
         computed_at: new Date().toISOString(),
       },
     };

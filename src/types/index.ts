@@ -248,6 +248,10 @@ export interface RoadAQIResponse {
     waqi_bias_pm25: number;
     waqi_bias_no2: number;
     satellite_no2: boolean;
+    iqair_aqi: number | null;
+    iqair_city: string | null;
+    iqair_validation: 'cross-validated' | 'partially-validated' | 'divergent' | null;
+    iqair_confidence_adj: number | null;
     computed_at: string;
   };
 }

@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Map, Satellite, Mountain, Wind, Store,
-  TreePine, Activity, Clock, Radio,
+  TreePine, Activity, Clock, Radio, ShieldCheck,
 } from 'lucide-react';
 import type { AirQualityData, PollutantType } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
@@ -311,7 +311,7 @@ export default function MapLayersSheet({
                       </div>
 
                       {/* Weather & data status bar */}
-                      {roadLayerMeta && (
+                      {roadLayerMeta && (<>
                         <div className="mt-3 flex items-center gap-3 text-[10px] text-gray-400 dark:text-gray-500">
                           <div className="flex items-center gap-1">
                             <Wind className="w-3 h-3" />
@@ -333,7 +333,26 @@ export default function MapLayersSheet({
                             <span>{roadLayerMeta.count} roads</span>
                           </div>
                         </div>
-                      )}
+                        {roadLayerMeta.iqair_validation && (
+                          <div className={`mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] border ${
+                            roadLayerMeta.iqair_validation === 'cross-validated'
+                              ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/25'
+                              : roadLayerMeta.iqair_validation === 'partially-validated'
+                              ? 'bg-amber-500/15 text-amber-500 border-amber-500/25'
+                              : 'bg-red-500/15 text-red-500 border-red-500/25'
+                          }`}>
+                            <ShieldCheck className="w-3 h-3" />
+                            <span>
+                              {roadLayerMeta.iqair_validation === 'cross-validated' ? 'Verified by IQAir'
+                                : roadLayerMeta.iqair_validation === 'partially-validated' ? 'Partially verified'
+                                : 'IQAir divergent'}
+                            </span>
+                            {roadLayerMeta.iqair_aqi != null && (
+                              <span className="font-semibold">AQI {roadLayerMeta.iqair_aqi}</span>
+                            )}
+                          </div>
+                        )}
+                      </>)}
 
                       {/* Forecast time slider */}
                       <div className="mt-4 p-3 rounded-xl bg-white dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700/50">
