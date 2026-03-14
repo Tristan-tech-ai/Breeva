@@ -178,8 +178,8 @@ function getQueryParams(zoom: number): { limit: number; highways: string[] | nul
   if (zoom >= 14) return { limit: 1000, highways: null };         // all roads
   if (zoom >= 13) return { limit: 800, highways: null };          // all roads
   if (zoom >= 12) return { limit: 600, highways: null };          // all roads including residential
-  if (zoom >= 11) return { limit: 350, highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link'] };
-  return { limit: 200, highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link'] };
+  if (zoom >= 11) return { limit: 350, highways: null };          // all roads
+  return { limit: 200, highways: null };                           // all roads
 }
 
 // ─── Surface type → PM₁₀ coarse fraction multiplier ────────
@@ -291,14 +291,22 @@ async function fetchBaselineBatch(
 
 // ─── Multi-point baseline grid with Redis cache ─────────────
 // Fetches 5 points (center + 4 corners) for spatial interpolation.
-// Cached in Redis for 15 min at coarse ~0.1° grid → most viewport moves = cache HIT.
+// Cached in Redis for 15 min.
+// Uses FIXED 0.05° grid around center (not viewport corners) so that the
+// same location always gets the same interpolated baseline regardless of zoom.
+const BL_HALF = 0.05; // ~5.5 km — covers city-scale spatial variation
+
 async function fetchBaselineGrid(south: number, west: number, north: number, east: number, forecastHour = 0) {
   const cLat = (south + north) / 2;
   const cLon = (west + east) / 2;
 
-  // Coarse grid key: ~0.1° ≈ 10km → covers entire city area
+  // Cache key based on quantized CENTER (~0.1° ≈ 10km) — zoom-independent
   const q = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
-  const baselineCacheKey = `vayu:bl:${q(south)}:${q(west)}:${q(north)}:${q(east)}:fh${forecastHour}`;
+  const baselineCacheKey = `vayu:bl:${q(cLat)}:${q(cLon)}:fh${forecastHour}`;
+
+  // Fixed grid bounds around center
+  const gN = cLat + BL_HALF, gS = cLat - BL_HALF;
+  const gW = cLon - BL_HALF, gE = cLon + BL_HALF;
 
   // Check Redis cache first (15 min TTL)
   const cachedBaseline = await redisGet(baselineCacheKey);
@@ -308,21 +316,21 @@ async function fetchBaselineGrid(south: number, west: number, north: number, eas
         center: BaselineData; nw: BaselineData; ne: BaselineData;
         sw: BaselineData; se: BaselineData;
       };
-      const interpolate = buildInterpolator(south, west, north, east, center, nw, ne, sw, se);
+      const interpolate = buildInterpolator(gS, gW, gN, gE, center, nw, ne, sw, se);
       return { center, interpolate };
     } catch { /* fall through to fetch */ }
   }
 
   // Batch fetch: 5 points in 2 HTTP calls (instead of 10)
-  const lats = [cLat, north, north, south, south];
-  const lons = [cLon, west, east, west, east];
+  const lats = [cLat, gN, gN, gS, gS];
+  const lons = [cLon, gW, gE, gW, gE];
   const results = await fetchBaselineBatch(lats, lons, forecastHour);
   const [center, nw, ne, sw, se] = results;
 
   // Cache for 15 min
   await redisSetEx(baselineCacheKey, 900, JSON.stringify({ center, nw, ne, sw, se }));
 
-  const interpolate = buildInterpolator(south, west, north, east, center, nw, ne, sw, se);
+  const interpolate = buildInterpolator(gS, gW, gN, gE, center, nw, ne, sw, se);
   return { center, interpolate };
 }
 

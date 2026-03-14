@@ -137,7 +137,6 @@ export function useRoadPollutionLayer(
   const layerRef = useRef<L.LayerGroup>(L.layerGroup());
   const controllerRef = useRef<AbortController | null>(null);
   const dataRef = useRef<RoadAQIResponse | null>(null);
-  const lastThrottleRef = useRef(0);
   const trailingRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [meta, setMeta] = useState<RoadLayerMeta | null>(null);
   // Track the fetched padded bounds to know if viewport still covered
@@ -203,27 +202,18 @@ export function useRoadPollutionLayer(
       && fb.n >= b.getNorth() && fb.e >= b.getEast();
   }, [map]);
 
-  // ── Fetch data with viewport padding ───────────────────────
-  const fetchData = useCallback(async () => {
+  // ── Network fetch (only called after debounce) ─────────────
+  const serverFetch = useCallback(async () => {
     if (!map || !visible) return;
     const zoom = Math.round(map.getZoom());
-    if (zoom < MIN_ZOOM) {
-      layerRef.current.clearLayers();
-      dataRef.current = null;
-      fetchedBoundsRef.current = null;
-      setMeta(null);
-      return;
-    }
-
-    // If viewport is still covered by last fetch → skip (0 HTTP)
+    if (zoom < MIN_ZOOM) return;
     if (viewportCovered() && dataRef.current) return;
 
-    // Pad viewport by 80% on each side → fetches ~3× area for more coverage
     const bounds = map.getBounds().pad(0.8);
     const s = bounds.getSouth(), w = bounds.getWest();
     const n = bounds.getNorth(), e = bounds.getEast();
 
-    // 1. Fresh cache hit → atomic swap, skip HTTP
+    // Fresh cache check (may have been populated by prefetch since debounce started)
     const cached = roadCache.get(s, w, n, e, zoom);
     if (cached) {
       dataRef.current = cached;
@@ -232,18 +222,7 @@ export function useRoadPollutionLayer(
       return;
     }
 
-    // 2. Stale / nearest-zoom / any overlapping → show immediately
-    const fallback = roadCache.getStale(s, w, n, e, zoom)
-      ?? roadCache.getNearestZoom(s, w, n, e, zoom)
-      ?? roadCache.getAnyOverlapping(s, w, n, e, zoom);
-    if (fallback) {
-      dataRef.current = fallback;
-      atomicSwap(fallback, pollutant);
-      // Don't update fetchedBoundsRef — this is stale, still need fresh
-    }
-    // If no fallback at all, OLD polylines stay visible (no clearLayers)
-
-    // 3. Abort in-flight, start new fetch
+    // Abort previous in-flight request
     controllerRef.current?.abort();
     const ac = new AbortController();
     controllerRef.current = ac;
@@ -269,6 +248,41 @@ export function useRoadPollutionLayer(
       if (err instanceof DOMException && err.name === 'AbortError') return;
     }
   }, [map, visible, forecastHour, pollutant, atomicSwap, viewportCovered]);
+
+  // ── Instant cache render (called synchronously on move) ────
+  const tryRenderFromCache = useCallback((): boolean => {
+    if (!map) return false;
+    const zoom = Math.round(map.getZoom());
+    if (zoom < MIN_ZOOM) {
+      layerRef.current.clearLayers();
+      dataRef.current = null;
+      fetchedBoundsRef.current = null;
+      setMeta(null);
+      return true; // "handled" — no server fetch needed
+    }
+    if (viewportCovered() && dataRef.current) return true;
+
+    const bounds = map.getBounds().pad(0.8);
+    const s = bounds.getSouth(), w = bounds.getWest();
+    const n = bounds.getNorth(), e = bounds.getEast();
+
+    const cached = roadCache.get(s, w, n, e, zoom);
+    if (cached) {
+      dataRef.current = cached;
+      fetchedBoundsRef.current = { s, w, n, e, z: zoom };
+      atomicSwap(cached, pollutant);
+      return true;
+    }
+
+    // Show stale/fallback instantly (partial > blank)
+    const fallback = roadCache.getStale(s, w, n, e, zoom)
+      ?? roadCache.getNearestZoom(s, w, n, e, zoom)
+      ?? roadCache.getAnyOverlapping(s, w, n, e, zoom);
+    if (fallback) {
+      atomicSwap(fallback, pollutant);
+    }
+    return false; // still need server fetch
+  }, [map, pollutant, atomicSwap, viewportCovered]);
 
   // ── Prefetch 4 adjacent tiles during idle ──────────────────
   const prefetchAdjacent = useCallback(() => {
@@ -315,44 +329,41 @@ export function useRoadPollutionLayer(
     atomicSwap(dataRef.current, pollutant);
   }, [pollutant, visible, atomicSwap]);
 
-  // Visibility / forecastHour toggle → may need fetch
+  // Visibility / forecastHour toggle → instant fetch (no debounce)
   useEffect(() => {
     if (!visible) {
       layerRef.current.clearLayers();
       controllerRef.current?.abort();
       return;
     }
-    fetchData();
+    // Toggle ON → try cache first, then server fetch immediately
+    if (!tryRenderFromCache()) {
+      serverFetch();
+    }
     return () => { controllerRef.current?.abort(); };
-  }, [visible, forecastHour, fetchData]);
+  }, [visible, forecastHour, tryRenderFromCache, serverFetch]);
 
-  // ── Map move → LEADING THROTTLE 250ms (fast response like POI) ──
+  // ── Map move → cache-first instant + debounced network fetch ──
+  // During continuous pan, only cached data renders instantly.
+  // Network fetch fires ONCE 400ms after the user stops moving,
+  // preventing the abort-storm that made pan loading very slow.
   useEffect(() => {
     if (!map || !visible) return;
     const onMove = () => {
-      const now = Date.now();
-      // If viewport still covered → skip entirely
-      if (viewportCovered() && dataRef.current) return;
+      // Try instant cache render (0ms latency)
+      const handled = tryRenderFromCache();
+      if (handled) return; // cache covered viewport — done
 
-      if (now - lastThrottleRef.current > 250) {
-        // Leading edge: fire immediately
-        fetchData();
-        lastThrottleRef.current = now;
-      } else {
-        // Trailing: schedule for after interval
-        if (trailingRef.current) clearTimeout(trailingRef.current);
-        trailingRef.current = setTimeout(() => {
-          fetchData();
-          lastThrottleRef.current = Date.now();
-        }, 250);
-      }
+      // Debounce server fetch: wait for user to stop panning
+      if (trailingRef.current) clearTimeout(trailingRef.current);
+      trailingRef.current = setTimeout(serverFetch, 400);
     };
     map.on('moveend', onMove);
     return () => {
       map.off('moveend', onMove);
       if (trailingRef.current) clearTimeout(trailingRef.current);
     };
-  }, [map, visible, fetchData, viewportCovered]);
+  }, [map, visible, tryRenderFromCache, serverFetch]);
 
   // Prefetch adjacent tiles after data loaded (idle callback)
   useEffect(() => {
