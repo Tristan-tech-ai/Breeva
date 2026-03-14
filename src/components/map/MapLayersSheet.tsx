@@ -4,6 +4,7 @@ import {
   TreePine, Activity, Clock,
 } from 'lucide-react';
 import type { AirQualityData, PollutantType } from '../../types';
+import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { POLLUTANT_OPTIONS, getColorStops } from './RoadPollutionLayer';
 
 interface MapLayersSheetProps {
@@ -20,6 +21,7 @@ interface MapLayersSheetProps {
   onPollutantChange?: (p: PollutantType) => void;
   forecastHour?: number;
   onForecastHourChange?: (h: number) => void;
+  roadLayerMeta?: RoadLayerMeta | null;
 }
 
 const mapTypes: { id: 'voyager' | 'osm' | 'satellite'; label: string; icon: typeof Map; preview: string }[] = [
@@ -57,6 +59,7 @@ export default function MapLayersSheet({
   onPollutantChange,
   forecastHour = 0,
   onForecastHourChange,
+  roadLayerMeta,
 }: MapLayersSheetProps) {
   const activePollutant = POLLUTANT_OPTIONS.find((o) => o.id === pollutant) || POLLUTANT_OPTIONS[0];
   const colorStops = getColorStops(pollutant);
@@ -224,6 +227,21 @@ export default function MapLayersSheet({
                   className="overflow-hidden"
                 >
                   <div className="mx-5 mb-5 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 overflow-hidden">
+                    {/* Mode header: Concentration vs AQI (eLichens-style) */}
+                    <div className="flex items-center gap-2 px-4 pt-3 pb-1.5">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                        pollutant === 'aqi'
+                          ? 'text-gray-400 dark:text-gray-500'
+                          : 'text-sky-600 dark:text-sky-400'
+                      }`}>
+                        {pollutant === 'aqi' ? 'Air Quality Index' : 'Concentration'}
+                      </span>
+                      <span className="text-[9px] text-gray-300 dark:text-gray-600">•</span>
+                      <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                        {pollutant === 'aqi' ? 'Composite index (0-500)' : `${activePollutant.label} in ${activePollutant.unit}`}
+                      </span>
+                    </div>
+
                     {/* Pollutant tabs */}
                     <div className="flex border-b border-gray-200 dark:border-gray-700">
                       {POLLUTANT_OPTIONS.map((opt) => (
@@ -279,18 +297,37 @@ export default function MapLayersSheet({
                         />
                       </div>
 
-                      {/* Scale labels */}
+                      {/* Scale labels — show units for concentration mode */}
                       <div className="flex justify-between px-0.5">
                         <span className="text-[9px] font-mono text-gray-400 dark:text-gray-500">
-                          {colorStops[0].v}
+                          {pollutant === 'aqi' ? 'Good' : `${colorStops[0].v}`}
                         </span>
                         <span className="text-[9px] font-mono text-gray-400 dark:text-gray-500">
-                          {colorStops[Math.floor(colorStops.length / 2)].v}
+                          {colorStops[Math.floor(colorStops.length / 2)].v}{pollutant !== 'aqi' && ' µg/m³'}
                         </span>
                         <span className="text-[9px] font-mono text-gray-400 dark:text-gray-500">
-                          {colorStops[colorStops.length - 1].v}
+                          {pollutant === 'aqi' ? 'Hazardous' : `${colorStops[colorStops.length - 1].v}`}
                         </span>
                       </div>
+
+                      {/* Weather & data status bar */}
+                      {roadLayerMeta && (
+                        <div className="mt-3 flex items-center gap-3 text-[10px] text-gray-400 dark:text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <Wind className="w-3 h-3" />
+                            <span>{roadLayerMeta.wind_speed.toFixed(1)} m/s</span>
+                          </div>
+                          {roadLayerMeta.waqi_station && (
+                            <div className="flex items-center gap-1 truncate">
+                              <Activity className="w-3 h-3 flex-shrink-0" />
+                              <span className="truncate">{roadLayerMeta.waqi_station}</span>
+                            </div>
+                          )}
+                          <div className="ml-auto flex items-center gap-1">
+                            <span>{roadLayerMeta.count} roads</span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Forecast time slider */}
                       <div className="mt-4 p-3 rounded-xl bg-white dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700/50">
@@ -328,10 +365,10 @@ export default function MapLayersSheet({
                       <div className="mt-3 flex items-start gap-2 p-2.5 rounded-xl bg-white dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700/50">
                         <Activity className="w-3.5 h-3.5 text-sky-500 mt-0.5 flex-shrink-0" />
                         <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                          Road-level pollution overlay powered by VAYU CALINE3 dispersion model.
-                          Colors represent estimated concentration per road segment based on traffic volume,
-                          street canyon effect, and real-time weather conditions.
-                          Zoom in (level 13+) to see road-level detail.
+                          {pollutant === 'aqi'
+                            ? 'Air Quality Index (AQI) combines all pollutants into a single 0-500 index. Road colors are mostly uniform since AQI smooths local differences. Switch to a pollutant tab to see per-road concentration detail.'
+                            : `${activePollutant.label} concentration per road segment based on traffic emissions, street canyon trapping, vegetation absorption, and ${forecastHour > 0 ? 'forecast' : 'real-time'} weather. Calibrated with nearest WAQI ground station.`
+                          }
                         </p>
                       </div>
                     </div>

@@ -1,7 +1,14 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import L from 'leaflet';
 import { getRoadAQI } from '../../lib/api';
-import type { PollutantType, RoadAQIFeature } from '../../types';
+import type { PollutantType, RoadAQIFeature, RoadAQIResponse } from '../../types';
+
+// Meta info exposed to UI
+export interface RoadLayerMeta {
+  wind_speed: number;
+  waqi_station: string | null;
+  count: number;
+}
 
 // ── Color scales per pollutant ───────────────────────────────
 
@@ -109,10 +116,11 @@ export function useRoadPollutionLayer(
   visible: boolean,
   pollutant: PollutantType = 'aqi',
   forecastHour = 0,
-) {
+): RoadLayerMeta | null {
   const layerRef = useRef<L.LayerGroup>(L.layerGroup());
   const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const abortRef = useRef(false);
+  const [meta, setMeta] = useState<RoadLayerMeta | null>(null);
 
   const fetchAndRender = useCallback(async () => {
     if (!map || !visible) return;
@@ -120,6 +128,7 @@ export function useRoadPollutionLayer(
     const zoom = map.getZoom();
     if (zoom < MIN_ZOOM) {
       layerRef.current.clearLayers();
+      setMeta(null);
       return;
     }
 
@@ -134,6 +143,13 @@ export function useRoadPollutionLayer(
     );
 
     if (abortRef.current || !data) return;
+
+    // Expose meta to UI
+    setMeta({
+      wind_speed: data.meta.wind_speed,
+      waqi_station: data.meta.waqi_station,
+      count: data.meta.count,
+    });
 
     layerRef.current.clearLayers();
     for (const road of data.roads) {
@@ -194,6 +210,8 @@ export function useRoadPollutionLayer(
       if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
     };
   }, [map, visible, fetchAndRender]);
+
+  return meta;
 }
 
 // ── Pollutant selector labels ────────────────────────────────

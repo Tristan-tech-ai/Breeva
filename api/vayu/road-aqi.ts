@@ -383,13 +383,26 @@ function computeRoadAQI(
   const qNOx  = (traffic * FLEET_EMISSION.nox) / 3600 / 1000;
 
   const veg = LANDUSE_MODIFIERS[road.landuse_proxy || ''] ?? 1.0;
-  // Canyon effect amplified — street canyons trap pollution significantly
-  const canyon = 1.0 + (road.canyon_ratio || 0) * 0.5;
+
+  // Enhanced canyon effect — OSPM-inspired non-linear model
+  // Aspect ratio H/W: deep canyons trap pollution in recirculation vortex
+  const aspectRatio = road.canyon_ratio || 0;
+  // Non-linear: shallow canyons (AR<0.5) have weak effect, deep canyons (AR>1.5) plateau
+  // Wind reduction: canyons shelter from wind, reducing dispersion
+  const canyonTrap = aspectRatio > 0
+    ? 1.0 + 0.8 * (1 - Math.exp(-1.5 * aspectRatio))  // asymptotic: max ~1.8× at very deep canyons
+    : 1.0;
+  // Wind sheltering: deep canyons reduce effective wind speed
+  const windShelter = aspectRatio > 0
+    ? Math.max(0.3, 1.0 - 0.4 * Math.min(aspectRatio, 2.0))  // min 30% of ambient wind
+    : 1.0;
+  const effectiveWind = baseline.wind_speed * windShelter;
+
   // Narrower roads trap pollution more (8m reference width)
   const widthFactor = road.width ? Math.max(0.8, Math.min(1.5, 8.0 / road.width)) : 1.0;
 
-  const pm25Delta = gaussianConc(qPM25, baseline.wind_speed, dist, 0.5) * veg * canyon * widthFactor * jitter;
-  const no2Delta  = gaussianConc(qNOx, baseline.wind_speed, dist, 0.5) * veg * canyon * widthFactor * jitter;
+  const pm25Delta = gaussianConc(qPM25, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * jitter;
+  const no2Delta  = gaussianConc(qNOx, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * jitter;
 
   // PM₁₀ = PM₂.₅ delta + coarse fraction (tire wear, brake dust, road dust)
   const pm10Delta = pm25Delta * 1.8;

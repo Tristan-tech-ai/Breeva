@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { useMapStore } from '../../stores/mapStore';
 import { fetchAQIZones } from './AQIOverlay';
 import { useRoadPollutionLayer } from './RoadPollutionLayer';
+import type { RoadLayerMeta } from './RoadPollutionLayer';
 import POILayer from './POILayer';
 import type { POI } from '../../lib/poi-api';
 import type { Route } from '../../types';
@@ -100,6 +101,7 @@ interface LeafletMapProps {
   activeFilter?: string | null;
   pollutant?: PollutantType;
   forecastHour?: number;
+  onRoadLayerMeta?: (meta: RoadLayerMeta | null) => void;
   onPlaceSelect?: (poi: POI) => void;
 }
 
@@ -111,8 +113,9 @@ function MapController({
   activeFilter,
   pollutant,
   forecastHour,
+  onRoadLayerMeta,
   onPlaceSelect,
-}: Pick<LeafletMapProps, 'showAQIOverlay' | 'showPOIs' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'onPlaceSelect'>) {
+}: Pick<LeafletMapProps, 'showAQIOverlay' | 'showPOIs' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'onRoadLayerMeta' | 'onPlaceSelect'>) {
   const map = useMap();
   const {
     center,
@@ -236,7 +239,12 @@ function MapController({
   }, [routes, map]);
 
   // Road pollution overlay (eLichens-style colored polylines)
-  useRoadPollutionLayer(map, !!showAQIOverlay, pollutant || 'aqi', forecastHour || 0);
+  const roadMeta = useRoadPollutionLayer(map, !!showAQIOverlay, pollutant || 'aqi', forecastHour || 0);
+
+  // Forward road layer meta to parent
+  useEffect(() => {
+    onRoadLayerMeta?.(roadMeta);
+  }, [roadMeta, onRoadLayerMeta]);
 
   // AQI overlay circles (low-zoom fallback when road layer hidden)
   useEffect(() => {
@@ -281,6 +289,7 @@ export default function LeafletMap({
   activeFilter = null,
   pollutant = 'aqi',
   forecastHour = 0,
+  onRoadLayerMeta,
   onPlaceSelect,
 }: LeafletMapProps) {
   const { center } = useMapStore();
@@ -313,6 +322,7 @@ export default function LeafletMap({
           activeFilter={activeFilter}
           pollutant={pollutant}
           forecastHour={forecastHour}
+          onRoadLayerMeta={onRoadLayerMeta}
           onPlaceSelect={onPlaceSelect}
         />
       </MapContainer>

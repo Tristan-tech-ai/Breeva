@@ -46,6 +46,7 @@ import PlaceDetailSheet from '../components/map/PlaceDetailSheet';
 import MapLayersSheet from '../components/map/MapLayersSheet';
 import type { POI } from '../lib/poi-api';
 import type { PollutantType } from '../types';
+import type { RoadLayerMeta } from '../components/map/RoadPollutionLayer';
 
 const FILTER_CHIPS = [
   { key: 'restaurant', label: 'Restaurants', icon: UtensilsCrossed, color: '#ef4444' },
@@ -101,6 +102,7 @@ export default function HomePage() {
   const [showPOIs, setShowPOIs] = useState(true);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [forecastHour, setForecastHour] = useState(0);
+  const [roadLayerMeta, setRoadLayerMeta] = useState<RoadLayerMeta | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'voyager' | 'osm' | 'satellite'>('voyager');
   const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
@@ -145,6 +147,7 @@ export default function HomePage() {
         activeFilter={activeFilter}
         pollutant={pollutant}
         forecastHour={forecastHour}
+        onRoadLayerMeta={setRoadLayerMeta}
         onPlaceSelect={(poi) => setSelectedPOI(poi)}
       />
 
@@ -578,6 +581,7 @@ export default function HomePage() {
         onPollutantChange={setPollutant}
         forecastHour={forecastHour}
         onForecastHourChange={setForecastHour}
+        roadLayerMeta={roadLayerMeta}
       />
 
       {/* Walk Complete modal */}
