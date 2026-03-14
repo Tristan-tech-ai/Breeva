@@ -55,6 +55,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { south, west, north, east, res: resolution, pollutant } = req.query;
+  // Also extract step param for anchored grid
+  const { step: stepParam } = req.query;
   if (!south || !west || !north || !east) {
     return res.status(400).json({ error: 'south, west, north, east required' });
   }
@@ -63,8 +65,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const w = parseFloat(west as string);
   const n = parseFloat(north as string);
   const e = parseFloat(east as string);
-  const gridRes = Math.max(3, Math.min(14, parseInt(resolution as string) || 6));
   const poll = (pollutant as string) || 'aqi';
+  const useStep = stepParam != null && !isNaN(parseFloat(stepParam as string));
 
   if ([s, w, n, e].some(isNaN) || s > n || w > e) {
     return res.status(400).json({ error: 'Invalid bounding box' });
@@ -76,9 +78,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Cache key (quantize to 2° grid for dedup — coarser = more hits)
-    const q = (v: number) => (Math.round(v / 2) * 2).toFixed(0);
-    const cacheKey = `vayu:grid:${q(s)}:${q(w)}:${q(n)}:${q(e)}:r${gridRes}`;
+    let lats: number[];
+    let lons: number[];
+    let gridRows: number;
+    let gridCols: number;
+    let cacheKey: string;
+
+    if (useStep) {
+      // ── Anchored fixed-step global grid ─────────────────────────────────
+      // Points are snapped to origin (0°) so same region = same coordinates
+      // This eliminates color inconsistency across pan/zoom.
+      const step = Math.max(1, Math.min(30, parseFloat(stepParam as string)));
+      const latStart = Math.ceil(s / step) * step;
+      const lonStart = Math.ceil(w / step) * step;
+
+      const latPoints: number[] = [];
+      const lonPoints: number[] = [];
+
+      for (let lat = latStart; lat <= n + 1e-9; lat = Math.round((lat + step) * 1e6) / 1e6) {
+        latPoints.push(Math.round(lat * 100) / 100);
+      }
+      for (let lon = lonStart; lon <= e + 1e-9; lon = Math.round((lon + step) * 1e6) / 1e6) {
+        lonPoints.push(Math.round(lon * 100) / 100);
+      }
+
+      // Edge case: no grid points fit in bbox (bbox < step) — use center
+      if (latPoints.length === 0) latPoints.push(Math.round(((s + n) / 2) * 100) / 100);
+      if (lonPoints.length === 0) lonPoints.push(Math.round(((w + e) / 2) * 100) / 100);
+
+      // Cap to 100 points total to stay within Open-Meteo URL limits
+      const maxPts = 100;
+      while (latPoints.length * lonPoints.length > maxPts && latPoints.length > 1 && lonPoints.length > 1) {
+        if (latPoints.length >= lonPoints.length) latPoints.splice(Math.floor(latPoints.length / 2), 1);
+        else lonPoints.splice(Math.floor(lonPoints.length / 2), 1);
+      }
+
+      gridRows = latPoints.length;
+      gridCols = lonPoints.length;
+      lats = [];
+      lons = [];
+      for (const lat of latPoints) {
+        for (const lon of lonPoints) {
+          lats.push(lat);
+          lons.push(lon);
+        }
+      }
+
+      // Stable cache key based on anchored grid parameters
+      cacheKey = `vayu:grid2:step${step}:${latStart}:${lonStart}:r${gridRows}x${gridCols}:${poll}`;
+    } else {
+      // ── Legacy res-based grid (used by old clients) ──────────────────────
+      const gridRes = Math.max(3, Math.min(14, parseInt(resolution as string) || 6));
+      const latStep = (n - s) / Math.max(1, gridRes - 1);
+      const lonStep = (e - w) / Math.max(1, gridRes - 1);
+      lats = [];
+      lons = [];
+      for (let row = 0; row < gridRes; row++) {
+        for (let col = 0; col < gridRes; col++) {
+          lats.push(Math.round((s + row * latStep) * 100) / 100);
+          lons.push(Math.round((w + col * lonStep) * 100) / 100);
+        }
+      }
+      gridRows = gridRes;
+      gridCols = gridRes;
+      const q = (v: number) => (Math.round(v / 2) * 2).toFixed(0);
+      cacheKey = `vayu:grid:${q(s)}:${q(w)}:${q(n)}:${q(e)}:r${gridRes}`;
+    }
 
     const cached = await redisGet(cacheKey);
     if (cached) {
@@ -87,18 +152,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(JSON.parse(cached));
     }
 
-    // Generate grid coordinates
-    const latStep = (n - s) / Math.max(1, gridRes - 1);
-    const lonStep = (e - w) / Math.max(1, gridRes - 1);
-    const lats: number[] = [];
-    const lons: number[] = [];
-
-    for (let row = 0; row < gridRes; row++) {
-      for (let col = 0; col < gridRes; col++) {
-        lats.push(Math.round((s + row * latStep) * 100) / 100);
-        lons.push(Math.round((w + col * lonStep) * 100) / 100);
-      }
-    }
 
     // Open-Meteo batch: comma-separated coordinates in single request
     const latParam = lats.join(',');
@@ -132,9 +185,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const result = {
       grid,
-      rows: gridRes,
-      cols: gridRes,
-      bounds: { south: s, west: w, north: n, east: e },
+      rows: gridRows,
+      cols: gridCols,
+      // Return actual grid extent (anchored points, not raw query bbox)
+      bounds: {
+        south: lats[0], west: lons[0],
+        north: lats[(gridRows - 1) * gridCols], east: lons[gridCols - 1],
+      },
       pollutant: poll,
       computed_at: new Date().toISOString(),
     };

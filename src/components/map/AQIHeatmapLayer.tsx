@@ -2,20 +2,15 @@ import { useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import type { PollutantType } from '../../types';
 import { getColorStops } from './RoadPollutionLayer';
-import { SpatialTileCache } from '../../lib/spatial-tile-cache';
 
 /**
  * Canvas-based AQI heatmap overlay for low zoom levels (z < 11).
- * Fetches gridded AQ data from /api/vayu/grid-aqi, renders bilinear-interpolated
- * canvas overlay via L.ImageOverlay.
  *
- * Zero-delay techniques:
- * - Persistent canvas (reuse instead of createElement each render)
- * - Atomic overlay swap (setUrl + setBounds on existing overlay)
- * - Leading throttle instead of debounce
- * - Viewport padding for over-fetch
- * - Mip-map fallback across zoom levels
- * - Old overlay stays until new one is ready
+ * KEY FIX — Color consistency:
+ * Grid points are snapped to a fixed global degree-grid (like map tiles).
+ * e.g. at step=10°, points are always at ...-20,-10,0,10,20...
+ * Same real-world location → always same Open-Meteo coordinates queried
+ * → same API response → same color regardless of pan/zoom.
  */
 
 interface GridAQIResponse {
@@ -26,8 +21,53 @@ interface GridAQIResponse {
   pollutant: string;
 }
 
-// Singleton grid cache: 30 entries, 15-min TTL
-const gridCache = new SpatialTileCache<GridAQIResponse>(30, 15);
+// ── Fixed global degree-grid step per zoom tier ───────────────
+// Coarser at low zoom (global scale), finer at high zoom (city scale)
+function getStep(zoom: number): number {
+  if (zoom <= 2) return 30;
+  if (zoom <= 4) return 20;
+  if (zoom <= 6) return 10;
+  if (zoom <= 8) return 5;
+  return 2; // z9-10
+}
+
+// Snap viewport bbox to global fixed-step degree grid.
+// Identical region → identical bbox → identical server request → identical colors.
+function snapBbox(b: L.LatLngBounds, zoom: number): { s: number; w: number; n: number; e: number; step: number } {
+  const step = getStep(zoom);
+  return {
+    s: Math.max(-85, Math.floor(b.getSouth() / step) * step),
+    w: Math.max(-180, Math.floor(b.getWest()  / step) * step),
+    n: Math.min(85,   Math.ceil(b.getNorth()  / step) * step),
+    e: Math.min(180,  Math.ceil(b.getEast()   / step) * step),
+    step,
+  };
+}
+
+// ── Simple TTL cache keyed by snapped bbox + step + pollutant ─
+// Plain Map (not SpatialTileCache) because lookup is exact-key, not spatial.
+interface HeatCacheEntry { data: GridAQIResponse; fetchedAt: number; }
+const heatmapCache = new Map<string, HeatCacheEntry>();
+const HEATMAP_TTL = 30 * 60_000; // 30 min
+
+function heatKey(s: number, w: number, n: number, e: number, step: number, poll: string): string {
+  return `${step}:${s}:${w}:${n}:${e}:${poll}`;
+}
+function heatGet(s: number, w: number, n: number, e: number, step: number, poll: string): GridAQIResponse | null {
+  const entry = heatmapCache.get(heatKey(s, w, n, e, step, poll));
+  if (!entry || Date.now() - entry.fetchedAt > HEATMAP_TTL) return null;
+  return entry.data;
+}
+function heatGetStale(s: number, w: number, n: number, e: number, step: number, poll: string): GridAQIResponse | null {
+  return heatmapCache.get(heatKey(s, w, n, e, step, poll))?.data ?? null;
+}
+function heatSet(s: number, w: number, n: number, e: number, step: number, poll: string, data: GridAQIResponse): void {
+  if (heatmapCache.size > 60) {
+    const oldest = heatmapCache.keys().next().value;
+    if (oldest) heatmapCache.delete(oldest);
+  }
+  heatmapCache.set(heatKey(s, w, n, e, step, poll), { data, fetchedAt: Date.now() });
+}
 
 // ── Color interpolation using same scales as road layer ──────
 
@@ -113,18 +153,17 @@ function renderHeatmapCanvas(
 
 // ── Fetch grid data ──────────────────────────────────────────
 
+// Pass `step` instead of `res` so server uses same anchored grid points.
 async function fetchGridAQI(
   south: number, west: number, north: number, east: number,
-  zoom: number, pollutant: string,
+  step: number, pollutant: string,
   signal?: AbortSignal,
 ): Promise<GridAQIResponse | null> {
-  // More grid points at low zoom for smoother global coverage
-  const gridRes = zoom <= 2 ? 8 : zoom <= 4 ? 10 : zoom <= 6 ? 10 : zoom <= 8 ? 12 : 14;
   try {
     const params = new URLSearchParams({
-      south: south.toFixed(4), west: west.toFixed(4),
-      north: north.toFixed(4), east: east.toFixed(4),
-      res: String(gridRes), pollutant,
+      south: String(south), west: String(west),
+      north: String(north), east: String(east),
+      step: String(step), pollutant,
     });
     const resp = await fetch(`/api/vayu/grid-aqi?${params}`, { signal });
     if (!resp.ok) return null;
@@ -151,7 +190,8 @@ export function useAQIHeatmapLayer(
   const lastGridRef = useRef<GridAQIResponse | null>(null);
   const lastThrottleRef = useRef(0);
   const trailingRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const fetchedBoundsRef = useRef<{ s: number; w: number; n: number; e: number; z: number } | null>(null);
+  // Track snapped bounds + step tier to know when viewport leaves covered area
+  const fetchedBoundsRef = useRef<{ s: number; w: number; n: number; e: number; step: number } | null>(null);
   // Persistent canvas — never recreated
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -199,17 +239,14 @@ export function useAQIHeatmapLayer(
   // Check if current viewport is covered by last fetched data
   const viewportCovered = useCallback((): boolean => {
     if (!map || !fetchedBoundsRef.current) return false;
-    const b = map.getBounds();
-    const z = Math.round(map.getZoom());
     const fb = fetchedBoundsRef.current;
-    // Clamp viewport to valid range for comparison
-    const vs = Math.max(-85.05, b.getSouth());
-    const vn = Math.min(85.05, b.getNorth());
-    const vw = Math.max(-180, b.getWest());
-    const ve = Math.min(180, b.getEast());
-    return fb.z === z
-      && fb.s <= vs && fb.w <= vw
-      && fb.n >= vn && fb.e >= ve;
+    const zoom = Math.round(map.getZoom());
+    // If step tier changed (significant zoom), must re-fetch for new resolution
+    if (getStep(zoom) !== fb.step) return false;
+    const b = map.getBounds();
+    const vs = Math.max(-85, b.getSouth()), vn = Math.min(85, b.getNorth());
+    const vw = Math.max(-180, b.getWest()), ve = Math.min(180, b.getEast());
+    return fb.s <= vs && fb.w <= vw && fb.n >= vn && fb.e >= ve;
   }, [map]);
 
   const fetchAndRender = useCallback(async () => {
@@ -225,30 +262,20 @@ export function useAQIHeatmapLayer(
     // If viewport still covered → skip
     if (viewportCovered() && lastGridRef.current) return;
 
-    // Pad viewport — reduce padding at low zoom to avoid overflow
-    // At z≤4 near-global, no padding needed; at z5-7 light padding; z8+ full 50%
-    const padFactor = zoom <= 4 ? 0 : zoom <= 7 ? 0.25 : 0.5;
-    const rawBounds = map.getBounds().pad(padFactor);
-    // Clamp to valid geographic range — prevents invalid coords sent to Open-Meteo
-    const s = Math.max(-85.05, rawBounds.getSouth());
-    const n = Math.min(85.05, rawBounds.getNorth());
-    const w = Math.max(-180, rawBounds.getWest());
-    const e = Math.min(180, rawBounds.getEast());
+  // Snap to fixed global grid — same area always produces same bbox → same API call
+  const { s, w, n, e, step } = snapBbox(map.getBounds(), zoom);
 
     // 1. Fresh cache hit → render instantly
-    const cached = gridCache.get(s, w, n, e, zoom);
+    const cached = heatGet(s, w, n, e, step, pollutant);
     if (cached) {
       lastGridRef.current = cached;
-      fetchedBoundsRef.current = { s, w, n, e, z: zoom };
+      fetchedBoundsRef.current = { s, w, n, e, step };
       renderOverlay(cached, pollutant);
       return;
     }
 
-    // 2. Fallback: stale data or wider-zoom data ONLY
-    // Important: do NOT use getNearestZoom (could return high-zoom/narrow-bbox data
-    // that renders as a tiny box overlay at low zoom) or getAnyOverlapping.
-    const fallback = gridCache.getStale(s, w, n, e, zoom)
-      ?? gridCache.getNearestWider(s, w, n, e, zoom);
+    // 2. Stale fallback (same step) while fetching fresh
+    const fallback = heatGetStale(s, w, n, e, step, pollutant);
     if (fallback) {
       lastGridRef.current = fallback;
       renderOverlay(fallback, pollutant);
@@ -261,12 +288,12 @@ export function useAQIHeatmapLayer(
     const ac = new AbortController();
     controllerRef.current = ac;
 
-    const data = await fetchGridAQI(s, w, n, e, zoom, pollutant, ac.signal);
+  const data = await fetchGridAQI(s, w, n, e, step, pollutant, ac.signal);
     if (!data || data.grid.length === 0 || ac.signal.aborted) return;
 
-    gridCache.set(s, w, n, e, zoom, data);
+  heatSet(s, w, n, e, step, pollutant, data);
     lastGridRef.current = data;
-    fetchedBoundsRef.current = { s, w, n, e, z: zoom };
+  fetchedBoundsRef.current = { s, w, n, e, step };
     renderOverlay(data, pollutant);
   }, [map, visible, pollutant, cleanup, renderOverlay, viewportCovered]);
 
