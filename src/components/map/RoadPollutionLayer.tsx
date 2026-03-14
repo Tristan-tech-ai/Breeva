@@ -289,7 +289,14 @@ export function useRoadPollutionLayer(
       if (forecastHour > 0) params.set('forecast_hour', String(forecastHour));
 
       const resp = await fetch(`/api/vayu/road-aqi?${params}`, { signal: ac.signal });
-      if (!resp.ok || ac.signal.aborted) return;
+      if (ac.signal.aborted) return;
+      if (!resp.ok) {
+        // Failed fetch: clear stale roads so user doesn't see wrong-area data
+        layerRef.current.clearLayers();
+        dataRef.current = null;
+        fetchedBoundsRef.current = null;
+        return;
+      }
       const data: RoadAQIResponse = await resp.json();
       if (ac.signal.aborted) return;
 

@@ -892,15 +892,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid bounding box' });
   }
 
-  // Bbox safety cap: with 15% client padding, spans can be ~1.3× the raw viewport.
-  // Use generous limits — LIMIT in getQueryParams() already controls the DB budget.
-  // ALWAYS return 200 — a 400 causes client-side error cascades.
-  const maxSpan = z <= 10 ? 5.0 : z <= 11 ? 3.0 : z <= 12 ? 2.0 : z <= 13 ? 1.5 : 1.0;
-  if (n - s > maxSpan || e - w > maxSpan) {
-    const empty = { roads: [], meta: { count: 0, zoom: z, wind_speed: 0 } };
-    res.setHeader('Cache-Control', 's-maxage=60');
-    return res.status(200).json(empty);
-  }
+  // No bbox size rejection — the LIMIT in getQueryParams() already caps DB work.
+  // Large bboxes just return fewer roads per unit area, which is fine.
 
   try {
     const cacheKey = bboxCacheKey(s, w, n, e, z, fh);
