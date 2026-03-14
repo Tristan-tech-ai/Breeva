@@ -99,6 +99,7 @@ export default function HomePage() {
   const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
   const [showWalkComplete, setShowWalkComplete] = useState(false);
   const [showAQIOverlay, setShowAQIOverlay] = useState(false);
+  const [showAQIStations, setShowAQIStations] = useState(false);
   const [showPOIs, setShowPOIs] = useState(true);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [forecastHour, setForecastHour] = useState(0);
@@ -142,6 +143,7 @@ export default function HomePage() {
         className="absolute inset-0"
         isDarkMode={isDark}
         showAQIOverlay={showAQIOverlay}
+        showAQIStations={showAQIStations}
         showPOIs={showPOIs}
         mapStyle={mapStyle}
         activeFilter={activeFilter}
@@ -574,6 +576,8 @@ export default function HomePage() {
         onMapStyleChange={setMapStyle}
         showAQIOverlay={showAQIOverlay}
         onAQIOverlayToggle={() => setShowAQIOverlay(!showAQIOverlay)}
+        showAQIStations={showAQIStations}
+        onAQIStationsToggle={() => setShowAQIStations(!showAQIStations)}
         showPOIs={showPOIs}
         onPOIsToggle={() => setShowPOIs(!showPOIs)}
         currentAQI={currentAQI}

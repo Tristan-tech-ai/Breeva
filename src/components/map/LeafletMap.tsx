@@ -96,6 +96,7 @@ interface LeafletMapProps {
   className?: string;
   isDarkMode?: boolean;
   showAQIOverlay?: boolean;
+  showAQIStations?: boolean;
   showPOIs?: boolean;
   mapStyle?: 'voyager' | 'osm' | 'satellite';
   activeFilter?: string | null;
@@ -109,13 +110,14 @@ interface LeafletMapProps {
 
 function MapController({
   showAQIOverlay,
+  showAQIStations,
   showPOIs,
   activeFilter,
   pollutant,
   forecastHour,
   onRoadLayerMeta,
   onPlaceSelect,
-}: Pick<LeafletMapProps, 'showAQIOverlay' | 'showPOIs' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'onRoadLayerMeta' | 'onPlaceSelect'>) {
+}: Pick<LeafletMapProps, 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'onRoadLayerMeta' | 'onPlaceSelect'>) {
   const map = useMap();
   const {
     center,
@@ -245,6 +247,30 @@ function MapController({
   // Area heatmap overlay (low-zoom raster, eLichens screenshot #8 style)
   useAQIHeatmapLayer(map, !!showAQIOverlay, pollutant || 'aqi');
 
+  // AQICN/WAQI station tile overlay (IQAir-style colored AQI markers)
+  const stationTileRef = useRef<L.TileLayer | null>(null);
+  useEffect(() => {
+    if (showAQIStations) {
+      if (!stationTileRef.current) {
+        const token = import.meta.env.VITE_WAQI_TOKEN || 'demo';
+        stationTileRef.current = L.tileLayer(
+          `https://tiles.aqicn.org/tiles/usepa-aqi/{z}/{x}/{y}.png?token=${token}`,
+          { attribution: '&copy; <a href="https://waqi.info">WAQI</a>', opacity: 0.85, zIndex: 650 },
+        );
+      }
+      if (!map.hasLayer(stationTileRef.current)) {
+        stationTileRef.current.addTo(map);
+      }
+    } else if (stationTileRef.current && map.hasLayer(stationTileRef.current)) {
+      stationTileRef.current.remove();
+    }
+  }, [showAQIStations, map]);
+
+  // Cleanup station tiles on unmount
+  useEffect(() => {
+    return () => { stationTileRef.current?.remove(); };
+  }, []);
+
   return showPOIs ? (
     <POILayer visible={showPOIs} activeFilter={activeFilter} onPlaceSelect={onPlaceSelect} />
   ) : null;
@@ -256,6 +282,7 @@ export default function LeafletMap({
   className = '',
   isDarkMode = false,
   showAQIOverlay = false,
+  showAQIStations = false,
   showPOIs = true,
   mapStyle = 'voyager',
   activeFilter = null,
@@ -290,6 +317,7 @@ export default function LeafletMap({
         <TileLayer key={tileUrl} url={tileUrl} attribution={tileConfig.attr} />
         <MapController
           showAQIOverlay={showAQIOverlay}
+          showAQIStations={showAQIStations}
           showPOIs={showPOIs}
           activeFilter={activeFilter}
           pollutant={pollutant}

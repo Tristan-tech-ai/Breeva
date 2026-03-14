@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Map, Satellite, Mountain, Wind, Store,
-  TreePine, Activity, Clock, Radio, ShieldCheck,
+  TreePine, Activity, Clock, Radio, ShieldCheck, Radar,
 } from 'lucide-react';
 import type { AirQualityData, PollutantType } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
@@ -14,6 +14,8 @@ interface MapLayersSheetProps {
   onMapStyleChange: (style: 'voyager' | 'osm' | 'satellite') => void;
   showAQIOverlay: boolean;
   onAQIOverlayToggle: () => void;
+  showAQIStations: boolean;
+  onAQIStationsToggle: () => void;
   showPOIs: boolean;
   onPOIsToggle: () => void;
   currentAQI?: AirQualityData | null;
@@ -52,6 +54,8 @@ export default function MapLayersSheet({
   onMapStyleChange,
   showAQIOverlay,
   onAQIOverlayToggle,
+  showAQIStations,
+  onAQIStationsToggle,
   showPOIs,
   onPOIsToggle,
   currentAQI,
@@ -163,7 +167,7 @@ export default function MapLayersSheet({
               <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
                 Map Details
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-2">
                 {/* Places toggle */}
                 <button
                   onClick={onPOIsToggle}
@@ -210,6 +214,31 @@ export default function MapLayersSheet({
                     </p>
                     <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
                       {currentAQI ? `AQI ${currentAQI.aqi} — ${currentAQI.level.replace('-', ' ')}` : 'Street-level air quality'}
+                    </p>
+                  </div>
+                </button>
+
+                {/* AQI Stations toggle */}
+                <button
+                  onClick={onAQIStationsToggle}
+                  className={`
+                    flex flex-col items-start gap-2 p-3.5 rounded-2xl border-2 transition-all text-left
+                    ${showAQIStations
+                      ? 'border-violet-500 bg-violet-50/50 dark:bg-violet-900/20'
+                      : 'border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700'
+                    }
+                  `}
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                    style={{ backgroundColor: showAQIStations ? '#8b5cf618' : undefined }}>
+                    <Radar className="w-4.5 h-4.5" style={{ color: showAQIStations ? '#8b5cf6' : '#9ca3af' }} />
+                  </div>
+                  <div>
+                    <p className={`text-sm font-semibold ${showAQIStations ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
+                      AQI Stations
+                    </p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
+                      10,000+ global monitors
                     </p>
                   </div>
                 </button>
