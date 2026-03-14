@@ -252,6 +252,7 @@ export interface RoadAQIResponse {
     iqair_city: string | null;
     iqair_validation: 'cross-validated' | 'partially-validated' | 'divergent' | null;
     iqair_confidence_adj: number | null;
+    ai_enhanced?: boolean;
     computed_at: string;
   };
 }

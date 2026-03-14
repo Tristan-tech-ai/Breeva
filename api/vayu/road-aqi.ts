@@ -70,6 +70,42 @@ function estimateTraffic(road: RoadRow, diurnal: number): number {
   if (road.traffic_base_estimate && road.traffic_base_estimate > 0) {
     return road.traffic_base_estimate * (road.traffic_calibration_factor || 1.0) * diurnal;
   }
+
+  // ── AI micro-classification override (from Gemini batch) ──
+  // If AI has classified this road, use its class for traffic estimation
+  if (road.micro_class) {
+    const aiTraffic: Record<string, number> = {
+      highway: 4000, arterial: 1500, collector: 600, local_road: 150,
+      neighborhood_road: 50, alley: 10, gang: 2, pedestrian_only: 0,
+    };
+    const base = aiTraffic[road.micro_class];
+    if (base != null) return base * diurnal;
+  }
+
+  // ── Smart gang/lorong detection (width + name heuristic) ──
+  if (road.highway === 'residential' || road.highway === 'living_street') {
+    const w = road.width;
+    // Width-based micro-classification
+    if (w != null && w < 3)  return 2 * diurnal;   // Gang sempit: motor only
+    if (w != null && w < 5)  return 15 * diurnal;  // Lorong/gang agak lebar
+    if (w != null && w < 6)  return 40 * diurnal;  // Jalan kampung
+
+    // Name-based detection (Indonesian road naming conventions)
+    if (road.name) {
+      const lower = road.name.toLowerCase();
+      if (lower.includes('gang') || lower.includes('gg.') || lower.includes('lorong') ||
+          lower.includes('jalan setapak') || lower.includes('lr.') || lower.includes('jl. setapak')) {
+        return 5 * diurnal;  // Named gang: near-zero traffic
+      }
+    }
+  }
+
+  // Service roads: differentiate by context
+  if (road.highway === 'service') {
+    if (road.landuse_proxy === 'residential') return 5 * diurnal;
+    if (road.landuse_proxy === 'industrial') return 30 * diurnal;
+  }
+
   // Derive from highway classification
   const base = HIGHWAY_TRAFFIC[road.highway] ?? 50;
   // Lane multiplier: 4-lane primary = 2× traffic of 2-lane primary
@@ -78,6 +114,17 @@ function estimateTraffic(road: RoadRow, diurnal: number): number {
   const lanes = road.lanes || defaultLanes;
   const laneFactor = Math.max(1, lanes / defaultLanes);
   return base * laneFactor * diurnal;
+}
+
+// ─── Region detection for temporal AI correction ────────────
+function detectRegion(lat: number, lon: number): string {
+  if (lat >= -8.85 && lat <= -8.06 && lon >= 114.43 && lon <= 115.71) return 'bali';
+  if (lat >= -6.50 && lat <= -6.08 && lon >= 106.60 && lon <= 107.10) return 'jakarta';
+  if (lat >= -7.02 && lat <= -6.82 && lon >= 107.45 && lon <= 107.77) return 'bandung';
+  if (lat >= -7.40 && lat <= -7.15 && lon >= 112.55 && lon <= 112.85) return 'surabaya';
+  if (lat >= -7.10 && lat <= -6.90 && lon >= 110.30 && lon <= 110.50) return 'semarang';
+  if (lat >= -7.87 && lat <= -7.72 && lon >= 110.30 && lon <= 110.50) return 'yogyakarta';
+  return 'default';
 }
 
 function gaussianConc(Q: number, wind: number, dist: number, H: number): number {
@@ -134,6 +181,25 @@ function getQueryParams(zoom: number): { limit: number; highways: string[] | nul
   return { limit: 100, highways: ['motorway', 'trunk'] };
 }
 
+// ─── Surface type → PM₁₀ coarse fraction multiplier ────────
+// Unpaved roads generate 5-10× more resuspended dust (tire/brake/road)
+const SURFACE_PM10_FACTOR: Record<string, number> = {
+  asphalt: 1.0, paved: 1.0, concrete: 0.9,
+  compacted: 1.8, gravel: 3.0, fine_gravel: 2.5,
+  dirt: 4.0, ground: 3.5, sand: 4.5, earth: 4.0,
+  unpaved: 3.5, mud: 1.5, // mud = wet → less dust
+};
+
+// ─── Elevation → atmospheric pressure correction ────────────
+// Higher elevation = lower pressure = faster dispersion (less concentration)
+// Bandung ~700m → ~0.92 factor, Jakarta ~10m → ~1.0
+function elevationFactor(elevationM: number | null): number {
+  if (elevationM == null || elevationM <= 0) return 1.0;
+  // Barometric formula simplified: P/P0 ≈ exp(-elevation/8500)
+  // Dispersion scales roughly inversely with air density
+  return Math.max(0.80, Math.exp(-elevationM / 8500));
+}
+
 // ─── Types ──────────────────────────────────────────────────
 interface RoadRow {
   osm_way_id: number;
@@ -145,6 +211,13 @@ interface RoadRow {
   landuse_proxy: string | null;
   traffic_base_estimate: number;
   traffic_calibration_factor: number;
+  // Phase 2: additional fields for enhanced accuracy
+  name: string | null;
+  surface: string | null;
+  elevation_avg: number | null;
+  // AI classification (from Gemini batch)
+  micro_class: string | null;
+  ai_pollution_factor: number | null;
 }
 
 interface RoadAQIFeature {
@@ -661,11 +734,23 @@ function computeRoadAQI(
   // Narrower roads trap pollution more (8m reference width)
   const widthFactor = road.width ? Math.max(0.8, Math.min(1.5, 8.0 / road.width)) : 1.0;
 
-  const pm25Delta = gaussianConc(qPM25, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * jitter;
-  const no2Delta  = gaussianConc(qNOx, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * jitter;
+  // Elevation correction: higher altitude = faster dispersion
+  const elevFactor = elevationFactor(road.elevation_avg);
+
+  let pm25Delta = gaussianConc(qPM25, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * elevFactor * jitter;
+  let no2Delta  = gaussianConc(qNOx, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * elevFactor * jitter;
+
+  // ── AI pollution factor override (from Gemini batch classification) ──
+  // Gang/lorong gets ai_pollution_factor ~0.05-0.2, heavy traffic roads ~1.0-1.5
+  if (road.ai_pollution_factor != null) {
+    pm25Delta *= road.ai_pollution_factor;
+    no2Delta  *= road.ai_pollution_factor;
+  }
 
   // PM₁₀ = PM₂.₅ delta + coarse fraction (tire wear, brake dust, road dust)
-  const pm10Delta = pm25Delta * 1.8;
+  // Surface-dependent: unpaved roads generate much more resuspended dust
+  const surfacePM10 = SURFACE_PM10_FACTOR[road.surface || ''] ?? 1.0;
+  const pm10Delta = pm25Delta * 1.8 * surfacePM10;
 
   // O₃ titration: NOx from traffic destroys ozone near roads
   // Higher traffic → more NOx → more O₃ consumed → lower roadside O₃
@@ -787,7 +872,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Use forecast hour for diurnal profile: shift current hour by forecast offset
     const targetHour = (new Date().getHours() + fh) % 24;
-    const diurnal = HOURLY_TRAFFIC[targetHour] ?? 1.0;
+    let diurnal = HOURLY_TRAFFIC[targetHour] ?? 1.0;
+
+    // ── Temporal AI correction (Module B): blend AI-predicted hourly factors ──
+    // Pre-computed by Gemini scheduled runs, cached in Redis
+    if (fh === 0) {
+      const region = detectRegion(cLat, cLon);
+      const today = new Date().toISOString().slice(0, 10);
+      const temporalRaw = await redisGet(`vayu:temporal:${region}:${today}`);
+      if (temporalRaw) {
+        try {
+          const tc = JSON.parse(temporalRaw);
+          const aiFactor = tc.hourly_factors?.[targetHour];
+          if (typeof aiFactor === 'number' && aiFactor > 0) {
+            // Blend: 60% AI prediction + 40% static curve (safety net)
+            diurnal = aiFactor * 0.6 + diurnal * 0.4;
+          }
+        } catch { /* use static diurnal */ }
+      }
+    }
 
     // Compute per-road AQI with spatially interpolated baseline
     const features: RoadAQIFeature[] = [];
@@ -846,6 +949,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         iqair_city: iqairValidation?.iqairCity ?? null,
         iqair_validation: iqairValidation?.validationStatus ?? null,
         iqair_confidence_adj: iqairValidation?.confidenceAdj ?? null,
+        ai_enhanced: filtered.some(r => r.ai_pollution_factor != null || r.micro_class != null),
         computed_at: new Date().toISOString(),
       },
     };

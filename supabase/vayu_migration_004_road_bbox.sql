@@ -25,7 +25,12 @@ RETURNS TABLE (
   canyon_ratio DECIMAL,
   landuse_proxy VARCHAR,
   traffic_base_estimate INTEGER,
-  traffic_calibration_factor DECIMAL
+  traffic_calibration_factor DECIMAL,
+  name VARCHAR,
+  surface VARCHAR,
+  elevation_avg DECIMAL,
+  micro_class VARCHAR,
+  ai_pollution_factor DECIMAL
 ) AS $$
 BEGIN
   RETURN QUERY
@@ -38,7 +43,12 @@ BEGIN
     rs.canyon_ratio,
     rs.landuse_proxy,
     rs.traffic_base_estimate,
-    rs.traffic_calibration_factor
+    rs.traffic_calibration_factor,
+    rs.name,
+    rs.surface,
+    rs.elevation_avg,
+    rs.micro_class,
+    rs.ai_pollution_factor
   FROM road_segments rs
   WHERE rs.geom && ST_MakeEnvelope(west, south, east, north, 4326)
   ORDER BY
