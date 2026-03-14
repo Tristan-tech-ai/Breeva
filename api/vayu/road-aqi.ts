@@ -752,16 +752,16 @@ function crossValidateIQAir(vayuAQI: number, iqair: IQAirData): IQAirValidation 
 
 // ─── Supabase RPC: find_roads_in_bbox ───────────────────────
 async function findRoadsInBbox(
-  south: number, west: number, north: number, east: number, limit: number, _simplifyTolerance = 0
+  south: number, west: number, north: number, east: number,
+  limit: number, _simplifyTolerance = 0, highwayTypes: string[] | null = null
 ): Promise<RoadRow[]> {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return [];
   try {
-    // Note: simplify_tolerance requires vayu_migration_004 update.
-    // Only send it when > 0, otherwise use the base 5-param signature.
     const params: Record<string, unknown> = { south, west, north, east, road_limit: limit };
     if (_simplifyTolerance > 0) params.simplify_tolerance = _simplifyTolerance;
+    if (highwayTypes) params.highway_types = highwayTypes;
     const resp = await fetch(`${url}/rest/v1/rpc/find_roads_in_bbox`, {
       method: 'POST',
       headers: {
@@ -772,9 +772,9 @@ async function findRoadsInBbox(
       body: JSON.stringify(params),
     });
     if (!resp.ok) {
-      // If simplify_tolerance param isn't recognized, retry without it
-      if (_simplifyTolerance > 0) {
-        return findRoadsInBbox(south, west, north, east, limit, 0);
+      // Fallback: retry without new params if migration not applied
+      if (highwayTypes || _simplifyTolerance > 0) {
+        return findRoadsInBbox(south, west, north, east, limit, 0, null);
       }
       return [];
     }
@@ -901,9 +901,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(JSON.parse(cached));
     }
 
-    // Query road segments in viewport
+    // Query road segments in viewport — pass highway filter to DB
     const { limit, highways, simplify } = getQueryParams(z);
-    const roads = await findRoadsInBbox(s, w, n, e, limit, simplify);
+    const roads = await findRoadsInBbox(s, w, n, e, limit, simplify, highways);
 
     if (roads.length === 0) {
       const empty = { roads: [], meta: { count: 0, zoom: z, wind_speed: 0 } };
@@ -911,10 +911,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(empty);
     }
 
-    // Filter by highway class if zoom is low
-    const filtered = highways
-      ? roads.filter((r) => highways.includes(r.highway))
-      : roads;
+    // Highway filtering already done in DB query — use all returned roads
+    const filtered = roads;
 
     // Fetch baseline AQI grid (5-point spatial interpolation)
     const { center: baselineCenter, interpolate: interpBaseline } = await fetchBaselineGrid(s, w, n, e, fh);

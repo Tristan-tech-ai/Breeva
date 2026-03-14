@@ -12,6 +12,7 @@
 -- Drop old signatures to allow parameter changes
 DROP FUNCTION IF EXISTS find_roads_in_bbox(DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, INTEGER);
 DROP FUNCTION IF EXISTS find_roads_in_bbox(DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, INTEGER, DOUBLE PRECISION);
+DROP FUNCTION IF EXISTS find_roads_in_bbox(DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, INTEGER, DOUBLE PRECISION, VARCHAR[]);
 
 CREATE OR REPLACE FUNCTION find_roads_in_bbox(
   south DOUBLE PRECISION,
@@ -19,7 +20,8 @@ CREATE OR REPLACE FUNCTION find_roads_in_bbox(
   north DOUBLE PRECISION,
   east  DOUBLE PRECISION,
   road_limit INTEGER DEFAULT 200,
-  simplify_tolerance DOUBLE PRECISION DEFAULT 0
+  simplify_tolerance DOUBLE PRECISION DEFAULT 0,
+  highway_types VARCHAR[] DEFAULT NULL
 )
 RETURNS TABLE (
   osm_way_id BIGINT,
@@ -60,6 +62,7 @@ BEGIN
     rs.ai_pollution_factor
   FROM road_segments rs
   WHERE rs.geom && ST_MakeEnvelope(west, south, east, north, 4326)
+    AND (highway_types IS NULL OR rs.highway = ANY(highway_types))
   ORDER BY rs.osm_way_id
   LIMIT road_limit;
 END;
