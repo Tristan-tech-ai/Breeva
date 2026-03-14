@@ -864,7 +864,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const roads = await findRoadsInBbox(s, w, n, e, limit);
 
     if (roads.length === 0) {
-      const empty = { roads: [], meta: { count: 0, zoom: z } };
+      const empty = { roads: [], meta: { count: 0, zoom: z, wind_speed: 0 } };
       res.setHeader('Cache-Control', 's-maxage=120');
       return res.status(200).json(empty);
     }

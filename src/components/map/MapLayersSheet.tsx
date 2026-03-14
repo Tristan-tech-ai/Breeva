@@ -344,7 +344,7 @@ export default function MapLayersSheet({
                         <div className="mt-3 flex items-center gap-3 text-[10px] text-gray-400 dark:text-gray-500">
                           <div className="flex items-center gap-1">
                             <Wind className="w-3 h-3" />
-                            <span>{roadLayerMeta.wind_speed.toFixed(1)} m/s</span>
+                            <span>{(roadLayerMeta.wind_speed ?? 0).toFixed(1)} m/s</span>
                           </div>
                           {roadLayerMeta.waqi_station && (
                             <div className="flex items-center gap-1 truncate">

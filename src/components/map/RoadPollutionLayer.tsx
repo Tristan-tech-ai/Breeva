@@ -180,7 +180,7 @@ export function useRoadPollutionLayer(
       layerRef.current.remove();
       layerRef.current = newGroup;
       setMeta({
-        wind_speed: data.meta.wind_speed,
+        wind_speed: data.meta.wind_speed ?? 0,
         waqi_station: data.meta.waqi_station,
         satellite_no2: data.meta.satellite_no2 ?? false,
         iqair_aqi: data.meta.iqair_aqi ?? null,
