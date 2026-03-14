@@ -166,7 +166,7 @@ function PollutantCard({ label, value, unit, icon }: { label: string; value: num
         <span className="text-gray-400 dark:text-gray-500">{icon}</span>
         <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">{label}</p>
       </div>
-      <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">{value.toFixed(1)}</p>
+      <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">{value != null ? value.toFixed(1) : '—'}</p>
       <p className="text-[10px] text-gray-400 dark:text-gray-500">{unit}</p>
     </div>
   );

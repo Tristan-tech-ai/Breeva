@@ -890,10 +890,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid bounding box' });
   }
 
-  // Limit bbox size based on zoom — accounts for client pad(0.5) on wide screens
-  const maxSpan = z <= 10 ? 2.0 : z <= 11 ? 1.2 : z <= 12 ? 0.7 : z <= 13 ? 0.5 : 0.5;
+  // Bbox too large → return empty roads (200) instead of 400.
+  // A 400 causes client-side error cascades; empty response is handled gracefully.
+  const maxSpan = z <= 10 ? 3.0 : z <= 11 ? 2.0 : z <= 12 ? 1.5 : z <= 13 ? 1.0 : 0.8;
   if (n - s > maxSpan || e - w > maxSpan) {
-    return res.status(400).json({ error: 'Bounding box too large. Zoom in more.' });
+    const empty = { roads: [], meta: { count: 0, zoom: z, wind_speed: 0 } };
+    res.setHeader('Cache-Control', 's-maxage=60');
+    return res.status(200).json(empty);
   }
 
   try {
