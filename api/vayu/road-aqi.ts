@@ -1099,10 +1099,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     // Cache: 30 min for current, 60 min for forecast (AQ data changes hourly)
-    await redisSetEx(cacheKey, fh > 0 ? 3600 : 1800, JSON.stringify(result));
+    const payload = JSON.stringify(result);
+    const sizeKB = Math.round(payload.length / 1024);
+    console.log(`[vayu] z${z} roads=${result.roads.length} payload=${sizeKB}KB`);
+    if (sizeKB > 4000) {
+      console.warn(`[vayu] WARNING: payload ${sizeKB}KB approaching Vercel 4.5MB limit`);
+    }
+    await redisSetEx(cacheKey, fh > 0 ? 3600 : 1800, payload);
 
     res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
     res.setHeader('X-Cache', 'MISS');
+    res.setHeader('X-Road-Count', String(result.roads.length));
+    res.setHeader('X-Payload-KB', String(sizeKB));
     return res.status(200).json(result);
 
   } catch (error) {
