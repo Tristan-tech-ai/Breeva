@@ -161,9 +161,13 @@ const HOURLY_TRAFFIC: Record<number, number> = {
 function roadWeight(highway: string): number {
   switch (highway) {
     case 'motorway': case 'trunk': return 5;
+    case 'motorway_link': case 'trunk_link': return 4;
     case 'primary': return 4;
+    case 'primary_link': return 3.5;
     case 'secondary': return 3.5;
+    case 'secondary_link': return 3;
     case 'tertiary': return 3;
+    case 'tertiary_link': return 2.5;
     case 'residential': return 2.5;
     default: return 2;
   }
@@ -173,44 +177,41 @@ function roadWeight(highway: string): number {
 // Progressive reveal: big roads first, then medium, then small.
 // Prevents payload bloat and keeps rendering clean at each zoom level.
 //
-// NOTE: LIMITs are set HIGH because the SQL migration (highway_types filter)
-// may not be applied yet. When the fallback fetches ALL road types, the JS
-// filter discards ~70-85% of results. These inflated LIMITs ensure enough
-// desired roads survive the JS filter. Once the SQL migration is applied,
-// the DB pre-filters so the LIMIT is used efficiently and can be lowered.
+// LIMITs sized for DB-side highway filtering (migration 004 applied).
+// JS safety-net filter still present as belt-and-suspenders.
 function getQueryParams(zoom: number): { limit: number; highways: string[] | null; simplify: number } {
   // z16+: ALL roads — gang, lorong, service, footway
-  if (zoom >= 16) return { limit: 50000, highways: null, simplify: 0 };
+  if (zoom >= 16) return { limit: 15000, highways: null, simplify: 0 };
   // z15: + residential, living_street, unclassified
-  if (zoom >= 15) return { limit: 30000, highways: [
+  if (zoom >= 15) return { limit: 10000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
     'tertiary', 'tertiary_link',
     'residential', 'living_street', 'unclassified',
   ], simplify: 0 };
   // z14: + tertiary (medium roads)
-  if (zoom >= 14) return { limit: 30000, highways: [
+  if (zoom >= 14) return { limit: 8000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
     'tertiary', 'tertiary_link',
   ], simplify: 0 };
   // z13: primary + secondary
-  if (zoom >= 13) return { limit: 20000, highways: [
+  if (zoom >= 13) return { limit: 5000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
   ], simplify: 0.0001 };
   // z12: primary + secondary
-  if (zoom >= 12) return { limit: 15000, highways: [
+  if (zoom >= 12) return { limit: 3000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
   ], simplify: 0.0002 };
   // z11: motorway, trunk, primary
-  if (zoom >= 11) return { limit: 8000, highways: [
+  if (zoom >= 11) return { limit: 2000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link',
   ], simplify: 0.0005 };
   // z10: motorway, trunk only
-  return { limit: 5000, highways: [
+  return { limit: 1000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
   ], simplify: 0.0005 };
 }
@@ -901,6 +902,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const cacheKey = bboxCacheKey(s, w, n, e, z, fh);
+
+    // One-time Redis flush: clear stale pre-fix road cache entries.
+    // Safe to remove this block after first deploy (2026-03-15).
+    const flushKey = 'vayu:road:cache_flushed_v2';
+    const flushed = await redisGet(flushKey);
+    if (!flushed) {
+      // Scan and delete all road cache keys via pattern
+      const scanUrl = process.env.UPSTASH_REDIS_REST_URL;
+      const scanToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+      if (scanUrl && scanToken) {
+        try {
+          // Upstash REST: use EVAL to delete matching keys
+          await fetch(`${scanUrl}`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${scanToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(["EVAL", "local keys = redis.call('keys', ARGV[1]) for i=1,#keys do redis.call('del', keys[i]) end return #keys", "0", "vayu:road:*"]),
+          });
+        } catch { /* non-fatal */ }
+      }
+      await redisSetEx(flushKey, 86400, '1'); // flag: don't flush again for 24h
+      console.log('[vayu] One-time Redis road cache flush executed');
+    }
 
     // Check Redis cache first
     const cached = await redisGet(cacheKey);

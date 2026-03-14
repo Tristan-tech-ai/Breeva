@@ -220,10 +220,13 @@ export function useRoadPollutionLayer(
     }
     if (viewportCovered() && dataRef.current) return true;
 
-    // Exact viewport — no padding. Matches base map tile behavior.
+    // 15% padding: cache can absorb small pans without re-fetch.
+    // Canvas renderer still clips at padding:0 so no off-screen rendering.
     const bounds = map.getBounds();
-    const s = bounds.getSouth(), w = bounds.getWest();
-    const n = bounds.getNorth(), e = bounds.getEast();
+    const latPad = (bounds.getNorth() - bounds.getSouth()) * 0.15;
+    const lngPad = (bounds.getEast() - bounds.getWest()) * 0.15;
+    const s = bounds.getSouth() - latPad, w = bounds.getWest() - lngPad;
+    const n = bounds.getNorth() + latPad, e = bounds.getEast() + lngPad;
 
     const cached = roadCache.get(s, w, n, e, zoom);
     if (cached) {
@@ -252,10 +255,13 @@ export function useRoadPollutionLayer(
     // If viewport is still covered by last fetch → skip (0 HTTP)
     if (viewportCovered() && dataRef.current) return;
 
-    // Exact viewport — no padding. All LIMIT budget goes to visible roads.
+    // 15% padding: fetched area slightly larger than viewport so cache
+    // absorbs small pans. Canvas renderer clips at padding:0.
     const bounds = map.getBounds();
-    const s = bounds.getSouth(), w = bounds.getWest();
-    const n = bounds.getNorth(), e = bounds.getEast();
+    const latPad = (bounds.getNorth() - bounds.getSouth()) * 0.15;
+    const lngPad = (bounds.getEast() - bounds.getWest()) * 0.15;
+    const s = bounds.getSouth() - latPad, w = bounds.getWest() - lngPad;
+    const n = bounds.getNorth() + latPad, e = bounds.getEast() + lngPad;
 
     // 1. Fresh cache hit → atomic swap, skip HTTP
     const cached = roadCache.get(s, w, n, e, zoom);

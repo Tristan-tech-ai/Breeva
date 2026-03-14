@@ -63,7 +63,7 @@ BEGIN
   FROM road_segments rs
   WHERE rs.geom && ST_MakeEnvelope(west, south, east, north, 4326)
     AND (highway_types IS NULL OR rs.highway = ANY(highway_types))
-  ORDER BY rs.osm_way_id
+  ORDER BY ST_GeoHash(ST_Centroid(rs.geom), 10)
   LIMIT road_limit;
 END;
 $$ LANGUAGE plpgsql STABLE;
