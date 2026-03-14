@@ -178,8 +178,8 @@ function getQueryParams(zoom: number): { limit: number; highways: string[] | nul
   if (zoom >= 14) return { limit: 1000, highways: null };         // all roads
   if (zoom >= 13) return { limit: 800, highways: null };          // all roads
   if (zoom >= 12) return { limit: 600, highways: null };
-  if (zoom >= 11) return { limit: 350, highways: null };
-  return { limit: 200, highways: null };
+  if (zoom >= 11) return { limit: 500, highways: null };
+  return { limit: 400, highways: null };
 }
 
 // ─── Surface type → PM₁₀ coarse fraction multiplier ────────
@@ -847,8 +847,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid bounding box' });
   }
 
-  // Limit bbox size based on zoom — allow 2× viewport for padding
-  const maxSpan = z <= 10 ? 1.5 : z <= 11 ? 1.0 : z <= 12 ? 0.6 : 0.3;
+  // Limit bbox size based on zoom — generous to allow client padding
+  const maxSpan = z <= 10 ? 3.0 : z <= 11 ? 2.0 : z <= 12 ? 1.2 : 0.5;
   if (n - s > maxSpan || e - w > maxSpan) {
     return res.status(400).json({ error: 'Bounding box too large. Zoom in more.' });
   }

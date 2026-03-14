@@ -197,7 +197,8 @@ export function useRoadPollutionLayer(
     const b = map.getBounds();
     const z = Math.round(map.getZoom());
     const fb = fetchedBoundsRef.current;
-    return fb.z === z
+    // Allow ±1 zoom tolerance so zooming in/out reuses existing data
+    return Math.abs(fb.z - z) <= 1
       && fb.s <= b.getSouth() && fb.w <= b.getWest()
       && fb.n >= b.getNorth() && fb.e >= b.getEast();
   }, [map]);
@@ -216,7 +217,9 @@ export function useRoadPollutionLayer(
     }
     if (viewportCovered() && dataRef.current) return true;
 
-    const bounds = map.getBounds().pad(0.8);
+    // Adaptive padding: less at low zoom to stay within server maxSpan
+    const padFactor = zoom >= 14 ? 0.5 : zoom >= 12 ? 0.3 : 0.15;
+    const bounds = map.getBounds().pad(padFactor);
     const s = bounds.getSouth(), w = bounds.getWest();
     const n = bounds.getNorth(), e = bounds.getEast();
 
@@ -253,8 +256,9 @@ export function useRoadPollutionLayer(
     // If viewport is still covered by last fetch → skip (0 HTTP)
     if (viewportCovered() && dataRef.current) return;
 
-    // Pad viewport by 80% on each side → fetches ~3× area for more coverage
-    const bounds = map.getBounds().pad(0.8);
+    // Pad viewport — adaptive: less at low zoom to stay within server maxSpan
+    const padFactor = zoom >= 14 ? 0.5 : zoom >= 12 ? 0.3 : 0.15;
+    const bounds = map.getBounds().pad(padFactor);
     const s = bounds.getSouth(), w = bounds.getWest();
     const n = bounds.getNorth(), e = bounds.getEast();
 
