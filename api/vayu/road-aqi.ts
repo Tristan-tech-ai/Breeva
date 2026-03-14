@@ -172,39 +172,45 @@ function roadWeight(highway: string): number {
 // ─── Zoom-based road query params (LOD: Level of Detail) ────
 // Progressive reveal: big roads first, then medium, then small.
 // Prevents payload bloat and keeps rendering clean at each zoom level.
+//
+// NOTE: LIMITs are set HIGH because the SQL migration (highway_types filter)
+// may not be applied yet. When the fallback fetches ALL road types, the JS
+// filter discards ~70-85% of results. These inflated LIMITs ensure enough
+// desired roads survive the JS filter. Once the SQL migration is applied,
+// the DB pre-filters so the LIMIT is used efficiently and can be lowered.
 function getQueryParams(zoom: number): { limit: number; highways: string[] | null; simplify: number } {
   // z16+: ALL roads — gang, lorong, service, footway
   if (zoom >= 16) return { limit: 50000, highways: null, simplify: 0 };
   // z15: + residential, living_street, unclassified
-  if (zoom >= 15) return { limit: 15000, highways: [
+  if (zoom >= 15) return { limit: 30000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
     'tertiary', 'tertiary_link',
     'residential', 'living_street', 'unclassified',
   ], simplify: 0 };
   // z14: + tertiary (medium roads)
-  if (zoom >= 14) return { limit: 8000, highways: [
+  if (zoom >= 14) return { limit: 30000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
     'tertiary', 'tertiary_link',
   ], simplify: 0 };
   // z13: primary + secondary
-  if (zoom >= 13) return { limit: 3000, highways: [
+  if (zoom >= 13) return { limit: 20000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
   ], simplify: 0.0001 };
   // z12: primary + secondary
-  if (zoom >= 12) return { limit: 2000, highways: [
+  if (zoom >= 12) return { limit: 15000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
   ], simplify: 0.0002 };
   // z11: motorway, trunk, primary
-  if (zoom >= 11) return { limit: 1000, highways: [
+  if (zoom >= 11) return { limit: 8000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link',
   ], simplify: 0.0005 };
   // z10: motorway, trunk only
-  return { limit: 500, highways: [
+  return { limit: 5000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
   ], simplify: 0.0005 };
 }
@@ -916,6 +922,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const filtered = highways
       ? roads.filter((r) => highways.includes(r.highway))
       : roads;
+
+    // Diagnostic: track filter efficiency to verify DB-side vs JS-side filtering
+    if (highways && roads.length !== filtered.length) {
+      console.log(`[vayu] z${z} filter: ${roads.length} from DB → ${filtered.length} after JS filter (${Math.round(100 - filtered.length / roads.length * 100)}% discarded — run SQL migration to fix)`);
+    }
 
     // Fetch baseline AQI grid (5-point spatial interpolation)
     const { center: baselineCenter, interpolate: interpBaseline } = await fetchBaselineGrid(s, w, n, e, fh);
