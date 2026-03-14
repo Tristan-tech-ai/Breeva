@@ -120,10 +120,9 @@ const MIN_ZOOM = 10;
 let sharedCanvasRenderer: L.Canvas | null = null;
 function getCanvasRenderer(): L.Canvas {
   if (!sharedCanvasRenderer) {
-    // padding: fraction of viewport to pre-render beyond edges.
-    // 0.5 = 50% extra on each side → roads FAR outside viewport get drawn.
-    // 0.15 = 15% — just enough to avoid pop-in on small pans.
-    sharedCanvasRenderer = L.canvas({ padding: 0.15, tolerance: 5 });
+    // padding: 0 — only render roads inside the visible viewport.
+    // No off-screen pre-render. Matches base map tile behavior exactly.
+    sharedCanvasRenderer = L.canvas({ padding: 0, tolerance: 5 });
   }
   return sharedCanvasRenderer;
 }
@@ -221,10 +220,8 @@ export function useRoadPollutionLayer(
     }
     if (viewportCovered() && dataRef.current) return true;
 
-    // Minimal padding: just enough so edge-roads aren't cut off.
-    // Pre-fetch adjacent tiles (idle callback) handles smooth panning.
-    const padFactor = zoom >= 14 ? 0.08 : zoom >= 12 ? 0.10 : 0.10;
-    const bounds = map.getBounds().pad(padFactor);
+    // Exact viewport — no padding. Matches base map tile behavior.
+    const bounds = map.getBounds();
     const s = bounds.getSouth(), w = bounds.getWest();
     const n = bounds.getNorth(), e = bounds.getEast();
 
@@ -255,10 +252,8 @@ export function useRoadPollutionLayer(
     // If viewport is still covered by last fetch → skip (0 HTTP)
     if (viewportCovered() && dataRef.current) return;
 
-    // Minimal padding: just enough so edge-roads aren't cut off.
-    // Pre-fetch adjacent tiles (idle callback) handles smooth panning.
-    const padFactor = zoom >= 14 ? 0.08 : zoom >= 12 ? 0.10 : 0.10;
-    const bounds = map.getBounds().pad(padFactor);
+    // Exact viewport — no padding. All LIMIT budget goes to visible roads.
+    const bounds = map.getBounds();
     const s = bounds.getSouth(), w = bounds.getWest();
     const n = bounds.getNorth(), e = bounds.getEast();
 
