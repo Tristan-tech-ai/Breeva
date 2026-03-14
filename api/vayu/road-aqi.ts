@@ -170,11 +170,31 @@ function roadWeight(highway: string): number {
 }
 
 // ─── Zoom-based road query params ────────────────────────
-// No artificial LIMIT: API cost is per-viewport (Open-Meteo/WAQI/IQAir = fixed),
-// NOT per-road. Road count only affects Supabase rows + computation (both fast).
-// Canvas renderer handles 5000+ polylines at 60fps.
-function getQueryParams(_zoom: number): { limit: number; highways: string[] | null } {
-  return { limit: 50000, highways: null };
+// Zoom-aware density control: fewer roads at low zoom to keep response <4.5MB (Vercel limit).
+// External API cost is FIXED per viewport; only Supabase rows + bandwidth scale with road count.
+function getQueryParams(zoom: number): { limit: number; highways: string[] | null; simplifyTolerance: number } {
+  if (zoom <= 10) return {
+    limit: 2000,
+    highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link'],
+    simplifyTolerance: 0.001,  // ~100m — aggressive simplification at city scale
+  };
+  if (zoom <= 11) return {
+    limit: 5000,
+    highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link'],
+    simplifyTolerance: 0.0005, // ~50m
+  };
+  if (zoom <= 12) return {
+    limit: 8000,
+    highways: null, // all roads
+    simplifyTolerance: 0.0002, // ~20m
+  };
+  if (zoom <= 13) return {
+    limit: 12000,
+    highways: null,
+    simplifyTolerance: 0.0001, // ~10m
+  };
+  // z14+: full detail, 5 decimal places (~1m accuracy)
+  return { limit: 20000, highways: null, simplifyTolerance: 0 };
 }
 
 // ─── Surface type → PM₁₀ coarse fraction multiplier ────────
@@ -720,7 +740,8 @@ function crossValidateIQAir(vayuAQI: number, iqair: IQAirData): IQAirValidation 
 
 // ─── Supabase RPC: find_roads_in_bbox ───────────────────────
 async function findRoadsInBbox(
-  south: number, west: number, north: number, east: number, limit: number
+  south: number, west: number, north: number, east: number,
+  limit: number, simplifyTolerance = 0,
 ): Promise<RoadRow[]> {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -733,7 +754,7 @@ async function findRoadsInBbox(
         apikey: key,
         Authorization: `Bearer ${key}`,
       },
-      body: JSON.stringify({ south, west, north, east, road_limit: limit }),
+      body: JSON.stringify({ south, west, north, east, road_limit: limit, simplify_tolerance: simplifyTolerance }),
     });
     if (!resp.ok) return [];
     return await resp.json();
@@ -860,8 +881,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Query road segments in viewport
-    const { limit, highways } = getQueryParams(z);
-    const roads = await findRoadsInBbox(s, w, n, e, limit);
+    const { limit, highways, simplifyTolerance } = getQueryParams(z);
+    const roads = await findRoadsInBbox(s, w, n, e, limit, simplifyTolerance);
 
     if (roads.length === 0) {
       const empty = { roads: [], meta: { count: 0, zoom: z, wind_speed: 0 } };
