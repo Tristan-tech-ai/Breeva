@@ -5,7 +5,6 @@ import 'leaflet/dist/leaflet.css';
 import { useMapStore } from '../../stores/mapStore';
 import { useRoadPollutionLayer } from './RoadPollutionLayer';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
-import { useAQIHeatmapLayer } from './AQIHeatmapLayer';
 import POILayer from './POILayer';
 import type { POI } from '../../lib/poi-api';
 import type { Route } from '../../types';
@@ -243,9 +242,6 @@ function MapController({
   useEffect(() => {
     onRoadLayerMeta?.(roadMeta);
   }, [roadMeta, onRoadLayerMeta]);
-
-  // Area heatmap overlay (low-zoom raster, eLichens screenshot #8 style)
-  useAQIHeatmapLayer(map, !!showAQIOverlay, pollutant || 'aqi');
 
   // AQICN/WAQI station tile overlay (IQAir-style colored AQI markers)
   const stationTileRef = useRef<L.TileLayer | null>(null);
