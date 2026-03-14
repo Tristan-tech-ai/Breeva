@@ -170,24 +170,42 @@ function roadWeight(highway: string): number {
 }
 
 // ─── Zoom-based road query params (LOD: Level of Detail) ────
-// At low zoom: only major roads (residential is sub-pixel anyway)
-// At high zoom: all roads including gang/lorong
-// NO LIMIT at z13+ — LIMIT with non-spatial ORDER causes random spatial gaps.
-// Payload size is controlled by coordinate truncation (5 decimals = ~1.1m).
+// Progressive reveal: big roads first, then medium, then small.
+// Prevents payload bloat and keeps rendering clean at each zoom level.
 function getQueryParams(zoom: number): { limit: number; highways: string[] | null; simplify: number } {
-  if (zoom >= 13) return { limit: 50000, highways: null, simplify: 0 };
-  if (zoom >= 12) return { limit: 5000, highways: [
+  // z16+: ALL roads — gang, lorong, service, footway
+  if (zoom >= 16) return { limit: 50000, highways: null, simplify: 0 };
+  // z15: + residential, living_street, unclassified
+  if (zoom >= 15) return { limit: 15000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
     'tertiary', 'tertiary_link',
-  ], simplify: 0.0002 };
-  if (zoom >= 11) return { limit: 3000, highways: [
+    'residential', 'living_street', 'unclassified',
+  ], simplify: 0 };
+  // z14: + tertiary (medium roads)
+  if (zoom >= 14) return { limit: 8000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
-  ], simplify: 0.0005 };
-  return { limit: 1500, highways: [
+    'tertiary', 'tertiary_link',
+  ], simplify: 0 };
+  // z13: primary + secondary
+  if (zoom >= 13) return { limit: 3000, highways: [
+    'motorway', 'motorway_link', 'trunk', 'trunk_link',
+    'primary', 'primary_link', 'secondary', 'secondary_link',
+  ], simplify: 0.0001 };
+  // z12: primary + secondary
+  if (zoom >= 12) return { limit: 2000, highways: [
+    'motorway', 'motorway_link', 'trunk', 'trunk_link',
+    'primary', 'primary_link', 'secondary', 'secondary_link',
+  ], simplify: 0.0002 };
+  // z11: motorway, trunk, primary
+  if (zoom >= 11) return { limit: 1000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link',
+  ], simplify: 0.0005 };
+  // z10: motorway, trunk only
+  return { limit: 500, highways: [
+    'motorway', 'motorway_link', 'trunk', 'trunk_link',
   ], simplify: 0.0005 };
 }
 
