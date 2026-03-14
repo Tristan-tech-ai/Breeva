@@ -135,7 +135,8 @@ function popupHtml(d: WAQIFeedData): string {
   const ago = timeAgo(d.time.iso);
 
   return `<div style="min-width:220px;max-width:280px;font-family:system-ui,-apple-system,sans-serif">
-    <div style="font-weight:700;font-size:13px;margin-bottom:6px;line-height:1.3">${name}</div>
+    <div style="font-weight:700;font-size:13px;line-height:1.3">${name}</div>
+    <div style="font-size:11px;color:#94a3b8;margin-bottom:8px">🕒 Updated ${ago} · ${src}</div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <div style="width:42px;height:42px;border-radius:10px;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:16px">${d.aqi}</div>
       <div>
@@ -145,7 +146,6 @@ function popupHtml(d: WAQIFeedData): string {
     </div>
     ${pills ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:6px">${pills}</div>` : ''}
     ${wx.length ? `<div style="font-size:11px;color:#64748b;margin-bottom:4px">${wx.join('  ')}</div>` : ''}
-    <div style="font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:4px;margin-top:4px">${src} · Updated ${ago}</div>
   </div>`;
 }
 
