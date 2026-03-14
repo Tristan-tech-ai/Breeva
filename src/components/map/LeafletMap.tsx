@@ -124,7 +124,6 @@ function MapController({
     destinationName,
     routes,
     selectedRoute,
-    currentAQI,
     isCalculatingRoutes,
     setDestination,
   } = useMapStore();
