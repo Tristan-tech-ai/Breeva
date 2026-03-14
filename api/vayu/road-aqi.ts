@@ -170,15 +170,16 @@ function roadWeight(highway: string): number {
 }
 
 // ─── Zoom-based road limit + filtering ──────────────────────
-// Phase 6: Increased limits for Canvas renderer (handles 2000+ polylines)
+// All road types visible from z12+ so users see detail without zooming too much.
+// Canvas renderer handles 2000+ polylines at 60fps.
 function getQueryParams(zoom: number): { limit: number; highways: string[] | null } {
   if (zoom >= 16) return { limit: 2000, highways: null };         // all roads, max density
-  if (zoom >= 15) return { limit: 1200, highways: null };         // all roads
-  if (zoom >= 14) return { limit: 800, highways: null };          // all roads
-  if (zoom >= 13) return { limit: 600, highways: null };          // all roads
-  if (zoom >= 12) return { limit: 350, highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link'] };
-  if (zoom >= 11) return { limit: 200, highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link'] };
-  return { limit: 100, highways: ['motorway', 'trunk'] };
+  if (zoom >= 15) return { limit: 1500, highways: null };         // all roads
+  if (zoom >= 14) return { limit: 1000, highways: null };         // all roads
+  if (zoom >= 13) return { limit: 800, highways: null };          // all roads
+  if (zoom >= 12) return { limit: 600, highways: null };          // all roads including residential
+  if (zoom >= 11) return { limit: 350, highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link'] };
+  return { limit: 200, highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link'] };
 }
 
 // ─── Surface type → PM₁₀ coarse fraction multiplier ────────
@@ -232,72 +233,110 @@ interface RoadAQIFeature {
   weight: number;
 }
 
-// ─── Open-Meteo single-point fetch ──────────────────────────
-// forecastHour: 0 = current (default), 1-24 = hours ahead
-async function fetchBaselinePoint(lat: number, lon: number, forecastHour = 0) {
-  if (forecastHour <= 0) {
-    // Current conditions (original behavior)
-    const [aqResp, wxResp] = await Promise.all([
-      fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&timezone=auto`),
-      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=wind_speed_10m&timezone=auto`),
-    ]);
-    const aq = aqResp.ok ? (await aqResp.json()).current : null;
-    const wx = wxResp.ok ? (await wxResp.json()).current : null;
-    return {
-      pm25: aq?.pm2_5 ?? 15,
-      pm10: aq?.pm10 ?? 25,
-      no2: aq?.nitrogen_dioxide ?? 10,
-      co: aq?.carbon_monoxide ?? 200,
-      o3: aq?.ozone ?? 30,
-      wind_speed: wx?.wind_speed_10m ?? 2.0,
-    };
-  }
+// ─── Open-Meteo BATCH fetch (5 points in 2 HTTP calls) ─────
+// Uses Open-Meteo's multi-coordinate support: latitude=l1,l2,...&longitude=ln1,ln2,...
+// Reduces 10 HTTP requests → 2, saving ~300-400ms per viewport.
 
-  // Forecast mode: fetch hourly data and pick the target hour
-  const [aqResp, wxResp] = await Promise.all([
-    fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&forecast_hours=${forecastHour + 1}&timezone=auto`),
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m&forecast_hours=${forecastHour + 1}&timezone=auto`),
-  ]);
-  const aq = aqResp.ok ? await aqResp.json() : null;
-  const wx = wxResp.ok ? await wxResp.json() : null;
-  const idx = forecastHour; // array index = hours from now
-  return {
-    pm25: aq?.hourly?.pm2_5?.[idx] ?? 15,
-    pm10: aq?.hourly?.pm10?.[idx] ?? 25,
-    no2: aq?.hourly?.nitrogen_dioxide?.[idx] ?? 10,
-    co: aq?.hourly?.carbon_monoxide?.[idx] ?? 200,
-    o3: aq?.hourly?.ozone?.[idx] ?? 30,
-    wind_speed: wx?.hourly?.wind_speed_10m?.[idx] ?? 2.0,
-  };
+interface BaselineData {
+  pm25: number; pm10: number; no2: number;
+  co: number; o3: number; wind_speed: number;
 }
 
-type BaselineData = Awaited<ReturnType<typeof fetchBaselinePoint>>;
+async function fetchBaselineBatch(
+  lats: number[], lons: number[], forecastHour = 0,
+): Promise<BaselineData[]> {
+  const latStr = lats.map(l => l.toFixed(4)).join(',');
+  const lonStr = lons.map(l => l.toFixed(4)).join(',');
+  const n = lats.length;
 
-// ─── Multi-point baseline grid for spatial interpolation ────
-// Samples 5 points (4 corners + center) to get spatial variation
-// Returns an interpolation function that gives baseline at any lat/lng
+  if (forecastHour <= 0) {
+    const [aqResp, wxResp] = await Promise.all([
+      fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latStr}&longitude=${lonStr}&current=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&timezone=auto`),
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latStr}&longitude=${lonStr}&current=wind_speed_10m&timezone=auto`),
+    ]);
+    const aqJson = aqResp.ok ? await aqResp.json() : null;
+    const wxJson = wxResp.ok ? await wxResp.json() : null;
+    // Multi-point returns array; single-point returns object
+    const aqArr = n === 1 ? [aqJson?.current] : (Array.isArray(aqJson) ? aqJson.map((r: Record<string, unknown>) => (r as Record<string, unknown>)?.current) : []);
+    const wxArr = n === 1 ? [wxJson?.current] : (Array.isArray(wxJson) ? wxJson.map((r: Record<string, unknown>) => (r as Record<string, unknown>)?.current) : []);
+    return lats.map((_, i) => ({
+      pm25: (aqArr[i] as Record<string, number>)?.pm2_5 ?? 15,
+      pm10: (aqArr[i] as Record<string, number>)?.pm10 ?? 25,
+      no2: (aqArr[i] as Record<string, number>)?.nitrogen_dioxide ?? 10,
+      co: (aqArr[i] as Record<string, number>)?.carbon_monoxide ?? 200,
+      o3: (aqArr[i] as Record<string, number>)?.ozone ?? 30,
+      wind_speed: (wxArr[i] as Record<string, number>)?.wind_speed_10m ?? 2.0,
+    }));
+  }
+
+  // Forecast mode
+  const [aqResp, wxResp] = await Promise.all([
+    fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latStr}&longitude=${lonStr}&hourly=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&forecast_hours=${forecastHour + 1}&timezone=auto`),
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latStr}&longitude=${lonStr}&hourly=wind_speed_10m&forecast_hours=${forecastHour + 1}&timezone=auto`),
+  ]);
+  const aqJson = aqResp.ok ? await aqResp.json() : null;
+  const wxJson = wxResp.ok ? await wxResp.json() : null;
+  const aqArr = n === 1 ? [aqJson] : (Array.isArray(aqJson) ? aqJson : []);
+  const wxArr = n === 1 ? [wxJson] : (Array.isArray(wxJson) ? wxJson : []);
+  const idx = forecastHour;
+  return lats.map((_, i) => ({
+    pm25: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.pm2_5?.[idx] ?? 15,
+    pm10: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.pm10?.[idx] ?? 25,
+    no2: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.nitrogen_dioxide?.[idx] ?? 10,
+    co: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.carbon_monoxide?.[idx] ?? 200,
+    o3: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.ozone?.[idx] ?? 30,
+    wind_speed: (wxArr[i] as Record<string, Record<string, number[]>>)?.hourly?.wind_speed_10m?.[idx] ?? 2.0,
+  }));
+}
+
+// ─── Multi-point baseline grid with Redis cache ─────────────
+// Fetches 5 points (center + 4 corners) for spatial interpolation.
+// Cached in Redis for 15 min at coarse ~0.1° grid → most viewport moves = cache HIT.
 async function fetchBaselineGrid(south: number, west: number, north: number, east: number, forecastHour = 0) {
   const cLat = (south + north) / 2;
   const cLon = (west + east) / 2;
 
-  // Fetch 5 points in parallel: center + 4 corners
-  const [center, nw, ne, sw, se] = await Promise.all([
-    fetchBaselinePoint(cLat, cLon, forecastHour),
-    fetchBaselinePoint(north, west, forecastHour),
-    fetchBaselinePoint(north, east, forecastHour),
-    fetchBaselinePoint(south, west, forecastHour),
-    fetchBaselinePoint(south, east, forecastHour),
-  ]);
+  // Coarse grid key: ~0.1° ≈ 10km → covers entire city area
+  const q = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
+  const baselineCacheKey = `vayu:bl:${q(south)}:${q(west)}:${q(north)}:${q(east)}:fh${forecastHour}`;
 
-  // Bilinear interpolation function
-  const interpolate = (lat: number, lon: number): BaselineData => {
-    // Normalize position within bbox [0,1]
+  // Check Redis cache first (15 min TTL)
+  const cachedBaseline = await redisGet(baselineCacheKey);
+  if (cachedBaseline) {
+    try {
+      const { center, nw, ne, sw, se } = JSON.parse(cachedBaseline) as {
+        center: BaselineData; nw: BaselineData; ne: BaselineData;
+        sw: BaselineData; se: BaselineData;
+      };
+      const interpolate = buildInterpolator(south, west, north, east, center, nw, ne, sw, se);
+      return { center, interpolate };
+    } catch { /* fall through to fetch */ }
+  }
+
+  // Batch fetch: 5 points in 2 HTTP calls (instead of 10)
+  const lats = [cLat, north, north, south, south];
+  const lons = [cLon, west, east, west, east];
+  const results = await fetchBaselineBatch(lats, lons, forecastHour);
+  const [center, nw, ne, sw, se] = results;
+
+  // Cache for 15 min
+  await redisSetEx(baselineCacheKey, 900, JSON.stringify({ center, nw, ne, sw, se }));
+
+  const interpolate = buildInterpolator(south, west, north, east, center, nw, ne, sw, se);
+  return { center, interpolate };
+}
+
+function buildInterpolator(
+  south: number, west: number, north: number, east: number,
+  center: BaselineData, nw: BaselineData, ne: BaselineData,
+  sw: BaselineData, se: BaselineData,
+) {
+  return (lat: number, lon: number): BaselineData => {
     const latSpan = north - south || 0.001;
     const lonSpan = east - west || 0.001;
-    const ty = Math.max(0, Math.min(1, (lat - south) / latSpan)); // 0=south, 1=north
-    const tx = Math.max(0, Math.min(1, (lon - west) / lonSpan));  // 0=west, 1=east
+    const ty = Math.max(0, Math.min(1, (lat - south) / latSpan));
+    const tx = Math.max(0, Math.min(1, (lon - west) / lonSpan));
 
-    // Weight center point (40%) + bilinear corners (60%) for stability
     const keys = ['pm25', 'pm10', 'no2', 'co', 'o3', 'wind_speed'] as const;
     const result = {} as Record<string, number>;
     for (const k of keys) {
@@ -804,7 +843,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Limit bbox size based on zoom — allow 2× viewport for padding
-  const maxSpan = z <= 11 ? 1.0 : z <= 12 ? 0.6 : 0.3;
+  const maxSpan = z <= 10 ? 1.5 : z <= 11 ? 1.0 : z <= 12 ? 0.6 : 0.3;
   if (n - s > maxSpan || e - w > maxSpan) {
     return res.status(400).json({ error: 'Bounding box too large. Zoom in more.' });
   }

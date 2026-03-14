@@ -14,8 +14,8 @@ export interface RoadLayerMeta {
   count: number;
 }
 
-// Singleton tile cache: 80 entries, 10-min TTL
-const roadCache = new SpatialTileCache<RoadAQIResponse>(80, 10);
+// Singleton tile cache: 120 entries, 15-min TTL (larger cache = higher hit rate)
+const roadCache = new SpatialTileCache<RoadAQIResponse>(120, 15);
 
 // ── Color scales per pollutant ───────────────────────────────
 
@@ -113,8 +113,7 @@ function getValue(road: RoadAQIFeature, pollutant: PollutantType): number {
 }
 
 // ── Minimum zoom for road overlay ────────────────────────────
-// Phase 3: lowered from 13 → 11 to show motorways/trunk at wider zoom
-const MIN_ZOOM = 11;
+const MIN_ZOOM = 10;
 
 // ── Shared Canvas renderer for WebGL-like performance ────────
 // Canvas renderer handles 2000+ polylines at 60fps vs SVG's ~500 limit
@@ -219,8 +218,8 @@ export function useRoadPollutionLayer(
     // If viewport is still covered by last fetch → skip (0 HTTP)
     if (viewportCovered() && dataRef.current) return;
 
-    // Pad viewport by 50% on each side → fetches 2× area
-    const bounds = map.getBounds().pad(0.5);
+    // Pad viewport by 80% on each side → fetches ~3× area for more coverage
+    const bounds = map.getBounds().pad(0.8);
     const s = bounds.getSouth(), w = bounds.getWest();
     const n = bounds.getNorth(), e = bounds.getEast();
 
@@ -327,7 +326,7 @@ export function useRoadPollutionLayer(
     return () => { controllerRef.current?.abort(); };
   }, [visible, forecastHour, fetchData]);
 
-  // ── Map move → LEADING THROTTLE (fires immediately + trailing) ──
+  // ── Map move → LEADING THROTTLE 250ms (fast response like POI) ──
   useEffect(() => {
     if (!map || !visible) return;
     const onMove = () => {
@@ -335,7 +334,7 @@ export function useRoadPollutionLayer(
       // If viewport still covered → skip entirely
       if (viewportCovered() && dataRef.current) return;
 
-      if (now - lastThrottleRef.current > 500) {
+      if (now - lastThrottleRef.current > 250) {
         // Leading edge: fire immediately
         fetchData();
         lastThrottleRef.current = now;
@@ -345,7 +344,7 @@ export function useRoadPollutionLayer(
         trailingRef.current = setTimeout(() => {
           fetchData();
           lastThrottleRef.current = Date.now();
-        }, 500);
+        }, 250);
       }
     };
     map.on('moveend', onMove);
