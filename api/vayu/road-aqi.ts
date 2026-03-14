@@ -735,12 +735,16 @@ function crossValidateIQAir(vayuAQI: number, iqair: IQAirData): IQAirValidation 
 
 // ─── Supabase RPC: find_roads_in_bbox ───────────────────────
 async function findRoadsInBbox(
-  south: number, west: number, north: number, east: number, limit: number, simplifyTolerance = 0
+  south: number, west: number, north: number, east: number, limit: number, _simplifyTolerance = 0
 ): Promise<RoadRow[]> {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return [];
   try {
+    // Note: simplify_tolerance requires vayu_migration_004 update.
+    // Only send it when > 0, otherwise use the base 5-param signature.
+    const params: Record<string, unknown> = { south, west, north, east, road_limit: limit };
+    if (_simplifyTolerance > 0) params.simplify_tolerance = _simplifyTolerance;
     const resp = await fetch(`${url}/rest/v1/rpc/find_roads_in_bbox`, {
       method: 'POST',
       headers: {
@@ -748,9 +752,15 @@ async function findRoadsInBbox(
         apikey: key,
         Authorization: `Bearer ${key}`,
       },
-      body: JSON.stringify({ south, west, north, east, road_limit: limit, simplify_tolerance: simplifyTolerance }),
+      body: JSON.stringify(params),
     });
-    if (!resp.ok) return [];
+    if (!resp.ok) {
+      // If simplify_tolerance param isn't recognized, retry without it
+      if (_simplifyTolerance > 0) {
+        return findRoadsInBbox(south, west, north, east, limit, 0);
+      }
+      return [];
+    }
     return await resp.json();
   } catch { return []; }
 }
