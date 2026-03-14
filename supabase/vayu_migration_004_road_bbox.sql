@@ -9,6 +9,8 @@
 --
 -- Priority ordering: major roads first (motorway > primary > residential)
 -- so LIMIT doesn't cut important roads at lower zoom levels.
+DROP FUNCTION IF EXISTS find_roads_in_bbox(DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, INTEGER);
+
 CREATE OR REPLACE FUNCTION find_roads_in_bbox(
   south DOUBLE PRECISION,
   west  DOUBLE PRECISION,
