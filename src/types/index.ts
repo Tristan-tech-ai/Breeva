@@ -244,6 +244,9 @@ export interface RoadAQIResponse {
     baseline_o3: number;
     baseline_pm10: number;
     wind_speed: number;
+    waqi_station: string | null;
+    waqi_bias_pm25: number;
+    waqi_bias_no2: number;
     computed_at: string;
   };
 }

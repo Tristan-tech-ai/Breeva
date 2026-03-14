@@ -238,6 +238,114 @@ async function fetchBaselineGrid(south: number, west: number, north: number, eas
   return { center, interpolate };
 }
 
+// ─── WAQI station bias correction ───────────────────────────
+// Fetches nearest WAQI station reading for the viewport center,
+// compares against Open-Meteo baseline, returns additive bias.
+// Cached in Redis for 1 hour to conserve WAQI quota (1000 req/day).
+interface WAQIBias {
+  pm25: number;
+  pm10: number;
+  no2: number;
+  o3: number;
+  stationName: string | null;
+}
+
+async function fetchWAQIBias(lat: number, lon: number, openMeteoBaseline: BaselineData): Promise<WAQIBias> {
+  const noBias: WAQIBias = { pm25: 0, pm10: 0, no2: 0, o3: 0, stationName: null };
+
+  const token = process.env.WAQI_TOKEN;
+  if (!token) return noBias;
+
+  // Check Redis cache first (1h TTL, quantized to ~0.05° ≈ 5km grid)
+  const q = (v: number) => (Math.round(v * 20) / 20).toFixed(2);
+  const cacheKey = `vayu:waqi:${q(lat)}:${q(lon)}`;
+
+  const cached = await redisGet(cacheKey);
+  if (cached) {
+    try { return JSON.parse(cached); } catch { /* fall through */ }
+  }
+
+  try {
+    const resp = await fetch(
+      `https://api.waqi.info/feed/geo:${lat.toFixed(4)};${lon.toFixed(4)}/?token=${encodeURIComponent(token)}`
+    );
+    if (!resp.ok) return noBias;
+    const json = await resp.json();
+    if (json.status !== 'ok' || !json.data?.iaqi) return noBias;
+
+    const iaqi = json.data.iaqi;
+    const stationName: string = json.data.city?.name ?? null;
+
+    // Extract pollutant concentrations from WAQI (values are in AQI sub-index)
+    // Convert PM2.5 AQI → µg/m³ using EPA breakpoints
+    const waqiPm25 = iaqi.pm25?.v != null ? pm25AQIToUg(iaqi.pm25.v) : null;
+    // NO₂ AQI → ppb → µg/m³ (1 ppb ≈ 1.88 µg/m³ at STP)
+    const waqiNo2 = iaqi.no2?.v != null ? no2AQIToUg(iaqi.no2.v) : null;
+    // O₃ AQI → ppb → µg/m³ (1 ppb ≈ 2.0 µg/m³ at STP)
+    const waqiO3 = iaqi.o3?.v != null ? o3AQIToUg(iaqi.o3.v) : null;
+    // PM10 AQI → µg/m³
+    const waqiPm10 = iaqi.pm10?.v != null ? pm10AQIToUg(iaqi.pm10.v) : null;
+
+    // Compute bias: observed (WAQI) - modeled (Open-Meteo)
+    // Clamp to ±50% of baseline to prevent wild swings from distant stations
+    const clampBias = (observed: number | null, modeled: number): number => {
+      if (observed == null) return 0;
+      const raw = observed - modeled;
+      const maxBias = Math.abs(modeled) * 0.5;
+      return Math.max(-maxBias, Math.min(maxBias, raw));
+    };
+
+    const bias: WAQIBias = {
+      pm25: clampBias(waqiPm25, openMeteoBaseline.pm25),
+      pm10: clampBias(waqiPm10, openMeteoBaseline.pm10),
+      no2: clampBias(waqiNo2, openMeteoBaseline.no2),
+      o3: clampBias(waqiO3, openMeteoBaseline.o3),
+      stationName,
+    };
+
+    // Cache for 1 hour
+    await redisSetEx(cacheKey, 3600, JSON.stringify(bias));
+    return bias;
+  } catch {
+    return noBias;
+  }
+}
+
+// ─── WAQI AQI → concentration converters (US EPA breakpoints) ─
+function pm25AQIToUg(aqi: number): number {
+  const bp = [ [0,50,0,12], [51,100,12.1,35.4], [101,150,35.5,55.4], [151,200,55.5,150.4], [201,300,150.5,250.4], [301,500,250.5,500.4] ];
+  for (const [aqiLo, aqiHi, cLo, cHi] of bp) {
+    if (aqi <= aqiHi) return ((cHi - cLo) / (aqiHi - aqiLo)) * (aqi - aqiLo) + cLo;
+  }
+  return 500;
+}
+
+function pm10AQIToUg(aqi: number): number {
+  const bp = [ [0,50,0,54], [51,100,55,154], [101,150,155,254], [151,200,255,354], [201,300,355,424], [301,500,425,604] ];
+  for (const [aqiLo, aqiHi, cLo, cHi] of bp) {
+    if (aqi <= aqiHi) return ((cHi - cLo) / (aqiHi - aqiLo)) * (aqi - aqiLo) + cLo;
+  }
+  return 604;
+}
+
+function no2AQIToUg(aqi: number): number {
+  // EPA NO₂ breakpoints in ppb, convert to µg/m³ (* 1.88)
+  const bp = [ [0,50,0,53], [51,100,54,100], [101,150,101,360], [151,200,361,649], [201,300,650,1249], [301,500,1250,2049] ];
+  for (const [aqiLo, aqiHi, cLo, cHi] of bp) {
+    if (aqi <= aqiHi) return (((cHi - cLo) / (aqiHi - aqiLo)) * (aqi - aqiLo) + cLo) * 1.88;
+  }
+  return 2049 * 1.88;
+}
+
+function o3AQIToUg(aqi: number): number {
+  // EPA O₃ breakpoints in ppb, convert to µg/m³ (* 2.0)
+  const bp = [ [0,50,0,54], [51,100,55,70], [101,150,71,85], [151,200,86,105], [201,300,106,200] ];
+  for (const [aqiLo, aqiHi, cLo, cHi] of bp) {
+    if (aqi <= aqiHi) return (((cHi - cLo) / (aqiHi - aqiLo)) * (aqi - aqiLo) + cLo) * 2.0;
+  }
+  return 200 * 2.0;
+}
+
 // ─── Supabase RPC: find_roads_in_bbox ───────────────────────
 async function findRoadsInBbox(
   south: number, west: number, north: number, east: number, limit: number
@@ -371,6 +479,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Fetch baseline AQI grid (5-point spatial interpolation)
     const { center: baselineCenter, interpolate: interpBaseline } = await fetchBaselineGrid(s, w, n, e, fh);
+
+    // WAQI station bias correction (only for current conditions, not forecast)
+    const cLat = (s + n) / 2;
+    const cLon = (w + e) / 2;
+    const bias = fh === 0
+      ? await fetchWAQIBias(cLat, cLon, baselineCenter)
+      : { pm25: 0, pm10: 0, no2: 0, o3: 0, stationName: null } as WAQIBias;
+
+    // Wrap interpolation with bias correction
+    const interpCorrected = (lat: number, lon: number): BaselineData => {
+      const raw = interpBaseline(lat, lon);
+      return {
+        ...raw,
+        pm25: Math.max(0, raw.pm25 + bias.pm25),
+        pm10: Math.max(0, raw.pm10 + bias.pm10),
+        no2: Math.max(0, raw.no2 + bias.no2),
+        o3: Math.max(0, raw.o3 + bias.o3),
+      } as BaselineData;
+    };
+
     // Use forecast hour for diurnal profile: shift current hour by forecast offset
     const targetHour = (new Date().getHours() + fh) % 24;
     const diurnal = HOURLY_TRAFFIC[targetHour] ?? 1.0;
@@ -388,7 +516,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const mid = coords[Math.floor(coords.length / 2)];
       const roadLon = mid[0];
       const roadLat = mid[1];
-      const baseline = interpBaseline(roadLat, roadLon);
+      const baseline = interpCorrected(roadLat, roadLon);
 
       const { aqi, pm25, no2, o3, pm10 } = computeRoadAQI(road, baseline, diurnal);
 
@@ -416,6 +544,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         baseline_o3: baselineCenter.o3,
         baseline_pm10: baselineCenter.pm10,
         wind_speed: baselineCenter.wind_speed,
+        waqi_station: bias.stationName,
+        waqi_bias_pm25: Math.round(bias.pm25 * 100) / 100,
+        waqi_bias_no2: Math.round(bias.no2 * 100) / 100,
         computed_at: new Date().toISOString(),
       },
     };
