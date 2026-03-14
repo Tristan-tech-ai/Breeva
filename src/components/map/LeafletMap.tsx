@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { useMapStore } from '../../stores/mapStore';
 import { useRoadPollutionLayer } from './RoadPollutionLayer';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
-import { useAQIStationsLayer } from './AQIStationsLayer';
+import { useAQIStationLayer } from './AQIStationLayer';
 import POILayer from './POILayer';
 import type { POI } from '../../lib/poi-api';
 import type { Route } from '../../types';
@@ -244,8 +244,8 @@ function MapController({
     onRoadLayerMeta?.(roadMeta);
   }, [roadMeta, onRoadLayerMeta]);
 
-  // Interactive AQI station markers via WAQI map/bounds API
-  useAQIStationsLayer(map, showAQIStations ?? false);
+  // Interactive WAQI station markers (replaces raster tile overlay)
+  useAQIStationLayer(map, !!showAQIStations);
 
   return showPOIs ? (
     <POILayer visible={showPOIs} activeFilter={activeFilter} onPlaceSelect={onPlaceSelect} />
