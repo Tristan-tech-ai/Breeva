@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { useMapStore } from '../../stores/mapStore';
 import { useRoadPollutionLayer } from './RoadPollutionLayer';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
+import { useAQIStationsLayer } from './AQIStationsLayer';
 import POILayer from './POILayer';
 import type { POI } from '../../lib/poi-api';
 import type { Route } from '../../types';
@@ -243,29 +244,8 @@ function MapController({
     onRoadLayerMeta?.(roadMeta);
   }, [roadMeta, onRoadLayerMeta]);
 
-  // AQICN/WAQI station tile overlay (IQAir-style colored AQI markers)
-  const stationTileRef = useRef<L.TileLayer | null>(null);
-  useEffect(() => {
-    if (showAQIStations) {
-      if (!stationTileRef.current) {
-        const token = import.meta.env.VITE_WAQI_TOKEN || 'demo';
-        stationTileRef.current = L.tileLayer(
-          `https://tiles.aqicn.org/tiles/usepa-aqi/{z}/{x}/{y}.png?token=${token}`,
-          { attribution: '&copy; <a href="https://waqi.info">WAQI</a>', opacity: 0.85, zIndex: 650 },
-        );
-      }
-      if (!map.hasLayer(stationTileRef.current)) {
-        stationTileRef.current.addTo(map);
-      }
-    } else if (stationTileRef.current && map.hasLayer(stationTileRef.current)) {
-      stationTileRef.current.remove();
-    }
-  }, [showAQIStations, map]);
-
-  // Cleanup station tiles on unmount
-  useEffect(() => {
-    return () => { stationTileRef.current?.remove(); };
-  }, []);
+  // Interactive AQI station markers via WAQI map/bounds API
+  useAQIStationsLayer(map, showAQIStations ?? false);
 
   return showPOIs ? (
     <POILayer visible={showPOIs} activeFilter={activeFilter} onPlaceSelect={onPlaceSelect} />
