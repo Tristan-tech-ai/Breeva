@@ -138,6 +138,31 @@ export class SpatialTileCache<T> {
     return null;
   }
 
+  /**
+   * Wider-only mip-map: only searches same zoom or LOWER zoom (wider area).
+   * Safe for heatmap fallback — prevents showing city-level (small-bbox) data
+   * as a tiny box overlay when viewed at low zoom.
+   */
+  getNearestWider(
+    south: number, west: number, north: number, east: number, targetZoom: number,
+  ): T | null {
+    for (const dz of [0, -1, -2, -3]) {
+      const z = targetZoom + dz;
+      if (z < 0) continue;
+      const key = this.tileKey(south, west, north, east, z);
+      const entry = this.cache.get(key);
+      if (entry) return entry.data;
+      for (const e of this.cache.values()) {
+        if (e.zoom !== z) continue;
+        if (e.north > south && e.south < north
+         && e.east > west && e.west < east) {
+          return e.data;
+        }
+      }
+    }
+    return null;
+  }
+
   set(
     south: number,
     west: number,

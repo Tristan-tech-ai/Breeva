@@ -118,8 +118,8 @@ async function fetchGridAQI(
   zoom: number, pollutant: string,
   signal?: AbortSignal,
 ): Promise<GridAQIResponse | null> {
-  // Higher grid resolution: fewer gaps at low zoom
-  const gridRes = zoom <= 4 ? 6 : zoom <= 6 ? 8 : zoom <= 8 ? 10 : 12;
+  // More grid points at low zoom for smoother global coverage
+  const gridRes = zoom <= 2 ? 8 : zoom <= 4 ? 10 : zoom <= 6 ? 10 : zoom <= 8 ? 12 : 14;
   try {
     const params = new URLSearchParams({
       south: south.toFixed(4), west: west.toFixed(4),
@@ -196,15 +196,20 @@ export function useAQIHeatmapLayer(
     }
   }, []);
 
-  // Check if viewport is still covered
+  // Check if current viewport is covered by last fetched data
   const viewportCovered = useCallback((): boolean => {
     if (!map || !fetchedBoundsRef.current) return false;
     const b = map.getBounds();
     const z = Math.round(map.getZoom());
     const fb = fetchedBoundsRef.current;
+    // Clamp viewport to valid range for comparison
+    const vs = Math.max(-85.05, b.getSouth());
+    const vn = Math.min(85.05, b.getNorth());
+    const vw = Math.max(-180, b.getWest());
+    const ve = Math.min(180, b.getEast());
     return fb.z === z
-      && fb.s <= b.getSouth() && fb.w <= b.getWest()
-      && fb.n >= b.getNorth() && fb.e >= b.getEast();
+      && fb.s <= vs && fb.w <= vw
+      && fb.n >= vn && fb.e >= ve;
   }, [map]);
 
   const fetchAndRender = useCallback(async () => {
@@ -220,10 +225,15 @@ export function useAQIHeatmapLayer(
     // If viewport still covered → skip
     if (viewportCovered() && lastGridRef.current) return;
 
-    // Pad viewport by 50% for over-fetch
-    const bounds = map.getBounds().pad(0.5);
-    const s = bounds.getSouth(), w = bounds.getWest();
-    const n = bounds.getNorth(), e = bounds.getEast();
+    // Pad viewport — reduce padding at low zoom to avoid overflow
+    // At z≤4 near-global, no padding needed; at z5-7 light padding; z8+ full 50%
+    const padFactor = zoom <= 4 ? 0 : zoom <= 7 ? 0.25 : 0.5;
+    const rawBounds = map.getBounds().pad(padFactor);
+    // Clamp to valid geographic range — prevents invalid coords sent to Open-Meteo
+    const s = Math.max(-85.05, rawBounds.getSouth());
+    const n = Math.min(85.05, rawBounds.getNorth());
+    const w = Math.max(-180, rawBounds.getWest());
+    const e = Math.min(180, rawBounds.getEast());
 
     // 1. Fresh cache hit → render instantly
     const cached = gridCache.get(s, w, n, e, zoom);
@@ -234,10 +244,11 @@ export function useAQIHeatmapLayer(
       return;
     }
 
-    // 2. Fallback: stale / nearest-zoom / any overlapping → show immediately
+    // 2. Fallback: stale data or wider-zoom data ONLY
+    // Important: do NOT use getNearestZoom (could return high-zoom/narrow-bbox data
+    // that renders as a tiny box overlay at low zoom) or getAnyOverlapping.
     const fallback = gridCache.getStale(s, w, n, e, zoom)
-      ?? gridCache.getNearestZoom(s, w, n, e, zoom)
-      ?? gridCache.getAnyOverlapping(s, w, n, e, zoom);
+      ?? gridCache.getNearestWider(s, w, n, e, zoom);
     if (fallback) {
       lastGridRef.current = fallback;
       renderOverlay(fallback, pollutant);
