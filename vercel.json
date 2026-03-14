@@ -11,6 +11,30 @@
     {
       "path": "/api/vayu/road-aqi?south=-6.22&west=106.80&north=-6.15&east=106.87&zoom=14",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/vayu/gemini-classify?mode=temporal&region=jakarta",
+      "schedule": "0 6,18 * * *"
+    },
+    {
+      "path": "/api/vayu/gemini-classify?mode=temporal&region=bali",
+      "schedule": "5 6,18 * * *"
+    },
+    {
+      "path": "/api/vayu/gemini-classify?mode=temporal&region=bandung",
+      "schedule": "10 6,18 * * *"
+    },
+    {
+      "path": "/api/vayu/gemini-classify?mode=temporal&region=surabaya",
+      "schedule": "15 6,18 * * *"
+    },
+    {
+      "path": "/api/vayu/gemini-classify?mode=error_analysis&region=jakarta",
+      "schedule": "0 3 * * 1"
+    },
+    {
+      "path": "/api/vayu/gemini-classify?mode=error_analysis&region=bali",
+      "schedule": "5 3 * * 1"
     }
   ]
 }

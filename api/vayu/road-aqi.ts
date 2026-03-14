@@ -874,11 +874,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const targetHour = (new Date().getHours() + fh) % 24;
     let diurnal = HOURLY_TRAFFIC[targetHour] ?? 1.0;
 
+    // ── Region detection (used for temporal AI, WAQI history, error corrections) ──
+    const region = detectRegion(cLat, cLon);
+    const today = new Date().toISOString().slice(0, 10);
+
+    // ── WAQI History Save (feeds Module B temporal learning) ──
+    // Fire-and-forget: save hourly WAQI readings so Gemini can learn traffic patterns
+    if (fh === 0 && bias.stationName) {
+      (async () => {
+        try {
+          const histKey = `vayu:waqi_history:${region}:${today}`;
+          const existing = await redisGet(histKey);
+          const history = existing ? JSON.parse(existing) : {};
+          history[targetHour] = {
+            pm25: Math.round((baselineCenter.pm25 + bias.pm25) * 10) / 10,
+            no2: Math.round((baselineCenter.no2 + bias.no2) * 10) / 10,
+            o3: Math.round((baselineCenter.o3 + bias.o3) * 10) / 10,
+            pm10: Math.round((baselineCenter.pm10 + bias.pm10) * 10) / 10,
+            wind: baselineCenter.wind_speed,
+            station: bias.stationName,
+          };
+          await redisSetEx(histKey, 691200, JSON.stringify(history)); // 8d TTL
+        } catch { /* non-fatal */ }
+      })();
+    }
+
     // ── Temporal AI correction (Module B): blend AI-predicted hourly factors ──
     // Pre-computed by Gemini scheduled runs, cached in Redis
     if (fh === 0) {
-      const region = detectRegion(cLat, cLon);
-      const today = new Date().toISOString().slice(0, 10);
       const temporalRaw = await redisGet(`vayu:temporal:${region}:${today}`);
       if (temporalRaw) {
         try {
@@ -890,6 +913,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         } catch { /* use static diurnal */ }
       }
+    }
+
+    // ── Pre-fetch residual error corrections (Module C) ──
+    // Cached correction factors from Gemini weekly analysis
+    const errorCorrections = new Map<string, number>();
+    if (fh === 0) {
+      const hwClasses = [...new Set(filtered.map(r => r.highway))];
+      await Promise.all(hwClasses.map(async (hw) => {
+        const raw = await redisGet(`vayu:correction:${region}:${hw}:${targetHour}`);
+        if (raw) {
+          const f = parseFloat(raw);
+          if (f > 0 && Math.abs(f - 1.0) > 0.01) errorCorrections.set(hw, f);
+        }
+      }));
     }
 
     // Compute per-road AQI with spatially interpolated baseline
@@ -907,7 +944,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const roadLat = mid[1];
       const baseline = interpCorrected(roadLat, roadLon);
 
-      const { aqi, pm25, no2, o3, pm10 } = computeRoadAQI(road, baseline, diurnal);
+      let { aqi, pm25, no2, o3, pm10 } = computeRoadAQI(road, baseline, diurnal);
+
+      // ── Apply residual error correction (Module C) ──
+      const corrFactor = errorCorrections.get(road.highway);
+      if (corrFactor) {
+        pm25 = Math.round(pm25 * corrFactor * 100) / 100;
+        no2 = Math.round(no2 * corrFactor * 100) / 100;
+        pm10 = Math.round(pm10 * corrFactor * 100) / 100;
+        aqi = pm25ToAQI(pm25);
+      }
 
       features.push({
         osm_way_id: road.osm_way_id,
@@ -928,6 +974,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const sortedAQIs = features.map(f => f.aqi).sort((a, b) => a - b);
       const medianAQI = sortedAQIs[Math.floor(sortedAQIs.length / 2)];
       iqairValidation = crossValidateIQAir(medianAQI, iqairData);
+    }
+
+    // ── Log prediction errors (feeds Module C residual learning) ──
+    // Fire-and-forget: accumulate predicted vs observed deltas for Gemini analysis
+    if (fh === 0 && bias.stationName && features.length > 0) {
+      (async () => {
+        try {
+          const observedAQI = iqairData?.aqius ?? pm25ToAQI(baselineCenter.pm25 + bias.pm25);
+          const errKey = `vayu:errors:${region}:accumulated`;
+          const raw = await redisGet(errKey);
+          const errors: Array<{ road_class: string; hour: number; predicted_aqi: number; actual_aqi: number; delta: number; ts: string }> = raw ? JSON.parse(raw) : [];
+          // Keep max 500 entries
+          if (errors.length >= 500) errors.splice(0, errors.length - 450);
+          // Average AQI per road class
+          const classBuckets = new Map<string, { sum: number; n: number }>();
+          for (const f of features) {
+            const b = classBuckets.get(f.highway) || { sum: 0, n: 0 };
+            b.sum += f.aqi; b.n++;
+            classBuckets.set(f.highway, b);
+          }
+          for (const [rc, { sum, n }] of classBuckets) {
+            const predicted = Math.round(sum / n);
+            errors.push({ road_class: rc, hour: targetHour, predicted_aqi: predicted, actual_aqi: observedAQI, delta: predicted - observedAQI, ts: new Date().toISOString() });
+          }
+          await redisSetEx(errKey, 691200, JSON.stringify(errors)); // 8d TTL
+        } catch { /* non-fatal */ }
+      })();
     }
 
     const result = {

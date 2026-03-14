@@ -379,15 +379,27 @@ Only include entries where |factor - 1.0| > 0.05 (meaningful correction needed).
 
 // ─── Handler ────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed. Use POST.' });
+  // Accept POST (manual/API) or GET (Vercel cron)
+  const isCron = req.method === 'GET';
+
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed. Use POST or GET (cron).' });
   }
 
-  // Auth: require service role key
+  // Auth: POST requires service role key, GET (cron) requires CRON_SECRET
   const authHeader = req.headers.authorization;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey || authHeader !== `Bearer ${serviceKey}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (isCron) {
+    // Vercel cron sends Authorization: Bearer <CRON_SECRET>
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+      return res.status(401).json({ error: 'Unauthorized cron request' });
+    }
+  } else {
+    if (!serviceKey || authHeader !== `Bearer ${serviceKey}`) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
   }
 
   const mode = (req.query.mode as string) || 'classify';
