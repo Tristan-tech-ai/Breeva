@@ -911,8 +911,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(empty);
     }
 
-    // Highway filtering already done in DB query — use all returned roads
-    const filtered = roads;
+    // Highway filter: applied in DB if migration ran (highway_types param),
+    // otherwise fallback stripped it → re-apply in JS as safety net.
+    const filtered = highways
+      ? roads.filter((r) => highways.includes(r.highway))
+      : roads;
 
     // Fetch baseline AQI grid (5-point spatial interpolation)
     const { center: baselineCenter, interpolate: interpBaseline } = await fetchBaselineGrid(s, w, n, e, fh);
