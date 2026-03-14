@@ -177,9 +177,9 @@ function getQueryParams(zoom: number): { limit: number; highways: string[] | nul
   if (zoom >= 15) return { limit: 1500, highways: null };         // all roads
   if (zoom >= 14) return { limit: 1000, highways: null };         // all roads
   if (zoom >= 13) return { limit: 800, highways: null };          // all roads
-  if (zoom >= 12) return { limit: 600, highways: null };          // all roads including residential
-  if (zoom >= 11) return { limit: 350, highways: null };          // all roads
-  return { limit: 200, highways: null };                           // all roads
+  if (zoom >= 12) return { limit: 600, highways: null };
+  if (zoom >= 11) return { limit: 350, highways: null };
+  return { limit: 200, highways: null };
 }
 
 // ─── Surface type → PM₁₀ coarse fraction multiplier ────────
@@ -291,22 +291,21 @@ async function fetchBaselineBatch(
 
 // ─── Multi-point baseline grid with Redis cache ─────────────
 // Fetches 5 points (center + 4 corners) for spatial interpolation.
-// Cached in Redis for 15 min.
-// Uses FIXED 0.05° grid around center (not viewport corners) so that the
-// same location always gets the same interpolated baseline regardless of zoom.
-const BL_HALF = 0.05; // ~5.5 km — covers city-scale spatial variation
-
+// Cached in Redis for 15 min at coarse ~0.1° grid → most viewport moves = cache HIT.
 async function fetchBaselineGrid(south: number, west: number, north: number, east: number, forecastHour = 0) {
   const cLat = (south + north) / 2;
   const cLon = (west + east) / 2;
 
-  // Cache key based on quantized CENTER (~0.1° ≈ 10km) — zoom-independent
-  const q = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
-  const baselineCacheKey = `vayu:bl:${q(cLat)}:${q(cLon)}:fh${forecastHour}`;
+  // Quantize center to 0.05° grid (~5.5km) so same location = same baseline at any zoom
+  const qLat = Math.round(cLat * 20) / 20;
+  const qLon = Math.round(cLon * 20) / 20;
+  const OFFSET = 0.05; // Fixed offset for corner sample points
 
-  // Fixed grid bounds around center
-  const gN = cLat + BL_HALF, gS = cLat - BL_HALF;
-  const gW = cLon - BL_HALF, gE = cLon + BL_HALF;
+  const baselineCacheKey = `vayu:bl:${qLat.toFixed(2)}:${qLon.toFixed(2)}:fh${forecastHour}`;
+
+  // Fixed grid bounds for interpolation (zoom-independent)
+  const gS = qLat - OFFSET, gN = qLat + OFFSET;
+  const gW = qLon - OFFSET, gE = qLon + OFFSET;
 
   // Check Redis cache first (15 min TTL)
   const cachedBaseline = await redisGet(baselineCacheKey);
@@ -321,9 +320,9 @@ async function fetchBaselineGrid(south: number, west: number, north: number, eas
     } catch { /* fall through to fetch */ }
   }
 
-  // Batch fetch: 5 points in 2 HTTP calls (instead of 10)
-  const lats = [cLat, gN, gN, gS, gS];
-  const lons = [cLon, gW, gE, gW, gE];
+  // Batch fetch: 5 fixed points in 2 HTTP calls (instead of 10)
+  const lats = [qLat, gN, gN, gS, gS];
+  const lons = [qLon, gW, gE, gW, gE];
   const results = await fetchBaselineBatch(lats, lons, forecastHour);
   const [center, nw, ne, sw, se] = results;
 
@@ -355,8 +354,6 @@ function buildInterpolator(
     }
     return result as unknown as BaselineData;
   };
-
-  return { center, interpolate };
 }
 
 // ─── Sentinel-5P satellite NO₂ correction ───────────────────
