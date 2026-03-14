@@ -330,10 +330,11 @@ async function fetchBaselineGrid(south: number, west: number, north: number, eas
   const cLat = (south + north) / 2;
   const cLon = (west + east) / 2;
 
-  // Quantize center to 0.05° grid (~5.5km) so same location = same baseline at any zoom
-  const qLat = Math.round(cLat * 20) / 20;
-  const qLon = Math.round(cLon * 20) / 20;
-  const OFFSET = 0.05; // Fixed offset for corner sample points
+  // Quantize center to 0.1° grid (~11km) so zoom changes + 15% padding
+  // don't shift the grid center, keeping colors stable across zoom transitions
+  const qLat = Math.round(cLat * 10) / 10;
+  const qLon = Math.round(cLon * 10) / 10;
+  const OFFSET = 0.1; // Fixed offset for corner sample points
 
   const baselineCacheKey = `vayu:bl:${qLat.toFixed(2)}:${qLon.toFixed(2)}:fh${forecastHour}`;
 
@@ -891,9 +892,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid bounding box' });
   }
 
-  // Bbox too large → return empty roads (200) instead of 400.
-  // A 400 causes client-side error cascades; empty response is handled gracefully.
-  const maxSpan = z <= 10 ? 3.0 : z <= 11 ? 2.0 : z <= 12 ? 1.5 : z <= 13 ? 1.0 : 0.8;
+  // Bbox safety cap: with 15% client padding, spans can be ~1.3× the raw viewport.
+  // Use generous limits — LIMIT in getQueryParams() already controls the DB budget.
+  // ALWAYS return 200 — a 400 causes client-side error cascades.
+  const maxSpan = z <= 10 ? 5.0 : z <= 11 ? 3.0 : z <= 12 ? 2.0 : z <= 13 ? 1.5 : 1.0;
   if (n - s > maxSpan || e - w > maxSpan) {
     const empty = { roads: [], meta: { count: 0, zoom: z, wind_speed: 0 } };
     res.setHeader('Cache-Control', 's-maxage=60');
@@ -905,7 +907,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // One-time Redis flush: clear stale pre-fix road cache entries.
     // Safe to remove this block after first deploy (2026-03-15).
-    const flushKey = 'vayu:road:cache_flushed_v2';
+    const flushKey = 'vayu:road:cache_flushed_v3';
     const flushed = await redisGet(flushKey);
     if (!flushed) {
       // Scan and delete all road cache keys via pattern
