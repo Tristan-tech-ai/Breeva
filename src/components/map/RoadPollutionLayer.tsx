@@ -127,25 +127,13 @@ function getCanvasRenderer(): L.Canvas {
 
 // ── Hook: Road Pollution Layer ───────────────────────────────
 
-// ── Zoom-based road type filter (client-side LOD) ────────────
-// At low zoom, only show major roads to prevent clutter
-const ZOOM_ROAD_FILTER: Record<number, Set<string> | null> = {
-  10: new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link']),
-  11: new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link']),
-  12: new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link']),
-  13: new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link', 'residential', 'unclassified', 'living_street']),
-};
-
-// Max polylines to render (Canvas performance limit)
-const MAX_RENDER_ROADS = 5000;
-
 export function useRoadPollutionLayer(
   map: L.Map | null,
   visible: boolean,
   pollutant: PollutantType = 'aqi',
   forecastHour = 0,
 ): RoadLayerMeta | null {
-  // Single persistent layer group — clear+rebuild pattern (no orphaned layers)
+  // Two layer groups for atomic swap: old stays visible until new is ready
   const layerRef = useRef<L.LayerGroup>(L.layerGroup());
   const controllerRef = useRef<AbortController | null>(null);
   const dataRef = useRef<RoadAQIResponse | null>(null);
@@ -154,30 +142,19 @@ export function useRoadPollutionLayer(
   // Track the fetched padded bounds to know if viewport still covered
   const fetchedBoundsRef = useRef<{ s: number; w: number; n: number; e: number; z: number } | null>(null);
 
-  // ── Render data into the EXISTING layer group (clear + rebuild) ──
-  const renderData = useCallback(
-    (data: RoadAQIResponse, currentPollutant: PollutantType) => {
-      if (!map) return;
-      // Clear ALL existing polylines from the single group
-      layerRef.current.clearLayers();
-
-      const zoom = Math.round(map.getZoom());
-      const filter = ZOOM_ROAD_FILTER[zoom] ?? null; // null = show all (z14+)
-
-      let rendered = 0;
+  // ── Build polylines into a NEW layer group (off-screen) ────
+  const buildLayer = useCallback(
+    (data: RoadAQIResponse, currentPollutant: PollutantType): L.LayerGroup => {
+      const group = L.layerGroup();
+      const zoom = map?.getZoom() ?? 14;
       for (const road of data.roads) {
-        // Client-side LOD: skip roads that don't belong at this zoom
-        if (filter && !filter.has(road.highway)) continue;
-        // Cap total rendered polylines for Canvas performance
-        if (rendered >= MAX_RENDER_ROADS) break;
-
         const coords = road.geometry.coordinates.map(
           ([lng, lat]) => [lat, lng] as L.LatLngTuple,
         );
         if (coords.length < 2) continue;
         const color = getConcentrationColor(getValue(road, currentPollutant), currentPollutant);
         const zoomScale = zoom >= 16 ? 1.6 : zoom >= 15 ? 1.3 : zoom >= 13 ? 1.0 : zoom >= 12 ? 0.7 : 0.5;
-        const weight = Math.max(1, road.weight * zoomScale);
+        const weight = road.weight * zoomScale; // natural scaling — sub-pixel roads correctly invisible at low zoom
         L.polyline(coords, {
           color,
           weight,
@@ -186,10 +163,22 @@ export function useRoadPollutionLayer(
           lineCap: 'round',
           lineJoin: 'round',
           renderer: getCanvasRenderer(),
-        }).addTo(layerRef.current);
-        rendered++;
+        }).addTo(group);
       }
+      return group;
+    },
+    [map],
+  );
 
+  // ── ATOMIC SWAP: old layer stays until new is added ────────
+  const atomicSwap = useCallback(
+    (data: RoadAQIResponse, currentPollutant: PollutantType) => {
+      if (!map) return;
+      const newGroup = buildLayer(data, currentPollutant);
+      // Add new FIRST, then remove old — never blank
+      newGroup.addTo(map);
+      layerRef.current.remove();
+      layerRef.current = newGroup;
       setMeta({
         wind_speed: data.meta.wind_speed ?? 0,
         waqi_station: data.meta.waqi_station,
@@ -200,7 +189,7 @@ export function useRoadPollutionLayer(
         count: data.meta.count,
       });
     },
-    [map],
+    [map, buildLayer],
   );
 
   // ── Check if current viewport is still covered by fetched data ──
@@ -209,7 +198,7 @@ export function useRoadPollutionLayer(
     const b = map.getBounds();
     const z = Math.round(map.getZoom());
     const fb = fetchedBoundsRef.current;
-    // Exact zoom match required — different zoom = different road set (LOD)
+    // Strict zoom match — zoom changes are handled by clearing + re-fetch
     return fb.z === z
       && fb.s <= b.getSouth() && fb.w <= b.getWest()
       && fb.n >= b.getNorth() && fb.e >= b.getEast();
@@ -235,24 +224,17 @@ export function useRoadPollutionLayer(
     const s = bounds.getSouth(), w = bounds.getWest();
     const n = bounds.getNorth(), e = bounds.getEast();
 
-    // Only use fresh cache — NO stale/cross-zoom fallbacks (prevents ghost layers)
     const cached = roadCache.get(s, w, n, e, zoom);
     if (cached) {
       dataRef.current = cached;
       fetchedBoundsRef.current = { s, w, n, e, z: zoom };
-      renderData(cached, pollutant);
+      atomicSwap(cached, pollutant);
       return true;
     }
 
-    // Safe fallback: only stale data at SAME zoom with containment check
-    const stale = roadCache.getStale(s, w, n, e, zoom);
-    if (stale) {
-      dataRef.current = stale;
-      renderData(stale, pollutant);
-      // Don't update fetchedBoundsRef — still need fresh data
-    }
+    // No fallback chain — blank is better than wrong-zoom ghost roads
     return false;
-  }, [map, visible, pollutant, renderData, viewportCovered]);
+  }, [map, visible, pollutant, atomicSwap, viewportCovered]);
 
   // ── Fetch data with viewport padding ───────────────────────
   const fetchData = useCallback(async () => {
@@ -275,22 +257,17 @@ export function useRoadPollutionLayer(
     const s = bounds.getSouth(), w = bounds.getWest();
     const n = bounds.getNorth(), e = bounds.getEast();
 
-    // 1. Fresh cache hit → render, skip HTTP
+    // 1. Fresh cache hit → atomic swap, skip HTTP
     const cached = roadCache.get(s, w, n, e, zoom);
     if (cached) {
       dataRef.current = cached;
       fetchedBoundsRef.current = { s, w, n, e, z: zoom };
-      renderData(cached, pollutant);
+      atomicSwap(cached, pollutant);
       return;
     }
 
-    // 2. Safe stale fallback: same zoom + containment only (no cross-zoom ghost data)
-    const stale = roadCache.getStale(s, w, n, e, zoom);
-    if (stale) {
-      dataRef.current = stale;
-      renderData(stale, pollutant);
-      // Don't update fetchedBoundsRef — still need fresh
-    }
+    // No fallback chain — prevents ghost roads from wrong zoom levels.
+    // Existing layer stays visible until fresh data arrives (atomic swap).
 
     // 3. Abort in-flight, start new fetch
     controllerRef.current?.abort();
@@ -313,32 +290,31 @@ export function useRoadPollutionLayer(
       roadCache.set(s, w, n, e, zoom, data);
       dataRef.current = data;
       fetchedBoundsRef.current = { s, w, n, e, z: zoom };
-      renderData(data, pollutant);
+      atomicSwap(data, pollutant);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
     }
-  }, [map, visible, forecastHour, pollutant, renderData, viewportCovered]);
+  }, [map, visible, forecastHour, pollutant, atomicSwap, viewportCovered]);
 
-  // ── Prefetch 2 adjacent tiles during idle (limited to save serverless slots) ──
+  // ── Prefetch 4 adjacent tiles during idle ──────────────────
   const prefetchAdjacent = useCallback(() => {
     if (!map || !visible || !dataRef.current) return;
     const zoom = Math.round(map.getZoom());
-    if (zoom < MIN_ZOOM || zoom < 12) return; // Only prefetch at z12+ (small payloads)
+    if (zoom < MIN_ZOOM) return;
 
     const bounds = map.getBounds();
     const latSpan = bounds.getNorth() - bounds.getSouth();
     const lngSpan = bounds.getEast() - bounds.getWest();
-    // Only 2 directions (N/S or E/W based on aspect) to conserve serverless slots
-    const offsets = latSpan > lngSpan
-      ? [[0, lngSpan], [0, -lngSpan]]  // landscape: prefetch left/right
-      : [[latSpan, 0], [-latSpan, 0]]; // portrait: prefetch up/down
+    const offsets = [[latSpan, 0], [-latSpan, 0], [0, lngSpan], [0, -lngSpan]];
 
     for (const [dLat, dLng] of offsets) {
       const ps = bounds.getSouth() + dLat;
       const pw = bounds.getWest() + dLng;
       const pn = bounds.getNorth() + dLat;
       const pe = bounds.getEast() + dLng;
+      // Skip if already cached
       if (roadCache.get(ps, pw, pn, pe, zoom)) continue;
+      // Low-priority fetch (no abort tracking — fire-and-forget)
       const params = new URLSearchParams({
         south: ps.toFixed(6), west: pw.toFixed(6),
         north: pn.toFixed(6), east: pe.toFixed(6),
@@ -362,8 +338,8 @@ export function useRoadPollutionLayer(
   // Pollutant change → re-render from existing data (ZERO HTTP)
   useEffect(() => {
     if (!visible || !dataRef.current) return;
-    renderData(dataRef.current, pollutant);
-  }, [pollutant, visible, renderData]);
+    atomicSwap(dataRef.current, pollutant);
+  }, [pollutant, visible, atomicSwap]);
 
   // Visibility / forecastHour toggle → may need fetch
   useEffect(() => {
@@ -376,23 +352,43 @@ export function useRoadPollutionLayer(
     return () => { controllerRef.current?.abort(); };
   }, [visible, forecastHour, fetchData]);
 
-  // ── Map move → cache-first instant render + debounced network fetch ──
-  // During continuous pan: only cached renders (0ms), no network storm.
-  // After user stops (400ms): ONE network fetch fires.
+  // ── Separate zoom and pan handlers for clean transitions ──
+  // Zoom change: clear everything + immediate fresh fetch (prevents ghost roads)
+  // Pan only:    cache-first instant render + debounced network fetch
   useEffect(() => {
     if (!map || !visible) return;
-    const onMove = () => {
-      // Instantly render from cache (0ms)
-      const fresh = renderCached();
-      if (fresh) return; // fresh cache hit, no network needed
+    let lastZoom = Math.round(map.getZoom());
 
-      // Debounce network fetch: fires once after 400ms of no movement
+    const onZoomEnd = () => {
+      const newZoom = Math.round(map.getZoom());
+      if (newZoom === lastZoom) return;
+      // ZOOM CHANGED: clear everything, fetch fresh for new LOD
+      lastZoom = newZoom;
+      layerRef.current.clearLayers();
+      dataRef.current = null;
+      fetchedBoundsRef.current = null;
       if (trailingRef.current) clearTimeout(trailingRef.current);
-      trailingRef.current = setTimeout(() => fetchData(), 400);
+      fetchData(); // immediate, no debounce
     };
-    map.on('moveend', onMove);
+
+    const onMoveEnd = () => {
+      const currentZoom = Math.round(map.getZoom());
+      if (currentZoom !== lastZoom) return; // handled by onZoomEnd
+
+      // Pan only: try cache first
+      const fresh = renderCached();
+      if (fresh) return;
+
+      // Debounce network fetch: fires once after 300ms of no movement
+      if (trailingRef.current) clearTimeout(trailingRef.current);
+      trailingRef.current = setTimeout(() => fetchData(), 300);
+    };
+
+    map.on('zoomend', onZoomEnd);
+    map.on('moveend', onMoveEnd);
     return () => {
-      map.off('moveend', onMove);
+      map.off('zoomend', onZoomEnd);
+      map.off('moveend', onMoveEnd);
       if (trailingRef.current) clearTimeout(trailingRef.current);
     };
   }, [map, visible, renderCached, fetchData]);

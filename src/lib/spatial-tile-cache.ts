@@ -90,9 +90,7 @@ export class SpatialTileCache<T> {
     const key = this.tileKey(south, west, north, east, zoom);
     const entry = this.cache.get(key);
     if (!entry) return null;
-    // Only return stale data if it spatially contains the viewport
-    // Prevents ghost roads from different locations appearing
-    if (!this.contains(entry, south, west, north, east)) return null;
+    // Accept even if it doesn't fully contain viewport — partial is better than blank
     return entry.data;
   }
 

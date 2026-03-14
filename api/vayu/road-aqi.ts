@@ -169,32 +169,27 @@ function roadWeight(highway: string): number {
   }
 }
 
-// ─── Zoom-based road query params ────────────────────────
-// Zoom-aware density control: fewer roads at low zoom to keep response <4.5MB (Vercel limit).
-// External API cost is FIXED per viewport; only Supabase rows + bandwidth scale with road count.
-function getQueryParams(zoom: number): { limit: number; highways: string[] | null; simplifyTolerance: number } {
-  if (zoom <= 10) return {
-    limit: 2000,
-    highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link'],
-    simplifyTolerance: 0.001,  // ~100m — aggressive simplification at city scale
-  };
-  if (zoom <= 11) return {
-    limit: 5000,
-    highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link'],
-    simplifyTolerance: 0.0005, // ~50m
-  };
-  if (zoom <= 12) return {
-    limit: 8000,
-    highways: null, // all roads
-    simplifyTolerance: 0.0002, // ~20m
-  };
-  if (zoom <= 13) return {
-    limit: 12000,
-    highways: null,
-    simplifyTolerance: 0.0001, // ~10m
-  };
-  // z14+: full detail, 5 decimal places (~1m accuracy)
-  return { limit: 20000, highways: null, simplifyTolerance: 0 };
+// ─── Zoom-based road query params (LOD: Level of Detail) ────
+// At low zoom: only major roads (residential is sub-pixel anyway)
+// At high zoom: all roads including gang/lorong
+// This matches how Google Maps / Mapbox render road layers.
+function getQueryParams(zoom: number): { limit: number; highways: string[] | null; simplify: number } {
+  if (zoom >= 15) return { limit: 10000, highways: null, simplify: 0 };
+  if (zoom >= 14) return { limit: 5000, highways: null, simplify: 0 };
+  if (zoom >= 13) return { limit: 3000, highways: null, simplify: 0.0001 };
+  if (zoom >= 12) return { limit: 1500, highways: [
+    'motorway', 'motorway_link', 'trunk', 'trunk_link',
+    'primary', 'primary_link', 'secondary', 'secondary_link',
+    'tertiary', 'tertiary_link',
+  ], simplify: 0.0002 };
+  if (zoom >= 11) return { limit: 800, highways: [
+    'motorway', 'motorway_link', 'trunk', 'trunk_link',
+    'primary', 'primary_link', 'secondary', 'secondary_link',
+  ], simplify: 0.0005 };
+  return { limit: 400, highways: [
+    'motorway', 'motorway_link', 'trunk', 'trunk_link',
+    'primary', 'primary_link',
+  ], simplify: 0.0005 };
 }
 
 // ─── Surface type → PM₁₀ coarse fraction multiplier ────────
@@ -740,8 +735,7 @@ function crossValidateIQAir(vayuAQI: number, iqair: IQAirData): IQAirValidation 
 
 // ─── Supabase RPC: find_roads_in_bbox ───────────────────────
 async function findRoadsInBbox(
-  south: number, west: number, north: number, east: number,
-  limit: number, simplifyTolerance = 0,
+  south: number, west: number, north: number, east: number, limit: number, simplifyTolerance = 0
 ): Promise<RoadRow[]> {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -863,8 +857,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid bounding box' });
   }
 
-  // Limit bbox size based on zoom — generous to allow client padding
-  const maxSpan = z <= 10 ? 3.0 : z <= 11 ? 2.0 : z <= 12 ? 1.2 : 0.5;
+  // Limit bbox size based on zoom — tighter to prevent oversized requests
+  const maxSpan = z <= 10 ? 2.0 : z <= 11 ? 1.2 : z <= 12 ? 0.7 : z <= 13 ? 0.4 : 0.25;
   if (n - s > maxSpan || e - w > maxSpan) {
     return res.status(400).json({ error: 'Bounding box too large. Zoom in more.' });
   }
@@ -881,8 +875,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Query road segments in viewport
-    const { limit, highways, simplifyTolerance } = getQueryParams(z);
-    const roads = await findRoadsInBbox(s, w, n, e, limit, simplifyTolerance);
+    const { limit, highways, simplify } = getQueryParams(z);
+    const roads = await findRoadsInBbox(s, w, n, e, limit, simplify);
 
     if (roads.length === 0) {
       const empty = { roads: [], meta: { count: 0, zoom: z, wind_speed: 0 } };

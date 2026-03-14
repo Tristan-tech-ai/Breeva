@@ -1,15 +1,15 @@
 -- ============================================
 -- VAYU ENGINE — MIGRATION 004: Road-Level Pollution Overlay
 -- Adds find_roads_in_bbox() RPC for eLichens-style road pollution rendering
--- Supports zoom-aware geometry simplification + coordinate precision
 -- ============================================
 
 -- Return road segments with geometry within a bounding box (map viewport).
 -- Used by /api/vayu/road-aqi to compute per-road pollution and send
 -- GeoJSON to the frontend for colored polyline rendering.
 --
--- simplify_tolerance: ST_SimplifyPreserveTopology tolerance in degrees
---   0 = full detail, 0.001 = ~100m (for z10), 0.0001 = ~10m (for z13)
+-- Priority ordering: major roads first (motorway > primary > residential)
+-- so LIMIT doesn't cut important roads at lower zoom levels.
+-- Drop old signatures to allow parameter changes
 DROP FUNCTION IF EXISTS find_roads_in_bbox(DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, INTEGER);
 DROP FUNCTION IF EXISTS find_roads_in_bbox(DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, INTEGER, DOUBLE PRECISION);
 
@@ -42,10 +42,9 @@ BEGIN
   SELECT
     rs.osm_way_id,
     CASE
-      WHEN simplify_tolerance > 0 THEN
-        ST_AsGeoJSON(ST_SimplifyPreserveTopology(rs.geom, simplify_tolerance), 5)::TEXT
-      ELSE
-        ST_AsGeoJSON(rs.geom, 5)::TEXT
+      WHEN simplify_tolerance > 0
+        THEN ST_AsGeoJSON(ST_SimplifyPreserveTopology(rs.geom, simplify_tolerance))::TEXT
+      ELSE ST_AsGeoJSON(rs.geom)::TEXT
     END AS geojson,
     rs.highway,
     rs.lanes,
