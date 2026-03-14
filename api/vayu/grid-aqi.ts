@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const w = parseFloat(west as string);
   const n = parseFloat(north as string);
   const e = parseFloat(east as string);
-  const gridRes = Math.max(3, Math.min(10, parseInt(resolution as string) || 6));
+  const gridRes = Math.max(3, Math.min(14, parseInt(resolution as string) || 6));
   const poll = (pollutant as string) || 'aqi';
 
   if ([s, w, n, e].some(isNaN) || s > n || w > e) {
@@ -82,7 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const cached = await redisGet(cacheKey);
     if (cached) {
-      res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+      res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=3600');
       res.setHeader('X-Cache', 'HIT');
       return res.status(200).json(JSON.parse(cached));
     }
@@ -139,10 +139,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       computed_at: new Date().toISOString(),
     };
 
-    // Cache 20 min (low-zoom data changes slowly)
-    await redisSetEx(cacheKey, 1200, JSON.stringify(result));
+    // Cache 60 min (low-zoom data changes slowly)
+    await redisSetEx(cacheKey, 3600, JSON.stringify(result));
 
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+    res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=3600');
     res.setHeader('X-Cache', 'MISS');
     return res.status(200).json(result);
 

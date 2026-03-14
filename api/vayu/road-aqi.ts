@@ -621,7 +621,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Check Redis cache first
     const cached = await redisGet(cacheKey);
     if (cached) {
-      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+      res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=1800');
       res.setHeader('X-Cache', 'HIT');
       return res.status(200).json(JSON.parse(cached));
     }
@@ -726,10 +726,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     };
 
-    // Cache: 15 min for current, 30 min for forecast (changes less frequently)
-    await redisSetEx(cacheKey, fh > 0 ? 1800 : 900, JSON.stringify(result));
+    // Cache: 30 min for current, 60 min for forecast (AQ data changes hourly)
+    await redisSetEx(cacheKey, fh > 0 ? 3600 : 1800, JSON.stringify(result));
 
-    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=1800');
     res.setHeader('X-Cache', 'MISS');
     return res.status(200).json(result);
 
