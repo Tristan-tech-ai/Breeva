@@ -123,14 +123,15 @@ function roadWeight(highway: string): number {
 }
 
 // ─── Zoom-based road limit + filtering ──────────────────────
+// Phase 6: Increased limits for Canvas renderer (handles 2000+ polylines)
 function getQueryParams(zoom: number): { limit: number; highways: string[] | null } {
-  if (zoom >= 16) return { limit: 800, highways: null };          // all roads, high cap
-  if (zoom >= 15) return { limit: 500, highways: null };          // all roads
-  if (zoom >= 14) return { limit: 400, highways: null };          // all roads
-  if (zoom >= 13) return { limit: 300, highways: null };          // all roads
-  if (zoom >= 12) return { limit: 200, highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link'] };
-  if (zoom >= 11) return { limit: 150, highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link'] };
-  return { limit: 80, highways: ['motorway', 'trunk'] };
+  if (zoom >= 16) return { limit: 2000, highways: null };         // all roads, max density
+  if (zoom >= 15) return { limit: 1200, highways: null };         // all roads
+  if (zoom >= 14) return { limit: 800, highways: null };          // all roads
+  if (zoom >= 13) return { limit: 600, highways: null };          // all roads
+  if (zoom >= 12) return { limit: 350, highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link'] };
+  if (zoom >= 11) return { limit: 200, highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link'] };
+  return { limit: 100, highways: ['motorway', 'trunk'] };
 }
 
 // ─── Types ──────────────────────────────────────────────────
@@ -236,6 +237,156 @@ async function fetchBaselineGrid(south: number, west: number, north: number, eas
   };
 
   return { center, interpolate };
+}
+
+// ─── Sentinel-5P satellite NO₂ correction ───────────────────
+// Fetches satellite-derived NO₂ spatial field and returns an
+// interpolation function for per-road correction.
+// Cached in Redis for 12h (satellite revisit is daily).
+interface SatelliteNO2Grid {
+  grid: number[];
+  rows: number;
+  cols: number;
+  bounds: { south: number; west: number; north: number; east: number };
+}
+
+async function fetchSatelliteNO2(
+  south: number, west: number, north: number, east: number,
+): Promise<((lat: number, lon: number) => number) | null> {
+  const clientId = process.env.COPERNICUS_CLIENT_ID;
+  const clientSecret = process.env.COPERNICUS_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  // Check Redis cache (quantized to 0.5° grid)
+  const q = (v: number) => (Math.round(v * 2) / 2).toFixed(1);
+  const cacheKey = `vayu:sat:no2:${q(south)}:${q(west)}:${q(north)}:${q(east)}`;
+
+  let gridData: SatelliteNO2Grid | null = null;
+
+  const cached = await redisGet(cacheKey);
+  if (cached) {
+    try { gridData = JSON.parse(cached); } catch { /* fall through */ }
+  }
+
+  if (!gridData) {
+    try {
+      // Authenticate with Copernicus Data Space
+      const tokenResp = await fetch(
+        'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'client_credentials',
+            client_id: clientId,
+            client_secret: clientSecret,
+          }),
+        },
+      );
+      if (!tokenResp.ok) return null;
+      const { access_token } = await tokenResp.json();
+
+      // Last 5 days of S5P data (cloud gaps may require wider window)
+      const to = new Date();
+      const from = new Date(to.getTime() - 5 * 24 * 60 * 60 * 1000);
+
+      const processBody = {
+        input: {
+          bounds: {
+            bbox: [west, south, east, north],
+            properties: { crs: 'http://www.opengis.net/def/crs/EPSG/0/4326' },
+          },
+          data: [{
+            type: 'sentinel-5p-l2',
+            dataFilter: {
+              timeRange: { from: from.toISOString(), to: to.toISOString() },
+              mosaickingOrder: 'mostRecent',
+            },
+          }],
+        },
+        output: {
+          width: 8,
+          height: 8,
+          responses: [{ identifier: 'default', format: { type: 'image/tiff' } }],
+        },
+        evalscript: `//VERSION=3
+function setup() {
+  return { input: [{ bands: ["NO2","dataMask"], units: "DN" }], output: { bands: 1, sampleType: "FLOAT32" } };
+}
+function evaluatePixel(s) {
+  if (s.dataMask === 0) return [NaN];
+  return [s.NO2 * 1e6];
+}`,
+      };
+
+      const processResp = await fetch('https://sh.dataspace.copernicus.eu/api/v1/process', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${access_token}`,
+        },
+        body: JSON.stringify(processBody),
+      });
+
+      if (processResp.ok) {
+        const buffer = await processResp.arrayBuffer();
+        const floatView = new Float32Array(buffer, buffer.byteLength - 8 * 8 * 4, 64);
+        const grid: number[] = [];
+        for (let i = 0; i < floatView.length; i++) {
+          grid.push(isNaN(floatView[i]) || floatView[i] <= 0 ? -1 : floatView[i]);
+        }
+
+        if (grid.some((v) => v > 0)) {
+          gridData = { grid, rows: 8, cols: 8, bounds: { south, west, north, east } };
+          await redisSetEx(cacheKey, 43200, JSON.stringify(gridData));
+        }
+      }
+    } catch {
+      // Satellite data is non-critical; fail silently
+      return null;
+    }
+  }
+
+  if (!gridData || gridData.grid.every((v) => v <= 0)) return null;
+
+  // Return interpolation function: bilinear on the satellite grid
+  // Converts column density (µmol/m²) to surface correction factor
+  const { grid, rows, cols, bounds } = gridData;
+
+  // Compute grid mean for normalization (excluding no-data)
+  const valid = grid.filter((v) => v > 0);
+  if (valid.length === 0) return null;
+  const gridMean = valid.reduce((a, b) => a + b, 0) / valid.length;
+
+  return (lat: number, lon: number): number => {
+    const latSpan = bounds.north - bounds.south || 0.01;
+    const lonSpan = bounds.east - bounds.west || 0.01;
+    const fy = Math.max(0, Math.min(rows - 1, ((lat - bounds.south) / latSpan) * (rows - 1)));
+    const fx = Math.max(0, Math.min(cols - 1, ((lon - bounds.west) / lonSpan) * (cols - 1)));
+
+    const y0 = Math.floor(fy);
+    const x0 = Math.floor(fx);
+    const y1 = Math.min(rows - 1, y0 + 1);
+    const x1 = Math.min(cols - 1, x0 + 1);
+    const ty = fy - y0;
+    const tx = fx - x0;
+
+    const get = (r: number, c: number) => {
+      const v = grid[r * cols + c];
+      return v > 0 ? v : gridMean; // fill no-data with mean
+    };
+
+    const bilinear =
+      get(y0, x0) * (1 - tx) * (1 - ty) +
+      get(y0, x1) * tx * (1 - ty) +
+      get(y1, x0) * (1 - tx) * ty +
+      get(y1, x1) * tx * ty;
+
+    // Correction factor: how much this pixel deviates from the mean
+    // Values > 1 = higher-than-average NO₂ column → scale up NO₂ baseline
+    // Clamped to [0.7, 1.5] to prevent extreme corrections
+    return Math.max(0.7, Math.min(1.5, bilinear / gridMean));
+  };
 }
 
 // ─── WAQI station bias correction ───────────────────────────
@@ -496,18 +647,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // WAQI station bias correction (only for current conditions, not forecast)
     const cLat = (s + n) / 2;
     const cLon = (w + e) / 2;
-    const bias = fh === 0
-      ? await fetchWAQIBias(cLat, cLon, baselineCenter)
-      : { pm25: 0, pm10: 0, no2: 0, o3: 0, stationName: null } as WAQIBias;
+    const [bias, satNO2Interp] = await Promise.all([
+      fh === 0
+        ? fetchWAQIBias(cLat, cLon, baselineCenter)
+        : Promise.resolve({ pm25: 0, pm10: 0, no2: 0, o3: 0, stationName: null } as WAQIBias),
+      fh === 0
+        ? fetchSatelliteNO2(s, w, n, e)
+        : Promise.resolve(null),
+    ]);
 
-    // Wrap interpolation with bias correction
+    // Wrap interpolation with bias + satellite correction
     const interpCorrected = (lat: number, lon: number): BaselineData => {
       const raw = interpBaseline(lat, lon);
+      let correctedNO2 = Math.max(0, raw.no2 + bias.no2);
+      // Apply Sentinel-5P spatial NO₂ correction if available
+      if (satNO2Interp) {
+        correctedNO2 *= satNO2Interp(lat, lon);
+      }
       return {
         ...raw,
         pm25: Math.max(0, raw.pm25 + bias.pm25),
         pm10: Math.max(0, raw.pm10 + bias.pm10),
-        no2: Math.max(0, raw.no2 + bias.no2),
+        no2: correctedNO2,
         o3: Math.max(0, raw.o3 + bias.o3),
       } as BaselineData;
     };
@@ -560,6 +721,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         waqi_station: bias.stationName,
         waqi_bias_pm25: Math.round(bias.pm25 * 100) / 100,
         waqi_bias_no2: Math.round(bias.no2 * 100) / 100,
+        satellite_no2: !!satNO2Interp,
         computed_at: new Date().toISOString(),
       },
     };

@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Map, Satellite, Mountain, Wind, Store,
-  TreePine, Activity, Clock,
+  TreePine, Activity, Clock, Radio,
 } from 'lucide-react';
 import type { AirQualityData, PollutantType } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
@@ -321,6 +321,12 @@ export default function MapLayersSheet({
                             <div className="flex items-center gap-1 truncate">
                               <Activity className="w-3 h-3 flex-shrink-0" />
                               <span className="truncate">{roadLayerMeta.waqi_station}</span>
+                            </div>
+                          )}
+                          {roadLayerMeta.satellite_no2 && (
+                            <div className="flex items-center gap-1">
+                              <Radio className="w-3 h-3 text-violet-500" />
+                              <span className="text-violet-500">S5P</span>
                             </div>
                           )}
                           <div className="ml-auto flex items-center gap-1">

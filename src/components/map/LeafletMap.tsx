@@ -3,9 +3,9 @@ import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMapStore } from '../../stores/mapStore';
-import { fetchAQIZones } from './AQIOverlay';
 import { useRoadPollutionLayer } from './RoadPollutionLayer';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
+import { useAQIHeatmapLayer } from './AQIHeatmapLayer';
 import POILayer from './POILayer';
 import type { POI } from '../../lib/poi-api';
 import type { Route } from '../../types';
@@ -133,15 +133,12 @@ function MapController({
   const userMarkerRef = useRef<L.Marker | null>(null);
   const destMarkerRef = useRef<L.Marker | null>(null);
   const routeLayerRef = useRef(L.layerGroup());
-  const aqiLayerRef = useRef(L.layerGroup());
 
   // Attach layer groups once
   useEffect(() => {
     routeLayerRef.current.addTo(map);
-    aqiLayerRef.current.addTo(map);
     return () => {
       routeLayerRef.current.remove();
-      aqiLayerRef.current.remove();
     };
   }, [map]);
 
@@ -246,32 +243,8 @@ function MapController({
     onRoadLayerMeta?.(roadMeta);
   }, [roadMeta, onRoadLayerMeta]);
 
-  // AQI overlay circles (low-zoom fallback when road layer hidden)
-  useEffect(() => {
-    aqiLayerRef.current.clearLayers();
-    if (!showAQIOverlay || !currentAQI || !userLocation) return;
-    // Road layer handles zoom >= 11, circles for zoom < 11
-    if (map.getZoom() >= 11) return;
-
-    let cancelled = false;
-    fetchAQIZones(userLocation, currentAQI.aqi).then((zones) => {
-      if (cancelled) return;
-      for (const zone of zones) {
-        const color = getAQIColor(zone.aqi);
-        L.circle([zone.center.lat, zone.center.lng], {
-          radius: zone.radius,
-          color,
-          fillColor: color,
-          fillOpacity: 0.15,
-          weight: 1,
-          opacity: 0.3,
-          interactive: false,
-        }).addTo(aqiLayerRef.current);
-      }
-    });
-
-    return () => { cancelled = true; };
-  }, [showAQIOverlay, currentAQI, userLocation, map]);
+  // Area heatmap overlay (low-zoom raster, eLichens screenshot #8 style)
+  useAQIHeatmapLayer(map, !!showAQIOverlay, pollutant || 'aqi');
 
   return showPOIs ? (
     <POILayer visible={showPOIs} activeFilter={activeFilter} onPlaceSelect={onPlaceSelect} />

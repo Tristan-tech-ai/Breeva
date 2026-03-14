@@ -247,6 +247,7 @@ export interface RoadAQIResponse {
     waqi_station: string | null;
     waqi_bias_pm25: number;
     waqi_bias_no2: number;
+    satellite_no2: boolean;
     computed_at: string;
   };
 }

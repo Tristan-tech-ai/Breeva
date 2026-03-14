@@ -1,12 +1,13 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import L from 'leaflet';
 import { getRoadAQI } from '../../lib/api';
-import type { PollutantType, RoadAQIFeature, RoadAQIResponse } from '../../types';
+import type { PollutantType, RoadAQIFeature } from '../../types';
 
 // Meta info exposed to UI
 export interface RoadLayerMeta {
   wind_speed: number;
   waqi_station: string | null;
+  satellite_no2: boolean;
   count: number;
 }
 
@@ -109,6 +110,16 @@ function getValue(road: RoadAQIFeature, pollutant: PollutantType): number {
 // Phase 3: lowered from 13 → 11 to show motorways/trunk at wider zoom
 const MIN_ZOOM = 11;
 
+// ── Shared Canvas renderer for WebGL-like performance ────────
+// Canvas renderer handles 2000+ polylines at 60fps vs SVG's ~500 limit
+let sharedCanvasRenderer: L.Canvas | null = null;
+function getCanvasRenderer(): L.Canvas {
+  if (!sharedCanvasRenderer) {
+    sharedCanvasRenderer = L.canvas({ padding: 0.5, tolerance: 5 });
+  }
+  return sharedCanvasRenderer;
+}
+
 // ── Hook: Road Pollution Layer ───────────────────────────────
 
 export function useRoadPollutionLayer(
@@ -148,6 +159,7 @@ export function useRoadPollutionLayer(
     setMeta({
       wind_speed: data.meta.wind_speed,
       waqi_station: data.meta.waqi_station,
+      satellite_no2: data.meta.satellite_no2 ?? false,
       count: data.meta.count,
     });
 
@@ -169,6 +181,7 @@ export function useRoadPollutionLayer(
         interactive: false,
         lineCap: 'round',
         lineJoin: 'round',
+        renderer: getCanvasRenderer(),
       }).addTo(layerRef.current);
     }
   }, [map, visible, pollutant, forecastHour]);
