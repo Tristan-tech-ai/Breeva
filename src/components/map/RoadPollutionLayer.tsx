@@ -99,7 +99,8 @@ function getValue(road: RoadAQIFeature, pollutant: PollutantType): number {
 }
 
 // ── Minimum zoom for road overlay ────────────────────────────
-const MIN_ZOOM = 13;
+// Phase 3: lowered from 13 → 11 to show motorways/trunk at wider zoom
+const MIN_ZOOM = 11;
 
 // ── Hook: Road Pollution Layer ───────────────────────────────
 
@@ -142,9 +143,9 @@ export function useRoadPollutionLayer(
       if (coords.length < 2) continue;
 
       const color = getConcentrationColor(getValue(road, pollutant), pollutant);
-      // Scale weight with zoom: thicker lines at higher zoom, like eLichens
+      // Scale weight with zoom: thicker at high zoom, thinner at low zoom (z11-12)
       const zoom = map.getZoom();
-      const zoomScale = zoom >= 16 ? 1.6 : zoom >= 15 ? 1.3 : 1.0;
+      const zoomScale = zoom >= 16 ? 1.6 : zoom >= 15 ? 1.3 : zoom >= 13 ? 1.0 : zoom >= 12 ? 0.7 : 0.5;
       L.polyline(coords, {
         color,
         weight: road.weight * zoomScale,

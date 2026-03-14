@@ -124,11 +124,13 @@ function roadWeight(highway: string): number {
 
 // ─── Zoom-based road limit + filtering ──────────────────────
 function getQueryParams(zoom: number): { limit: number; highways: string[] | null } {
-  if (zoom >= 16) return { limit: 500, highways: null };          // all roads
-  if (zoom >= 15) return { limit: 400, highways: null };          // all roads
-  if (zoom >= 14) return { limit: 300, highways: null };          // all roads
-  if (zoom >= 13) return { limit: 200, highways: ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'] };
-  return { limit: 100, highways: ['motorway', 'trunk', 'primary'] };
+  if (zoom >= 16) return { limit: 800, highways: null };          // all roads, high cap
+  if (zoom >= 15) return { limit: 500, highways: null };          // all roads
+  if (zoom >= 14) return { limit: 400, highways: null };          // all roads
+  if (zoom >= 13) return { limit: 300, highways: null };          // all roads
+  if (zoom >= 12) return { limit: 200, highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link'] };
+  if (zoom >= 11) return { limit: 150, highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link'] };
+  return { limit: 80, highways: ['motorway', 'trunk'] };
 }
 
 // ─── Types ──────────────────────────────────────────────────
@@ -334,8 +336,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid bounding box' });
   }
 
-  // Limit bbox size (~0.1° max span = ~11km) to prevent abuse
-  if (n - s > 0.15 || e - w > 0.15) {
+  // Limit bbox size based on zoom level to prevent abuse
+  // z11 viewport ≈ 0.5°, z12 ≈ 0.3°, z13+ ≈ 0.15°
+  const maxSpan = z <= 11 ? 0.5 : z <= 12 ? 0.3 : 0.15;
+  if (n - s > maxSpan || e - w > maxSpan) {
     return res.status(400).json({ error: 'Bounding box too large. Zoom in more.' });
   }
 

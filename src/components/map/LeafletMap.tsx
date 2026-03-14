@@ -242,8 +242,8 @@ function MapController({
   useEffect(() => {
     aqiLayerRef.current.clearLayers();
     if (!showAQIOverlay || !currentAQI || !userLocation) return;
-    // Road layer handles zoom >= 13, circles for zoom < 13
-    if (map.getZoom() >= 13) return;
+    // Road layer handles zoom >= 11, circles for zoom < 11
+    if (map.getZoom() >= 11) return;
 
     let cancelled = false;
     fetchAQIZones(userLocation, currentAQI.aqi).then((zones) => {
