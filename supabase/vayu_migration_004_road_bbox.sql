@@ -53,17 +53,7 @@ BEGIN
     rs.ai_pollution_factor
   FROM road_segments rs
   WHERE rs.geom && ST_MakeEnvelope(west, south, east, north, 4326)
-  ORDER BY
-    CASE rs.highway
-      WHEN 'motorway' THEN 1
-      WHEN 'trunk' THEN 2
-      WHEN 'primary' THEN 3
-      WHEN 'secondary' THEN 4
-      WHEN 'tertiary' THEN 5
-      WHEN 'residential' THEN 6
-      ELSE 7
-    END ASC,
-    rs.traffic_base_estimate DESC NULLS LAST
+  ORDER BY random()
   LIMIT road_limit;
 END;
 $$ LANGUAGE plpgsql STABLE;

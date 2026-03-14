@@ -154,9 +154,10 @@ export function useRoadPollutionLayer(
         if (coords.length < 2) continue;
         const color = getConcentrationColor(getValue(road, currentPollutant), currentPollutant);
         const zoomScale = zoom >= 16 ? 1.6 : zoom >= 15 ? 1.3 : zoom >= 13 ? 1.0 : zoom >= 12 ? 0.7 : 0.5;
+        const weight = Math.max(2, road.weight * zoomScale); // min 2px so small roads are always visible
         L.polyline(coords, {
           color,
-          weight: road.weight * zoomScale,
+          weight,
           opacity: 0.85,
           interactive: false,
           lineCap: 'round',

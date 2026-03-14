@@ -173,13 +173,13 @@ function roadWeight(highway: string): number {
 // All road types visible from z12+ so users see detail without zooming too much.
 // Canvas renderer handles 2000+ polylines at 60fps.
 function getQueryParams(zoom: number): { limit: number; highways: string[] | null } {
-  if (zoom >= 16) return { limit: 2000, highways: null };         // all roads, max density
-  if (zoom >= 15) return { limit: 1500, highways: null };         // all roads
-  if (zoom >= 14) return { limit: 1000, highways: null };         // all roads
-  if (zoom >= 13) return { limit: 800, highways: null };          // all roads
-  if (zoom >= 12) return { limit: 600, highways: null };
-  if (zoom >= 11) return { limit: 500, highways: null };
-  return { limit: 400, highways: null };
+  if (zoom >= 16) return { limit: 3000, highways: null };
+  if (zoom >= 15) return { limit: 2500, highways: null };
+  if (zoom >= 14) return { limit: 2000, highways: null };
+  if (zoom >= 13) return { limit: 1500, highways: null };
+  if (zoom >= 12) return { limit: 1200, highways: null };
+  if (zoom >= 11) return { limit: 800, highways: null };
+  return { limit: 600, highways: null };
 }
 
 // ─── Surface type → PM₁₀ coarse fraction multiplier ────────
