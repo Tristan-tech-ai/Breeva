@@ -93,6 +93,17 @@ const PLABEL: Record<string, string> = {
 
 function esc(s: string) { return s.replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+function timeAgo(iso: string): string {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
 function popupHtml(d: WAQIFeedData): string {
   const color = aqiColor(d.aqi);
   const label = aqiLabel(d.aqi);
@@ -121,7 +132,7 @@ function popupHtml(d: WAQIFeedData): string {
       .map((a) => esc(a.name))
       .join(', ') || 'WAQI';
 
-  const time = d.time.s?.split(' ')[1]?.substring(0, 5) ?? '';
+  const ago = timeAgo(d.time.iso);
 
   return `<div style="min-width:220px;max-width:280px;font-family:system-ui,-apple-system,sans-serif">
     <div style="font-weight:700;font-size:13px;margin-bottom:6px;line-height:1.3">${name}</div>
@@ -134,7 +145,7 @@ function popupHtml(d: WAQIFeedData): string {
     </div>
     ${pills ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:6px">${pills}</div>` : ''}
     ${wx.length ? `<div style="font-size:11px;color:#64748b;margin-bottom:4px">${wx.join('  ')}</div>` : ''}
-    <div style="font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:4px;margin-top:4px">${src} · ${time}</div>
+    <div style="font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:4px;margin-top:4px">${src} · Updated ${ago}</div>
   </div>`;
 }
 
@@ -161,11 +172,10 @@ export function useAQIStationLayer(map: L.Map, visible: boolean): void {
       if (isNaN(val) || val < 0) continue;
 
       const color = aqiColor(val);
-      const textColor = val <= 100 ? '#000' : '#fff';
 
       const icon = L.divIcon({
         className: 'aqi-badge-wrapper',
-        html: `<div class="aqi-badge" style="background:${color};color:${textColor}">
+        html: `<div class="aqi-badge" style="background:${color}">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a7.5 7.5 0 1 0-10.6 10.6L12 23l4.9-4.7a7.5 7.5 0 0 0 .8-10.6z"/><circle cx="12" cy="12" r="3"/></svg>
           <span>${val}</span>
         </div>`,
