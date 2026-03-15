@@ -9,6 +9,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  * Flow: bbox → find_roads_in_bbox RPC → compute per-road AQI → Redis cache → respond
  */
 
+const VAYU_VERSION = '1.0.1'; // force Vercel rebuild after force-push cycle
+
 // ─── Redis helpers (Upstash REST) ───────────────────────────
 async function redisGet(key: string): Promise<string | null> {
   const url = process.env.UPSTASH_REDIS_REST_URL;
@@ -892,8 +894,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid bounding box' });
   }
 
-  // No bbox size rejection — the LIMIT in getQueryParams() already caps DB work.
-  // Large bboxes just return fewer roads per unit area, which is fine.
+  // Safety-net bbox size limit — return empty 200 (never 400) for absurdly large bboxes.
+  const latSpan = n - s;
+  const lngSpan = e - w;
+  const maxSpan = z <= 10 ? 6.0
+               : z <= 11 ? 3.0
+               : z <= 12 ? 1.5
+               : z <= 13 ? 0.8
+               : z <= 14 ? 0.4
+               : 0.25;
+
+  if (latSpan > maxSpan || lngSpan > maxSpan) {
+    return res.status(200).json({
+      roads: [],
+      meta: { reason: 'bbox_too_large', zoom: z, latSpan, lngSpan, maxSpan, version: VAYU_VERSION },
+    });
+  }
 
   try {
     const cacheKey = bboxCacheKey(s, w, n, e, z, fh);

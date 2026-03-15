@@ -313,7 +313,7 @@ export function useRoadPollutionLayer(
   const prefetchAdjacent = useCallback(() => {
     if (!map || !visible || !dataRef.current) return;
     const zoom = Math.round(map.getZoom());
-    if (zoom < MIN_ZOOM) return;
+    if (zoom < MIN_ZOOM || zoom <= 11) return; // skip prefetch at low zoom — viewport already large
 
     const bounds = map.getBounds();
     const latSpan = bounds.getNorth() - bounds.getSouth();
