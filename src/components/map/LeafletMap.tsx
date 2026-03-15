@@ -66,26 +66,21 @@ function createUserIcon(): L.DivIcon {
 function createDestIcon(): L.DivIcon {
   return L.divIcon({
     className: 'dest-location-marker',
-    html: `<div class="dest-pin">
-        <svg width="28" height="36" viewBox="0 0 28 36" fill="none">
-          <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.27 21.73 0 14 0z" fill="#ef4444"/>
-          <circle cx="14" cy="13" r="5.5" fill="white"/>
-        </svg>
-      </div>`,
+    html: `
+      <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14 0C6.268 0 0 6.268 0 14c0 9.333 12.418 20.597 12.95 21.098a1.5 1.5 0 0 0 2.1 0C15.582 34.597 28 23.333 28 14 28 6.268 21.732 0 14 0z" fill="#ef4444"/>
+        <path d="M14 0C6.268 0 0 6.268 0 14c0 9.333 12.418 20.597 12.95 21.098a1.5 1.5 0 0 0 2.1 0C15.582 34.597 28 23.333 28 14 28 6.268 21.732 0 14 0z" fill="url(#destGrad)"/>
+        <circle cx="14" cy="13" r="5.5" fill="white"/>
+        <defs>
+          <linearGradient id="destGrad" x1="4" y1="2" x2="24" y2="30" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#f87171"/>
+            <stop offset="1" stop-color="#dc2626"/>
+          </linearGradient>
+        </defs>
+      </svg>`,
     iconSize: [28, 36],
     iconAnchor: [14, 36],
     popupAnchor: [0, -36],
-  });
-}
-
-function createStartIcon(): L.DivIcon {
-  return L.divIcon({
-    className: 'start-location-marker',
-    html: `<div class="start-pin">
-        <div class="start-pin-dot"></div>
-      </div>`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
   });
 }
 
@@ -140,7 +135,6 @@ function MapController({
   const prevCenterRef = useRef(center);
   const userMarkerRef = useRef<L.Marker | null>(null);
   const destMarkerRef = useRef<L.Marker | null>(null);
-  const startMarkerRef = useRef<L.Marker | null>(null);
   const routeLayerRef = useRef(L.layerGroup());
 
   // Attach layer groups once
@@ -208,24 +202,6 @@ function MapController({
       destMarkerRef.current = null;
     }
   }, [destination, destinationName, map]);
-
-  // Start marker (shows user location as route origin when routes exist)
-  useEffect(() => {
-    if (routes.length > 0 && userLocation) {
-      if (!startMarkerRef.current) {
-        startMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], {
-          icon: createStartIcon(),
-          interactive: false,
-          zIndexOffset: 800,
-        }).addTo(map);
-      } else {
-        startMarkerRef.current.setLatLng([userLocation.lat, userLocation.lng]);
-      }
-    } else if (startMarkerRef.current) {
-      startMarkerRef.current.remove();
-      startMarkerRef.current = null;
-    }
-  }, [routes, userLocation, map]);
 
   // Route polylines
   useEffect(() => {
