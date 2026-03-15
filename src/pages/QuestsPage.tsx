@@ -134,8 +134,20 @@ export default function QuestsPage() {
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center py-8">
-            <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
+          <div className="space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="glass-card p-4 animate-pulse">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="w-32 h-4 rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="w-48 h-3 rounded bg-gray-100 dark:bg-gray-800" />
+                    <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full mt-2" />
+                  </div>
+                  <div className="w-14 h-5 rounded-full bg-gray-100 dark:bg-gray-800" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : displayed.length === 0 ? (
           <div className="glass-card p-8 text-center">

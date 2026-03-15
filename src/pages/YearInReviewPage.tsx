@@ -126,8 +126,41 @@ export default function YearInReviewPage() {
 
       <div className="max-w-2xl mx-auto px-4 -mt-6 relative z-10 space-y-4">
         {isLoading ? (
-          <div className="flex justify-center py-16">
-            <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
+          <div className="space-y-4">
+            {/* Stats grid skeleton */}
+            <div className="grid grid-cols-2 gap-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="rounded-2xl bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700/30 shadow-sm p-4 animate-pulse">
+                  <div className="w-9 h-9 rounded-xl bg-gray-200 dark:bg-gray-700 mb-2" />
+                  <div className="w-16 h-6 rounded bg-gray-200 dark:bg-gray-700" />
+                  <div className="w-12 h-2.5 rounded bg-gray-100 dark:bg-gray-800 mt-1" />
+                </div>
+              ))}
+            </div>
+            {/* Monthly chart skeleton */}
+            <div className="rounded-2xl bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700/30 shadow-sm p-5 animate-pulse">
+              <div className="w-24 h-3 rounded bg-gray-200 dark:bg-gray-700 mb-4" />
+              <div className="flex items-end gap-[6px] h-24">
+                {[...Array(12)].map((_, i) => (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full rounded-t-sm bg-gray-200 dark:bg-gray-700" style={{ height: `${15 + Math.random() * 60}%` }} />
+                    <div className="w-2 h-2 rounded bg-gray-100 dark:bg-gray-800" />
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Highlights skeleton */}
+            <div className="rounded-2xl bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700/30 shadow-sm p-5 animate-pulse space-y-3">
+              <div className="w-20 h-3 rounded bg-gray-200 dark:bg-gray-700" />
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded bg-gray-200 dark:bg-gray-700" />
+                  <div className="w-48 h-3.5 rounded bg-gray-200 dark:bg-gray-700" />
+                </div>
+              ))}
+            </div>
+            {/* Share button skeleton */}
+            <div className="w-full h-12 rounded-xl bg-gray-200 dark:bg-gray-700 animate-pulse" />
           </div>
         ) : stats && (
           <>

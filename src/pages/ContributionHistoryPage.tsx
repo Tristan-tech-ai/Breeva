@@ -83,8 +83,48 @@ export default function ContributionHistoryPage() {
 
   if (isLoading) {
     return (
-      <div className="gradient-mesh-bg min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-[3px] border-primary-500 border-t-transparent rounded-full animate-spin" />
+      <div className="gradient-mesh-bg min-h-screen pb-24">
+        <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between">
+          <div className="w-6 h-6 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+          <div className="w-36 h-4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+          <div className="w-6" />
+        </div>
+        <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
+          {/* Stats card skeleton */}
+          <div className="gradient-primary rounded-2xl p-5 animate-pulse flex flex-col items-center gap-2">
+            <div className="w-7 h-7 rounded bg-white/20" />
+            <div className="w-28 h-2.5 rounded bg-white/20" />
+            <div className="w-16 h-8 rounded bg-white/20" />
+            <div className="w-24 h-2.5 rounded bg-white/10" />
+          </div>
+          {/* Tier skeleton */}
+          <div className="glass-card p-4 animate-pulse">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded bg-gray-200 dark:bg-gray-700" />
+              <div className="space-y-1">
+                <div className="w-20 h-3.5 rounded bg-gray-200 dark:bg-gray-700" />
+                <div className="w-16 h-2.5 rounded bg-gray-100 dark:bg-gray-800" />
+              </div>
+            </div>
+            <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full" />
+          </div>
+          {/* List skeleton */}
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="glass-card p-4 animate-pulse">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="w-32 h-3.5 rounded bg-gray-200 dark:bg-gray-700" />
+                  <div className="w-20 h-2.5 rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+                <div className="text-right space-y-1">
+                  <div className="w-14 h-3.5 rounded bg-gray-200 dark:bg-gray-700" />
+                  <div className="w-16 h-2.5 rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

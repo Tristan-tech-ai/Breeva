@@ -261,8 +261,45 @@ ${points}
 
   if (isLoading) {
     return (
-      <div className="gradient-mesh-bg min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-[3px] border-primary-500 border-t-transparent rounded-full animate-spin" />
+      <div className="gradient-mesh-bg min-h-screen pb-24">
+        <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between">
+          <div className="w-6 h-6 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+          <div className="w-24 h-4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+          <div className="flex gap-1">
+            {[...Array(3)].map((_, i) => <div key={i} className="w-5 h-5 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />)}
+          </div>
+        </div>
+        <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
+          {/* Date skeleton */}
+          <div className="w-36 h-3 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+          {/* Map skeleton */}
+          <div className="rounded-2xl bg-gray-200 dark:bg-gray-800 h-56 animate-pulse" />
+          {/* Stats grid skeleton */}
+          <div className="grid grid-cols-3 gap-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="glass-card p-4 animate-pulse flex flex-col items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-gray-200 dark:bg-gray-700" />
+                <div className="w-14 h-5 rounded bg-gray-200 dark:bg-gray-700" />
+                <div className="w-10 h-2.5 rounded bg-gray-100 dark:bg-gray-800" />
+              </div>
+            ))}
+          </div>
+          {/* Details skeleton */}
+          <div className="glass-card p-5 animate-pulse space-y-3">
+            <div className="w-28 h-3 rounded bg-gray-200 dark:bg-gray-700" />
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="flex items-center justify-between">
+                <div className="w-24 h-3 rounded bg-gray-100 dark:bg-gray-800" />
+                <div className="w-16 h-3.5 rounded bg-gray-200 dark:bg-gray-700" />
+              </div>
+            ))}
+          </div>
+          {/* Chart skeleton */}
+          <div className="glass-card p-5 animate-pulse">
+            <div className="w-24 h-3 rounded bg-gray-200 dark:bg-gray-700 mb-3" />
+            <div className="h-32 rounded-xl bg-gray-100 dark:bg-gray-800" />
+          </div>
+        </div>
       </div>
     );
   }

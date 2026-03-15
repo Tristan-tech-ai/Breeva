@@ -214,8 +214,30 @@ export default function LeaderboardPage() {
 
         {/* List */}
         {isLoading ? (
-          <div className="flex justify-center py-8">
-            <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
+          <div className="space-y-2">
+            {/* Podium skeleton */}
+            <div className="flex items-end justify-center gap-3 mb-6">
+              {[44, 60, 44].map((s, i) => (
+                <div key={i} className="flex flex-col items-center gap-1.5 animate-pulse">
+                  <div className="w-5 h-5 rounded bg-gray-200 dark:bg-gray-700" />
+                  <div className={`rounded-full bg-gray-200 dark:bg-gray-700`} style={{ width: s, height: s }} />
+                  <div className="w-14 h-3 rounded bg-gray-200 dark:bg-gray-700" />
+                  <div className="w-10 h-2.5 rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+              ))}
+            </div>
+            {/* List skeleton */}
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="glass-card p-3 flex items-center gap-3 animate-pulse">
+                <div className="w-6 h-4 rounded bg-gray-200 dark:bg-gray-700" />
+                <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="w-24 h-3.5 rounded bg-gray-200 dark:bg-gray-700" />
+                  <div className="w-16 h-2.5 rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+                <div className="w-12 h-4 rounded bg-gray-100 dark:bg-gray-800" />
+              </div>
+            ))}
           </div>
         ) : (
           <VirtualizedList entries={entries.slice(3)} userId={user?.id} activeTab={activeTab} />

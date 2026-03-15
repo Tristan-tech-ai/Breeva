@@ -127,8 +127,60 @@ export default function MerchantDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="gradient-mesh-bg min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-[3px] border-primary-500 border-t-transparent rounded-full animate-spin" />
+      <div className="gradient-mesh-bg min-h-screen pb-24">
+        <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between">
+          <div className="w-6 h-6 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+          <div className="w-32 h-4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+          <div className="w-6" />
+        </div>
+        <div className="max-w-2xl mx-auto px-4 pt-4 space-y-5">
+          {/* Merchant info skeleton */}
+          <div className="glass-card p-5 animate-pulse">
+            <div className="flex items-start gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="w-36 h-5 rounded bg-gray-200 dark:bg-gray-700" />
+                <div className="w-20 h-3 rounded bg-gray-100 dark:bg-gray-800" />
+                <div className="flex gap-1">
+                  {[...Array(5)].map((_, i) => <div key={i} className="w-3.5 h-3.5 rounded bg-gray-200 dark:bg-gray-700" />)}
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 space-y-2">
+              <div className="w-full h-3 rounded bg-gray-100 dark:bg-gray-800" />
+              <div className="w-3/4 h-3 rounded bg-gray-100 dark:bg-gray-800" />
+            </div>
+          </div>
+          {/* Details skeleton */}
+          <div className="glass-card p-5 animate-pulse space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gray-200 dark:bg-gray-700" />
+                <div className="flex-1 space-y-1">
+                  <div className="w-16 h-2.5 rounded bg-gray-100 dark:bg-gray-800" />
+                  <div className="w-40 h-3.5 rounded bg-gray-200 dark:bg-gray-700" />
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Rewards skeleton */}
+          <div className="glass-card p-5 animate-pulse">
+            <div className="w-28 h-3 rounded bg-gray-200 dark:bg-gray-700 mb-4" />
+            <div className="space-y-3">
+              {[...Array(2)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-gray-700" />
+                  <div className="flex-1 space-y-1">
+                    <div className="w-32 h-3.5 rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="w-20 h-2.5 rounded bg-gray-100 dark:bg-gray-800" />
+                  </div>
+                  <div className="w-16 h-7 rounded-lg bg-gray-200 dark:bg-gray-700" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <BottomNavigation />
       </div>
     );
   }
