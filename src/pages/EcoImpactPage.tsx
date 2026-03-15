@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import AnimatedNumber from '../components/ui/AnimatedNumber';
+import WeeklySummaryCard from '../components/features/WeeklySummaryCard';
 
 const LazyCharts = lazy(() => import('recharts').then(m => ({
   default: ({ data, tab }: { data: WeeklyData[]; tab: 'co2' | 'distance' }) => (
@@ -215,6 +216,15 @@ export default function EcoImpactPage() {
             {weeklyProgress >= 100 ? '🎉 Goal achieved! Keep going!' : `${(weeklyGoal - (totalKm % weeklyGoal)).toFixed(1)} km to go`}
           </p>
         </motion.div>
+
+        {/* Weekly Summary Card */}
+        <WeeklySummaryCard
+          distanceKm={weeklyData.length > 0 ? weeklyData[weeklyData.length - 1].distance : 0}
+          walks={weeklyData.length > 0 ? weeklyData[weeklyData.length - 1].walks : 0}
+          co2Kg={weeklyData.length > 0 ? weeklyData[weeklyData.length - 1].co2 : 0}
+          streak={currentStreak}
+          pointsEarned={profile?.ecopoints_balance || 0}
+        />
 
         {/* Impact Grid */}
         <div className="grid grid-cols-2 gap-3">

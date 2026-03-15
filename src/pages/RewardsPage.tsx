@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Star, Sparkles, Gift, Ticket, QrCode } from 'lucide-react';
+import { Star, Sparkles, Gift, Ticket, QrCode, RotateCcw } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
@@ -36,6 +36,8 @@ export default function RewardsPage() {
     reward: { title: string } | null;
     merchant: { name: string } | null;
   }>>([]);
+
+  const [flippedVoucher, setFlippedVoucher] = useState<string | null>(null);
 
   const fetchRewards = useCallback(async () => {
     setIsLoading(true);
@@ -142,6 +144,34 @@ export default function RewardsPage() {
               ))}
             </div>
 
+            {/* Featured carousel */}
+            {!isLoading && rewards.length > 0 && (
+              <div className="mb-4">
+                <h3 className="px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Featured</h3>
+                <div className="flex gap-3 overflow-x-auto px-4 pb-2 snap-x snap-mandatory scrollbar-hide">
+                  {rewards.slice(0, 5).map((reward) => {
+                    const canAfford = (profile?.ecopoints_balance || 0) >= reward.points_required;
+                    return (
+                      <motion.div
+                        key={`feat-${reward.id}`}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => canAfford && setSelectedReward(reward)}
+                        className="flex-shrink-0 w-[200px] snap-center rounded-2xl bg-gradient-to-br from-primary-500 to-emerald-500 p-4 text-white shadow-lg cursor-pointer"
+                      >
+                        <div className="text-2xl mb-2">{reward.discount_percentage ? `${reward.discount_percentage}%` : '🎁'}</div>
+                        <h4 className="text-sm font-bold line-clamp-1">{reward.title}</h4>
+                        <p className="text-[10px] text-white/70 mt-0.5">{(reward.merchant as { name: string } | null)?.name || 'Breeva'}</p>
+                        <div className="flex items-center gap-1 mt-2">
+                          <Star size={10} className="text-amber-300" fill="currentColor" />
+                          <span className="text-xs font-bold">{reward.points_required} pts</span>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Content */}
             <div className="px-4">
               {isLoading ? (
@@ -210,32 +240,59 @@ export default function RewardsPage() {
               />
             ) : (
               <div className="space-y-3">
-                {myVouchers.map((v) => (
-                  <div
-                    key={v.id}
-                    className="glass-card p-4 flex items-center gap-3"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center flex-shrink-0">
-                      <QrCode size={20} className="text-primary-500" />
+                {myVouchers.map((v) => {
+                  const isFlipped = flippedVoucher === v.id;
+                  return (
+                    <div
+                      key={v.id}
+                      className="relative h-[88px] cursor-pointer"
+                      style={{ perspective: '600px' }}
+                      onClick={() => setFlippedVoucher(isFlipped ? null : v.id)}
+                    >
+                      <motion.div
+                        animate={{ rotateY: isFlipped ? 180 : 0 }}
+                        transition={{ duration: 0.4, ease: 'easeInOut' }}
+                        style={{ transformStyle: 'preserve-3d' }}
+                        className="absolute inset-0"
+                      >
+                        {/* Front */}
+                        <div className="absolute inset-0 glass-card p-4 flex items-center gap-3" style={{ backfaceVisibility: 'hidden' }}>
+                          <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center flex-shrink-0">
+                            <QrCode size={20} className="text-primary-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                              {(v.reward as { title: string } | null)?.title || 'Reward'}
+                            </h4>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                              {(v.merchant as { name: string } | null)?.name} · {v.points_spent} pts
+                            </p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">Tap to reveal code</p>
+                          </div>
+                          <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${
+                            v.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                            v.status === 'used' ? 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' :
+                            'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                          }`}>
+                            {v.status}
+                          </span>
+                        </div>
+                        {/* Back */}
+                        <div
+                          className="absolute inset-0 glass-card p-4 flex items-center justify-center gap-4 bg-gradient-to-r from-primary-50 to-emerald-50 dark:from-primary-900/20 dark:to-emerald-900/20"
+                          style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+                        >
+                          <div className="text-center">
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">QR Code</p>
+                            <p className="text-lg font-mono font-bold text-primary-600 dark:text-primary-400 tracking-wider">{v.qr_code}</p>
+                            <p className="text-[10px] text-gray-400 mt-1">Backup: {v.backup_code}</p>
+                          </div>
+                          <RotateCcw size={14} className="text-gray-400 absolute top-3 right-3" />
+                        </div>
+                      </motion.div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                        {(v.reward as { title: string } | null)?.title || 'Reward'}
-                      </h4>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                        {(v.merchant as { name: string } | null)?.name} · {v.points_spent} pts
-                      </p>
-                      <p className="text-[10px] font-mono text-gray-400 mt-0.5">{v.qr_code}</p>
-                    </div>
-                    <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${
-                      v.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                      v.status === 'used' ? 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' :
-                      'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                    }`}>
-                      {v.status}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

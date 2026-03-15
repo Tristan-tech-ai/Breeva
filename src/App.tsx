@@ -5,6 +5,8 @@ import { AuthProvider } from './components/auth/AuthProvider';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import OfflineBanner from './components/ui/OfflineBanner';
+import PWAInstallBanner from './components/features/PWAInstallBanner';
+import CommandPalette from './components/features/CommandPalette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 // Eager load: critical path pages
@@ -62,6 +64,8 @@ function App() {
         <ErrorBoundary>
           <KeyboardShortcutsProvider>
           <OfflineBanner />
+          <PWAInstallBanner />
+          <CommandPalette />
           <Toaster
             position="top-center"
             toastOptions={{

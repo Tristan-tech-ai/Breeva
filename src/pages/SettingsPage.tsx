@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Moon, Bell, MapPin, CalendarDays, BarChart3,
-  User, Trash2, Smartphone, FileText, Lock, Globe, Ruler,
+  User, Trash2, Smartphone, FileText, Lock, Globe, Ruler, Contrast,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
@@ -51,6 +51,11 @@ export default function SettingsPage() {
   const { user } = useAuthStore();
   const { locale, setLocale } = useI18nStore();
   const [distanceUnit, setDistanceUnit] = useState<string>(() => localStorage.getItem('breeva_distance_unit') || 'km');
+  const [highContrast, setHighContrast] = useState(() => {
+    const saved = localStorage.getItem('breeva_high_contrast') === 'true';
+    if (saved) document.documentElement.classList.add('high-contrast');
+    return saved;
+  });
   const [settings, setSettings] = useState<Settings>(() => {
     // Init from localStorage
     return {
@@ -136,6 +141,21 @@ export default function SettingsPage() {
           type: 'toggle',
           value: settings.dark_mode,
           action: () => toggle('dark_mode'),
+        },
+        {
+          icon: Contrast,
+          label: 'High Contrast',
+          description: 'Increase text and border contrast for accessibility',
+          type: 'toggle',
+          value: highContrast,
+          action: () => {
+            setHighContrast(prev => {
+              const next = !prev;
+              document.documentElement.classList.toggle('high-contrast', next);
+              localStorage.setItem('breeva_high_contrast', String(next));
+              return next;
+            });
+          },
         },
       ],
     },

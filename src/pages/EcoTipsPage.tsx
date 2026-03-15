@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { ChevronLeft, Leaf, Wind, Footprints, Droplets, TreePine, AlertTriangle } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 
@@ -82,10 +82,50 @@ const aqTips = [
   },
 ];
 
+function SwipeableCard({ tip, onDismiss }: { tip: typeof tips[number]; onDismiss: () => void }) {
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-200, 200], [-18, 18]);
+  const opacity = useTransform(x, [-200, -100, 0, 100, 200], [0, 1, 1, 1, 0]);
+  const Icon = tip.icon;
+
+  return (
+    <motion.div
+      style={{ x, rotate, opacity }}
+      drag="x"
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.7}
+      onDragEnd={(_, info) => {
+        if (Math.abs(info.offset.x) > 100) onDismiss();
+      }}
+      initial={{ scale: 0.95, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      exit={{ x: 300, opacity: 0, transition: { duration: 0.2 } }}
+      className="absolute inset-0 glass-card p-5 cursor-grab active:cursor-grabbing"
+    >
+      <div className="flex items-center gap-3 mb-2">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${tip.color}`}>
+          <Icon className="w-5 h-5" />
+        </div>
+        <div>
+          <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">Swipe to explore</p>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">{tip.title}</h2>
+        </div>
+      </div>
+      <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed ml-[52px]">
+        {tip.body}
+      </p>
+      <div className="mt-3 ml-[52px] flex items-center gap-1 text-[10px] text-gray-400">
+        <ChevronLeft className="w-3 h-3" /> Swipe to see next tip
+      </div>
+    </motion.div>
+  );
+}
+
 export default function EcoTipsPage() {
   const navigate = useNavigate();
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [currentAqi, setCurrentAqi] = useState<number | null>(null);
+  const [cardIdx, setCardIdx] = useState(0);
 
   // Fetch AQI for current location
   useEffect(() => {
@@ -104,11 +144,6 @@ export default function EcoTipsPage() {
     );
   }, []);
 
-  // Daily tip rotation based on date
-  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
-  const tipOfDay = tips[dayOfYear % tips.length];
-  const TipOfDayIcon = tipOfDay.icon;
-
   // Get relevant AQ tip
   const aqTip = currentAqi != null ? aqTips.find(t => currentAqi <= t.maxAqi) || aqTips[aqTips.length - 1] : null;
 
@@ -123,24 +158,20 @@ export default function EcoTipsPage() {
       </div>
 
       <div className="px-4 pt-4 pb-12 max-w-2xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-5 mb-5"
-        >
-          <div className="flex items-center gap-3 mb-2">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${tipOfDay.color}`}>
-              <TipOfDayIcon className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">Tip of the Day</p>
-              <h2 className="text-sm font-bold text-gray-900 dark:text-white">{tipOfDay.title}</h2>
-            </div>
+        <div className="relative h-[130px] mb-5">
+          <AnimatePresence mode="popLayout">
+            <SwipeableCard
+              key={cardIdx}
+              tip={tips[cardIdx % tips.length]}
+              onDismiss={() => setCardIdx(i => i + 1)}
+            />
+          </AnimatePresence>
+          <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex gap-1">
+            {tips.map((_, i) => (
+              <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === cardIdx % tips.length ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
+            ))}
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed ml-[52px]">
-            {tipOfDay.body}
-          </p>
-        </motion.div>
+        </div>
 
         {/* AQ-Based Tip */}
         {aqTip && (() => {

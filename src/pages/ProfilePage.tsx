@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, BarChart3, Trophy, Coins, Settings, HelpCircle, LogOut, Leaf, Flame, TreePine, Pencil, Info } from 'lucide-react';
@@ -7,10 +8,32 @@ import BottomNavigation from '../components/layout/BottomNavigation';
 import AnimatedNumber from '../components/ui/AnimatedNumber';
 import LazyImage from '../components/ui/LazyImage';
 import ActivityRings from '../components/ui/ActivityRings';
+import StreakHeatmap from '../components/features/StreakHeatmap';
+import { supabase } from '../lib/supabase';
 
 export default function ProfilePage() {
-  const { profile, signOut } = useAuthStore();
+  const { profile, user, signOut } = useAuthStore();
   const navigate = useNavigate();
+  const [walkDays, setWalkDays] = useState<Record<string, number>>({});
+
+  // Fetch walk history dates for heatmap
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('walks')
+      .select('started_at')
+      .eq('user_id', user.id)
+      .gte('started_at', new Date(Date.now() - 84 * 86400000).toISOString())
+      .then(({ data }) => {
+        if (!data) return;
+        const counts: Record<string, number> = {};
+        for (const w of data) {
+          const day = new Date(w.started_at).toISOString().split('T')[0];
+          counts[day] = (counts[day] || 0) + 1;
+        }
+        setWalkDays(counts);
+      });
+  }, [user]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -142,6 +165,21 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
+          </div>
+        </motion.div>
+
+        {/* Environmental Impact Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.32 }}
+          className="mx-4 mt-4"
+        >
+          <div className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
+            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+              Walking Activity
+            </h3>
+            <StreakHeatmap data={walkDays} weeks={12} />
           </div>
         </motion.div>
 

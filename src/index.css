@@ -418,6 +418,43 @@
   background: rgba(15, 23, 42, 0.9) !important;
 }
 
+/* High Contrast Mode — accessibility enhancement */
+.high-contrast {
+  --hc-text: #000;
+  --hc-bg: #fff;
+  --hc-border: #000;
+}
+.high-contrast.dark {
+  --hc-text: #fff;
+  --hc-bg: #000;
+  --hc-border: #fff;
+}
+
+.high-contrast .glass-card,
+.high-contrast .glass-button,
+.high-contrast .glass-nav,
+.high-contrast .glass-sheet,
+.high-contrast .glass-modal {
+  border-color: var(--hc-border);
+  border-width: 2px;
+}
+
+.high-contrast .text-gray-400,
+.high-contrast .text-gray-500 {
+  color: var(--hc-text) !important;
+  opacity: 0.75;
+}
+
+.high-contrast .text-gray-300 {
+  color: var(--hc-text) !important;
+  opacity: 0.65;
+}
+
+.high-contrast button:focus-visible {
+  outline-width: 3px;
+  outline-offset: 3px;
+}
+
 .glass-popup .leaflet-popup-close-button {
   display: none;
 }
