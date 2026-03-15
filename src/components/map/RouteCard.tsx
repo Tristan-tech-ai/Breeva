@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Clock, Route as RouteIcon, Wind, Star, Leaf, Zap, Scale, Check, TreePine, Car, Shield } from 'lucide-react';
+import { Clock, Route as RouteIcon, Wind, Star, Leaf, Zap, Scale, Check, TreePine, Car } from 'lucide-react';
 import type { Route } from '../../types';
 import { getAQIColor } from './LeafletMap';
 
@@ -72,16 +72,6 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
         </div>
       )}
 
-      {/* VAYU AI-powered badge */}
-      {route.vayu_score?.vayu_scored && (
-        <div className="absolute top-0 left-0">
-          <div className="bg-gradient-to-r from-violet-500 to-purple-600 text-white text-[8px] font-bold px-2 py-0.5 rounded-br-xl uppercase tracking-wider flex items-center gap-1">
-            <Shield className="w-2.5 h-2.5" />
-            VAYU AI
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex items-center gap-3 mb-3">
         <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${info.gradient} flex items-center justify-center shadow-sm`}>
@@ -114,19 +104,9 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
         </div>
         <div className="flex items-center gap-1.5">
           <Wind className="w-3.5 h-3.5" style={{ color: getAQIColor(route.vayu_avg_aqi ?? route.avg_aqi) }} />
-          <span className="text-sm text-gray-600 dark:text-gray-300">
-            AQI {route.vayu_avg_aqi ?? route.avg_aqi} · {getAQILabel(route.vayu_avg_aqi ?? route.avg_aqi)}
+          <span className="text-sm font-medium" style={{ color: getAQIColor(route.vayu_avg_aqi ?? route.avg_aqi) }}>
+            {getAQILabel(route.vayu_avg_aqi ?? route.avg_aqi)}
           </span>
-          {route.vayu_segment_count && route.vayu_segment_count > 0 && (
-            <span className="text-[9px] text-violet-500 dark:text-violet-400 font-medium">
-              ({route.vayu_segment_count} roads)
-            </span>
-          )}
-          {route.aqi_confidence && route.aqi_confidence >= 80 && (
-            <span className="text-[9px] text-gray-400 dark:text-gray-500" title={`${route.aqi_confidence}% confidence`}>
-              {route.aqi_confidence >= 90 ? '●●●' : '●●○'}
-            </span>
-          )}
         </div>
         <div className="ml-auto flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 px-2.5 py-1 rounded-full border border-amber-200/50 dark:border-amber-700/30">
           <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
