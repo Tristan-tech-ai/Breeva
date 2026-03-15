@@ -1,16 +1,16 @@
-import { useState, useRef, useEffect } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../stores/authStore';
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, KeyRound, RotateCcw, Check, X } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, Check, X } from 'lucide-react';
 import logoBreeva from '../assets/logo-breeva.svg';
 
-type AuthView = 'login' | 'signup' | 'verify-otp' | 'forgot-password' | 'reset-sent';
+type AuthView = 'login' | 'signup' | 'forgot-password' | 'reset-sent';
 
 export default function LoginPage() {
   const {
     user, isLoading, signInWithGoogle, signInWithEmail, signUpWithEmail,
-    verifyOtp, resendOtp, sendResetPasswordEmail, pendingVerification,
+    sendResetPasswordEmail, pendingVerification,
     error, setError,
   } = useAuthStore();
   const [view, setView] = useState<AuthView>('login');
@@ -20,21 +20,18 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
-  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [resetEmail, setResetEmail] = useState('');
   const location = useLocation();
+  const navigate = useNavigate();
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
 
-  // Auto-switch to verify-otp when pendingVerification exists
-  useEffect(() => {
-    if (pendingVerification && view === 'signup') {
-      setView('verify-otp');
-    }
-  }, [pendingVerification, view]);
+  // If there's a pending verification, redirect to the dedicated verify page
+  if (pendingVerification) {
+    return <Navigate to="/verify-email" replace />;
+  }
 
-  // Redirect if already authenticated (but NOT during OTP verification)
-  if (user && !isLoading && !pendingVerification && view !== 'verify-otp') {
+  // Redirect if already authenticated
+  if (user && !isLoading) {
     return <Navigate to={from} replace />;
   }
 
@@ -84,57 +81,8 @@ export default function LoginPage() {
       }
       const ok = await signUpWithEmail(email, password, fullName.trim());
       setIsSubmitting(false);
-      if (ok) setView('verify-otp');
+      if (ok) navigate('/verify-email', { replace: true });
     }
-  };
-
-  const handleOtpChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
-    const newDigits = [...otpDigits];
-    newDigits[index] = value.slice(-1);
-    setOtpDigits(newDigits);
-    if (value && index < 5) {
-      otpRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleOtpPaste = (e: React.ClipboardEvent) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (!pasted) return;
-    const newDigits = [...otpDigits];
-    for (let i = 0; i < 6; i++) newDigits[i] = pasted[i] || '';
-    setOtpDigits(newDigits);
-    const focusIdx = Math.min(pasted.length, 5);
-    otpRefs.current[focusIdx]?.focus();
-  };
-
-  const handleVerifyOtp = async () => {
-    const code = otpDigits.join('');
-    if (code.length !== 6) {
-      setError('Please enter the 6-digit code');
-      return;
-    }
-    setIsSubmitting(true);
-    const ok = await verifyOtp(code);
-    if (!ok) {
-      setIsSubmitting(false);
-      setOtpDigits(['', '', '', '', '', '']);
-      otpRefs.current[0]?.focus();
-    }
-  };
-
-  const handleResendOtp = async () => {
-    setIsSubmitting(true);
-    await resendOtp();
-    setIsSubmitting(false);
-    setOtpDigits(['', '', '', '', '', '']);
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -484,85 +432,6 @@ export default function LoginPage() {
                     <p className="mt-5 text-center text-xs text-gray-400 dark:text-gray-500 leading-relaxed">
                       Your data is encrypted and secure. We never share your information.
                     </p>
-                  </motion.div>
-                )}
-
-                {/* ─── VERIFY OTP ─── */}
-                {view === 'verify-otp' && (
-                  <motion.div key="otp-form" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
-                    <button
-                      onClick={() => { switchView('signup'); useAuthStore.setState({ pendingVerification: null }); }}
-                      className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mb-4 transition"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                      Back
-                    </button>
-
-                    <div className="text-center mb-6">
-                      <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/40 dark:to-primary-800/30 flex items-center justify-center">
-                        <KeyRound className="w-7 h-7 text-primary-600 dark:text-primary-400" />
-                      </div>
-                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Verify your email</h2>
-                      <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">
-                        We sent a 6-digit code to<br />
-                        <span className="font-semibold text-gray-700 dark:text-gray-300">{pendingVerification?.email}</span>
-                      </p>
-                    </div>
-
-                    {/* Error message */}
-                    <AnimatePresence>
-                      {error && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm text-center"
-                        >
-                          {error}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* OTP Input */}
-                    <div className="flex justify-center gap-2.5 mb-6" onPaste={handleOtpPaste}>
-                      {otpDigits.map((digit, i) => (
-                        <input
-                          key={i}
-                          ref={(el) => { otpRefs.current[i] = el; }}
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={1}
-                          value={digit}
-                          onChange={(e) => handleOtpChange(i, e.target.value)}
-                          onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                          className="w-12 h-14 text-center text-xl font-bold rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition"
-                        />
-                      ))}
-                    </div>
-
-                    <button
-                      onClick={handleVerifyOtp}
-                      disabled={isSubmitting || otpDigits.join('').length < 6}
-                      className="w-full py-3 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold shadow-lg shadow-primary-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                    >
-                      {isSubmitting ? (
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="w-4.5 h-4.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Verifying...</span>
-                        </div>
-                      ) : 'Verify & Create Account'}
-                    </button>
-
-                    <div className="mt-4 text-center">
-                      <button
-                        onClick={handleResendOtp}
-                        disabled={isSubmitting}
-                        className="inline-flex items-center gap-1.5 text-sm text-primary-500 hover:text-primary-600 dark:hover:text-primary-400 font-medium disabled:opacity-50 transition"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        Resend code
-                      </button>
-                    </div>
                   </motion.div>
                 )}
 

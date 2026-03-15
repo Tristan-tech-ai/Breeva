@@ -15,6 +15,7 @@ import LoginPage from './pages/LoginPage';
 
 // Lazy load: all other pages for fast initial load
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const EditProfilePage = lazy(() => import('./pages/EditProfilePage'));
@@ -83,6 +84,7 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/landing" element={<LandingPage />} />
 

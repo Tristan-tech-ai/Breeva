@@ -408,9 +408,15 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         // Only persist minimal data — session is managed by Supabase
         profile: state.profile,
+        // Persist pending verification so it survives page navigation/refresh
+        pendingVerification: state.pendingVerification,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
+          // Clear expired pending verification on rehydrate
+          if (state.pendingVerification && Date.now() > state.pendingVerification.expiresAt) {
+            state.pendingVerification = null;
+          }
           console.log('Auth store rehydrated');
         }
       },
