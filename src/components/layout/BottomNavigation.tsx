@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Home, Store, Gift, User } from 'lucide-react';
 import logoBreeva from '../../assets/logo-breeva.svg';
+import { haptic } from '../../lib/haptic';
 
 const tabs = [
   { path: '/', label: 'Home', Icon: Home, badgeKey: null },
@@ -51,6 +52,7 @@ export default function BottomNavigation({ badges }: BottomNavigationProps) {
                 role="tab"
                 aria-current={isActive ? 'page' : undefined}
                 aria-label={tab.label}
+                onClick={() => haptic('light')}
                 className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 relative transition-colors duration-200 ${
                   isActive
                     ? 'text-primary-600 dark:text-primary-400'

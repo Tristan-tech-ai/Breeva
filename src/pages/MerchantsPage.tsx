@@ -6,6 +6,8 @@ import BottomNavigation from '../components/layout/BottomNavigation';
 import { supabase } from '../lib/supabase';
 import { SkeletonList } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
+import LazyImage from '../components/ui/LazyImage';
+import SpotlightCard from '../components/ui/SpotlightCard';
 
 interface MerchantRow {
   id: string;
@@ -103,9 +105,12 @@ export default function MerchantsPage() {
 
         {/* Category pills */}
         <div className="px-4 flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
-          {categories.map((cat) => (
-            <button
+          {categories.map((cat, i) => (
+            <motion.button
               key={cat}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04 }}
               onClick={() => setSelectedCategory(cat)}
               className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-medium transition ${
                 cat === selectedCategory
@@ -114,7 +119,7 @@ export default function MerchantsPage() {
               }`}
             >
               {cat}
-            </button>
+            </motion.button>
           ))}
         </div>
 
@@ -132,17 +137,21 @@ export default function MerchantsPage() {
             />
           ) : (
             filtered.map((merchant, i) => (
-              <motion.div
+              <SpotlightCard
                 key={merchant.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-4 flex gap-3 cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => navigate(`/merchants/${merchant.id}`)}
+                className="rounded-2xl"
+                spotlightColor="rgba(16,185,129,0.10)"
               >
-                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary-100 to-secondary-100 dark:from-primary-900/30 dark:to-secondary-900/30 flex items-center justify-center text-2xl flex-shrink-0">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-4 flex gap-3 cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => navigate(`/merchants/${merchant.id}`)}
+                >
+                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary-100 to-secondary-100 dark:from-primary-900/30 dark:to-secondary-900/30 flex items-center justify-center text-2xl flex-shrink-0 overflow-hidden">
                   {merchant.logo_url ? (
-                    <img src={merchant.logo_url} className="w-10 h-10 rounded-lg object-cover" alt="" />
+                    <LazyImage src={merchant.logo_url} alt={merchant.name} className="w-10 h-10 rounded-lg" />
                   ) : (
                     categoryEmoji[merchant.category || ''] || '🏪'
                   )}
@@ -164,6 +173,7 @@ export default function MerchantsPage() {
                   </div>
                 </div>
               </motion.div>
+              </SpotlightCard>
             ))
           )}
         </div>

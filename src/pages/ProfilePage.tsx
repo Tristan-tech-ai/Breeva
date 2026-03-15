@@ -5,6 +5,8 @@ import { useAuthStore } from '../stores/authStore';
 import { formatNumber } from '../lib/utils';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import AnimatedNumber from '../components/ui/AnimatedNumber';
+import LazyImage from '../components/ui/LazyImage';
+import ActivityRings from '../components/ui/ActivityRings';
 
 export default function ProfilePage() {
   const { profile, signOut } = useAuthStore();
@@ -52,7 +54,7 @@ export default function ProfilePage() {
           >
             <div className="w-24 h-24 rounded-full border-4 border-white/30 overflow-hidden bg-white dark:bg-gray-900/20 backdrop-blur-sm shadow-xl">
               {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt={profile.name || 'Profile'} className="w-full h-full object-cover" />
+                <LazyImage src={profile.avatar_url} alt={profile.name || 'Profile'} className="w-full h-full" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-3xl text-white font-bold">
                   {profile?.name?.[0]?.toUpperCase() || '?'}
@@ -107,6 +109,47 @@ export default function ProfilePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
+          className="mx-4 mt-4"
+        >
+          <div className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
+            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
+              Daily Progress
+            </h3>
+            <div className="flex items-center gap-5">
+              <ActivityRings
+                size={100}
+                rings={[
+                  { label: 'Distance', value: profile?.total_distance_km || 0, max: Math.max(profile?.total_distance_km || 0, 5), color: '#10b981' },
+                  { label: 'Walks', value: profile?.total_walks || 0, max: Math.max(profile?.total_walks || 0, 3), color: '#3b82f6' },
+                  { label: 'Points', value: profile?.ecopoints_balance || 0, max: Math.max(profile?.ecopoints_balance || 0, 500), color: '#f59e0b' },
+                ]}
+              />
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Distance</span>
+                  <span className="text-xs font-bold text-gray-900 dark:text-white ml-auto">{(profile?.total_distance_km || 0).toFixed(1)} km</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Walks</span>
+                  <span className="text-xs font-bold text-gray-900 dark:text-white ml-auto">{profile?.total_walks || 0}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Points</span>
+                  <span className="text-xs font-bold text-gray-900 dark:text-white ml-auto">{formatNumber(profile?.ecopoints_balance || 0)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Environmental Impact Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
           className="mx-4 mt-4"
         >
           <div className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">

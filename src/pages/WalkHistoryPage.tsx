@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Footprints } from 'lucide-react';
@@ -8,6 +8,8 @@ import { formatDistance, formatDuration, formatNumber } from '../lib/utils';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { SkeletonList } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
+import PullToRefreshIndicator from '../components/ui/PullToRefreshIndicator';
 
 interface Walk {
   id: string;
@@ -27,6 +29,7 @@ export default function WalkHistoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
+  const [groupBy, setGroupBy] = useState<'all' | 'week' | 'month'>('all');
   const LIMIT = 15;
 
   const fetchWalks = async (offset = 0, append = false) => {
@@ -64,6 +67,15 @@ export default function WalkHistoryPage() {
     fetchWalks(nextPage * LIMIT, true);
   };
 
+  const handleRefresh = useCallback(async () => {
+    setPage(0);
+    await fetchWalks(0, false);
+  }, [user]);
+
+  const { containerRef, isRefreshing, pullDistance, progress } = usePullToRefresh({
+    onRefresh: handleRefresh,
+  });
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('id-ID', {
@@ -82,8 +94,33 @@ export default function WalkHistoryPage() {
     }
   };
 
+  const getGroupKey = (dateStr: string) => {
+    const d = new Date(dateStr);
+    if (groupBy === 'month') {
+      return d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+    }
+    if (groupBy === 'week') {
+      const weekStart = new Date(d);
+      weekStart.setDate(d.getDate() - d.getDay());
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      const fmt = (dt: Date) => dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+      return `${fmt(weekStart)} – ${fmt(weekEnd)}`;
+    }
+    return '';
+  };
+
+  const grouped = groupBy === 'all'
+    ? { '': walks }
+    : walks.reduce((acc, w) => {
+        const key = getGroupKey(w.completed_at || w.created_at);
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(w);
+        return acc;
+      }, {} as Record<string, Walk[]>);
+
   return (
-    <div className="gradient-mesh-bg min-h-screen pb-24">
+    <div ref={containerRef} className="gradient-mesh-bg min-h-screen pb-24 overflow-auto">
       {/* Header */}
       <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between">
         <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
@@ -96,6 +133,25 @@ export default function WalkHistoryPage() {
       </div>
 
       <div className="px-4 pt-4 pb-12">
+        <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
+
+        {/* Group-by selector */}
+        <div className="flex gap-2 mb-4">
+          {(['all', 'week', 'month'] as const).map(g => (
+            <button
+              key={g}
+              onClick={() => setGroupBy(g)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition capitalize ${
+                groupBy === g
+                  ? 'gradient-primary text-white shadow-sm'
+                  : 'bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700/30 text-gray-600 dark:text-gray-400'
+              }`}
+            >
+              {g === 'all' ? 'All' : g === 'week' ? 'By Week' : 'By Month'}
+            </button>
+          ))}
+        </div>
+
         {/* Walk Cards */}
         {walks.length === 0 && !isLoading ? (
           <EmptyState
@@ -106,13 +162,21 @@ export default function WalkHistoryPage() {
             onAction={() => navigate('/')}
           />
         ) : (
-          <motion.div
-            className="space-y-3"
-            initial="hidden"
-            animate="show"
-            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
-          >
-            {walks.map((walk) => {
+          <div>
+            {Object.entries(grouped).map(([groupLabel, groupWalks]) => (
+              <div key={groupLabel || 'all'} className="mb-4">
+                {groupLabel && (
+                  <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 px-1">
+                    {groupLabel}
+                  </h3>
+                )}
+                <motion.div
+                  className="space-y-3"
+                  initial="hidden"
+                  animate="show"
+                  variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
+                >
+                  {groupWalks.map((walk) => {
               const routeType = getRouteTypeLabel(walk.route_type);
               return (
                 <motion.div
@@ -152,6 +216,9 @@ export default function WalkHistoryPage() {
                 </motion.div>
               );
             })}
+                </motion.div>
+              </div>
+            ))}
 
             {/* Load More */}
             {hasMore && !isLoading && (
@@ -162,7 +229,7 @@ export default function WalkHistoryPage() {
                 Load More
               </button>
             )}
-          </motion.div>
+          </div>
         )}
 
         {/* Loading */}

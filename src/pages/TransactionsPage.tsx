@@ -5,6 +5,9 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { formatNumber } from '../lib/utils';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import { SkeletonList } from '../components/ui/Skeleton';
+import EmptyState from '../components/ui/EmptyState';
+import { Coins } from 'lucide-react';
 
 interface Transaction {
   id: string;
@@ -114,9 +117,12 @@ export default function TransactionsPage() {
 
       {/* Filter Tabs */}
       <div className="px-4 pt-4 pb-2 flex gap-2">
-        {filters.map((f) => (
-          <button
+        {filters.map((f, i) => (
+          <motion.button
             key={f.value}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
             onClick={() => setFilter(f.value)}
             className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
               filter === f.value
@@ -125,29 +131,19 @@ export default function TransactionsPage() {
             }`}
           >
             {f.label}
-          </button>
+          </motion.button>
         ))}
       </div>
 
       <div className="px-4 pt-2 pb-12">
         {isLoading ? (
-          <div className="flex justify-center py-8">
-            <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <SkeletonList rows={5} />
         ) : transactions.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass-card p-12 text-center"
-          >
-            <div className="text-5xl mb-4">💰</div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              No transactions yet
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Start walking to earn EcoPoints!
-            </p>
-          </motion.div>
+          <EmptyState
+            icon={Coins}
+            title="No transactions yet"
+            description="Start walking to earn EcoPoints!"
+          />
         ) : (
           Object.entries(grouped).map(([date, items]) => (
             <div key={date} className="mb-4">

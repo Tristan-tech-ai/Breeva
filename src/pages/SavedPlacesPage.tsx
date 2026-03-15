@@ -8,6 +8,8 @@ import BottomNavigation from '../components/layout/BottomNavigation';
 import EmptyState from '../components/ui/EmptyState';
 import type { SavedPlace } from '../types';
 
+const SWIPE_THRESHOLD = -80;
+
 const categoryIcons: Record<string, React.ReactNode> = {
   home: <Home className="w-4 h-4 text-blue-500" />,
   work: <Briefcase className="w-4 h-4 text-amber-500" />,
@@ -193,8 +195,24 @@ export default function SavedPlacesPage() {
               <motion.div
                 key={place.id}
                 variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
-                className="glass-card p-3.5 flex items-center gap-3"
+                className="relative overflow-hidden rounded-2xl"
               >
+                {/* Delete backdrop */}
+                <div className="absolute inset-0 bg-red-500 flex items-center justify-end pr-6 rounded-2xl">
+                  <Trash2 className="w-5 h-5 text-white" />
+                </div>
+                {/* Swipeable card */}
+                <motion.div
+                  drag="x"
+                  dragConstraints={{ left: SWIPE_THRESHOLD, right: 0 }}
+                  dragElastic={0.1}
+                  onDragEnd={(_e, info) => {
+                    if (info.offset.x < SWIPE_THRESHOLD) {
+                      removePlace(place.id);
+                    }
+                  }}
+                  className="glass-card p-3.5 flex items-center gap-3 relative z-10"
+                >
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${categoryColors[place.category]}`}>
                   {categoryIcons[place.category]}
                 </div>
@@ -227,6 +245,7 @@ export default function SavedPlacesPage() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+              </motion.div>
               </motion.div>
             ))}
           </motion.div>

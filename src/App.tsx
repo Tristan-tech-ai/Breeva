@@ -5,6 +5,7 @@ import { AuthProvider } from './components/auth/AuthProvider';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import OfflineBanner from './components/ui/OfflineBanner';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 // Eager load: critical path pages
 import HomePage from './pages/HomePage';
@@ -49,11 +50,17 @@ function PageLoader() {
   );
 }
 
+function KeyboardShortcutsProvider({ children }: { children: React.ReactNode }) {
+  useKeyboardShortcuts();
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <ErrorBoundary>
+          <KeyboardShortcutsProvider>
           <OfflineBanner />
           <Toaster
             position="top-center"
@@ -197,6 +204,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
           </Routes>
         </Suspense>
+        </KeyboardShortcutsProvider>
         </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
