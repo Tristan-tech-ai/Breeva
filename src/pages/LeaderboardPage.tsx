@@ -89,7 +89,7 @@ export default function LeaderboardPage() {
 
     const { data } = await supabase
       .from('users')
-      .select('id, name, avatar_url, total_distance_km, total_walks, ecopoints_balance')
+      .select('id, full_name, avatar_url, total_distance_km, total_walks, ecopoints_balance')
       .order(sortCol, { ascending: false })
       .limit(50);
 
@@ -97,7 +97,7 @@ export default function LeaderboardPage() {
       setEntries(
         data.map((u) => ({
           user_id: u.id,
-          name: u.name || 'Green Walker',
+          name: u.full_name || 'Green Walker',
           avatar_url: u.avatar_url,
           total_distance_km: u.total_distance_km || 0,
           total_walks: u.total_walks || 0,
