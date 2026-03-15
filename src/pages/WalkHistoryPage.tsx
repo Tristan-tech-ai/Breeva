@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Footprints } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { formatDistance, formatDuration, formatNumber } from '../lib/utils';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import { SkeletonList } from '../components/ui/Skeleton';
+import EmptyState from '../components/ui/EmptyState';
 
 interface Walk {
   id: string;
@@ -95,35 +98,26 @@ export default function WalkHistoryPage() {
       <div className="px-4 pt-4 pb-12">
         {/* Walk Cards */}
         {walks.length === 0 && !isLoading ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass-card p-12 text-center"
-          >
-            <div className="text-5xl mb-4">🚶</div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              No walks yet
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              Start your first eco-walk to see your history here!
-            </p>
-            <button
-              onClick={() => navigate('/')}
-              className="gradient-primary text-white text-sm font-semibold py-3 px-6 rounded-xl"
-            >
-              Start
-            </button>
-          </motion.div>
+          <EmptyState
+            icon={Footprints}
+            title="No walks yet"
+            description="Start your first eco-walk to see your history here!"
+            actionLabel="Start Walking"
+            onAction={() => navigate('/')}
+          />
         ) : (
-          <div className="space-y-3">
-            {walks.map((walk, index) => {
+          <motion.div
+            className="space-y-3"
+            initial="hidden"
+            animate="show"
+            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
+          >
+            {walks.map((walk) => {
               const routeType = getRouteTypeLabel(walk.route_type);
               return (
                 <motion.div
                   key={walk.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
+                  variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
                   className="glass-card p-4 cursor-pointer hover:shadow-md transition-shadow"
                   onClick={() => navigate(`/profile/history/${walk.id}`)}
                 >
@@ -168,14 +162,12 @@ export default function WalkHistoryPage() {
                 Load More
               </button>
             )}
-          </div>
+          </motion.div>
         )}
 
         {/* Loading */}
         {isLoading && (
-          <div className="flex justify-center py-8">
-            <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <SkeletonList rows={3} />
         )}
       </div>
 

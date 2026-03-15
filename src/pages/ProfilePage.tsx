@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, BarChart3, Trophy, Coins, Settings, HelpCirc
 import { useAuthStore } from '../stores/authStore';
 import { formatNumber } from '../lib/utils';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import AnimatedNumber from '../components/ui/AnimatedNumber';
 
 export default function ProfilePage() {
   const { profile, signOut } = useAuthStore();
@@ -82,19 +83,19 @@ export default function ProfilePage() {
           <div className="rounded-2xl bg-white dark:bg-gray-900/90 backdrop-blur-2xl border border-gray-200 dark:border-gray-700/30 shadow-lg p-5">
             <div className="grid grid-cols-4 gap-3 text-center">
               <div>
-                <div className="text-lg font-bold tabular-nums text-accent-500">{formatNumber(profile?.ecopoints_balance || 0)}</div>
+                <AnimatedNumber value={profile?.ecopoints_balance || 0} className="text-lg font-bold tabular-nums text-accent-500" />
                 <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">Points</div>
               </div>
               <div>
-                <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{(profile?.total_distance_km || 0).toFixed(1)}</div>
+                <AnimatedNumber value={profile?.total_distance_km || 0} decimals={1} className="text-lg font-bold tabular-nums text-gray-900 dark:text-white" />
                 <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">km</div>
               </div>
               <div>
-                <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{profile?.total_walks || 0}</div>
+                <AnimatedNumber value={profile?.total_walks || 0} className="text-lg font-bold tabular-nums text-gray-900 dark:text-white" />
                 <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">Walks</div>
               </div>
               <div>
-                <div className="text-lg font-bold tabular-nums text-primary-500">{profile?.current_streak || 0}</div>
+                <AnimatedNumber value={profile?.current_streak || 0} className="text-lg font-bold tabular-nums text-primary-500" />
                 <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">Streak</div>
               </div>
             </div>

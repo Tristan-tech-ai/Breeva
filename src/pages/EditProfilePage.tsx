@@ -176,10 +176,12 @@ export default function EditProfilePage() {
             <motion.div
               initial={{ opacity: 0, y: -5 }}
               animate={{ opacity: 1, y: 0 }}
+              role="alert"
+              aria-live="polite"
               className={`p-3 rounded-xl text-sm text-center ${
                 message.type === 'success'
-                  ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 border border-primary-200 dark:border-primary-800'
-                  : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800'
+                  ? 'bg-success-50 dark:bg-success-500/10 text-success-600 dark:text-success-500 border border-success-200 dark:border-success-500/20'
+                  : 'bg-danger-50 dark:bg-danger-500/10 text-danger-600 dark:text-danger-500 border border-danger-200 dark:border-danger-500/20'
               }`}
             >
               {message.text}

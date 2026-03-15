@@ -1,7 +1,10 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './components/auth/AuthProvider';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import OfflineBanner from './components/ui/OfflineBanner';
 
 // Eager load: critical path pages
 import HomePage from './pages/HomePage';
@@ -50,7 +53,16 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Suspense fallback={<PageLoader />}>
+        <ErrorBoundary>
+          <OfflineBanner />
+          <Toaster
+            position="top-center"
+            toastOptions={{
+              className: '!bg-white/90 dark:!bg-gray-900/90 !backdrop-blur-xl !border !border-white/20 dark:!border-white/10 !shadow-lg !rounded-2xl !text-sm !text-gray-900 dark:!text-white',
+              duration: 3000,
+            }}
+          />
+          <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
@@ -185,6 +197,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
           </Routes>
         </Suspense>
+        </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
   );

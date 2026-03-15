@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import {
@@ -69,6 +70,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { profile, signOut } = useAuthStore();
   const { locale, setLocale } = useI18nStore();
 
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [isOpen, onClose]);
+
   const handleItemClick = (path: string) => {
     if (path.startsWith('#')) {
       if (path === '#share') {
@@ -125,6 +136,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation menu"
             className="fixed top-0 left-0 bottom-0 z-[61] w-[300px] max-w-[85vw] bg-white dark:bg-gray-900/95 backdrop-blur-2xl shadow-2xl flex flex-col"
           >
             {/* User Header */}

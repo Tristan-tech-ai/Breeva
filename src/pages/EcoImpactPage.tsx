@@ -5,6 +5,7 @@ import { ChevronLeft, Leaf, TreePine, Droplets, Wind, Flame, TrendingUp, Award, 
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import AnimatedNumber from '../components/ui/AnimatedNumber';
 
 const LazyCharts = lazy(() => import('recharts').then(m => ({
   default: ({ data, tab }: { data: WeeklyData[]; tab: 'co2' | 'distance' }) => (
@@ -178,7 +179,7 @@ export default function EcoImpactPage() {
         >
           <Leaf className="w-8 h-8 text-white/80 mx-auto mb-2" />
           <p className="text-white/70 text-xs uppercase tracking-wider mb-1">Your Total Eco Impact</p>
-          <h2 className="text-4xl font-bold text-white tabular-nums">{totalKm.toFixed(1)} km</h2>
+          <AnimatedNumber value={totalKm} decimals={1} suffix=" km" className="text-4xl font-bold text-white tabular-nums" />
           <p className="text-white/60 text-xs mt-1">{totalWalks} eco-walks completed</p>
 
           {/* Streak */}

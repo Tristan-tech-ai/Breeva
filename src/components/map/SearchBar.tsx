@@ -105,7 +105,7 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
   const activeChip = hasFilter ? filterChips.find(c => c.key === activeFilter) : undefined;
 
   return (
-    <div className="relative w-full" ref={filterRef}>
+    <div className="relative w-full" ref={filterRef} role="combobox" aria-expanded={showDropdown} aria-owns="search-results-list" aria-haspopup="listbox">
       {/* Search Input */}
       <div
         className={`
@@ -118,9 +118,14 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
         `}
       >
         <Search className="w-[18px] h-[18px] text-primary-500 dark:text-primary-400 flex-shrink-0" strokeWidth={2.2} />
+        <label htmlFor="search-input" className="sr-only">Search places</label>
         <input
+          id="search-input"
           ref={inputRef}
           type="text"
+          role="searchbox"
+          aria-autocomplete="list"
+          aria-controls="search-results-list"
           placeholder="Search here"
           value={searchQuery}
           onChange={(e) => handleInputChange(e.target.value)}
@@ -210,13 +215,17 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.15 }}
             className="absolute top-full left-0 right-0 mt-2 z-50 max-h-[60vh] overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-100 dark:border-gray-800"
+            id="search-results-list"
+            role="listbox"
           >
             {/* Search results */}
             {searchResults.length > 0 && (
-              <div className="py-1">
+              <div>
                 {searchResults.map((result, i) => (
                   <button
                     key={result.placeId || result.dataId || i}
+                    role="option"
+                    aria-selected={false}
                     onClick={() => handleSelect(result)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors text-left"
                   >

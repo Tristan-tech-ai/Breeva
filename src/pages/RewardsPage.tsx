@@ -5,6 +5,8 @@ import BottomNavigation from '../components/layout/BottomNavigation';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
 import RewardRedemptionModal from '../components/features/RewardRedemptionModal';
+import { SkeletonGrid } from '../components/ui/Skeleton';
+import EmptyState from '../components/ui/EmptyState';
 
 interface RewardRow {
   id: string;
@@ -143,18 +145,13 @@ export default function RewardsPage() {
             {/* Content */}
             <div className="px-4">
               {isLoading ? (
-                <div className="py-16 flex flex-col items-center gap-3">
-                  <div className="w-8 h-8 border-[3px] border-primary-500 border-t-transparent rounded-full animate-spin" />
-                  <p className="text-xs text-gray-400 dark:text-gray-500">Loading rewards...</p>
-                </div>
+                <SkeletonGrid count={4} />
               ) : rewards.length === 0 ? (
-                <div className="py-16 flex flex-col items-center gap-3 text-center">
-                  <Gift size={40} className="text-gray-300 dark:text-gray-600" />
-                  <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400">No Rewards Available Yet</h3>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 max-w-xs">
-                    Rewards from eco-merchants will appear here soon. Keep walking to earn EcoPoints!
-                  </p>
-                </div>
+                <EmptyState
+                  icon={Gift}
+                  title="No Rewards Available Yet"
+                  description="Rewards from eco-merchants will appear here soon. Keep walking to earn EcoPoints!"
+                />
               ) : (
                 <div className="grid grid-cols-2 gap-3">
                   {rewards.map((reward, i) => {
@@ -206,13 +203,11 @@ export default function RewardsPage() {
         {activeTab === 'my-vouchers' && (
           <div className="px-4">
             {myVouchers.length === 0 ? (
-              <div className="py-16 flex flex-col items-center gap-3 text-center">
-                <Ticket size={40} className="text-gray-300 dark:text-gray-600" />
-                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400">No Vouchers Yet</h3>
-                <p className="text-xs text-gray-400 dark:text-gray-500 max-w-xs">
-                  Redeem your EcoPoints to get vouchers from eco-merchants.
-                </p>
-              </div>
+              <EmptyState
+                icon={Ticket}
+                title="No Vouchers Yet"
+                description="Redeem your EcoPoints to get vouchers from eco-merchants."
+              />
             ) : (
               <div className="space-y-3">
                 {myVouchers.map((v) => (

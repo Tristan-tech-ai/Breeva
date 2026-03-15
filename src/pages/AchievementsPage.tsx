@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import { SkeletonGrid } from '../components/ui/Skeleton';
 
 interface Achievement {
   id: string;
@@ -124,9 +125,7 @@ export default function AchievementsPage() {
         </motion.div>
 
         {isLoading ? (
-          <div className="flex justify-center py-8">
-            <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <SkeletonGrid count={6} />
         ) : achievements.length > 0 ? (
           // Real achievements from database
           Object.entries(categoryGroups).map(([category, items]) => (

@@ -5,6 +5,7 @@ import { ChevronLeft, MapPin, Home, Briefcase, Heart, Trash2, Navigation, Plus, 
 import { useSavedPlacesStore } from '../stores/savedPlacesStore';
 import { useAuthStore } from '../stores/authStore';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import EmptyState from '../components/ui/EmptyState';
 import type { SavedPlace } from '../types';
 
 const categoryIcons: Record<string, React.ReactNode> = {
@@ -174,33 +175,24 @@ export default function SavedPlacesPage() {
 
         {/* Saved Places List */}
         {filteredPlaces.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass-card p-12 text-center"
-          >
-            <MapPin className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              No saved places
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              Save your favourite locations for quick navigation
-            </p>
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="gradient-primary text-white text-sm font-semibold py-2.5 px-5 rounded-xl"
-            >
-              Add First Place
-            </button>
-          </motion.div>
+          <EmptyState
+            icon={MapPin}
+            title="No saved places"
+            description="Save your favourite locations for quick navigation"
+            actionLabel="Add First Place"
+            onAction={() => setShowAddForm(true)}
+          />
         ) : (
-          <div className="space-y-2">
-            {filteredPlaces.map((place, index) => (
+          <motion.div
+            className="space-y-2"
+            initial="hidden"
+            animate="show"
+            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+          >
+            {filteredPlaces.map((place) => (
               <motion.div
                 key={place.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.03 }}
+                variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
                 className="glass-card p-3.5 flex items-center gap-3"
               >
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${categoryColors[place.category]}`}>
@@ -237,7 +229,7 @@ export default function SavedPlacesPage() {
                 </div>
               </motion.div>
             ))}
-          </div>
+          </motion.div>
         )}
       </div>
 

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { MapPin, Clock, Leaf, Flame, Sparkles, Star, Map, ChevronRight, Wind, Shield } from 'lucide-react';
 import type { WalkSession, ExposureResult } from '../../types';
 import PostWalkRating from './PostWalkRating';
+import CelebrationBurst from '../ui/CelebrationBurst';
 
 interface WalkCompleteProps {
   session: WalkSession;
@@ -39,7 +40,8 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4" role="dialog" aria-modal="true" aria-label="Walk complete">
+      <CelebrationBurst active={true} />
       <motion.div
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -65,12 +67,25 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
         </div>
 
         {/* Stats grid */}
-        <div className="grid grid-cols-2 gap-2.5 mb-5">
-          <StatCard icon={<MapPin size={16} />} label="Distance" value={`${distKm} km`} color="text-blue-500" bg="bg-blue-50 dark:bg-blue-500/10" />
-          <StatCard icon={<Clock size={16} />} label="Duration" value={`${durMin} min`} color="text-violet-500" bg="bg-violet-50 dark:bg-violet-500/10" />
-          <StatCard icon={<Leaf size={16} />} label="CO₂ Saved" value={`${co2Saved} kg`} color="text-emerald-500" bg="bg-emerald-50 dark:bg-emerald-500/10" />
-          <StatCard icon={<Flame size={16} />} label="Calories" value={`${calories}`} color="text-orange-500" bg="bg-orange-50 dark:bg-orange-500/10" />
-        </div>
+        <motion.div
+          className="grid grid-cols-2 gap-2.5 mb-5"
+          initial="hidden"
+          animate="show"
+          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.1 } } }}
+        >
+          <motion.div variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}>
+            <StatCard icon={<MapPin size={16} />} label="Distance" value={`${distKm} km`} color="text-blue-500" bg="bg-blue-50 dark:bg-blue-500/10" />
+          </motion.div>
+          <motion.div variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}>
+            <StatCard icon={<Clock size={16} />} label="Duration" value={`${durMin} min`} color="text-violet-500" bg="bg-violet-50 dark:bg-violet-500/10" />
+          </motion.div>
+          <motion.div variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}>
+            <StatCard icon={<Leaf size={16} />} label="CO₂ Saved" value={`${co2Saved} kg`} color="text-emerald-500" bg="bg-emerald-50 dark:bg-emerald-500/10" />
+          </motion.div>
+          <motion.div variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}>
+            <StatCard icon={<Flame size={16} />} label="Calories" value={`${calories}`} color="text-orange-500" bg="bg-orange-50 dark:bg-orange-500/10" />
+          </motion.div>
+        </motion.div>
 
         {/* VAYU Exposure card */}
         {exposureResult && (

@@ -63,6 +63,7 @@ export default function ContributePage() {
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleGetLocation = () => {
     navigator.geolocation.getCurrentPosition(
@@ -80,7 +81,15 @@ export default function ContributePage() {
   };
 
   const handleSubmit = async () => {
-    if (!selectedType || !placeName.trim()) return;
+    const errors: Record<string, string> = {};
+    if (!selectedType) errors.type = 'Please select a report type';
+    if (!placeName.trim()) errors.placeName = 'Place name is required';
+    else if (placeName.trim().length < 3) errors.placeName = 'Name must be at least 3 characters';
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+    setFieldErrors({});
 
     setIsSubmitting(true);
 
@@ -159,6 +168,7 @@ export default function ContributePage() {
     setCurrentCoords(null);
     setPhotoFile(null);
     setPhotoPreview(null);
+    setFieldErrors({});
   };
 
   return (
@@ -297,9 +307,18 @@ export default function ContributePage() {
                     type="text"
                     placeholder="e.g. Taman Kota Baru"
                     value={placeName}
-                    onChange={e => setPlaceName(e.target.value)}
-                    className="w-full bg-white dark:bg-gray-900/80 backdrop-blur-sm rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none border border-gray-200 dark:border-gray-700/50 focus:border-primary-500 transition"
+                    onChange={e => { setPlaceName(e.target.value); setFieldErrors(prev => { const { placeName: _, ...rest } = prev; return rest; }); }}
+                    className={`w-full bg-white dark:bg-gray-900/80 backdrop-blur-sm rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none border transition ${
+                      fieldErrors.placeName
+                        ? 'border-danger-500 focus:border-danger-500'
+                        : 'border-gray-200 dark:border-gray-700/50 focus:border-primary-500'
+                    }`}
+                    aria-invalid={!!fieldErrors.placeName}
+                    aria-describedby={fieldErrors.placeName ? 'placeName-error' : undefined}
                   />
+                  {fieldErrors.placeName && (
+                    <p id="placeName-error" className="mt-1 text-xs text-danger-500" role="alert">{fieldErrors.placeName}</p>
+                  )}
                 </div>
 
                 {/* Category */}

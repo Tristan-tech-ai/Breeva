@@ -20,18 +20,30 @@ export default function AQICard({ data, className = '' }: AQICardProps) {
   return (
     <motion.div
       layout
+      role="button"
+      tabIndex={0}
+      aria-expanded={level !== 'glance'}
+      aria-label={`Air Quality Index ${data.aqi}, ${getAQILabel(data.aqi)}. Tap to ${level === 'glance' ? 'expand' : 'collapse'}.`}
       className={`rounded-2xl overflow-hidden bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm cursor-pointer select-none ${className}`}
       onClick={() => {
         if (level === 'glance') setLevel('detail');
         else if (level === 'detail') setLevel('expert');
         else setLevel('glance');
       }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (level === 'glance') setLevel('detail');
+          else if (level === 'detail') setLevel('expert');
+          else setLevel('glance');
+        }
+      }}
     >
       {/* Glanceable Level */}
       <div className="p-4 flex items-center gap-3.5">
         {/* Circular gauge */}
         <div className="relative w-14 h-14 flex-shrink-0">
-          <svg className="w-14 h-14 transform -rotate-90" viewBox="0 0 56 56">
+          <svg className="w-14 h-14 transform -rotate-90" viewBox="0 0 56 56" role="img" aria-label={`AQI gauge: ${data.aqi}, ${getAQILabel(data.aqi)}`}>
             <circle
               cx="28"
               cy="28"
@@ -116,6 +128,9 @@ export default function AQICard({ data, className = '' }: AQICardProps) {
                     {data.confidence >= 0.7 ? '🟢' : data.confidence >= 0.4 ? '🟡' : '🔴'}
                     <span className="text-gray-600 dark:text-gray-300">
                       {data.confidence >= 0.7 ? 'Akurat' : data.confidence >= 0.4 ? 'Estimasi' : 'Kasar'}
+                    </span>
+                    <span className="sr-only">
+                      {data.confidence >= 0.7 ? 'High confidence' : data.confidence >= 0.4 ? 'Medium confidence' : 'Low confidence'}
                     </span>
                   </span>
                   {data.freshness && (

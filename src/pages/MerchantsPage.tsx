@@ -4,6 +4,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Search, BadgeCheck, Star, MapPin, Plus } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { supabase } from '../lib/supabase';
+import { SkeletonList } from '../components/ui/Skeleton';
+import EmptyState from '../components/ui/EmptyState';
 
 interface MerchantRow {
   id: string;
@@ -119,22 +121,15 @@ export default function MerchantsPage() {
         {/* Content */}
         <div className="px-4 flex flex-col gap-3">
           {isLoading ? (
-            <div className="py-16 flex flex-col items-center gap-3">
-              <div className="w-8 h-8 border-[3px] border-primary-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-xs text-gray-400 dark:text-gray-500">Loading merchants...</p>
-            </div>
+            <SkeletonList rows={4} />
           ) : filtered.length === 0 ? (
-            <div className="py-16 flex flex-col items-center gap-3 text-center">
-              <MapPin size={40} className="text-gray-300 dark:text-gray-600" />
-              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400">
-                {merchants.length === 0 ? 'No Merchants Yet' : 'No Matches'}
-              </h3>
-              <p className="text-xs text-gray-400 dark:text-gray-500 max-w-xs">
-                {merchants.length === 0
-                  ? 'Eco-merchants will appear here once partners are onboarded. You can suggest a merchant from the Contribute page!'
-                  : 'Try a different search or category.'}
-              </p>
-            </div>
+            <EmptyState
+              icon={MapPin}
+              title={merchants.length === 0 ? 'No Merchants Yet' : 'No Matches'}
+              description={merchants.length === 0
+                ? 'Eco-merchants will appear here once partners are onboarded. You can suggest a merchant from the Contribute page!'
+                : 'Try a different search or category.'}
+            />
           ) : (
             filtered.map((merchant, i) => (
               <motion.div
