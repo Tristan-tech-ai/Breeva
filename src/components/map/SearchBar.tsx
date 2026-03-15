@@ -127,18 +127,20 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
           onBlur={() => setTimeout(() => setIsFocused(false), 200)}
           className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 outline-none"
         />
-        {isSearching && <Loader2 className="w-4 h-4 text-primary-500 animate-spin flex-shrink-0" />}
-        {searchQuery && !isSearching && (
-          <button
-            onClick={() => {
-              clearSearch();
-              inputRef.current?.focus();
-            }}
-            className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-          >
-            <X className="w-4 h-4 text-gray-400" />
-          </button>
-        )}
+        <div className="w-6 flex items-center justify-center flex-shrink-0">
+          {isSearching && <Loader2 className="w-4 h-4 text-primary-500 animate-spin" />}
+          {searchQuery && !isSearching && (
+            <button
+              onClick={() => {
+                clearSearch();
+                inputRef.current?.focus();
+              }}
+              className="p-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+            >
+              <X className="w-4 h-4 text-gray-400" />
+            </button>
+          )}
+        </div>
 
         {/* Filter icon */}
         {hasFilter && (
