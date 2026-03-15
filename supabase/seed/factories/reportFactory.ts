@@ -20,6 +20,7 @@ export function makeReportsForUser(
   userId: string,
   city: City,
   count: number,
+  daysBack = 30,
 ): ReportSeedData[] {
   const locations = CITY_LOCATIONS[city];
   const descriptions = AQ_DESCRIPTIONS[city];
@@ -43,7 +44,7 @@ export function makeReportsForUser(
       description: randomFrom(descriptions),
       photo_url: null,
       confidence_score: randomFloat(0.6, 1.0, 2),
-      created_at: randomTimestamp(-30, 0),
+      created_at: randomTimestamp(-daysBack, 0),
     });
   }
   return reports;

@@ -6,11 +6,20 @@ import type { City } from '../data/city-locations';
 
 /** Report count ranges per tier: power users contribute most */
 const REPORT_COUNTS: Record<string, [number, number]> = {
-  power: [5, 10],
-  active: [2, 5],
+  power: [10, 20],
+  active: [4, 8],
   casual: [0, 2],
   new: [0, 1],
   dormant: [1, 3],
+};
+
+/** Days back per tier for contribution heatmap coverage */
+const REPORT_DAYS: Record<string, number> = {
+  power: 365,
+  active: 180,
+  casual: 30,
+  new: 7,
+  dormant: 60,
 };
 
 export class ReportSeeder {
@@ -24,7 +33,12 @@ export class ReportSeeder {
       const count = randomBetween(lo, hi);
       if (count === 0) continue;
 
-      const reports = makeReportsForUser(userId, userData.city as City, count);
+      const reports = makeReportsForUser(
+        userId,
+        userData.city as City,
+        count,
+        REPORT_DAYS[userData.tier] ?? 30,
+      );
 
       const { error } = await this.sb.from('air_quality_reports').insert(
         reports.map((r) => ({

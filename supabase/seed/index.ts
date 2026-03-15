@@ -19,6 +19,11 @@ import { ReportSeeder } from './seeders/ReportSeeder';
 import { RedemptionSeeder } from './seeders/RedemptionSeeder';
 import { QuestProgressSeeder } from './seeders/QuestProgressSeeder';
 import { AchievementSeeder } from './seeders/AchievementSeeder';
+import { TransactionSeeder } from './seeders/TransactionSeeder';
+import { ReviewSeeder } from './seeders/ReviewSeeder';
+import { SettingsSeeder } from './seeders/SettingsSeeder';
+import { SavedPlacesSeeder } from './seeders/SavedPlacesSeeder';
+import { DEMO_CREDENTIALS } from './data/indonesian-names';
 
 // ─── CLI Flags ───────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -33,6 +38,10 @@ const SEEDER_ORDER = [
   'walks',
   'reports',
   'redemptions',
+  'transactions',
+  'reviews',
+  'settings',
+  'saved_places',
   'quests',
   'achievements',
 ] as const;
@@ -55,6 +64,9 @@ async function truncateAll() {
     'points_transactions',
     'leaderboard_weekly',
     'redeemed_rewards',
+    'reviews',
+    'saved_places',
+    'user_settings',
     'air_quality_reports',
     'walks',
     'rewards',
@@ -83,7 +95,11 @@ async function truncateAll() {
   if (authUsers?.users) {
     for (const u of authUsers.users) {
       // Only delete seed users (identified by email pattern)
-      if (u.email?.endsWith('@breeva.seed')) {
+      if (
+        u.email?.endsWith('@example.com') ||
+        u.email === DEMO_CREDENTIALS.demo.email ||
+        u.email === DEMO_CREDENTIALS.merchant.email
+      ) {
         await supabaseAdmin.auth.admin.deleteUser(u.id);
         console.log(`   ✓ Deleted auth user ${u.email}`);
       }
@@ -139,6 +155,7 @@ async function main() {
             subscription_tier: 'free',
             city: 'jakarta',
             tier: 'active',
+            role: 'user',
           } satisfies import('./factories/userFactory').UserSeedData);
         }
       }
@@ -194,7 +211,39 @@ async function main() {
       summary['redemptions'] = result.count;
     }
 
-    // ── 7. Quest progress ──
+    // ── 7. Transactions (points ledger) ──
+    if (shouldRun('transactions')) {
+      console.log('\n💰 Seeding points transactions...');
+      const seeder = new TransactionSeeder(supabaseAdmin);
+      const result = await seeder.run(userMap);
+      summary['transactions'] = result.count;
+    }
+
+    // ── 8. Reviews ──
+    if (shouldRun('reviews')) {
+      console.log('\n⭐ Seeding merchant reviews...');
+      const seeder = new ReviewSeeder(supabaseAdmin);
+      const result = await seeder.run(Array.from(userMap.keys()), merchantList);
+      summary['reviews'] = result.count;
+    }
+
+    // ── 9. User Settings ──
+    if (shouldRun('settings')) {
+      console.log('\n⚙️  Seeding user settings...');
+      const seeder = new SettingsSeeder(supabaseAdmin);
+      const result = await seeder.run(userMap);
+      summary['settings'] = result.count;
+    }
+
+    // ── 10. Saved Places ──
+    if (shouldRun('saved_places')) {
+      console.log('\n📍 Seeding saved places...');
+      const seeder = new SavedPlacesSeeder(supabaseAdmin);
+      const result = await seeder.run(userMap);
+      summary['saved_places'] = result.count;
+    }
+
+    // ── 11. Quest progress ──
     if (shouldRun('quests')) {
       console.log('\n📋 Seeding quest progress...');
       const seeder = new QuestProgressSeeder(supabaseAdmin);
@@ -202,7 +251,7 @@ async function main() {
       summary['quest_progress'] = result.count;
     }
 
-    // ── 8. Achievements ──
+    // ── 12. Achievements ──
     if (shouldRun('achievements')) {
       console.log('\n🏆 Seeding achievements...');
       const seeder = new AchievementSeeder(supabaseAdmin);
@@ -223,6 +272,23 @@ async function main() {
     console.log('╠══════════════════════════════════════╣');
     console.log(`║  ${'TOTAL'.padEnd(20)} ${String(grandTotal).padStart(6)} rows ║`);
     console.log('╚══════════════════════════════════════╝');
+
+    // Demo credentials
+    console.log('\n╔══════════════════════════════════════╗');
+    console.log('║       🔑 Demo Login Credentials      ║');
+    console.log('╠══════════════════════════════════════╣');
+    console.log(`║  Demo Account (power user):          ║`);
+    console.log(`║    ${DEMO_CREDENTIALS.demo.email.padEnd(32)} ║`);
+    console.log(`║    ${DEMO_CREDENTIALS.demo.password.padEnd(32)} ║`);
+    console.log('╠──────────────────────────────────────╣');
+    console.log(`║  Merchant Owner:                     ║`);
+    console.log(`║    ${DEMO_CREDENTIALS.merchant.email.padEnd(32)} ║`);
+    console.log(`║    ${DEMO_CREDENTIALS.merchant.password.padEnd(32)} ║`);
+    console.log('╠──────────────────────────────────────╣');
+    console.log(`║  Regular users:                      ║`);
+    console.log(`║    *@example.com / Breeva2026!seed   ║`);
+    console.log('╚══════════════════════════════════════╝');
+
     console.log('\n✅ Seeding complete!');
   } catch (err) {
     console.error('\n❌ Seeding failed:', err);

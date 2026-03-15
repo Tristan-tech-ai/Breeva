@@ -1,5 +1,5 @@
 import { randomBetween, randomDate, randomDateStr } from '../utils/helpers';
-import { INDONESIAN_NAMES, type NameEntry } from '../data/indonesian-names';
+import { INDONESIAN_NAMES, DEMO_CREDENTIALS, type NameEntry } from '../data/indonesian-names';
 
 export interface UserSeedData {
   email: string;
@@ -18,9 +18,24 @@ export interface UserSeedData {
   subscription_tier: string;
   city: string;
   tier: string;
+  role: string;
 }
 
 function buildUser(entry: NameEntry): UserSeedData {
+  const role = entry.role ?? 'user';
+
+  // Demo & Merchant accounts use well-known credentials
+  const getEmail = () => {
+    if (role === 'demo') return DEMO_CREDENTIALS.demo.email;
+    if (role === 'merchant_owner') return DEMO_CREDENTIALS.merchant.email;
+    return `${entry.first.toLowerCase()}.${entry.last.toLowerCase()}@example.com`;
+  };
+  const getPassword = () => {
+    if (role === 'demo') return DEMO_CREDENTIALS.demo.password;
+    if (role === 'merchant_owner') return DEMO_CREDENTIALS.merchant.password;
+    return 'Breeva2026!seed';
+  };
+
   const tiers: Record<string, () => UserSeedData> = {
     power: () => {
       const walks = randomBetween(60, 100);
@@ -30,8 +45,8 @@ function buildUser(entry: NameEntry): UserSeedData {
       const spent = randomBetween(0, Math.floor(totalPts * 0.3));
       const streak = randomBetween(15, 30);
       return {
-        email: `${entry.first.toLowerCase()}.${entry.last.toLowerCase()}@example.com`,
-        password: 'Breeva2026!seed',
+        email: getEmail(),
+        password: getPassword(),
         full_name: `${entry.first} ${entry.last}`,
         avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${entry.first}`,
         ecopoints_balance: totalPts - spent,
@@ -42,9 +57,10 @@ function buildUser(entry: NameEntry): UserSeedData {
         current_streak: streak,
         longest_streak: Math.max(streak, randomBetween(streak, streak + 5)),
         last_walk_date: randomDateStr(-2, 0),
-        subscription_tier: Math.random() > 0.5 ? 'premium' : 'free',
+        subscription_tier: role === 'demo' ? 'premium' : (Math.random() > 0.5 ? 'premium' : 'free'),
         city: entry.city,
         tier: 'power',
+        role,
       };
     },
     active: () => {
@@ -55,8 +71,8 @@ function buildUser(entry: NameEntry): UserSeedData {
       const spent = randomBetween(0, Math.floor(totalPts * 0.2));
       const streak = randomBetween(5, 14);
       return {
-        email: `${entry.first.toLowerCase()}.${entry.last.toLowerCase()}@example.com`,
-        password: 'Breeva2026!seed',
+        email: getEmail(),
+        password: getPassword(),
         full_name: `${entry.first} ${entry.last}`,
         avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${entry.first}`,
         ecopoints_balance: totalPts - spent,
@@ -70,6 +86,7 @@ function buildUser(entry: NameEntry): UserSeedData {
         subscription_tier: 'free',
         city: entry.city,
         tier: 'active',
+        role,
       };
     },
     casual: () => {
@@ -79,8 +96,8 @@ function buildUser(entry: NameEntry): UserSeedData {
       const totalPts = walks * randomBetween(8, 12);
       const streak = randomBetween(1, 4);
       return {
-        email: `${entry.first.toLowerCase()}.${entry.last.toLowerCase()}@example.com`,
-        password: 'Breeva2026!seed',
+        email: getEmail(),
+        password: getPassword(),
         full_name: `${entry.first} ${entry.last}`,
         avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${entry.first}`,
         ecopoints_balance: totalPts,
@@ -94,11 +111,12 @@ function buildUser(entry: NameEntry): UserSeedData {
         subscription_tier: 'free',
         city: entry.city,
         tier: 'casual',
+        role,
       };
     },
     new: () => ({
-      email: `${entry.first.toLowerCase()}.${entry.last.toLowerCase()}@example.com`,
-      password: 'Breeva2026!seed',
+      email: getEmail(),
+      password: getPassword(),
       full_name: `${entry.first} ${entry.last}`,
       avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${entry.first}`,
       ecopoints_balance: 100,
@@ -112,6 +130,7 @@ function buildUser(entry: NameEntry): UserSeedData {
       subscription_tier: 'free',
       city: entry.city,
       tier: 'new',
+      role,
     }),
     dormant: () => {
       const walks = randomBetween(5, 10);
@@ -119,8 +138,8 @@ function buildUser(entry: NameEntry): UserSeedData {
       const co2 = Math.round(distKm * 1000 * 0.12);
       const totalPts = walks * randomBetween(8, 12);
       return {
-        email: `${entry.first.toLowerCase()}.${entry.last.toLowerCase()}@example.com`,
-        password: 'Breeva2026!seed',
+        email: getEmail(),
+        password: getPassword(),
         full_name: `${entry.first} ${entry.last}`,
         avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${entry.first}`,
         ecopoints_balance: totalPts,
@@ -134,6 +153,7 @@ function buildUser(entry: NameEntry): UserSeedData {
         subscription_tier: 'free',
         city: entry.city,
         tier: 'dormant',
+        role,
       };
     },
   };

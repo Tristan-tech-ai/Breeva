@@ -26,7 +26,12 @@ export class WalkSeeder {
       const count = randomBetween(lo, hi);
       if (count === 0) continue;
 
-      const daysBack = userData.tier === 'dormant' ? 120 : 90;
+      const daysBack =
+        userData.role === 'demo' ? 365
+        : userData.tier === 'power' ? 365
+        : userData.tier === 'active' ? 180
+        : userData.tier === 'dormant' ? 120
+        : 90;
       const walks = makeWalksForUser(userId, userData.city as City, count, daysBack);
 
       // Batch insert in chunks of 25
