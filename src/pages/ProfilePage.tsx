@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, BarChart3, Trophy, Coins, Settings, HelpCircle, LogOut, Leaf, Flame, TreePine, Pencil, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BarChart3, Trophy, Coins, Settings, HelpCircle, LogOut, Leaf, Flame, TreePine, Pencil, Info, Footprints, MapPin } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { formatNumber } from '../lib/utils';
 import BottomNavigation from '../components/layout/BottomNavigation';
@@ -9,21 +9,25 @@ import AnimatedNumber from '../components/ui/AnimatedNumber';
 import LazyImage from '../components/ui/LazyImage';
 import ActivityRings from '../components/ui/ActivityRings';
 import StreakHeatmap from '../components/features/StreakHeatmap';
+import type { HeatmapCategory } from '../components/features/StreakHeatmap';
 import { supabase } from '../lib/supabase';
 
 export default function ProfilePage() {
   const { profile, user, signOut } = useAuthStore();
   const navigate = useNavigate();
   const [walkDays, setWalkDays] = useState<Record<string, number>>({});
+  const [contributionDays, setContributionDays] = useState<Record<string, number>>({});
 
   // Fetch walk history dates for heatmap
   useEffect(() => {
     if (!user) return;
+
+    // Walks
     supabase
       .from('walks')
       .select('started_at')
       .eq('user_id', user.id)
-      .gte('started_at', new Date(Date.now() - 84 * 86400000).toISOString())
+      .gte('started_at', new Date(Date.now() - 112 * 86400000).toISOString())
       .then(({ data }) => {
         if (!data) return;
         const counts: Record<string, number> = {};
@@ -33,7 +37,63 @@ export default function ProfilePage() {
         }
         setWalkDays(counts);
       });
+
+    // AQ Contributions from Supabase
+    supabase
+      .from('air_quality_reports')
+      .select('created_at')
+      .eq('user_id', user.id)
+      .gte('created_at', new Date(Date.now() - 112 * 86400000).toISOString())
+      .then(({ data }) => {
+        const counts: Record<string, number> = {};
+        if (data) {
+          for (const r of data) {
+            const day = new Date(r.created_at).toISOString().split('T')[0];
+            counts[day] = (counts[day] || 0) + 1;
+          }
+        }
+        // Also merge local contributions
+        try {
+          const stored = JSON.parse(localStorage.getItem('breeva_contributions') || '[]') as { createdAt: string }[];
+          for (const c of stored) {
+            const day = new Date(c.createdAt).toISOString().split('T')[0];
+            counts[day] = (counts[day] || 0) + 1;
+          }
+        } catch { /* ignore */ }
+        setContributionDays(counts);
+      });
   }, [user]);
+
+  const heatmapCategories: HeatmapCategory[] = [
+    {
+      key: 'walks',
+      label: 'Walks',
+      icon: Footprints,
+      data: walkDays,
+      colors: [
+        'bg-emerald-200 dark:bg-emerald-800',
+        'bg-emerald-300 dark:bg-emerald-700',
+        'bg-emerald-400 dark:bg-emerald-600',
+        'bg-emerald-500',
+      ],
+      empty: 'bg-gray-100 dark:bg-gray-800/80',
+      unit: 'walks',
+    },
+    {
+      key: 'contributions',
+      label: 'Contributions',
+      icon: MapPin,
+      data: contributionDays,
+      colors: [
+        'bg-sky-200 dark:bg-sky-800',
+        'bg-sky-300 dark:bg-sky-700',
+        'bg-sky-400 dark:bg-sky-600',
+        'bg-sky-500',
+      ],
+      empty: 'bg-gray-100 dark:bg-gray-800/80',
+      unit: 'contributions',
+    },
+  ];
 
   const handleSignOut = async () => {
     await signOut();
@@ -177,9 +237,9 @@ export default function ProfilePage() {
         >
           <div className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-              Walking Activity
+              Activity
             </h3>
-            <StreakHeatmap data={walkDays} weeks={12} />
+            <StreakHeatmap categories={heatmapCategories} weeks={16} />
           </div>
         </motion.div>
 
