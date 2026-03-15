@@ -7,9 +7,16 @@ interface HeatmapCategory {
   label: string;
   icon: React.ElementType;
   data: Record<string, number>;
-  /** 4 color stops from lightest to darkest */
+  /** 4 color stops from lightest to darkest (Tailwind classes for legend) */
   colors: [string, string, string, string];
-  /** Empty cell color */
+  /** 4 hex color stops for cells [light, lightDark] */
+  hexColors: [string, string, string, string];
+  /** Same but for dark mode */
+  hexColorsDark: [string, string, string, string];
+  /** Hex color for empty cells */
+  hexEmpty: string;
+  hexEmptyDark: string;
+  /** Empty cell color (Tailwind class for legend) */
   empty: string;
   unit: string;
 }
@@ -92,51 +99,59 @@ function HeatmapTooltip({ anchor, value, date, unit }: {
   unit: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ x: number; y: number; below: boolean }>({ x: 0, y: 0, below: false });
+  const [pos, setPos] = useState<{ x: number; y: number; below: boolean; ready: boolean }>({ x: 0, y: 0, below: false, ready: false });
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const tipW = rect.width;
-    const tipH = rect.height;
+    // Reset ready on anchor change so we measure before showing
+    setPos(p => ({ ...p, ready: false }));
+    // Use rAF to ensure the DOM is painted before measuring
+    const raf = requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      const tipW = el.offsetWidth;
+      const tipH = el.offsetHeight;
 
-    // Center horizontally on the anchor cell
-    let x = anchor.left + anchor.width / 2 - tipW / 2;
-    // Clamp to viewport
-    x = Math.max(8, Math.min(x, window.innerWidth - tipW - 8));
+      // Center horizontally on the anchor cell
+      let x = anchor.left + anchor.width / 2 - tipW / 2;
+      // Clamp to viewport with 8px margin
+      x = Math.max(8, Math.min(x, window.innerWidth - tipW - 8));
 
-    // Position above the cell by default; flip below if it would clip the top
-    const spaceAbove = anchor.top - 8;
-    const below = spaceAbove < tipH + 8;
-    const y = below
-      ? anchor.top + anchor.width + 6
-      : anchor.top - tipH - 6;
+      // Position above the cell by default; flip below if it would clip the top
+      const spaceAbove = anchor.top;
+      const below = spaceAbove < tipH + 12;
+      const y = below
+        ? anchor.top + anchor.width + 6
+        : anchor.top - tipH - 6;
 
-    setPos({ x, y, below });
-  }, [anchor]);
+      setPos({ x, y, below, ready: true });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [anchor.top, anchor.left, anchor.width]);
 
   const formattedDate = formatTooltipDate(date);
   const label = value === 0
     ? `No ${unit} on ${formattedDate}`
     : `${value} ${value === 1 ? unit.replace(/s$/, '') : unit} on ${formattedDate}`;
 
+  // Compute arrow left relative to tooltip
+  const arrowLeft = Math.max(8, Math.min(anchor.left + anchor.width / 2 - pos.x - 4, (ref.current?.offsetWidth ?? 100) - 16));
+
   return createPortal(
     <div
       ref={ref}
       className="fixed z-[9999] pointer-events-none"
-      style={{ left: pos.x, top: pos.y }}
+      style={{ left: pos.x, top: pos.y, opacity: pos.ready ? 1 : 0, transition: 'opacity 0.1s' }}
     >
-      <div className={`relative bg-[#1b1f23] text-white text-[11px] leading-tight font-medium px-3 py-2 rounded-md shadow-xl whitespace-nowrap ${pos.below ? 'mt-0' : ''}`}>
+      <div className="relative text-white text-[11px] leading-tight font-medium px-3 py-2 rounded-md shadow-xl whitespace-nowrap" style={{ backgroundColor: '#1b1f23' }}>
         {label}
         {/* Arrow */}
         <div
           className="absolute w-0 h-0"
           style={{
-            left: Math.max(8, Math.min(anchor.left + anchor.width / 2 - pos.x - 4, 200)),
+            left: arrowLeft,
             ...(pos.below
-              ? { top: -4, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderBottom: '4px solid #1b1f23' }
-              : { bottom: -4, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '4px solid #1b1f23' }
+              ? { top: -4, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: '5px solid #1b1f23' }
+              : { bottom: -4, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid #1b1f23' }
             ),
           }}
         />
@@ -149,6 +164,15 @@ function HeatmapTooltip({ anchor, value, date, unit }: {
 export default function StreakHeatmap({ categories, weeks = 16 }: StreakHeatmapProps) {
   const [activeKey, setActiveKey] = useState(categories[0]?.key || '');
   const [hoveredCell, setHoveredCell] = useState<{ cell: Cell; rect: DOMRect } | null>(null);
+  const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   const activeCategory = categories.find(c => c.key === activeKey) || categories[0];
 
@@ -163,14 +187,16 @@ export default function StreakHeatmap({ categories, weeks = 16 }: StreakHeatmapP
   const totalActivity = useMemo(() => grid.reduce((s, c) => s + c.value, 0), [grid]);
   const activeDays = useMemo(() => grid.filter(c => c.value > 0).length, [grid]);
 
-  const getColor = useCallback((value: number) => {
-    if (value === 0) return activeCategory.empty;
+  const getColor = useCallback((value: number): string => {
+    const colors = isDark ? activeCategory.hexColorsDark : activeCategory.hexColors;
+    const empty = isDark ? activeCategory.hexEmptyDark : activeCategory.hexEmpty;
+    if (value === 0) return empty;
     const intensity = value / maxVal;
-    if (intensity > 0.75) return activeCategory.colors[3];
-    if (intensity > 0.5) return activeCategory.colors[2];
-    if (intensity > 0.25) return activeCategory.colors[1];
-    return activeCategory.colors[0];
-  }, [maxVal, activeCategory]);
+    if (intensity > 0.75) return colors[3];
+    if (intensity > 0.5) return colors[2];
+    if (intensity > 0.25) return colors[1];
+    return colors[0];
+  }, [maxVal, activeCategory, isDark]);
 
   const handleCellEnter = (cell: Cell, e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -258,12 +284,13 @@ export default function StreakHeatmap({ categories, weeks = 16 }: StreakHeatmapP
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: cell.col * 0.008, duration: 0.2 }}
-              className={`absolute rounded-[3px] ${getColor(cell.value)} cursor-pointer outline-1 outline-transparent hover:outline-gray-400 dark:hover:outline-gray-500 outline-offset-[-1px] hover:outline`}
+              className="absolute rounded-[3px] cursor-pointer outline-1 outline-offset-[-1px] outline-transparent hover:outline hover:outline-gray-400 dark:hover:outline-gray-500"
               style={{
                 width: CELL_SIZE,
                 height: CELL_SIZE,
                 left: DAY_LABEL_W + cell.col * STEP,
                 top: 18 + cell.row * STEP,
+                backgroundColor: getColor(cell.value),
               }}
               onMouseEnter={(e) => handleCellEnter(cell, e)}
               onMouseLeave={() => setHoveredCell(null)}
