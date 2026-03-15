@@ -40,7 +40,7 @@ export class RedemptionSeeder {
           status: redemption.status,
           qr_code: redemption.qr_code,
           backup_code: redemption.backup_code,
-          redeemed_at: redemption.redeemed_at,
+          used_at: redemption.used_at,
           expires_at: redemption.expires_at,
         });
 

@@ -17,6 +17,7 @@ export interface UserSeedData {
   last_walk_date: string | null;
   subscription_tier: string;
   city: string;
+  tier: string;
 }
 
 function buildUser(entry: NameEntry): UserSeedData {
@@ -43,6 +44,7 @@ function buildUser(entry: NameEntry): UserSeedData {
         last_walk_date: randomDateStr(-2, 0),
         subscription_tier: Math.random() > 0.5 ? 'premium' : 'free',
         city: entry.city,
+        tier: 'power',
       };
     },
     active: () => {
@@ -67,6 +69,7 @@ function buildUser(entry: NameEntry): UserSeedData {
         last_walk_date: randomDateStr(-3, 0),
         subscription_tier: 'free',
         city: entry.city,
+        tier: 'active',
       };
     },
     casual: () => {
@@ -90,6 +93,7 @@ function buildUser(entry: NameEntry): UserSeedData {
         last_walk_date: randomDateStr(-7, 0),
         subscription_tier: 'free',
         city: entry.city,
+        tier: 'casual',
       };
     },
     new: () => ({
@@ -107,6 +111,7 @@ function buildUser(entry: NameEntry): UserSeedData {
       last_walk_date: randomBetween(0, 1) ? randomDateStr(-1, 0) : null,
       subscription_tier: 'free',
       city: entry.city,
+      tier: 'new',
     }),
     dormant: () => {
       const walks = randomBetween(5, 10);
@@ -128,6 +133,7 @@ function buildUser(entry: NameEntry): UserSeedData {
         last_walk_date: randomDateStr(-30, -7),
         subscription_tier: 'free',
         city: entry.city,
+        tier: 'dormant',
       };
     },
   };

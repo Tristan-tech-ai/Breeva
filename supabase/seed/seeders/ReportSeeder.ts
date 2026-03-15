@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { makeReportsForUser } from '../factories/reportFactory';
 import { randomBetween } from '../utils/helpers';
 import type { UserSeedData } from '../factories/userFactory';
+import type { City } from '../data/city-locations';
 
 /** Report count ranges per tier: power users contribute most */
 const REPORT_COUNTS: Record<string, [number, number]> = {
@@ -23,16 +24,17 @@ export class ReportSeeder {
       const count = randomBetween(lo, hi);
       if (count === 0) continue;
 
-      const reports = makeReportsForUser(userId, userData.city, count);
+      const reports = makeReportsForUser(userId, userData.city as City, count);
 
       const { error } = await this.sb.from('air_quality_reports').insert(
         reports.map((r) => ({
           user_id: r.user_id,
-          latitude: r.latitude,
-          longitude: r.longitude,
+          lat: r.lat,
+          lng: r.lng,
           aqi_rating: r.aqi_rating,
           description: r.description,
           photo_url: r.photo_url,
+          confidence_score: r.confidence_score,
         }))
       );
 

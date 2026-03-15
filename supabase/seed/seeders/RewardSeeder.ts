@@ -8,6 +8,7 @@ export class RewardSeeder {
     merchants: Array<{ id: string; category: string }>
   ): Promise<{ count: number; rewards: Array<{ id: string; merchant_id: string; points_cost: number }> }> {
     const allRewards: Array<{ id: string; merchant_id: string; points_cost: number }> = [];
+    type RewardRow = { id: string; merchant_id: string; points_required: number };
 
     for (const m of merchants) {
       const rewards = makeRewardsForMerchant(m.id, m.category);
@@ -19,23 +20,24 @@ export class RewardSeeder {
             merchant_id: r.merchant_id,
             title: r.title,
             description: r.description,
-            points_cost: r.points_cost,
+            points_required: r.points_required,
             discount_percentage: r.discount_percentage,
             discount_amount: r.discount_amount,
             terms_conditions: r.terms_conditions,
             is_active: r.is_active,
-            total_quantity: r.total_quantity,
-            remaining_quantity: r.remaining_quantity,
+            total_stock: r.total_stock,
+            remaining_stock: r.remaining_stock,
             valid_from: r.valid_from,
             valid_until: r.valid_until,
           })
-          .select('id, merchant_id, points_cost')
+          .select('id, merchant_id, points_required')
           .single();
 
         if (error) {
           console.error(`   ✗ Reward "${r.title}": ${error.message}`);
         } else if (data) {
-          allRewards.push(data);
+          const row = data as unknown as RewardRow;
+          allRewards.push({ id: row.id, merchant_id: row.merchant_id, points_cost: row.points_required });
         }
       }
     }

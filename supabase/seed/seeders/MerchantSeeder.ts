@@ -18,9 +18,11 @@ export class MerchantSeeder {
           category: m.category,
           logo_url: m.logo_url,
           address: m.address,
-          city: m.city,
-          latitude: m.latitude,
-          longitude: m.longitude,
+          lat: m.lat,
+          lng: m.lng,
+          phone: m.phone,
+          rating: m.rating,
+          review_count: m.review_count,
           is_verified: m.is_verified,
           is_active: m.is_active,
         })),
@@ -42,9 +44,11 @@ export class MerchantSeeder {
               category: m.category,
               logo_url: m.logo_url,
               address: m.address,
-              city: m.city,
-              latitude: m.latitude,
-              longitude: m.longitude,
+              lat: m.lat,
+              lng: m.lng,
+              phone: m.phone,
+              rating: m.rating,
+              review_count: m.review_count,
               is_verified: m.is_verified,
               is_active: m.is_active,
             },
@@ -57,7 +61,7 @@ export class MerchantSeeder {
           console.error(`   ✗ ${m.name}: ${rowErr.message}`);
         } else if (row) {
           inserted.push({ id: row.id, category: row.category });
-          console.log(`   + ${m.name} (${m.city})`);
+          console.log(`   + ${m.name}`);
         }
       }
     } else if (data) {

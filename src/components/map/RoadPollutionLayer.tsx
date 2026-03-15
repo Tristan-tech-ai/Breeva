@@ -149,14 +149,37 @@ export function useRoadPollutionLayer(
     (data: RoadAQIResponse, currentPollutant: PollutantType): L.LayerGroup => {
       const group = L.layerGroup();
       const zoom = map?.getZoom() ?? 14;
+
+      // Local normalization: compute min/max for current viewport data
+      // so the full color spectrum is used regardless of absolute AQI values
+      const values = data.roads.map(r => getValue(r, currentPollutant));
+      const minVal = values.length > 0 ? Math.min(...values) : 0;
+      const maxVal = values.length > 0 ? Math.max(...values) : 1;
+      const range = maxVal - minVal;
+      // Use local normalization when range is narrow (< 30% of scale)
+      // This makes color differences visible even when all roads are 30-50 AQI
+      const stops = getColorStops(currentPollutant);
+      const scaleRange = stops[stops.length - 1].v - stops[0].v;
+      const useLocalNorm = range > 0 && range < scaleRange * 0.3;
+
       for (const road of data.roads) {
         const coords = road.geometry.coordinates.map(
           ([lng, lat]) => [lat, lng] as L.LatLngTuple,
         );
         if (coords.length < 2) continue;
-        const color = getConcentrationColor(getValue(road, currentPollutant), currentPollutant);
+
+        let color: string;
+        if (useLocalNorm) {
+          // Map local range to full color spectrum for sharp differentiation
+          const t = (getValue(road, currentPollutant) - minVal) / range;
+          const mappedValue = stops[0].v + t * scaleRange * 0.6; // use 60% of scale for visual spread
+          color = getConcentrationColor(mappedValue, currentPollutant);
+        } else {
+          color = getConcentrationColor(getValue(road, currentPollutant), currentPollutant);
+        }
+
         const zoomScale = zoom >= 16 ? 1.6 : zoom >= 15 ? 1.3 : zoom >= 13 ? 1.0 : zoom >= 12 ? 0.7 : 0.5;
-        const weight = road.weight * zoomScale; // natural scaling — sub-pixel roads correctly invisible at low zoom
+        const weight = road.weight * zoomScale;
         L.polyline(coords, {
           color,
           weight,

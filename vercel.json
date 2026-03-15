@@ -13,6 +13,14 @@
       "schedule": "0 0 * * *"
     },
     {
+      "path": "/api/vayu/gemini-classify?mode=classify&region=bali",
+      "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/vayu/gemini-classify?mode=classify&region=jakarta",
+      "schedule": "35 0 * * *"
+    },
+    {
       "path": "/api/vayu/gemini-classify?mode=temporal&region=jakarta",
       "schedule": "0 6,18 * * *"
     },

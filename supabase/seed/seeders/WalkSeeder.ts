@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { makeWalksForUser } from '../factories/walkFactory';
 import { randomBetween } from '../utils/helpers';
 import type { UserSeedData } from '../factories/userFactory';
+import type { City } from '../data/city-locations';
 
 /** Walk count ranges per user tier */
 const WALK_COUNTS: Record<string, [number, number]> = {
@@ -26,7 +27,7 @@ export class WalkSeeder {
       if (count === 0) continue;
 
       const daysBack = userData.tier === 'dormant' ? 120 : 90;
-      const walks = makeWalksForUser(userId, userData.city, count, daysBack);
+      const walks = makeWalksForUser(userId, userData.city as City, count, daysBack);
 
       // Batch insert in chunks of 25
       for (let i = 0; i < walks.length; i += 25) {
@@ -36,21 +37,20 @@ export class WalkSeeder {
             user_id: w.user_id,
             started_at: w.started_at,
             completed_at: w.completed_at,
-            duration_minutes: w.duration_minutes,
+            duration_seconds: w.duration_seconds,
             distance_meters: w.distance_meters,
-            steps_count: w.steps_count,
-            avg_speed_kmh: w.avg_speed_kmh,
-            start_latitude: w.start_latitude,
-            start_longitude: w.start_longitude,
-            end_latitude: w.end_latitude,
-            end_longitude: w.end_longitude,
+            origin_address: w.origin_address,
+            origin_lat: w.origin_lat,
+            origin_lng: w.origin_lng,
+            destination_address: w.destination_address,
+            destination_lat: w.destination_lat,
+            destination_lng: w.destination_lng,
             avg_aqi: w.avg_aqi,
-            min_aqi: w.min_aqi,
-            max_aqi: w.max_aqi,
             ecopoints_earned: w.ecopoints_earned,
             co2_saved_grams: w.co2_saved_grams,
-            route_geojson: w.route_geojson,
+            route_type: w.route_type,
             status: w.status,
+            is_verified: w.is_verified,
           }))
         );
 

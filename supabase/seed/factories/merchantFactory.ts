@@ -7,6 +7,7 @@ export interface MerchantSeedData {
   description: string;
   category: string;
   address: string;
+  city: string;
   lat: number;
   lng: number;
   phone: string;
@@ -44,6 +45,7 @@ export function makeAllMerchants(): MerchantSeedData[] {
         description: template.description,
         category: template.category,
         address: loc.address,
+        city,
         lat: jitter(loc.lat),
         lng: jitter(loc.lng),
         phone: generateIndonesianPhone(),

@@ -41,7 +41,7 @@ export class QuestProgressSeeder {
       const rows: Array<Record<string, unknown>> = [];
 
       for (let d = 0; d < questDays; d++) {
-        const questDate = randomDateStr(90);
+        const questDate = randomDateStr(-90, 0);
 
         // Pick 1-3 quests for this day
         const dayQuestCount = randomBetween(1, Math.min(3, quests.length));

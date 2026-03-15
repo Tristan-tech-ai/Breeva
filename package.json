@@ -7,7 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed": "tsx supabase/seed/index.ts",
+    "seed:fresh": "tsx supabase/seed/index.ts --fresh",
+    "seed:users": "tsx supabase/seed/index.ts --only=users",
+    "seed:merchants": "tsx supabase/seed/index.ts --only=merchants",
+    "seed:walks": "tsx supabase/seed/index.ts --only=walks"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
@@ -48,6 +53,7 @@
     "globals": "^16.5.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
+    "tsx": "^4.21.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "npm:rolldown-vite@7.2.5"
