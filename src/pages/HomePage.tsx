@@ -110,16 +110,6 @@ export default function HomePage() {
   const [showLayersSheet, setShowLayersSheet] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
-  // Ambient AQI tint color
-  const aqiTint = (() => {
-    const aqi = currentAQI?.aqi;
-    if (!aqi) return 'transparent';
-    if (aqi <= 50) return 'rgba(16,185,129,0.06)';  // green
-    if (aqi <= 100) return 'rgba(245,158,11,0.08)'; // amber
-    if (aqi <= 150) return 'rgba(239,68,68,0.08)';  // orange-red
-    return 'rgba(239,68,68,0.12)';                   // red
-  })();
-
   useEffect(() => {
     startLocating();
     return () => stopLocating();
@@ -161,12 +151,6 @@ export default function HomePage() {
         forecastHour={forecastHour}
         onRoadLayerMeta={setRoadLayerMeta}
         onPlaceSelect={(poi) => setSelectedPOI(poi)}
-      />
-
-      {/* Ambient AQI tint overlay */}
-      <div
-        className="absolute inset-0 pointer-events-none z-[1] transition-colors duration-1000"
-        style={{ backgroundColor: aqiTint }}
       />
 
       {/* Sidebar */}
