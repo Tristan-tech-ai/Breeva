@@ -991,62 +991,87 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       try {
         const midLat = (startLat + endLat) / 2;
         const midLng = (startLng + endLng) / 2;
-        const bufferDeg = 0.005; // ~500m
-        const gangRoads = await findGangRoadsInBBox(
-          midLat - bufferDeg, midLng - bufferDeg,
-          midLat + bufferDeg, midLng + bufferDeg,
-        );
+        // Fix C: Corridor-wide search instead of midpoint-only
+        const bufferDeg = 0.003; // ~300m buffer
+        const south = Math.min(startLat, endLat) - bufferDeg;
+        const north = Math.max(startLat, endLat) + bufferDeg;
+        const west = Math.min(startLng, endLng) - bufferDeg;
+        const east = Math.max(startLng, endLng) + bufferDeg;
+        const gangRoads = await findGangRoadsInBBox(south, west, north, east);
         if (gangRoads.length > 0) {
-          // Pick gang road closest to midpoint
-          let bestRoad = gangRoads[0];
-          let bestDist = Infinity;
-          for (const gr of gangRoads) {
-            try {
-              const coords = JSON.parse(gr.geojson).coordinates;
-              const mid = coords[Math.floor(coords.length / 2)];
-              const d = haversineMeters(midLat, midLng, mid[1], mid[0]);
-              if (d < bestDist) { bestDist = d; bestRoad = gr; }
-            } catch { /* skip */ }
-          }
-          const coords = JSON.parse(bestRoad.geojson).coordinates;
-          const midCoord = coords[Math.floor(coords.length / 2)];
-          const gangWp: [number, number] = [midCoord[0], midCoord[1]]; // [lng, lat]
+          // Fix D: Score gang roads by length + alignment + proximity instead of closest-to-midpoint
+          const travelBearing = Math.atan2(endLng - startLng, endLat - startLat);
+          const scoredGangRoads = gangRoads
+            .map(gr => {
+              try {
+                const coords = JSON.parse(gr.geojson).coordinates;
+                if (coords.length < 2) return null;
+                let len = 0;
+                for (let i = 1; i < coords.length; i++) {
+                  len += haversineMeters(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]);
+                }
+                const first = coords[0];
+                const last = coords[coords.length - 1];
+                const roadBearing = Math.atan2(last[0] - first[0], last[1] - first[1]);
+                const angleDiff = Math.abs(travelBearing - roadBearing);
+                const alignment = Math.abs(Math.cos(angleDiff));
+                const mid = coords[Math.floor(coords.length / 2)];
+                const distToMid = haversineMeters(midLat, midLng, mid[1], mid[0]);
+                const score = (Math.min(len, 200) / 200) * 0.4
+                            + alignment * 0.3
+                            + (1 - Math.min(distToMid, 500) / 500) * 0.3;
+                return { ...gr, coords, len, score, mid };
+              } catch { return null; }
+            })
+            .filter((gr): gr is NonNullable<typeof gr> => gr !== null && gr.len > 30)
+            .sort((a, b) => b.score - a.score);
 
-          const orsApiKey = process.env.VITE_OPENROUTESERVICE_API_KEY || process.env.ORS_API_KEY;
-          if (orsApiKey) {
-            const gangOrs = await doORSRequest([orsStart, gangWp, orsEnd], profile, orsApiKey);
-            const gangRoute = gangOrs[0];
-            if (gangRoute && !scoredRoutes.some((r) =>
-              isSimilarGeometry(gangRoute.geometry, r.polyline.map((p) => [p.lng, p.lat]), 40)
-            )) {
-              const polyline = orsToPolyline(gangRoute.geometry);
-              const waypoints = orsToWaypoints(gangRoute.geometry);
-              let gangScore;
-              try { gangScore = await scorePolyline(polyline, 'pedestrian', 0); } catch { gangScore = null; }
-              const instructions = gangRoute.segments.flatMap((seg) =>
-                seg.steps.map((step) => ({
-                  text: step.instruction, distance: step.distance,
-                  duration: step.duration, type: step.type,
-                  waypoint_index: step.way_points[0] ?? 0,
-                }))
-              );
-              // Replace worst-AQI route if gang route is cleaner, or append if < 3
-              const gangAvgAqi = gangScore?.avg_aqi ?? 999;
-              const worstIdx = scoredRoutes.reduce((wi, r, i) =>
-                (r.score?.avg_aqi ?? 0) > (scoredRoutes[wi].score?.avg_aqi ?? 0) ? i : wi, 0);
-              const worstAqi = scoredRoutes[worstIdx].score?.avg_aqi ?? 0;
-              const gangEntry = {
-                index: scoredRoutes.length,
-                polyline: waypoints,
-                distance_meters: Math.round(gangRoute.summary.distance),
-                duration_seconds: Math.round(gangRoute.summary.duration),
-                instructions,
-                score: gangScore,
-              };
-              if (scoredRoutes.length < 3) {
-                scoredRoutes.push(gangEntry);
-              } else if (gangAvgAqi < worstAqi) {
-                scoredRoutes[worstIdx] = gangEntry;
+          if (scoredGangRoads.length > 0) {
+            const bestRoad = scoredGangRoads[0];
+            const gangWp: [number, number] = [bestRoad.mid[0], bestRoad.mid[1]]; // [lng, lat]
+
+            const orsApiKey = process.env.VITE_OPENROUTESERVICE_API_KEY || process.env.ORS_API_KEY;
+            if (orsApiKey) {
+              const gangOrs = await doORSRequest([orsStart, gangWp, orsEnd], profile, orsApiKey);
+              const gangRoute = gangOrs[0];
+              if (gangRoute && !scoredRoutes.some((r) =>
+                isSimilarGeometry(gangRoute.geometry, r.polyline.map((p) => [p.lng, p.lat]), 40)
+              )) {
+                const polyline = orsToPolyline(gangRoute.geometry);
+                const waypoints = orsToWaypoints(gangRoute.geometry);
+                let gangScore;
+                try { gangScore = await scorePolyline(polyline, 'pedestrian', 0); } catch { gangScore = null; }
+                const instructions = gangRoute.segments.flatMap((seg) =>
+                  seg.steps.map((step) => ({
+                    text: step.instruction, distance: step.distance,
+                    duration: step.duration, type: step.type,
+                    waypoint_index: step.way_points[0] ?? 0,
+                  }))
+                );
+                const gangAvgAqi = gangScore?.avg_aqi ?? 999;
+                const worstIdx = scoredRoutes.reduce((wi, r, i) =>
+                  (r.score?.avg_aqi ?? 0) > (scoredRoutes[wi].score?.avg_aqi ?? 0) ? i : wi, 0);
+                const worstAqi = scoredRoutes[worstIdx].score?.avg_aqi ?? 0;
+                const gangEntry = {
+                  index: scoredRoutes.length,
+                  polyline: waypoints,
+                  distance_meters: Math.round(gangRoute.summary.distance),
+                  duration_seconds: Math.round(gangRoute.summary.duration),
+                  instructions,
+                  score: gangScore,
+                };
+                // Fix B: Reject backtracking routes (duration > 1.4× shortest)
+                const shortestDuration = Math.min(...scoredRoutes.map(r => r.duration_seconds));
+                if (gangEntry.duration_seconds <= shortestDuration * 1.4) {
+                  if (scoredRoutes.length < 3) {
+                    scoredRoutes.push(gangEntry);
+                  } else if (gangAvgAqi < worstAqi) {
+                    scoredRoutes[worstIdx] = gangEntry;
+                  }
+                } else {
+                  console.log('[clean-route] Gang route rejected: duration ratio',
+                    (gangEntry.duration_seconds / shortestDuration).toFixed(2));
+                }
               }
             }
           }
@@ -1068,37 +1093,31 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       };
     });
 
-    let geminiResult: GeminiRanking | null = null;
-    try { geminiResult = await rankWithGemini(geminiInput); } catch { /* skip */ }
+    // Fix A: Always use metric-based labels. Gemini only provides reasoning text.
+    let reasoning: string | null = null;
+    try {
+      const geminiResult = await rankWithGemini(geminiInput);
+      reasoning = geminiResult?.reasoning ?? null;
+    } catch { /* skip */ }
 
-    let labeled: Array<typeof scoredRoutes[0] & { label: 'cleanest' | 'balanced' | 'fastest'; reasoning: string | null }>;
+    // Assign labels based on actual metrics: fastest=shortest duration, cleanest=lowest AQI
+    const byDuration = [...scoredRoutes].sort((a, b) => a.duration_seconds - b.duration_seconds);
+    const byAqi = [...scoredRoutes].sort((a, b) => (a.score?.avg_aqi ?? 999) - (b.score?.avg_aqi ?? 999));
+    const usedIndices = new Set<number>();
 
-    if (geminiResult && geminiResult.ranking.length === scoredRoutes.length) {
-      labeled = geminiResult.ranking.map((rank1Based, i) => {
-        const defaultLabels: Array<'cleanest' | 'balanced' | 'fastest'> = ['cleanest', 'balanced', 'fastest'];
-        const route = scoredRoutes[rank1Based - 1] || scoredRoutes[i];
-        return { ...route, label: (geminiResult!.labels?.[i] as 'cleanest' | 'balanced' | 'fastest') || defaultLabels[i] || 'balanced', reasoning: geminiResult!.reasoning };
-      });
-    } else {
-      // Assign labels based on actual metrics: fastest=shortest duration, cleanest=lowest AQI
-      const byDuration = [...scoredRoutes].sort((a, b) => a.duration_seconds - b.duration_seconds);
-      const byAqi = [...scoredRoutes].sort((a, b) => (a.score?.avg_aqi ?? 999) - (b.score?.avg_aqi ?? 999));
-      const usedIndices = new Set<number>();
+    const fastestRoute = byDuration[0];
+    usedIndices.add(fastestRoute.index);
 
-      const fastestRoute = byDuration[0];
-      usedIndices.add(fastestRoute.index);
+    const cleanestRoute = byAqi.find((r) => !usedIndices.has(r.index)) || byAqi[0];
+    usedIndices.add(cleanestRoute.index);
 
-      const cleanestRoute = byAqi.find((r) => !usedIndices.has(r.index)) || byAqi[0];
-      usedIndices.add(cleanestRoute.index);
+    const balancedRoute = scoredRoutes.find((r) => !usedIndices.has(r.index)) || scoredRoutes[0];
 
-      const balancedRoute = scoredRoutes.find((r) => !usedIndices.has(r.index)) || scoredRoutes[0];
-
-      labeled = [
-        { ...cleanestRoute, label: 'cleanest' as const, reasoning: null },
-        { ...balancedRoute, label: 'balanced' as const, reasoning: null },
-        { ...fastestRoute, label: 'fastest' as const, reasoning: null },
-      ];
-    }
+    const labeled: Array<typeof scoredRoutes[0] & { label: 'cleanest' | 'balanced' | 'fastest'; reasoning: string | null }> = [
+      { ...cleanestRoute, label: 'cleanest' as const, reasoning },
+      { ...balancedRoute, label: 'balanced' as const, reasoning },
+      { ...fastestRoute, label: 'fastest' as const, reasoning },
+    ];
 
     const routes = labeled.map((r) => ({
       polyline: r.polyline, distance_meters: r.distance_meters, duration_seconds: r.duration_seconds, instructions: r.instructions,
