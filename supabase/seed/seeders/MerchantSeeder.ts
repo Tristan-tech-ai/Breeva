@@ -8,6 +8,14 @@ export class MerchantSeeder {
     const merchants = makeAllMerchants();
     const inserted: Array<{ id: string; category: string }> = [];
 
+    // Find merchant@breeva.app user to assign ownership
+    const { data: merchantUser } = await this.sb
+      .from('users')
+      .select('id')
+      .eq('email', 'merchant@breeva.app')
+      .maybeSingle();
+    const merchantOwnerId = merchantUser?.id || null;
+
     for (const m of merchants) {
       // Check if merchant already exists by name
       const { data: existing } = await this.sb
@@ -21,6 +29,9 @@ export class MerchantSeeder {
         console.log(`   ↩ ${m.name} already exists`);
         continue;
       }
+
+      // Assign owner_id to first 3 merchants for the demo account
+      const ownerForThis = inserted.length < 3 ? merchantOwnerId : null;
 
       const { data: row, error: rowErr } = await this.sb
         .from('merchants')
@@ -37,6 +48,9 @@ export class MerchantSeeder {
           review_count: m.review_count,
           is_verified: m.is_verified,
           is_active: m.is_active,
+          sponsor_tier: m.sponsor_tier,
+          priority_boost: m.priority_boost,
+          owner_id: ownerForThis,
         })
         .select('id, category')
         .single();
@@ -45,7 +59,7 @@ export class MerchantSeeder {
         console.error(`   ✗ ${m.name}: ${rowErr.message}`);
       } else if (row) {
         inserted.push({ id: row.id, category: row.category });
-        console.log(`   + ${m.name}`);
+        console.log(`   + ${m.name} [${m.sponsor_tier}]`);
       }
     }
 

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { POI } from '../lib/poi-api';
 import { getPOIsInRect } from '../lib/poi-api';
+import { db } from '../lib/supabase';
 import { diagStart, diagEnd, diagLog, diagFetchSummary } from '../lib/poi-diagnostics';
 
 // ── Tile math (slippy-map convention) ────────────────────────────────
@@ -78,6 +79,8 @@ interface POIStoreState {
   _fetchGen: number;
   /** Per-filter cache — stores POIs + tiles for previously visited filters */
   _filterCache: Map<string, FilterCacheEntry>;
+  /** Last merchant fetch center (to avoid re-fetching for small pans) */
+  _lastMerchantCenter: { lat: number; lng: number } | null;
 
   /** Compute tile keys covering a viewport, fetch any new ones */
   fetchForViewport: (bounds: L.LatLngBounds, zoom: number, filterCats?: string[]) => void;
@@ -95,6 +98,7 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
   activeFilter: null,
   _fetchGen: 0,
   _filterCache: new Map(),
+  _lastMerchantCenter: null,
 
   fetchForViewport(bounds, zoom, filterCats) {
     if (zoom < 14) return;
@@ -234,6 +238,54 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
       }
     };
     runNext();
+
+    // ── Fetch merchants from Supabase alongside POI tiles ─────────
+    const centerLat = (bounds.getNorth() + bounds.getSouth()) / 2;
+    const centerLng = (bounds.getEast() + bounds.getWest()) / 2;
+    const lastCenter = get()._lastMerchantCenter;
+    // Skip if center hasn't moved much (< ~500m)
+    const moved = !lastCenter ||
+      Math.abs(centerLat - lastCenter.lat) > 0.004 ||
+      Math.abs(centerLng - lastCenter.lng) > 0.004;
+
+    if (moved) {
+      set({ _lastMerchantCenter: { lat: centerLat, lng: centerLng } });
+      // Compute radius from viewport bounds (diagonal / 2 in km, min 2km)
+      const latSpan = bounds.getNorth() - bounds.getSouth();
+      const lngSpan = bounds.getEast() - bounds.getWest();
+      const diagKm = Math.sqrt(latSpan ** 2 + lngSpan ** 2) * 111;
+      const radiusKm = Math.max(2, Math.min(diagKm / 2, 50));
+
+      db.getNearbyMerchants(centerLat, centerLng, radiusKm).then(({ data: merchants }) => {
+        if (!merchants || merchants.length === 0 || get()._fetchGen !== gen) return;
+
+        const state = get();
+        const newAll = new Map(state.allPOIs);
+        for (const m of merchants) {
+          const poiId = `merchant-${m.id}`;
+          const cat = `eco_merchant.${(m.category || 'general').toLowerCase().replace(/\s+/g, '_')}`;
+          newAll.set(poiId, {
+            id: poiId,
+            name: m.name,
+            category: 'eco_merchant',
+            subcategory: cat,
+            coordinate: { lat: Number(m.lat), lng: Number(m.lng) },
+            address: m.address ?? undefined,
+            rating: m.rating != null ? Number(m.rating) : undefined,
+            reviewCount: m.review_count ?? undefined,
+            types: ['eco_merchant', cat],
+            description: m.description ?? undefined,
+            // Extended merchant metadata on the POI object
+            _isMerchant: true,
+            _merchantId: m.id,
+            _sponsorTier: m.sponsor_tier || 'free',
+            _priorityBoost: m.priority_boost || 0,
+          } as POI & { _isMerchant: boolean; _merchantId: string; _sponsorTier: string; _priorityBoost: number });
+        }
+        set({ allPOIs: newAll, serial: state.serial + 1 });
+        diagLog('merchants-injected', { count: merchants.length });
+      });
+    }
   },
 
   setFilter(filter, _filterCats) {

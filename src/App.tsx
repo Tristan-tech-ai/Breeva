@@ -36,6 +36,7 @@ const QuestsPage = lazy(() => import('./pages/QuestsPage'));
 const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'));
 const MerchantRegisterPage = lazy(() => import('./pages/MerchantRegisterPage'));
 const MerchantDetailPage = lazy(() => import('./pages/MerchantDetailPage'));
+const MerchantDashboardPage = lazy(() => import('./pages/MerchantDashboardPage'));
 const WalkDetailPage = lazy(() => import('./pages/WalkDetailPage'));
 const EcoTipsPage = lazy(() => import('./pages/EcoTipsPage'));
 const ContributionHistoryPage = lazy(() => import('./pages/ContributionHistoryPage'));
@@ -143,6 +144,11 @@ function App() {
             <Route path="/merchants/:id" element={
               <ProtectedRoute>
                 <MerchantDetailPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/merchants/:id/manage" element={
+              <ProtectedRoute>
+                <MerchantDashboardPage />
               </ProtectedRoute>
             } />
 

@@ -17,6 +17,8 @@ export interface MerchantSeedData {
   is_active: boolean;
   rating: number;
   review_count: number;
+  sponsor_tier: string;
+  priority_boost: number;
 }
 
 // Distribute templates across cities
@@ -40,6 +42,15 @@ export function makeAllMerchants(): MerchantSeedData[] {
       const template = pool[templateIdx];
       const loc = locations[i % locations.length];
 
+      // Distribute sponsor tiers: ~7% featured, ~13% premium, ~27% basic, rest free
+      const idx = merchants.length;
+      let sponsor_tier: string;
+      let priority_boost: number;
+      if (idx < 2)       { sponsor_tier = 'featured'; priority_boost = 3; }
+      else if (idx < 6)  { sponsor_tier = 'premium';  priority_boost = 2; }
+      else if (idx < 14) { sponsor_tier = 'basic';    priority_boost = 1; }
+      else               { sponsor_tier = 'free';     priority_boost = 0; }
+
       merchants.push({
         name: template.name,
         description: template.description,
@@ -55,6 +66,8 @@ export function makeAllMerchants(): MerchantSeedData[] {
         is_active: true,
         rating: randomFloat(3.8, 5.0, 1),
         review_count: randomBetween(5, 120),
+        sponsor_tier,
+        priority_boost,
       });
     }
   }

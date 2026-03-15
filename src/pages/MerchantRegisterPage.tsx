@@ -85,8 +85,9 @@ export default function MerchantRegisterPage() {
       lng: coords.lng,
       phone: phone.trim() || null,
       website: website.trim() || null,
-      is_verified: false,
-      is_active: false, // Admin activates after verification
+      owner_id: user.id,
+      is_verified: true,
+      is_active: true,
       ...(docUrl && { document_url: docUrl }),
     });
 

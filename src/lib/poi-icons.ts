@@ -18,6 +18,7 @@ const ROOT_COLORS: Record<string, string> = {
   public_transport: '#8b5cf6', // violet
   production:     '#d97706', // amber-dark
   national_park:  '#16a34a', // green-dark
+  eco_merchant:   '#059669', // emerald-600 — distinct from leisure green
 };
 
 const FALLBACK_COLOR = '#6b7280';
@@ -84,6 +85,9 @@ const ICONS: Record<string, string> = {
 
   // Fallback
   generic:     '<circle cx="8" cy="8" r="4" fill="#fff" opacity=".85"/><circle cx="8" cy="8" r="1.5" fill="currentColor" opacity=".4"/>',
+
+  // Eco Merchant (leaf icon)
+  eco_merchant: '<path d="M8 2C5 2 3 5 3 8c0 2 1 3.5 2 4.5L8 14l3-1.5c1-1 2-2.5 2-4.5 0-3-2-6-5-6z" fill="#fff" opacity=".9"/><path d="M8 5v5M6 7c1 1 3 1 4 0" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none" opacity=".5"/>',
 };
 
 // ── Subcategory → icon key mapping ────────────────────────────────────
@@ -189,6 +193,19 @@ const SUBCATEGORY_MAP: Record<string, string> = {
 
   // national_park
   'national_park': 'park',
+
+  // eco_merchant
+  'eco_merchant':                    'eco_merchant',
+  'eco_merchant.refill_station':     'eco_merchant',
+  'eco_merchant.thrift_store':       'eco_merchant',
+  'eco_merchant.vegan':              'eco_merchant',
+  'eco_merchant.repair_shop':        'eco_merchant',
+  'eco_merchant.eco_products':       'eco_merchant',
+  'eco_merchant.café':               'eco_merchant',
+  'eco_merchant.market':             'eco_merchant',
+  'eco_merchant.books':              'eco_merchant',
+  'eco_merchant.other':              'eco_merchant',
+  'eco_merchant.general':            'eco_merchant',
 };
 
 // Root category → default icon
@@ -208,6 +225,7 @@ const ROOT_ICON_MAP: Record<string, string> = {
   public_transport: 'bus_stop',
   production:     'generic',
   national_park:  'park',
+  eco_merchant:   'eco_merchant',
 };
 
 // ── Priority tiers (min zoom to show) ─────────────────────────────────
@@ -267,6 +285,7 @@ const ROOT_PRIORITY: Record<string, number> = {
   public_transport: 17,
   production: 18,
   national_park: 15,
+  eco_merchant: 15, // Green merchants visible from z15 (free tier default)
 };
 
 // ── Public API ────────────────────────────────────────────────────────
@@ -386,4 +405,68 @@ export function getClusterDivIcon(count: number, color?: string): L.DivIcon {
   });
   clusterIconCache.set(cKey, icon);
   return icon;
+}
+
+// ── Merchant tier-aware icon ──────────────────────────────────────────
+
+const merchantIconCache = new Map<string, L.DivIcon>();
+
+/**
+ * Creates a merchant-specific marker icon with tier-based sizing and glow effect.
+ * free=14px, basic=18px, premium=22px, featured=26px with animated pulse.
+ */
+export function getMerchantDivIcon(tier: string): L.DivIcon {
+  if (merchantIconCache.has(tier)) return merchantIconCache.get(tier)!;
+
+  const color = ROOT_COLORS['eco_merchant'];
+  const svgInner = ICONS['eco_merchant'] || ICONS['generic'];
+
+  let px: number, svgPx: number, extraCls: string, glowStyle: string;
+  switch (tier) {
+    case 'featured':
+      px = 34; svgPx = 18;
+      extraCls = 'poi-merchant-featured';
+      glowStyle = `box-shadow: 0 0 12px ${color}80, 0 0 24px ${color}40;`;
+      break;
+    case 'premium':
+      px = 30; svgPx = 16;
+      extraCls = 'poi-merchant-premium';
+      glowStyle = `box-shadow: 0 0 8px ${color}60;`;
+      break;
+    case 'basic':
+      px = 26; svgPx = 14;
+      extraCls = '';
+      glowStyle = `box-shadow: 0 2px 6px ${color}40;`;
+      break;
+    default: // free
+      px = 22; svgPx = 12;
+      extraCls = '';
+      glowStyle = '';
+  }
+
+  const html = `<div class="poi-icon-marker ${extraCls}" style="--poi-color:${color};${glowStyle}">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="${svgPx}" height="${svgPx}">${svgInner}</svg>
+  </div>`;
+
+  const icon = L.divIcon({
+    className: 'poi-icon-wrapper',
+    html,
+    iconSize: [px, px],
+    iconAnchor: [px / 2, px / 2],
+  });
+  merchantIconCache.set(tier, icon);
+  return icon;
+}
+
+/**
+ * Resolve the min-zoom for a merchant based on its priority boost.
+ * Higher boost = visible at lower zoom = higher priority.
+ */
+export function merchantPriority(boost: number): number {
+  switch (boost) {
+    case 3: return 10; // featured — always visible
+    case 2: return 13; // premium
+    case 1: return 14; // basic
+    default: return 15; // free
+  }
 }

@@ -72,6 +72,12 @@ CREATE TABLE IF NOT EXISTS merchants (
   is_active BOOLEAN DEFAULT true,
   rating DECIMAL(2,1) DEFAULT 0,
   review_count INTEGER DEFAULT 0,
+  owner_id UUID REFERENCES users(id),
+  sponsor_tier VARCHAR(20) DEFAULT 'free',
+  sponsor_expires_at TIMESTAMP WITH TIME ZONE,
+  priority_boost INTEGER DEFAULT 0,
+  is_eco_certified BOOLEAN DEFAULT false,
+  eco_badge TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

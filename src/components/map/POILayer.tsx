@@ -1,10 +1,11 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import { useNavigate } from 'react-router-dom';
 import type { POI } from '../../lib/poi-api';
 import { usePoiStore } from '../../stores/poiStore';
 import { reindex, getVisibleFeatures, type ClusterFeature } from '../../lib/poi-cluster';
-import { resolveIcon, resolvePriority, getCategoryDivIcon, getClusterDivIcon } from '../../lib/poi-icons';
+import { resolveIcon, resolvePriority, getCategoryDivIcon, getClusterDivIcon, getMerchantDivIcon, merchantPriority } from '../../lib/poi-icons';
 import { resolveLabels, type LabelCandidate } from '../../lib/label-collision';
 import { diagStart, diagEnd } from '../../lib/poi-diagnostics';
 
@@ -38,8 +39,20 @@ const FILTER_CHIP_COLORS: Record<string, string> = {
 
 /** Get the appropriate DivIcon for a POI using hierarchical resolution */
 function getPoiIcon(poi: POI, size: 'sm' | 'lg' = 'sm'): L.DivIcon {
+  // Merchant POIs get tier-specific icons
+  const mp = poi as POI & { _isMerchant?: boolean; _sponsorTier?: string };
+  if (mp._isMerchant) {
+    return getMerchantDivIcon(mp._sponsorTier || 'free');
+  }
   const { iconKey, color } = resolveIcon(poi.types || []);
   return getCategoryDivIcon(iconKey, color, size);
+}
+
+/** Get effective priority for a POI — handles merchant boost override */
+function getPoiPriority(poi: POI): number {
+  const mp = poi as POI & { _isMerchant?: boolean; _priorityBoost?: number };
+  if (mp._isMerchant) return merchantPriority(mp._priorityBoost || 0);
+  return resolvePriority(poi.types || []);
 }
 
 // ── Unique key for a cluster feature (used for diff) ─────────────────
@@ -62,6 +75,7 @@ export default function POILayer({
   onPlaceSelect,
 }: POILayerProps) {
   const map = useMap();
+  const navigate = useNavigate();
 
   // Store selectors (individual to avoid re-renders on unrelated state)
   const serial = usePoiStore((s) => s.serial);
@@ -170,7 +184,7 @@ export default function POILayer({
 
     const candidates: LabelCandidate[] = [];
     for (const f of pointFeatures) {
-      const priority = resolvePriority(f.poi.types || []);
+      const priority = getPoiPriority(f.poi);
       // When filtered or deep zoom, bypass priority check — show all POIs
       if (!showAll && priority > currentZoom) continue;
       const pt = map.latLngToContainerPoint([f.lat, f.lng]);
@@ -192,7 +206,7 @@ export default function POILayer({
     const newKeys = new Set<string>();
     for (const f of features) {
       if (f.type === 'point') {
-        const priority = resolvePriority(f.poi.types || []);
+        const priority = getPoiPriority(f.poi);
         if (!showAll && priority > currentZoom) continue;
       }
       newKeys.add(featureKey(f));
@@ -226,7 +240,7 @@ export default function POILayer({
       }
 
       // Point feature — check priority
-      const priority = resolvePriority(f.poi.types || []);
+      const priority = getPoiPriority(f.poi);
       if (!isFiltered && priority > currentZoom) continue;
 
       const placement = placements.get(f.id);
@@ -291,7 +305,14 @@ export default function POILayer({
       });
 
       const poi = f.poi;
-      marker.on('click', () => { onPlaceSelect?.(poi); });
+      const mp = poi as POI & { _isMerchant?: boolean; _merchantId?: string };
+      marker.on('click', () => {
+        if (mp._isMerchant && mp._merchantId) {
+          navigate(`/merchants/${mp._merchantId}`);
+        } else {
+          onPlaceSelect?.(poi);
+        }
+      });
       pool.set(k, marker);
     }
     diagEnd('render-cycle', { markers: pool.size });

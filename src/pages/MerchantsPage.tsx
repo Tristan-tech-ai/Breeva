@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, BadgeCheck, Star, MapPin, Plus } from 'lucide-react';
+import { Search, BadgeCheck, Star, MapPin, Plus, Settings } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { supabase } from '../lib/supabase';
 import { SkeletonList } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
 import LazyImage from '../components/ui/LazyImage';
 import SpotlightCard from '../components/ui/SpotlightCard';
+import { useAuthStore } from '../stores/authStore';
 
 interface MerchantRow {
   id: string;
@@ -37,10 +38,12 @@ const categoryEmoji: Record<string, string> = {
 
 export default function MerchantsPage() {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const [merchants, setMerchants] = useState<MerchantRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [ownedMerchant, setOwnedMerchant] = useState<{ id: string; is_verified: boolean } | null>(null);
 
   useEffect(() => {
     const fetchMerchants = async () => {
@@ -64,6 +67,21 @@ export default function MerchantsPage() {
     fetchMerchants();
   }, []);
 
+  // Fetch owned merchant for Manage CTA
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('merchants')
+      .select('id, is_verified')
+      .eq('owner_id', user.id)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setOwnedMerchant(data);
+      });
+  }, [user]);
+
   const categories = ['All', ...new Set(merchants.map(m => m.category).filter(Boolean) as string[])];
 
   const filtered = merchants.filter(m => {
@@ -81,12 +99,22 @@ export default function MerchantsPage() {
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">Eco-Merchants</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">Discover sustainable businesses near you</p>
           </div>
-          <Link
-            to="/merchants/register"
-            className="w-9 h-9 rounded-xl gradient-primary flex items-center justify-center shadow-sm"
-          >
-            <Plus className="w-5 h-5 text-white" />
-          </Link>
+          <div className="flex items-center gap-2">
+            {ownedMerchant?.is_verified && (
+              <Link
+                to={`/merchants/${ownedMerchant.id}/manage`}
+                className="w-9 h-9 rounded-xl bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700/30 flex items-center justify-center shadow-sm"
+              >
+                <Settings className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+              </Link>
+            )}
+            <Link
+              to="/merchants/register"
+              className="w-9 h-9 rounded-xl gradient-primary flex items-center justify-center shadow-sm"
+            >
+              <Plus className="w-5 h-5 text-white" />
+            </Link>
+          </div>
         </div>
 
         {/* Search */}
