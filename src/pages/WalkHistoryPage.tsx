@@ -13,8 +13,8 @@ import PullToRefreshIndicator from '../components/ui/PullToRefreshIndicator';
 
 interface Walk {
   id: string;
-  distance_km: number;
-  duration_minutes: number;
+  distance_meters: number;
+  duration_seconds: number;
   ecopoints_earned: number;
   avg_aqi: number | null;
   route_type: string | null;
@@ -196,13 +196,13 @@ export default function WalkHistoryPage() {
                   <div className="grid grid-cols-3 gap-3 text-center">
                     <div>
                       <div className="text-sm font-bold text-gray-900 dark:text-white">
-                        {formatDistance(walk.distance_km * 1000)}
+                        {formatDistance(walk.distance_meters)}
                       </div>
                       <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Distance</div>
                     </div>
                     <div>
                       <div className="text-sm font-bold text-gray-900 dark:text-white">
-                        {formatDuration(walk.duration_minutes * 60)}
+                        {formatDuration(walk.duration_seconds)}
                       </div>
                       <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Duration</div>
                     </div>

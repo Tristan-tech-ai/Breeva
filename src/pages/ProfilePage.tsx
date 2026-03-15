@@ -269,14 +269,14 @@ export default function ProfilePage() {
           >
             <div className="w-24 h-24 rounded-full border-4 border-white/30 overflow-hidden bg-white dark:bg-gray-900/20 backdrop-blur-sm shadow-xl">
               {profile?.avatar_url ? (
-                <LazyImage src={profile.avatar_url} alt={profile.name || 'Profile'} className="w-full h-full" />
+                <LazyImage src={profile.avatar_url} alt={profile.full_name || 'Profile'} className="w-full h-full" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-3xl text-white font-bold">
-                  {profile?.name?.[0]?.toUpperCase() || '?'}
+                  {profile?.full_name?.[0]?.toUpperCase() || '?'}
                 </div>
               )}
             </div>
-            <h1 className="mt-3 text-xl font-bold text-white">{profile?.name || 'Eco Walker'}</h1>
+            <h1 className="mt-3 text-xl font-bold text-white">{profile?.full_name || 'Eco Walker'}</h1>
             <p className="text-white/70 text-sm">@{profile?.email?.split('@')[0] || 'user'}</p>
             <Link
               to="/profile/edit"

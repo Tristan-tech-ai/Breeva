@@ -40,7 +40,7 @@ export default function YearInReviewPage() {
       // Walks
       const { data: walks } = await supabase
         .from('walks')
-        .select('distance_km, ecopoints_earned, avg_aqi, created_at')
+        .select('distance_meters, ecopoints_earned, avg_aqi, created_at')
         .eq('user_id', user.id)
         .gte('created_at', startOfYear)
         .lte('created_at', endOfYear);
@@ -63,7 +63,7 @@ export default function YearInReviewPage() {
 
       const bestMonthIdx = monthly.indexOf(Math.max(...monthly));
 
-      const totalDistance = walkData.reduce((s, w) => s + (w.distance_km || 0), 0);
+      const totalDistance = walkData.reduce((s, w) => s + ((w.distance_meters || 0) / 1000), 0);
       const totalPoints = walkData.reduce((s, w) => s + (w.ecopoints_earned || 0), 0);
       const aqiReadings = walkData.filter(w => w.avg_aqi != null);
       const avgAqi = aqiReadings.length > 0

@@ -188,7 +188,7 @@ export default function HomePage() {
                       <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full gradient-primary flex items-center justify-center text-white text-sm font-bold">
-                        {profile?.name?.charAt(0) || '?'}
+                        {profile?.full_name?.charAt(0) || '?'}
                       </div>
                     )}
                   </div>

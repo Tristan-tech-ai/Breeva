@@ -61,7 +61,7 @@ export default function RewardRedemptionModal({ reward, onClose, onSuccess }: Pr
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       >
         <motion.div
@@ -69,7 +69,7 @@ export default function RewardRedemptionModal({ reward, onClose, onSuccess }: Pr
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-md bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl p-6 mx-4 mb-0 sm:mb-auto"
+          className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-6 mx-4"
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">

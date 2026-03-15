@@ -156,12 +156,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-xl text-white font-bold">
-                      {profile?.name?.[0]?.toUpperCase() || '?'}
+                      {profile?.full_name?.[0]?.toUpperCase() || '?'}
                     </div>
                   )}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-base font-bold text-white truncate">{profile?.name || 'Eco Walker'}</h3>
+                  <h3 className="text-base font-bold text-white truncate">{profile?.full_name || 'Eco Walker'}</h3>
                   <p className="text-white/60 text-xs truncate">{profile?.email || ''}</p>
                 </div>
               </div>

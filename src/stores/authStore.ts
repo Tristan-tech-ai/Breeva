@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 export interface UserProfile {
   id: string;
   email: string;
-  name: string | null;
+  full_name: string | null;
   avatar_url: string | null;
   ecopoints_balance: number;
   total_distance_km: number;
@@ -165,7 +165,7 @@ export const useAuthStore = create<AuthState>()(
             const newProfile = {
               id: user.id,
               email: user.email!,
-              name: user.user_metadata?.full_name || user.user_metadata?.name || null,
+              full_name: user.user_metadata?.full_name || user.user_metadata?.name || null,
               avatar_url: user.user_metadata?.avatar_url || null,
               ecopoints_balance: 0,
               total_distance_km: 0,
@@ -229,8 +229,8 @@ export const useAuthStore = create<AuthState>()(
 
           if (result && 'data' in result && result.data.session) {
             set({ user: result.data.session.user, session: result.data.session });
-            // Fetch profile but don't let it block initialization
-            get().fetchProfile().catch(console.error);
+            // Await profile fetch so pages have profile data ready
+            await get().fetchProfile().catch(console.error);
           }
 
           set({ isLoading: false, isInitialized: true });

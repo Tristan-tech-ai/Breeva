@@ -10,7 +10,7 @@ export default function EditProfilePage() {
   const { user, profile, updateProfile, isLoading } = useAuthStore();
   const navigate = useNavigate();
 
-  const [name, setName] = useState(profile?.name || '');
+  const [name, setName] = useState(profile?.full_name || '');
   const [avatarPreview, setAvatarPreview] = useState(profile?.avatar_url || '');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -63,7 +63,7 @@ export default function EditProfilePage() {
       }
 
       await updateProfile({
-        name: name.trim() || null,
+        full_name: name.trim() || null,
         ...(avatarUrl && { avatar_url: avatarUrl }),
       });
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
