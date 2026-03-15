@@ -8,8 +8,6 @@ import BottomNavigation from '../components/layout/BottomNavigation';
 import EmptyState from '../components/ui/EmptyState';
 import type { SavedPlace } from '../types';
 
-const SWIPE_THRESHOLD = -80;
-
 const categoryIcons: Record<string, React.ReactNode> = {
   home: <Home className="w-5 h-5" />,
   work: <Briefcase className="w-5 h-5" />,
@@ -225,91 +223,71 @@ export default function SavedPlacesPage() {
                 <motion.div
                   key={place.id}
                   variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
-                  className="relative overflow-hidden rounded-2xl"
+                  className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm overflow-hidden"
                 >
-                  {/* Delete backdrop */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-red-500 to-red-600 flex items-center justify-end pr-6 rounded-2xl">
-                    <div className="flex flex-col items-center gap-0.5">
-                      <Trash2 className="w-5 h-5 text-white" />
-                      <span className="text-[9px] text-white/80 font-medium">Delete</span>
+                  {/* Top accent bar */}
+                  <div className={`h-1 bg-gradient-to-r ${categoryGradients[place.category]}`} />
+
+                  <div className="p-4">
+                    <div className="flex items-start gap-3.5">
+                      {/* Category icon */}
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${categoryColors[place.category]}`}>
+                        {categoryIcons[place.category]}
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{place.name}</h4>
+                          <span className={`shrink-0 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider rounded-md ${categoryColors[place.category]}`}>
+                            {categoryLabels[place.category]}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate flex items-center gap-1">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          {place.address || `${place.coordinate.lat.toFixed(4)}, ${place.coordinate.lng.toFixed(4)}`}
+                        </p>
+                        <div className="flex items-center gap-1 mt-1 text-[10px] text-gray-400 dark:text-gray-500">
+                          <Clock className="w-3 h-3" />
+                          <span>Saved {timeAgo}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800/50">
+                      <button
+                        onClick={() => handleNavigate(place)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 text-xs font-semibold hover:bg-primary-100 dark:hover:bg-primary-500/20 transition"
+                      >
+                        <Navigation className="w-3.5 h-3.5" />
+                        Navigate
+                      </button>
+                      <button
+                        onClick={() => handleSharePlace(place)}
+                        className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-gray-50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 text-xs font-medium hover:bg-gray-100 dark:hover:bg-gray-700/50 transition"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        Share
+                      </button>
+                      <button
+                        onClick={() => {
+                          window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.coordinate.lat + ',' + place.coordinate.lng)}`, '_blank', 'noopener,noreferrer');
+                        }}
+                        className="flex items-center justify-center p-2 rounded-xl bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition"
+                        title="Open in Maps"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => removePlace(place.id)}
+                        className="flex items-center justify-center p-2 rounded-xl text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                        title="Remove"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
-                  {/* Swipeable card */}
-                  <motion.div
-                    drag="x"
-                    dragConstraints={{ left: SWIPE_THRESHOLD, right: 0 }}
-                    dragElastic={0.1}
-                    onDragEnd={(_e, info) => {
-                      if (info.offset.x < SWIPE_THRESHOLD) {
-                        removePlace(place.id);
-                      }
-                    }}
-                    className="relative z-10 rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm overflow-hidden"
-                  >
-                    {/* Top accent bar */}
-                    <div className={`h-1 w-full bg-gradient-to-r ${categoryGradients[place.category]}`} />
-
-                    <div className="p-4">
-                      <div className="flex items-start gap-3.5">
-                        {/* Category icon */}
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${categoryColors[place.category]}`}>
-                          {categoryIcons[place.category]}
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{place.name}</h4>
-                            <span className={`px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider rounded-md ${categoryColors[place.category]}`}>
-                              {categoryLabels[place.category]}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate flex items-center gap-1">
-                            <MapPin className="w-3 h-3 shrink-0" />
-                            {place.address || `${place.coordinate.lat.toFixed(4)}, ${place.coordinate.lng.toFixed(4)}`}
-                          </p>
-                          <div className="flex items-center gap-1 mt-1.5 text-[10px] text-gray-400 dark:text-gray-500">
-                            <Clock className="w-3 h-3" />
-                            <span>Saved {timeAgo}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800/50">
-                        <button
-                          onClick={() => handleNavigate(place)}
-                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 text-xs font-semibold hover:bg-primary-100 dark:hover:bg-primary-500/20 transition"
-                        >
-                          <Navigation className="w-3.5 h-3.5" />
-                          Navigate
-                        </button>
-                        <button
-                          onClick={() => handleSharePlace(place)}
-                          className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-gray-50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 text-xs font-medium hover:bg-gray-100 dark:hover:bg-gray-700/50 transition"
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                          Share
-                        </button>
-                        <button
-                          onClick={() => {
-                            window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.coordinate.lat + ',' + place.coordinate.lng)}`, '_blank', 'noopener,noreferrer');
-                          }}
-                          className="flex items-center justify-center p-2 rounded-xl bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition"
-                          title="Open in Maps"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => removePlace(place.id)}
-                          className="flex items-center justify-center p-2 rounded-xl text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
-                          title="Remove"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
                 </motion.div>
               );
             })}
