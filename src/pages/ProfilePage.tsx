@@ -27,7 +27,7 @@ export default function ProfilePage() {
       .from('walks')
       .select('started_at')
       .eq('user_id', user.id)
-      .gte('started_at', new Date(Date.now() - 112 * 86400000).toISOString())
+      .gte('started_at', new Date(Date.now() - 365 * 86400000).toISOString())
       .then(({ data }) => {
         if (!data) return;
         const counts: Record<string, number> = {};
@@ -43,7 +43,7 @@ export default function ProfilePage() {
       .from('air_quality_reports')
       .select('created_at')
       .eq('user_id', user.id)
-      .gte('created_at', new Date(Date.now() - 112 * 86400000).toISOString())
+      .gte('created_at', new Date(Date.now() - 365 * 86400000).toISOString())
       .then(({ data }) => {
         const counts: Record<string, number> = {};
         if (data) {
@@ -247,7 +247,7 @@ export default function ProfilePage() {
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
               Activity
             </h3>
-            <StreakHeatmap categories={heatmapCategories} weeks={16} />
+            <StreakHeatmap categories={heatmapCategories} />
           </div>
         </motion.div>
 

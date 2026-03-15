@@ -23,6 +23,7 @@ interface HeatmapCategory {
 
 interface StreakHeatmapProps {
   categories: HeatmapCategory[];
+  /** If not set, auto-fills container width. GitHub shows 52 weeks (1 year). */
   weeks?: number;
 }
 
@@ -161,10 +162,12 @@ function HeatmapTooltip({ anchor, value, date, unit }: {
   );
 }
 
-export default function StreakHeatmap({ categories, weeks = 16 }: StreakHeatmapProps) {
+export default function StreakHeatmap({ categories, weeks: weeksProp }: StreakHeatmapProps) {
   const [activeKey, setActiveKey] = useState(categories[0]?.key || '');
   const [hoveredCell, setHoveredCell] = useState<{ cell: Cell; rect: DOMRect } | null>(null);
   const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [autoWeeks, setAutoWeeks] = useState(weeksProp ?? 20);
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -173,6 +176,25 @@ export default function StreakHeatmap({ categories, weeks = 16 }: StreakHeatmapP
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
   }, []);
+
+  // Auto-calculate weeks to fill container width
+  useEffect(() => {
+    if (weeksProp != null) return; // manual override
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.offsetWidth;
+      // Available width for columns = total width - day label width
+      const cols = Math.floor((w - DAY_LABEL_W) / STEP);
+      setAutoWeeks(Math.max(8, Math.min(cols, 52))); // cap at 52 weeks (1 year)
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [weeksProp]);
+
+  const weeks = weeksProp ?? autoWeeks;
 
   const activeCategory = categories.find(c => c.key === activeKey) || categories[0];
 
@@ -235,7 +257,7 @@ export default function StreakHeatmap({ categories, weeks = 16 }: StreakHeatmapP
       <div className="flex items-baseline gap-1.5 mb-3">
         <span className="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{totalActivity}</span>
         <span className="text-xs text-gray-500 dark:text-gray-400">
-          {activeCategory.unit} in the last {weeks} weeks
+          {activeCategory.unit} in the last {weeks >= 48 ? 'year' : `${weeks} weeks`}
         </span>
         {activeDays > 0 && (
           <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto tabular-nums">
@@ -245,7 +267,7 @@ export default function StreakHeatmap({ categories, weeks = 16 }: StreakHeatmapP
       </div>
 
       {/* Heatmap grid */}
-      <div className="overflow-x-auto scrollbar-hide">
+      <div ref={containerRef} className="overflow-x-auto scrollbar-hide">
         <div className="relative" style={{ width: gridTotalW, minHeight: 7 * STEP + 18 }}>
           {/* Month labels — absolute positioned */}
           {monthLabels.map((m, i) => (
