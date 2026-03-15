@@ -84,7 +84,20 @@ function getMonthLabels(weeks: number) {
       lastMonth = m;
     }
   }
-  return labels;
+
+  // Remove labels that are too close together (< 3 columns apart)
+  // This prevents overlapping text when a month only has 1-2 weeks visible at the edges
+  const filtered: typeof labels = [];
+  for (let i = 0; i < labels.length; i++) {
+    const next = labels[i + 1];
+    const prev = filtered[filtered.length - 1];
+    // Skip if too close to previous kept label
+    if (prev && labels[i].col - prev.col < 3) continue;
+    // Skip if too close to next label AND this is the first label (edge sliver)
+    if (next && next.col - labels[i].col < 3 && filtered.length === 0) continue;
+    filtered.push(labels[i]);
+  }
+  return filtered;
 }
 
 function formatTooltipDate(dateStr: string) {
