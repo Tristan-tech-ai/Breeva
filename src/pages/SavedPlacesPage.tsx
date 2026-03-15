@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, MapPin, Home, Briefcase, Heart, Trash2, Navigation, Plus, Search, Share2, Clock, ExternalLink } from 'lucide-react';
+import { ChevronLeft, MapPin, Home, Briefcase, Heart, Trash2, Navigation, Plus, Search, Share2, Clock } from 'lucide-react';
 import { useSavedPlacesStore } from '../stores/savedPlacesStore';
 import { useAuthStore } from '../stores/authStore';
 import BottomNavigation from '../components/layout/BottomNavigation';
@@ -269,15 +269,6 @@ export default function SavedPlacesPage() {
                       >
                         <Share2 className="w-3.5 h-3.5" />
                         Share
-                      </button>
-                      <button
-                        onClick={() => {
-                          window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.coordinate.lat + ',' + place.coordinate.lng)}`, '_blank', 'noopener,noreferrer');
-                        }}
-                        className="flex items-center justify-center p-2 rounded-xl bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition"
-                        title="Open in Maps"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => removePlace(place.id)}
