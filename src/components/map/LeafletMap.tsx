@@ -66,19 +66,26 @@ function createUserIcon(): L.DivIcon {
 function createDestIcon(): L.DivIcon {
   return L.divIcon({
     className: 'dest-location-marker',
-    html: `
-      <div class="flex flex-col items-center">
-        <div class="w-9 h-9 bg-gradient-to-br from-red-500 to-rose-600 rounded-full border-[3px] border-white shadow-xl flex items-center justify-center">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-            <circle cx="12" cy="10" r="3"/>
-          </svg>
-        </div>
-        <div class="w-1.5 h-3 bg-gradient-to-b from-red-500 to-rose-600 -mt-0.5 rounded-b-full"></div>
+    html: `<div class="dest-pin">
+        <svg width="28" height="36" viewBox="0 0 28 36" fill="none">
+          <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.27 21.73 0 14 0z" fill="#ef4444"/>
+          <circle cx="14" cy="13" r="5.5" fill="white"/>
+        </svg>
       </div>`,
-    iconSize: [36, 48],
-    iconAnchor: [18, 48],
-    popupAnchor: [0, -48],
+    iconSize: [28, 36],
+    iconAnchor: [14, 36],
+    popupAnchor: [0, -36],
+  });
+}
+
+function createStartIcon(): L.DivIcon {
+  return L.divIcon({
+    className: 'start-location-marker',
+    html: `<div class="start-pin">
+        <div class="start-pin-dot"></div>
+      </div>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
   });
 }
 
@@ -133,6 +140,7 @@ function MapController({
   const prevCenterRef = useRef(center);
   const userMarkerRef = useRef<L.Marker | null>(null);
   const destMarkerRef = useRef<L.Marker | null>(null);
+  const startMarkerRef = useRef<L.Marker | null>(null);
   const routeLayerRef = useRef(L.layerGroup());
 
   // Attach layer groups once
@@ -200,6 +208,24 @@ function MapController({
       destMarkerRef.current = null;
     }
   }, [destination, destinationName, map]);
+
+  // Start marker (shows user location as route origin when routes exist)
+  useEffect(() => {
+    if (routes.length > 0 && userLocation) {
+      if (!startMarkerRef.current) {
+        startMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], {
+          icon: createStartIcon(),
+          interactive: false,
+          zIndexOffset: 800,
+        }).addTo(map);
+      } else {
+        startMarkerRef.current.setLatLng([userLocation.lat, userLocation.lng]);
+      }
+    } else if (startMarkerRef.current) {
+      startMarkerRef.current.remove();
+      startMarkerRef.current = null;
+    }
+  }, [routes, userLocation, map]);
 
   // Route polylines
   useEffect(() => {

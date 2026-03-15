@@ -434,7 +434,32 @@
 
 /* Custom marker resets */
 .user-location-marker,
-.dest-location-marker {
+.dest-location-marker,
+.start-location-marker {
   background: transparent !important;
   border: none !important;
+}
+
+/* Destination pin */
+.dest-pin {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  transition: transform 0.2s ease;
+}
+.dest-pin:hover {
+  transform: scale(1.1);
+}
+
+/* Start pin (green dot with ring) */
+.start-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.start-pin-dot {
+  width: 12px;
+  height: 12px;
+  background: #22c55e;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 0 0 3px rgba(34, 197, 94, 0.2);
 }
