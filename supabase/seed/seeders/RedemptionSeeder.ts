@@ -12,6 +12,11 @@ export class RedemptionSeeder {
   ): Promise<{ count: number }> {
     let total = 0;
 
+    if (rewards.length === 0) {
+      console.log('   ⚠ No rewards available, skipping redemptions');
+      return { count: 0 };
+    }
+
     // Only power & active users redeem rewards
     const eligible = [...userMap.entries()].filter(
       ([, u]) => u.tier === 'power' || u.tier === 'active'

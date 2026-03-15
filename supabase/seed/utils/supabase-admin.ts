@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
+import { config } from 'dotenv';
 
-const url = process.env.SUPABASE_URL;
+// Load .env.local (Vite convention)
+config({ path: '.env.local' });
+
+const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!url || !serviceKey) {

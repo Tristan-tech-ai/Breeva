@@ -8,11 +8,23 @@ export class MerchantSeeder {
     const merchants = makeAllMerchants();
     const inserted: Array<{ id: string; category: string }> = [];
 
-    // Batch insert all merchants
-    const { data, error } = await this.sb
-      .from('merchants')
-      .upsert(
-        merchants.map((m) => ({
+    for (const m of merchants) {
+      // Check if merchant already exists by name
+      const { data: existing } = await this.sb
+        .from('merchants')
+        .select('id, category')
+        .eq('name', m.name)
+        .maybeSingle();
+
+      if (existing) {
+        inserted.push({ id: existing.id, category: existing.category });
+        console.log(`   ↩ ${m.name} already exists`);
+        continue;
+      }
+
+      const { data: row, error: rowErr } = await this.sb
+        .from('merchants')
+        .insert({
           name: m.name,
           description: m.description,
           category: m.category,
@@ -25,50 +37,16 @@ export class MerchantSeeder {
           review_count: m.review_count,
           is_verified: m.is_verified,
           is_active: m.is_active,
-        })),
-        { onConflict: 'name' }
-      )
-      .select('id, category');
+        })
+        .select('id, category')
+        .single();
 
-    if (error) {
-      console.error(`   ✗ Merchant upsert failed: ${error.message}`);
-
-      // Fallback: insert one by one
-      for (const m of merchants) {
-        const { data: row, error: rowErr } = await this.sb
-          .from('merchants')
-          .upsert(
-            {
-              name: m.name,
-              description: m.description,
-              category: m.category,
-              logo_url: m.logo_url,
-              address: m.address,
-              lat: m.lat,
-              lng: m.lng,
-              phone: m.phone,
-              rating: m.rating,
-              review_count: m.review_count,
-              is_verified: m.is_verified,
-              is_active: m.is_active,
-            },
-            { onConflict: 'name' }
-          )
-          .select('id, category')
-          .single();
-
-        if (rowErr) {
-          console.error(`   ✗ ${m.name}: ${rowErr.message}`);
-        } else if (row) {
-          inserted.push({ id: row.id, category: row.category });
-          console.log(`   + ${m.name}`);
-        }
-      }
-    } else if (data) {
-      for (const row of data) {
+      if (rowErr) {
+        console.error(`   ✗ ${m.name}: ${rowErr.message}`);
+      } else if (row) {
         inserted.push({ id: row.id, category: row.category });
+        console.log(`   + ${m.name}`);
       }
-      console.log(`   + Inserted ${data.length} merchants`);
     }
 
     return { count: inserted.length, merchants: inserted };
