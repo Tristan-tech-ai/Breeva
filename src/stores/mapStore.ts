@@ -54,6 +54,9 @@ interface MapState {
   isSearching: boolean;
   recentSearches: SearchResult[];
 
+  // View target (fly-to on search select)
+  viewTarget: Coordinate | null;
+
   // Destination
   destination: Coordinate | null;
   destinationName: string | null;
@@ -74,6 +77,7 @@ interface MapState {
   // Actions
   setCenter: (center: Coordinate) => void;
   setZoom: (zoom: number) => void;
+  setViewTarget: (coord: Coordinate | null) => void;
   setUserLocation: (location: Coordinate | null) => void;
   startLocating: () => void;
   stopLocating: () => void;
@@ -115,6 +119,7 @@ export const useMapStore = create<MapState>()((set, get) => ({
   isSearching: false,
   recentSearches: loadRecentSearches(),
 
+  viewTarget: null,
   destination: null,
   destinationName: null,
 
@@ -246,6 +251,8 @@ export const useMapStore = create<MapState>()((set, get) => ({
   },
 
   clearSearch: () => set({ searchQuery: '', searchResults: [] }),
+
+  setViewTarget: (coord) => set({ viewTarget: coord }),
 
   setDestination: async (coord, name) => {
     if (!name) {

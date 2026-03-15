@@ -90,6 +90,7 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
         price: result.price,
       };
       onPlaceSelect(poi);
+      useMapStore.getState().setViewTarget(result.coordinate);
     } else {
       setDestination(result.coordinate, result.name);
     }
