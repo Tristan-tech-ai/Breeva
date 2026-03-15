@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Moon, Bell, MapPin, CalendarDays, BarChart3,
-  User, Trash2, Smartphone, FileText, Lock,
+  User, Trash2, Smartphone, FileText, Lock, Globe, Ruler,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
+import { requestNotificationPermission, isNotificationEnabled, scheduleStreakReminder, scheduleQuestReminder } from '../lib/notifications';
+import { useI18nStore } from '../stores/i18nStore';
 
 interface SettingSection {
   title: string;
@@ -22,6 +24,7 @@ interface SettingItem {
   type: 'toggle' | 'select' | 'link' | 'danger';
   value?: boolean | string;
   options?: string[];
+  onSelect?: (v: string) => void;
   action?: () => void;
 }
 
@@ -46,6 +49,8 @@ const DEFAULTS: Settings = {
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { locale, setLocale } = useI18nStore();
+  const [distanceUnit, setDistanceUnit] = useState<string>(() => localStorage.getItem('breeva_distance_unit') || 'km');
   const [settings, setSettings] = useState<Settings>(() => {
     // Init from localStorage
     return {
@@ -95,7 +100,13 @@ export default function SettingsPage() {
       .then(() => {});
   }, [user]);
 
-  const toggle = (key: keyof Settings) => {
+  const toggle = async (key: keyof Settings) => {
+    // Special handling for push notifications — request permission
+    if (key === 'push_notifications' && !settings.push_notifications) {
+      const permission = await requestNotificationPermission();
+      if (permission !== 'granted') return; // User denied
+    }
+
     setSettings(prev => {
       const updated = { ...prev, [key]: !prev[key] };
       // localStorage cache
@@ -103,6 +114,10 @@ export default function SettingsPage() {
       // Side effects
       if (key === 'dark_mode') {
         document.documentElement.classList.toggle('dark', updated.dark_mode);
+      }
+      if (key === 'push_notifications' && updated.push_notifications && isNotificationEnabled()) {
+        scheduleStreakReminder();
+        scheduleQuestReminder();
       }
       // Sync to cloud (non-blocking)
       syncToCloud(updated);
@@ -121,6 +136,32 @@ export default function SettingsPage() {
           type: 'toggle',
           value: settings.dark_mode,
           action: () => toggle('dark_mode'),
+        },
+      ],
+    },
+    {
+      title: 'Language & Units',
+      items: [
+        {
+          icon: Globe,
+          label: 'Language',
+          description: locale === 'en' ? 'English' : 'Bahasa Indonesia',
+          type: 'select',
+          value: locale,
+          options: ['en', 'id'],
+          onSelect: (v: string) => setLocale(v as 'en' | 'id'),
+        },
+        {
+          icon: Ruler,
+          label: 'Distance Unit',
+          description: distanceUnit === 'km' ? 'Kilometers' : 'Miles',
+          type: 'select',
+          value: distanceUnit,
+          options: ['km', 'miles'],
+          onSelect: (v: string) => {
+            setDistanceUnit(v);
+            localStorage.setItem('breeva_distance_unit', v);
+          },
         },
       ],
     },
@@ -273,6 +314,24 @@ export default function SettingsPage() {
                           item.value ? 'translate-x-[22px]' : 'translate-x-[2px]'
                         }`}
                       />
+                    </div>
+                  )}
+
+                  {item.type === 'select' && item.options && (
+                    <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                      {item.options.map(opt => (
+                        <button
+                          key={opt}
+                          onClick={(e) => { e.stopPropagation(); item.onSelect?.(opt); }}
+                          className={`px-2.5 py-1 text-[10px] font-medium transition uppercase ${
+                            item.value === opt
+                              ? 'bg-primary-500 text-white'
+                              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                          }`}
+                        >
+                          {opt}
+                        </button>
+                      ))}
                     </div>
                   )}
 

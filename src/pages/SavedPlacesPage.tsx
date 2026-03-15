@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, MapPin, Home, Briefcase, Heart, Trash2, Navigation, Plus, Search } from 'lucide-react';
+import { ChevronLeft, MapPin, Home, Briefcase, Heart, Trash2, Navigation, Plus, Search, Share2 } from 'lucide-react';
 import { useSavedPlacesStore } from '../stores/savedPlacesStore';
 import { useAuthStore } from '../stores/authStore';
 import BottomNavigation from '../components/layout/BottomNavigation';
@@ -41,6 +41,18 @@ export default function SavedPlacesPage() {
     if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
+
+  const handleSharePlace = async (place: SavedPlace) => {
+    const text = `📍 ${place.name}\n📌 ${place.address || `${place.coordinate.lat.toFixed(4)}, ${place.coordinate.lng.toFixed(4)}`}\n\nShared via Breeva — eco-walk app\nhttps://breeva.site`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: place.name, text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        alert('Place info copied to clipboard!');
+      }
+    } catch { /* cancelled */ }
+  };
 
   const handleNavigate = (place: SavedPlace) => {
     // Navigate to home and set destination
@@ -201,6 +213,13 @@ export default function SavedPlacesPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleSharePlace(place)}
+                    className="p-2 rounded-lg text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition"
+                    title="Share"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => handleNavigate(place)}
                     className="p-2 rounded-lg text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition"

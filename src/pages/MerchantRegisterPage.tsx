@@ -11,6 +11,7 @@ import {
   LocateFixed,
   CheckCircle2,
   Loader2,
+  Upload,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
@@ -41,6 +42,8 @@ export default function MerchantRegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docName, setDocName] = useState('');
 
   const handleGetLocation = () => {
     navigator.geolocation.getCurrentPosition(
@@ -60,6 +63,19 @@ export default function MerchantRegisterPage() {
     setIsSubmitting(true);
     setError('');
 
+    let docUrl: string | null = null;
+    if (docFile && user) {
+      const ext = docFile.name.split('.').pop() || 'pdf';
+      const path = `${user.id}/${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from('merchant-docs')
+        .upload(path, docFile, { contentType: docFile.type });
+      if (!uploadErr) {
+        const { data: urlData } = supabase.storage.from('merchant-docs').getPublicUrl(path);
+        docUrl = urlData.publicUrl;
+      }
+    }
+
     const { error: insertErr } = await supabase.from('merchants').insert({
       name: name.trim(),
       description: description.trim() || null,
@@ -71,6 +87,7 @@ export default function MerchantRegisterPage() {
       website: website.trim() || null,
       is_verified: false,
       is_active: false, // Admin activates after verification
+      ...(docUrl && { document_url: docUrl }),
     });
 
     setIsSubmitting(false);
@@ -235,6 +252,37 @@ export default function MerchantRegisterPage() {
             placeholder="https:// or @handle"
             className="glass-input w-full px-4 py-3 text-sm text-gray-900 dark:text-white placeholder-gray-400"
           />
+        </div>
+
+        {/* Business Document */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
+            <Upload className="w-3.5 h-3.5 inline mr-1" />Business Document (KTP/SIUP)
+          </label>
+          {docName ? (
+            <div className="glass-card p-3 flex items-center gap-3">
+              <FileText className="w-5 h-5 text-primary-500 flex-shrink-0" />
+              <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate">{docName}</span>
+              <button onClick={() => { setDocFile(null); setDocName(''); }} className="text-xs text-red-400 font-medium">Remove</button>
+            </div>
+          ) : (
+            <label className="glass-card p-4 flex flex-col items-center gap-2 cursor-pointer hover:border-primary-300 transition">
+              <Upload className="w-6 h-6 text-gray-400" />
+              <span className="text-xs text-gray-500 dark:text-gray-400">Upload KTP, SIUP, or business permit (max 5MB)</span>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  if (f.size > 5 * 1024 * 1024) { setError('File too large (max 5MB)'); return; }
+                  setDocFile(f);
+                  setDocName(f.name);
+                }}
+              />
+            </label>
+          )}
         </div>
 
         {/* Error */}

@@ -32,6 +32,7 @@ const MerchantRegisterPage = lazy(() => import('./pages/MerchantRegisterPage'));
 const MerchantDetailPage = lazy(() => import('./pages/MerchantDetailPage'));
 const WalkDetailPage = lazy(() => import('./pages/WalkDetailPage'));
 const EcoTipsPage = lazy(() => import('./pages/EcoTipsPage'));
+const ContributionHistoryPage = lazy(() => import('./pages/ContributionHistoryPage'));
 
 // Page loading fallback — minimal skeleton
 function PageLoader() {
@@ -142,6 +143,11 @@ function App() {
             <Route path="/contribute" element={
               <ProtectedRoute>
                 <ContributePage />
+              </ProtectedRoute>
+            } />
+            <Route path="/contribute/history" element={
+              <ProtectedRoute>
+                <ContributionHistoryPage />
               </ProtectedRoute>
             } />
 

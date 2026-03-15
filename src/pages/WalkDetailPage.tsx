@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Play, Pause, Download, RotateCcw, Leaf, Clock, Flame } from 'lucide-react';
+import { ChevronLeft, Play, Pause, Download, RotateCcw, Leaf, Clock, Flame, Share2, Wind, Star, Image } from 'lucide-react';
+import { submitAQCalibration } from '../lib/api';
 import { MapContainer, TileLayer, Polyline, CircleMarker, useMap } from 'react-leaflet';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { supabase } from '../lib/supabase';
@@ -52,6 +53,10 @@ export default function WalkDetailPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [replayIndex, setReplayIndex] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // AQ Calibration state
+  const [aqRating, setAqRating] = useState<number | null>(null);
+  const [aqSubmitted, setAqSubmitted] = useState(false);
 
   useEffect(() => {
     if (!id || !user) return;
@@ -117,6 +122,115 @@ export default function WalkDetailPage() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);
 
+  // Share walk stats
+  const handleShare = async () => {
+    if (!walk) return;
+    const text = `🚶 Breeva Walk\n📏 ${formatDistance(walk.distance_meters)}\n⏱ ${formatDuration(walk.duration_seconds)}\n🌱 ${(walk.co2_saved_grams / 1000).toFixed(2)} kg CO₂ saved\n⭐ +${formatNumber(walk.ecopoints_earned)} EcoPoints\n\nTrack your eco-impact at breeva.site`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'My Breeva Walk', text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        alert('Walk stats copied to clipboard!');
+      }
+    } catch { /* cancelled */ }
+  };
+
+  // Share walk stats as image card
+  const handleShareImage = async () => {
+    if (!walk) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 600;
+    canvas.height = 400;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Background gradient
+    const grad = ctx.createLinearGradient(0, 0, 600, 400);
+    grad.addColorStop(0, '#10b981');
+    grad.addColorStop(1, '#059669');
+    ctx.fillStyle = grad;
+    ctx.roundRect(0, 0, 600, 400, 20);
+    ctx.fill();
+
+    // Title
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '600 16px system-ui, sans-serif';
+    ctx.fillText('🚶 BREEVA ECO-WALK', 40, 50);
+
+    // Date
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '14px system-ui, sans-serif';
+    ctx.fillText(new Date(walk.completed_at || walk.created_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }), 40, 75);
+
+    // Stats
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 48px system-ui, sans-serif';
+    ctx.fillText(formatDistance(walk.distance_meters), 40, 150);
+
+    ctx.font = '16px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillText('Distance', 40, 175);
+
+    // Grid stats
+    const stats = [
+      { label: 'Duration', value: formatDuration(walk.duration_seconds) },
+      { label: 'CO₂ Saved', value: `${(walk.co2_saved_grams / 1000).toFixed(2)} kg` },
+      { label: 'EcoPoints', value: `+${formatNumber(walk.ecopoints_earned)}` },
+    ];
+    stats.forEach((s, i) => {
+      const x = 40 + i * 190;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 28px system-ui, sans-serif';
+      ctx.fillText(s.value, x, 240);
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = '13px system-ui, sans-serif';
+      ctx.fillText(s.label, x, 262);
+    });
+
+    // Footer
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillText('Track your eco-impact at breeva.site', 40, 370);
+
+    // Convert to blob and share
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const file = new File([blob], 'breeva-walk.png', { type: 'image/png' });
+      try {
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'My Breeva Walk' });
+        } else {
+          // Fallback: download
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'breeva-walk.png';
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      } catch { /* cancelled */ }
+    }, 'image/png');
+  };
+
+  // AQ Calibration
+  const handleAQCalibration = async (rating: number) => {
+    if (!walk || !user || aqSubmitted) return;
+    setAqRating(rating);
+    setAqSubmitted(true);
+    await submitAQCalibration(walk.id, user.id, rating, walk.origin_lat, walk.origin_lng);
+    // Bonus points for calibration
+    try {
+      await supabase.rpc('add_ecopoints', {
+        p_user_id: user.id,
+        p_amount: 5,
+        p_type: 'aq_calibration',
+        p_description: 'Air quality calibration feedback',
+      });
+    } catch { /* ignore */ }
+    useAuthStore.getState().fetchProfile();
+  };
+
   // GPX export
   const exportGPX = () => {
     if (!walk || routeCoords.length < 2) return;
@@ -174,9 +288,17 @@ ${points}
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-base font-semibold text-gray-900 dark:text-white">Walk Detail</h1>
-        <button onClick={exportGPX} disabled={routeCoords.length < 2} className="text-primary-500 p-1 disabled:opacity-30">
-          <Download className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button onClick={handleShareImage} className="text-primary-500 p-1" title="Share as image">
+            <Image className="w-5 h-5" />
+          </button>
+          <button onClick={handleShare} className="text-primary-500 p-1" title="Share as text">
+            <Share2 className="w-5 h-5" />
+          </button>
+          <button onClick={exportGPX} disabled={routeCoords.length < 2} className="text-primary-500 p-1 disabled:opacity-30" title="Export GPX">
+            <Download className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 pt-4 pb-12 space-y-4">
@@ -266,6 +388,33 @@ ${points}
             </span>
           </div>
         )}
+
+        {/* AQ Calibration Feedback */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Wind size={16} className="text-primary-500" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">How was the air quality?</h3>
+          </div>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-3">Your feedback helps calibrate VAYU Engine (+5 EcoPoints)</p>
+          {aqSubmitted ? (
+            <div className="flex items-center gap-2 text-primary-500 text-xs font-medium">
+              <Star size={14} className="fill-primary-500" />
+              Thanks! You rated: {aqRating}/5
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <button
+                  key={rating}
+                  onClick={() => handleAQCalibration(rating)}
+                  className="flex-1 py-2 rounded-lg text-xs font-medium transition hover:scale-105 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-primary-100 dark:hover:bg-primary-900/30 hover:text-primary-600"
+                >
+                  {rating === 1 ? '😷' : rating === 2 ? '😐' : rating === 3 ? '🙂' : rating === 4 ? '😊' : '🌿'} {rating}
+                </button>
+              ))}
+            </div>
+          )}
+        </motion.div>
       </div>
 
       <BottomNavigation />

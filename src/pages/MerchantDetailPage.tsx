@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Star, MapPin, Phone, Globe, BadgeCheck, Send } from 'lucide-react';
+import { ChevronLeft, Star, MapPin, Phone, Globe, BadgeCheck, Send, Flag } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
@@ -43,6 +43,7 @@ export default function MerchantDetailPage() {
   const [myComment, setMyComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasReviewed, setHasReviewed] = useState(false);
+  const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!id) return;
@@ -109,6 +110,17 @@ export default function MerchantDetailPage() {
 
     setHasReviewed(true);
     setIsSubmitting(false);
+  };
+
+  const handleFlagReview = async (reviewId: string) => {
+    if (!user || flaggedIds.has(reviewId)) return;
+    if (!confirm('Flag this review as inappropriate?')) return;
+    setFlaggedIds(prev => new Set(prev).add(reviewId));
+    await supabase.from('review_flags').insert({
+      review_id: reviewId,
+      user_id: user.id,
+      reason: 'inappropriate',
+    });
   };
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -245,7 +257,18 @@ export default function MerchantDetailPage() {
                         <Star key={s} size={11} className={s <= rev.rating ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'} fill={s <= rev.rating ? 'currentColor' : 'none'} />
                       ))}
                     </div>
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500">{formatDate(rev.created_at)}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-400 dark:text-gray-500">{formatDate(rev.created_at)}</span>
+                      {rev.user_id !== user?.id && (
+                        <button
+                          onClick={() => handleFlagReview(rev.id)}
+                          className={`p-1 rounded transition ${flaggedIds.has(rev.id) ? 'text-red-400' : 'text-gray-300 dark:text-gray-600 hover:text-red-400'}`}
+                          title={flaggedIds.has(rev.id) ? 'Flagged' : 'Flag review'}
+                        >
+                          <Flag size={11} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {rev.comment && (
                     <p className="text-xs text-gray-600 dark:text-gray-300">{rev.comment}</p>

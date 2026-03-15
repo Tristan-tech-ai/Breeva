@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from './authStore';
 import { getVayuExposure, getVayuVehicleType, submitVayuContribution } from '../lib/api';
 import { checkAndUnlockAchievements } from '../lib/achievements';
+import { showNotification, isNotificationEnabled } from '../lib/notifications';
 
 interface WalkTrackingState {
   // Walk session
@@ -235,7 +236,22 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       });
 
       // Auto-contribute walk trace to VAYU crowdsource (non-blocking)
-      submitVayuContribution(session.id, vehicleType).catch(() => {});
+      // Award 5 bonus EcoPoints if contribution succeeds
+      submitVayuContribution(session.id, vehicleType).then(async (ok) => {
+        if (ok) {
+          const user = useAuthStore.getState().user;
+          if (user) {
+            try {
+              await supabase.rpc('add_ecopoints', {
+                p_user_id: user.id,
+                p_amount: 5,
+                p_type: 'vayu_contribution',
+                p_description: 'VAYU data contribution bonus',
+              });
+            } catch { /* ignore */ }
+          }
+        }
+      }).catch(() => {});
     }
 
     // Save to Supabase
@@ -284,6 +300,18 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
 
           // 5. Refresh profile to pick up new stats
           useAuthStore.getState().fetchProfile();
+
+          // 6. Save last walk date for streak reminder
+          localStorage.setItem('breeva_last_walk_date', new Date().toISOString().split('T')[0]);
+
+          // 7. Walk completion notification
+          if (isNotificationEnabled()) {
+            showNotification(
+              '🚶 Walk Complete!',
+              `${(distanceMeters / 1000).toFixed(2)} km walked — +${points} EcoPoints earned`,
+              { url: '/eco-impact', tag: 'walk-complete' }
+            ).catch(() => {});
+          }
         }
       }
     } catch (error) {

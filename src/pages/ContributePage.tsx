@@ -13,6 +13,7 @@ import {
   LocateFixed,
   Wind,
   Footprints,
+  Clock,
 } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { supabase } from '../lib/supabase';
@@ -168,7 +169,9 @@ export default function ContributePage() {
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-base font-semibold text-gray-900 dark:text-white">Contribute</h1>
-        <div className="w-6" />
+        <button onClick={() => navigate('/contribute/history')} className="text-primary-500 p-1">
+          <Clock className="w-5 h-5" />
+        </button>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 pt-4 pb-12">

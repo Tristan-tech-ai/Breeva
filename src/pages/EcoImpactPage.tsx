@@ -1,7 +1,7 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Leaf, TreePine, Droplets, Wind, Flame, TrendingUp, Award, Footprints } from 'lucide-react';
+import { ChevronLeft, Leaf, TreePine, Droplets, Wind, Flame, TrendingUp, Award, Footprints, Share2, Users } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
 import BottomNavigation from '../components/layout/BottomNavigation';
@@ -40,6 +40,7 @@ export default function EcoImpactPage() {
   const { profile, user } = useAuthStore();
   const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([]);
   const [chartTab, setChartTab] = useState<'co2' | 'distance'>('co2');
+  const [avgStats, setAvgStats] = useState<{ km: number; co2: number; walks: number } | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -73,6 +74,20 @@ export default function EcoImpactPage() {
         walks: v.walks,
       })));
     })();
+
+    // Fetch average stats across all users
+    supabase
+      .from('users')
+      .select('total_distance_km, total_co2_saved_grams, total_walks')
+      .then(({ data: allUsers }) => {
+        if (allUsers && allUsers.length > 1) {
+          const count = allUsers.length;
+          const avgKm = allUsers.reduce((s, u) => s + (u.total_distance_km || 0), 0) / count;
+          const avgCo2 = allUsers.reduce((s, u) => s + (u.total_co2_saved_grams || 0), 0) / count;
+          const avgWalks = allUsers.reduce((s, u) => s + (u.total_walks || 0), 0) / count;
+          setAvgStats({ km: avgKm, co2: avgCo2 / 1000, walks: avgWalks });
+        }
+      });
   }, [user]);
 
   const totalKm = profile?.total_distance_km || 0;
@@ -82,6 +97,18 @@ export default function EcoImpactPage() {
   const caloriesBurned = Math.round(totalKm * 60);
   const waterSaved = (totalKm * 3.8).toFixed(0); // ~3.8L water per km of car driving
   const currentStreak = profile?.current_streak || 0;
+
+  const handleShareImpact = async () => {
+    const text = `\ud83c\udf3f My Breeva Eco Impact\n\ud83d\udeb6 ${totalKm.toFixed(1)} km walked (${totalWalks} walks)\n\ud83c\udf31 ${co2Saved} kg CO\u2082 saved\n\ud83c\udf32 ${treesEquivalent} trees worth\n\ud83d\udca7 ${waterSaved}L water saved\n\ud83d\udd25 ${currentStreak} day streak\n\nJoin the eco-walk movement at breeva.site`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'My Eco Impact - Breeva', text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        alert('Eco impact copied to clipboard!');
+      }
+    } catch { /* cancelled */ }
+  };
 
   const impactCards = [
     {
@@ -137,7 +164,9 @@ export default function EcoImpactPage() {
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-base font-semibold text-gray-900 dark:text-white">Eco Impact</h1>
-        <div className="w-6" />
+        <button onClick={handleShareImpact} className="text-primary-500 p-1">
+          <Share2 className="w-5 h-5" />
+        </button>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 pt-4 pb-12 space-y-5">
@@ -268,6 +297,52 @@ export default function EcoImpactPage() {
             </div>
           </div>
         </motion.div>
+
+        {/* Avg Comparison */}
+        {avgStats && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.45 }}
+            className="glass-card p-4"
+          >
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+              <Users className="w-4 h-4 text-primary-500" />
+              vs Average Breeva User
+            </h3>
+            <div className="space-y-3">
+              {[
+                { label: 'Distance', yours: totalKm, avg: avgStats.km, unit: 'km' },
+                { label: 'CO\u2082 Saved', yours: Number(co2Saved), avg: avgStats.co2, unit: 'kg' },
+                { label: 'Walks', yours: totalWalks, avg: avgStats.walks, unit: '' },
+              ].map((stat) => {
+                const pct = stat.avg > 0 ? Math.round(((stat.yours - stat.avg) / stat.avg) * 100) : 0;
+                return (
+                  <div key={stat.label}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{stat.label}</span>
+                      <span className={`text-xs font-bold ${
+                        pct >= 0 ? 'text-emerald-500' : 'text-amber-500'
+                      }`}>
+                        {pct >= 0 ? '+' : ''}{pct}%
+                      </span>
+                    </div>
+                    <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${pct >= 0 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                        style={{ width: `${Math.min(Math.max((stat.yours / Math.max(stat.avg * 2, 1)) * 100, 5), 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[9px] text-gray-400 dark:text-gray-500 mt-0.5">
+                      <span>You: {stat.yours.toFixed(1)} {stat.unit}</span>
+                      <span>Avg: {stat.avg.toFixed(1)} {stat.unit}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
 
         {/* Milestones */}
         <div>

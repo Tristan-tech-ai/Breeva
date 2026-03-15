@@ -1134,6 +1134,32 @@ export async function submitVayuContribution(
   }
 }
 
+/** Submit AQ calibration feedback after a walk */
+export async function submitAQCalibration(
+  walkId: string,
+  userId: string,
+  aqRating: number,
+  lat: number,
+  lng: number
+): Promise<boolean> {
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const { error } = await supabase.from('air_quality_reports').insert({
+      user_id: userId,
+      lat,
+      lng,
+      aqi_rating: aqRating,
+      description: `Walk calibration (walk: ${walkId})`,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 /** Fetch road-level AQI data for a map viewport bounding box */
 export async function getRoadAQI(
   south: number,

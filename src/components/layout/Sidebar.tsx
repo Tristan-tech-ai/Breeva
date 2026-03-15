@@ -21,6 +21,7 @@ import {
   Store,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import { useI18nStore } from '../../stores/i18nStore';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -50,7 +51,7 @@ const menuSections = [
   {
     title: 'Preferences',
     items: [
-      { icon: Globe, label: 'Language', path: '/profile/settings', color: 'text-cyan-500', badge: 'EN' },
+      { icon: Globe, label: 'Language', path: '#lang', color: 'text-cyan-500', badge: 'LANG' },
       { icon: Settings, label: 'Settings', path: '/profile/settings', color: 'text-gray-500 dark:text-gray-400' },
     ],
   },
@@ -66,11 +67,15 @@ const menuSections = [
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { profile, signOut } = useAuthStore();
+  const { locale, setLocale } = useI18nStore();
 
   const handleItemClick = (path: string) => {
     if (path.startsWith('#')) {
       if (path === '#share') {
         handleShareLocation();
+      }
+      if (path === '#lang') {
+        setLocale(locale === 'en' ? 'id' : 'en');
       }
       return;
     }
@@ -179,7 +184,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                         </span>
                         {(item as { badge?: string }).badge && (
                           <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
-                            {(item as { badge?: string }).badge}
+                            {(item as { badge?: string }).badge === 'LANG' ? locale.toUpperCase() : (item as { badge?: string }).badge}
                           </span>
                         )}
                         <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600" />

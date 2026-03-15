@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Lightbulb, Leaf, Wind, Footprints, Droplets, TreePine } from 'lucide-react';
+import { ChevronLeft, Leaf, Wind, Footprints, Droplets, TreePine, AlertTriangle } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 
 const tips = [
@@ -55,9 +55,62 @@ const tips = [
   },
 ];
 
+const aqTips = [
+  {
+    condition: 'good',
+    maxAqi: 50,
+    icon: Leaf,
+    title: 'Air Quality is Great!',
+    body: 'AQ index is below 50 — perfect for outdoor walks. Take advantage and go for a longer walk today!',
+    color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20',
+  },
+  {
+    condition: 'moderate',
+    maxAqi: 100,
+    icon: Wind,
+    title: 'Moderate Air Quality',
+    body: 'AQ index is 51-100. Walking is still safe for most people. Avoid heavy exercise near busy roads.',
+    color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/20',
+  },
+  {
+    condition: 'poor',
+    maxAqi: 999,
+    icon: AlertTriangle,
+    title: 'Poor Air Quality Alert',
+    body: 'AQ index is above 100. Consider shorter walks, wear a mask, and stick to routes through parks and green spaces.',
+    color: 'text-red-500 bg-red-50 dark:bg-red-900/20',
+  },
+];
+
 export default function EcoTipsPage() {
   const navigate = useNavigate();
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [currentAqi, setCurrentAqi] = useState<number | null>(null);
+
+  // Fetch AQI for current location
+  useEffect(() => {
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const res = await fetch(`/api/vayu/aqi?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`);
+          if (res.ok) {
+            const data = await res.json();
+            setCurrentAqi(data.aqi ?? data.value ?? null);
+          }
+        } catch { /* ignore */ }
+      },
+      () => {},
+      { enableHighAccuracy: false, timeout: 5000 }
+    );
+  }, []);
+
+  // Daily tip rotation based on date
+  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+  const tipOfDay = tips[dayOfYear % tips.length];
+  const TipOfDayIcon = tipOfDay.icon;
+
+  // Get relevant AQ tip
+  const aqTip = currentAqi != null ? aqTips.find(t => currentAqi <= t.maxAqi) || aqTips[aqTips.length - 1] : null;
 
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24">
@@ -73,14 +126,45 @@ export default function EcoTipsPage() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-5 mb-5 text-center"
+          className="glass-card p-5 mb-5"
         >
-          <Lightbulb className="w-8 h-8 text-amber-400 mx-auto mb-2" />
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Did You Know?</h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Small habits create big impact. Here are tips to make your walks even more eco-friendly.
+          <div className="flex items-center gap-3 mb-2">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${tipOfDay.color}`}>
+              <TipOfDayIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">Tip of the Day</p>
+              <h2 className="text-sm font-bold text-gray-900 dark:text-white">{tipOfDay.title}</h2>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed ml-[52px]">
+            {tipOfDay.body}
           </p>
         </motion.div>
+
+        {/* AQ-Based Tip */}
+        {aqTip && (() => {
+          const AqIcon = aqTip.icon;
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 }}
+              className="glass-card p-4 mb-5 border border-gray-200/50 dark:border-gray-700/30"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${aqTip.color}`}>
+                  <AqIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Based on Local AQ{currentAqi != null ? ` (AQI: ${currentAqi})` : ''}</p>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">{aqTip.title}</h3>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed ml-[52px]">{aqTip.body}</p>
+            </motion.div>
+          );
+        })()}
 
         <div className="space-y-3">
           {tips.map((tip, i) => {
