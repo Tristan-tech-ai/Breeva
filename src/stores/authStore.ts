@@ -21,6 +21,28 @@ export interface UserProfile {
   onboarding_completed?: boolean;
 }
 
+// Helper to call our email API
+async function sendEmailApi(body: Record<string, string>) {
+  const res = await fetch('/api/auth/email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: 'Email send failed' }));
+    throw new Error(data.error || 'Failed to send email');
+  }
+  return res.json();
+}
+
+interface PendingVerification {
+  email: string;
+  password: string;
+  fullName: string;
+  otp: string;
+  expiresAt: number;
+}
+
 interface AuthState {
   // State
   user: SupabaseUser | null;
@@ -29,6 +51,7 @@ interface AuthState {
   isLoading: boolean;
   isInitialized: boolean;
   error: string | null;
+  pendingVerification: PendingVerification | null;
 
   // Actions
   setUser: (user: SupabaseUser | null) => void;
@@ -42,6 +65,10 @@ interface AuthState {
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<boolean>;
   signUpWithEmail: (email: string, password: string, fullName: string) => Promise<boolean>;
+  verifyOtp: (code: string) => Promise<boolean>;
+  resendOtp: () => Promise<boolean>;
+  sendResetPasswordEmail: (email: string) => Promise<boolean>;
+  resetPassword: (token: string, newPassword: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   fetchProfile: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
@@ -59,6 +86,7 @@ export const useAuthStore = create<AuthState>()(
       isLoading: true,
       isInitialized: false,
       error: null,
+      pendingVerification: null,
 
       // Setters
       setUser: (user) => set({ user }),
@@ -109,27 +137,142 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Sign up with email/password
+      // Sign up with email/password — sends OTP verification first
       signUpWithEmail: async (email: string, password: string, fullName: string) => {
         try {
           set({ isLoading: true, error: null });
+
+          // Generate 6-digit OTP
+          const otp = String(Math.floor(100000 + Math.random() * 900000));
+          const expiresAt = Date.now() + 15 * 60 * 1000; // 15 min
+
+          // Send verification email
+          await sendEmailApi({ type: 'verification', email, name: fullName, otp });
+
+          // Store pending verification — don't create account yet
+          set({
+            pendingVerification: { email, password, fullName, otp, expiresAt },
+            isLoading: false,
+          });
+          return true;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to sign up';
+          set({ error: message, isLoading: false });
+          return false;
+        }
+      },
+
+      // Verify OTP and complete signup
+      verifyOtp: async (code: string) => {
+        const { pendingVerification } = get();
+        if (!pendingVerification) {
+          set({ error: 'No pending verification' });
+          return false;
+        }
+
+        if (Date.now() > pendingVerification.expiresAt) {
+          set({ error: 'Verification code expired. Please sign up again.', pendingVerification: null });
+          return false;
+        }
+
+        if (code !== pendingVerification.otp) {
+          set({ error: 'Invalid verification code' });
+          return false;
+        }
+
+        try {
+          set({ isLoading: true, error: null });
+          const { email, password, fullName } = pendingVerification;
+
+          // Now actually create the account
           const { data, error } = await supabase.auth.signUp({
             email,
             password,
-            options: {
-              data: { full_name: fullName },
-            },
+            options: { data: { full_name: fullName } },
           });
           if (error) throw error;
+
           if (data.user) {
-            set({ user: data.user, session: data.session });
+            set({ user: data.user, session: data.session, pendingVerification: null });
             await get().fetchProfile();
+
+            // Send welcome email (fire-and-forget)
+            sendEmailApi({ type: 'welcome', email, name: fullName }).catch(console.error);
+
             set({ isLoading: false });
             return true;
           }
           return false;
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to sign up';
+          const message = err instanceof Error ? err.message : 'Failed to create account';
+          set({ error: message, isLoading: false });
+          return false;
+        }
+      },
+
+      // Resend OTP
+      resendOtp: async () => {
+        const { pendingVerification } = get();
+        if (!pendingVerification) {
+          set({ error: 'No pending verification' });
+          return false;
+        }
+        try {
+          set({ isLoading: true, error: null });
+          const otp = String(Math.floor(100000 + Math.random() * 900000));
+          const expiresAt = Date.now() + 15 * 60 * 1000;
+
+          await sendEmailApi({
+            type: 'verification',
+            email: pendingVerification.email,
+            name: pendingVerification.fullName,
+            otp,
+          });
+
+          set({
+            pendingVerification: { ...pendingVerification, otp, expiresAt },
+            isLoading: false,
+          });
+          return true;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to resend code';
+          set({ error: message, isLoading: false });
+          return false;
+        }
+      },
+
+      // Send reset password email
+      sendResetPasswordEmail: async (email: string) => {
+        try {
+          set({ isLoading: true, error: null });
+          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
+          });
+          if (error) throw error;
+
+          // Also send our branded email
+          const resetLink = `${window.location.origin}/auth/callback?type=recovery`;
+          sendEmailApi({ type: 'reset', email, name: '', resetLink }).catch(console.error);
+
+          set({ isLoading: false });
+          return true;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to send reset email';
+          set({ error: message, isLoading: false });
+          return false;
+        }
+      },
+
+      // Reset password with new password (after callback)
+      resetPassword: async (_token: string, newPassword: string) => {
+        try {
+          set({ isLoading: true, error: null });
+          const { error } = await supabase.auth.updateUser({ password: newPassword });
+          if (error) throw error;
+          set({ isLoading: false });
+          return true;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to reset password';
           set({ error: message, isLoading: false });
           return false;
         }
