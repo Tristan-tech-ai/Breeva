@@ -411,10 +411,49 @@ async function findRoadsAlongRoute(routeGeoJson: string, bufferMeters = 30): Pro
   } catch { return []; }
 }
 
-// ─── Supabase RPC: find_roads_in_bbox (gang road lookup) ────
-async function findGangRoadsInBBox(
+// ─── Supabase RPC: find_through_gang_roads (topology-verified) ──
+interface ThroughGangRoad {
+  osm_way_id: number; geojson: string; highway: string;
+  name: string | null; road_length_m: number;
+  start_connections: number; end_connections: number;
+}
+
+async function findThroughGangRoads(
   south: number, west: number, north: number, east: number,
-): Promise<Array<{ osm_way_id: number; geojson: string; highway: string; name: string | null }>> {
+  roadLimit = 20, connectionDistanceM = 5.0,
+): Promise<ThroughGangRoad[]> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return [];
+  try {
+    const resp = await fetch(`${url}/rest/v1/rpc/find_through_gang_roads`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        south, west, north, east,
+        road_limit: roadLimit,
+        connection_distance_m: connectionDistanceM,
+      }),
+    });
+    if (!resp.ok) {
+      // Fallback to old bbox query if new RPC not deployed yet
+      return await findGangRoadsInBBoxFallback(south, west, north, east);
+    }
+    const data = await resp.json();
+    return Array.isArray(data) && data.length > 0 ? data : [];
+  } catch {
+    return await findGangRoadsInBBoxFallback(south, west, north, east);
+  }
+}
+
+// Fallback: old bbox query (used if migration 007 not yet applied)
+async function findGangRoadsInBBoxFallback(
+  south: number, west: number, north: number, east: number,
+): Promise<ThroughGangRoad[]> {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return [];
@@ -434,7 +473,16 @@ async function findGangRoadsInBBox(
       }),
     });
     if (!resp.ok) return [];
-    return await resp.json();
+    const rows = await resp.json();
+    return (rows || []).map((r: Record<string, unknown>) => ({
+      osm_way_id: r.osm_way_id as number,
+      geojson: r.geojson as string,
+      highway: r.highway as string,
+      name: (r.name as string) ?? null,
+      road_length_m: 0,
+      start_connections: 1,
+      end_connections: 1,
+    }));
   } catch { return []; }
 }
 
@@ -991,24 +1039,28 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       try {
         const midLat = (startLat + endLat) / 2;
         const midLng = (startLng + endLng) / 2;
-        // Fix C: Corridor-wide search instead of midpoint-only
-        const bufferDeg = 0.003; // ~300m buffer
+        // Fix C: Corridor-wide search
+        const bufferDeg = 0.003;
         const south = Math.min(startLat, endLat) - bufferDeg;
         const north = Math.max(startLat, endLat) + bufferDeg;
         const west = Math.min(startLng, endLng) - bufferDeg;
         const east = Math.max(startLng, endLng) + bufferDeg;
-        const gangRoads = await findGangRoadsInBBox(south, west, north, east);
-        if (gangRoads.length > 0) {
-          // Fix D: Score gang roads by length + alignment + proximity instead of closest-to-midpoint
+        // Phase 1: Use topology-verified through-road RPC (no dead-ends)
+        const throughRoads = await findThroughGangRoads(south, west, north, east);
+        if (throughRoads.length > 0) {
+          // Fix D: Score through-roads by length + alignment + proximity
           const travelBearing = Math.atan2(endLng - startLng, endLat - startLat);
-          const scoredGangRoads = gangRoads
+          const scoredGangRoads = throughRoads
             .map(gr => {
               try {
                 const coords = JSON.parse(gr.geojson).coordinates;
                 if (coords.length < 2) return null;
-                let len = 0;
-                for (let i = 1; i < coords.length; i++) {
-                  len += haversineMeters(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]);
+                // Use road_length_m from RPC if available, else compute
+                let len = gr.road_length_m || 0;
+                if (len === 0) {
+                  for (let i = 1; i < coords.length; i++) {
+                    len += haversineMeters(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]);
+                  }
                 }
                 const first = coords[0];
                 const last = coords[coords.length - 1];
@@ -1017,9 +1069,12 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
                 const alignment = Math.abs(Math.cos(angleDiff));
                 const mid = coords[Math.floor(coords.length / 2)];
                 const distToMid = haversineMeters(midLat, midLng, mid[1], mid[0]);
-                const score = (Math.min(len, 200) / 200) * 0.4
-                            + alignment * 0.3
-                            + (1 - Math.min(distToMid, 500) / 500) * 0.3;
+                // Connectivity bonus: more connections = more confident through-road
+                const connScore = Math.min((gr.start_connections + gr.end_connections) / 6, 1);
+                const score = (Math.min(len, 200) / 200) * 0.3
+                            + alignment * 0.25
+                            + (1 - Math.min(distToMid, 500) / 500) * 0.25
+                            + connScore * 0.2;
                 return { ...gr, coords, len, score, mid };
               } catch { return null; }
             })
