@@ -2,13 +2,17 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../stores/authStore';
+import { supabase } from '../lib/supabase';
+
+const MAX_AVATAR_SIZE = 2 * 1024 * 1024; // 2MB
 
 export default function EditProfilePage() {
-  const { profile, updateProfile, isLoading } = useAuthStore();
+  const { user, profile, updateProfile, isLoading } = useAuthStore();
   const navigate = useNavigate();
 
   const [name, setName] = useState(profile?.name || '');
   const [avatarPreview, setAvatarPreview] = useState(profile?.avatar_url || '');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -16,20 +20,52 @@ export default function EditProfilePage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (!file.type.startsWith('image/')) {
+      setMessage({ type: 'error', text: 'Please select an image file.' });
+      return;
+    }
+    if (file.size > MAX_AVATAR_SIZE) {
+      setMessage({ type: 'error', text: 'Image must be under 2MB.' });
+      return;
+    }
+
     // Preview
     const reader = new FileReader();
     reader.onload = () => setAvatarPreview(reader.result as string);
     reader.readAsDataURL(file);
-
-    // TODO: Upload to Supabase Storage
+    setAvatarFile(file);
   };
 
   const handleSave = async () => {
+    if (!user) return;
     setIsSaving(true);
     setMessage(null);
 
     try {
-      await updateProfile({ name: name.trim() || null });
+      let avatarUrl: string | undefined;
+
+      // Upload avatar if changed
+      if (avatarFile) {
+        const ext = avatarFile.name.split('.').pop() || 'jpg';
+        const filePath = `${user.id}/avatar.${ext}`;
+
+        const { error: uploadErr } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, avatarFile, { upsert: true, contentType: avatarFile.type });
+
+        if (uploadErr) throw new Error('Avatar upload failed');
+
+        const { data: urlData } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+
+        avatarUrl = urlData.publicUrl;
+      }
+
+      await updateProfile({
+        name: name.trim() || null,
+        ...(avatarUrl && { avatar_url: avatarUrl }),
+      });
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
       setTimeout(() => navigate('/profile'), 1000);
     } catch {

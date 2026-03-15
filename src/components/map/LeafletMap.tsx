@@ -215,10 +215,38 @@ function MapController({
     }
 
     if (selectedRoute) {
-      L.polyline(
-        selectedRoute.waypoints.map((wp) => [wp.lat, wp.lng] as L.LatLngTuple),
-        { color: getRouteColor(selectedRoute), weight: 7, opacity: 0.9 },
-      ).addTo(routeLayerRef.current);
+      const segments = selectedRoute.vayu_score?.segments;
+      if (segments && segments.length > 0 && selectedRoute.waypoints.length >= 2) {
+        // Draw colored sub-polylines per VAYU segment AQI
+        const wps = selectedRoute.waypoints;
+        const totalPoints = wps.length;
+        // Draw base route line (subtle) then overlay colored segments
+        L.polyline(
+          wps.map((wp) => [wp.lat, wp.lng] as L.LatLngTuple),
+          { color: getRouteColor(selectedRoute), weight: 5, opacity: 0.3 },
+        ).addTo(routeLayerRef.current);
+
+        for (let i = 0; i < segments.length; i++) {
+          const seg = segments[i];
+          const nextFrac = i < segments.length - 1 ? segments[i + 1].fraction_along : 1.0;
+          const startIdx = Math.max(0, Math.floor(seg.fraction_along * (totalPoints - 1)));
+          const endIdx = Math.min(totalPoints - 1, Math.ceil(nextFrac * (totalPoints - 1)));
+          if (endIdx <= startIdx) continue;
+          const segPoints = wps.slice(startIdx, endIdx + 1).map((wp) => [wp.lat, wp.lng] as L.LatLngTuple);
+          if (segPoints.length < 2) continue;
+          L.polyline(segPoints, {
+            color: getAQIColor(seg.aqi),
+            weight: 7,
+            opacity: 0.9,
+          }).addTo(routeLayerRef.current);
+        }
+      } else {
+        // Fallback: solid single-color polyline
+        L.polyline(
+          selectedRoute.waypoints.map((wp) => [wp.lat, wp.lng] as L.LatLngTuple),
+          { color: getRouteColor(selectedRoute), weight: 7, opacity: 0.9 },
+        ).addTo(routeLayerRef.current);
+      }
     }
   }, [routes, selectedRoute]);
 

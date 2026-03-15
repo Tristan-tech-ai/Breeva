@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import { useAuthStore } from '../stores/authStore';
+import { supabase } from '../lib/supabase';
 
 interface SettingSection {
   title: string;
@@ -23,39 +25,89 @@ interface SettingItem {
   action?: () => void;
 }
 
+interface Settings {
+  dark_mode: boolean;
+  push_notifications: boolean;
+  location_tracking: boolean;
+  quest_reminders: boolean;
+  anonymous_data: boolean;
+  profile_visible: boolean;
+}
+
+const DEFAULTS: Settings = {
+  dark_mode: false,
+  push_notifications: true,
+  location_tracking: true,
+  quest_reminders: true,
+  anonymous_data: true,
+  profile_visible: true,
+};
+
 export default function SettingsPage() {
   const navigate = useNavigate();
-  const [darkMode, setDarkMode] = useState(
-    document.documentElement.classList.contains('dark')
-  );
-  const [pushNotifications, setPushNotifications] = useState(() => localStorage.getItem('breeva_push_notifications') !== 'false');
-  const [locationTracking, setLocationTracking] = useState(() => localStorage.getItem('breeva_location_tracking') !== 'false');
-  const [questReminders, setQuestReminders] = useState(() => localStorage.getItem('breeva_quest_reminders') !== 'false');
-  const [anonymousData, setAnonymousData] = useState(() => localStorage.getItem('breeva_anonymous_data') !== 'false');
-  const [profileVisible, setProfileVisible] = useState(() => localStorage.getItem('breeva_profile_visible') !== 'false');
+  const { user } = useAuthStore();
+  const [settings, setSettings] = useState<Settings>(() => {
+    // Init from localStorage
+    return {
+      dark_mode: document.documentElement.classList.contains('dark'),
+      push_notifications: localStorage.getItem('breeva_push_notifications') !== 'false',
+      location_tracking: localStorage.getItem('breeva_location_tracking') !== 'false',
+      quest_reminders: localStorage.getItem('breeva_quest_reminders') !== 'false',
+      anonymous_data: localStorage.getItem('breeva_anonymous_data') !== 'false',
+      profile_visible: localStorage.getItem('breeva_profile_visible') !== 'false',
+    };
+  });
 
-  // Persist toggles to localStorage
+  // Fetch from Supabase on mount
   useEffect(() => {
-    localStorage.setItem('breeva_push_notifications', String(pushNotifications));
-  }, [pushNotifications]);
-  useEffect(() => {
-    localStorage.setItem('breeva_location_tracking', String(locationTracking));
-  }, [locationTracking]);
-  useEffect(() => {
-    localStorage.setItem('breeva_quest_reminders', String(questReminders));
-  }, [questReminders]);
-  useEffect(() => {
-    localStorage.setItem('breeva_anonymous_data', String(anonymousData));
-  }, [anonymousData]);
-  useEffect(() => {
-    localStorage.setItem('breeva_profile_visible', String(profileVisible));
-  }, [profileVisible]);
+    if (!user) return;
+    supabase
+      .from('user_settings')
+      .select('*')
+      .eq('user_id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          const cloud: Settings = {
+            dark_mode: data.dark_mode ?? DEFAULTS.dark_mode,
+            push_notifications: data.push_notifications ?? DEFAULTS.push_notifications,
+            location_tracking: data.location_tracking ?? DEFAULTS.location_tracking,
+            quest_reminders: data.quest_reminders ?? DEFAULTS.quest_reminders,
+            anonymous_data: data.anonymous_data ?? DEFAULTS.anonymous_data,
+            profile_visible: data.profile_visible ?? DEFAULTS.profile_visible,
+          };
+          setSettings(cloud);
+          // Apply dark mode from cloud
+          document.documentElement.classList.toggle('dark', cloud.dark_mode);
+          // Cache locally
+          for (const [k, v] of Object.entries(cloud)) {
+            localStorage.setItem(`breeva_${k}`, String(v));
+          }
+        }
+      });
+  }, [user]);
 
-  const toggleDarkMode = () => {
-    const newVal = !darkMode;
-    setDarkMode(newVal);
-    document.documentElement.classList.toggle('dark', newVal);
-    localStorage.setItem('breeva_dark_mode', newVal ? 'true' : 'false');
+  const syncToCloud = useCallback((updated: Settings) => {
+    if (!user) return;
+    supabase
+      .from('user_settings')
+      .upsert({ user_id: user.id, ...updated, updated_at: new Date().toISOString() })
+      .then(() => {});
+  }, [user]);
+
+  const toggle = (key: keyof Settings) => {
+    setSettings(prev => {
+      const updated = { ...prev, [key]: !prev[key] };
+      // localStorage cache
+      localStorage.setItem(`breeva_${key}`, String(updated[key]));
+      // Side effects
+      if (key === 'dark_mode') {
+        document.documentElement.classList.toggle('dark', updated.dark_mode);
+      }
+      // Sync to cloud (non-blocking)
+      syncToCloud(updated);
+      return updated;
+    });
   };
 
   const sections: SettingSection[] = [
@@ -67,8 +119,8 @@ export default function SettingsPage() {
           label: 'Dark Mode',
           description: 'Switch between light and dark themes',
           type: 'toggle',
-          value: darkMode,
-          action: toggleDarkMode,
+          value: settings.dark_mode,
+          action: () => toggle('dark_mode'),
         },
       ],
     },
@@ -80,24 +132,24 @@ export default function SettingsPage() {
           label: 'Push Notifications',
           description: 'Receive walk and quest reminders',
           type: 'toggle',
-          value: pushNotifications,
-          action: () => setPushNotifications(!pushNotifications),
+          value: settings.push_notifications,
+          action: () => toggle('push_notifications'),
         },
         {
           icon: MapPin,
           label: 'Location Updates',
           description: 'Notify about nearby merchants',
           type: 'toggle',
-          value: locationTracking,
-          action: () => setLocationTracking(!locationTracking),
+          value: settings.location_tracking,
+          action: () => toggle('location_tracking'),
         },
         {
           icon: CalendarDays,
           label: 'Quest Reminders',
           description: 'Daily quest availability alerts',
           type: 'toggle',
-          value: questReminders,
-          action: () => setQuestReminders(!questReminders),
+          value: settings.quest_reminders,
+          action: () => toggle('quest_reminders'),
         },
       ],
     },
@@ -109,16 +161,16 @@ export default function SettingsPage() {
           label: 'Anonymous Data',
           description: 'Share anonymized usage data to improve Breeva',
           type: 'toggle',
-          value: anonymousData,
-          action: () => setAnonymousData(!anonymousData),
+          value: settings.anonymous_data,
+          action: () => toggle('anonymous_data'),
         },
         {
           icon: User,
           label: 'Profile Visibility',
           description: 'Show your profile on leaderboards',
           type: 'toggle',
-          value: profileVisible,
-          action: () => setProfileVisible(!profileVisible),
+          value: settings.profile_visible,
+          action: () => toggle('profile_visible'),
         },
         {
           icon: Trash2,

@@ -822,8 +822,9 @@ function computeRoadAQI(
     : 1.0;
   const effectiveWind = baseline.wind_speed * windShelter;
 
-  // Narrower roads trap pollution more (8m reference width)
-  const widthFactor = road.width ? Math.max(0.8, Math.min(1.5, 8.0 / road.width)) : 1.0;
+  // Narrower roads trap pollution more (8m reference width) — scaled by traffic so empty gang roads aren't penalized
+  const rawWidthFactor = road.width ? Math.max(0.8, Math.min(1.5, 8.0 / road.width)) : 1.0;
+  const widthFactor = traffic > 50 ? rawWidthFactor : 1.0 + (rawWidthFactor - 1.0) * Math.min(1, traffic / 50);
 
   // Elevation correction: higher altitude = faster dispersion
   const elevFactor = elevationFactor(road.elevation_avg);

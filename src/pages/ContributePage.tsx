@@ -60,6 +60,8 @@ export default function ContributePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const handleGetLocation = () => {
     navigator.geolocation.getCurrentPosition(
@@ -83,6 +85,23 @@ export default function ContributePage() {
 
     try {
       const { user } = useAuthStore.getState();
+      let photoUrl: string | null = null;
+
+      // Upload photo if provided
+      if (photoFile && user) {
+        const ext = photoFile.name.split('.').pop() || 'jpg';
+        const filePath = `${user.id}/${Date.now()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage
+          .from('contributions')
+          .upload(filePath, photoFile, { contentType: photoFile.type });
+
+        if (!uploadErr) {
+          const { data: urlData } = supabase.storage
+            .from('contributions')
+            .getPublicUrl(filePath);
+          photoUrl = urlData.publicUrl;
+        }
+      }
 
       // Submit air quality hazard reports to Supabase
       if (selectedType === 'hazard' && currentCoords && user) {
@@ -92,7 +111,19 @@ export default function ContributePage() {
           lng: currentCoords.lng,
           aqi_rating: 4, // poor
           description: `${placeName.trim()} — ${placeDescription.trim()}`,
+          ...(photoUrl && { photo_url: photoUrl }),
         });
+      }
+
+      // Award EcoPoints for contribution
+      if (user) {
+        await supabase.rpc('add_ecopoints', {
+          p_user_id: user.id,
+          p_amount: 25,
+          p_type: 'contribution',
+          p_description: `Contributed: ${selectedType} — ${placeName.trim()}`,
+        });
+        useAuthStore.getState().fetchProfile();
       }
 
       // Store all contributions locally + as a backup
@@ -104,6 +135,7 @@ export default function ContributePage() {
         category: placeCategory.trim(),
         coordinate: currentCoords,
         createdAt: new Date().toISOString(),
+        ...(photoUrl && { photoUrl }),
       };
 
       const contributions = JSON.parse(localStorage.getItem('breeva_contributions') || '[]');
@@ -124,6 +156,8 @@ export default function ContributePage() {
     setPlaceCategory('');
     setIsSubmitted(false);
     setCurrentCoords(null);
+    setPhotoFile(null);
+    setPhotoPreview(null);
   };
 
   return (
@@ -327,15 +361,41 @@ export default function ContributePage() {
                   </button>
                 </div>
 
-                {/* Photo placeholder */}
+                {/* Photo */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
                     Photo (optional)
                   </label>
-                  <button className="flex flex-col items-center gap-2 w-full py-6 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-primary-300 hover:text-primary-500 transition">
-                    <Camera className="w-6 h-6" />
-                    <span className="text-xs font-medium">Tap to add photo</span>
-                  </button>
+                  {photoPreview ? (
+                    <div className="relative">
+                      <img src={photoPreview} alt="Preview" className="w-full h-40 object-cover rounded-xl" />
+                      <button
+                        onClick={() => { setPhotoFile(null); setPhotoPreview(null); }}
+                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center text-xs"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center gap-2 w-full py-6 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-primary-300 hover:text-primary-500 transition cursor-pointer">
+                      <Camera className="w-6 h-6" />
+                      <span className="text-xs font-medium">Tap to add photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 5 * 1024 * 1024) { alert('Max 5MB'); return; }
+                          setPhotoFile(file);
+                          const reader = new FileReader();
+                          reader.onload = () => setPhotoPreview(reader.result as string);
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                  )}
                 </div>
 
                 {/* Submit */}

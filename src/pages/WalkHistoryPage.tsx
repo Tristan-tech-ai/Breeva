@@ -124,7 +124,8 @@ export default function WalkHistoryPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  className="glass-card p-4"
+                  className="glass-card p-4 cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => navigate(`/profile/history/${walk.id}`)}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs text-gray-400 dark:text-gray-500">

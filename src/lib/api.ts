@@ -1,9 +1,9 @@
-import type { Coordinate, AirQualityData, Route, RouteInstruction, TransportModeInfo, AQIFreshness, RouteScoreResult, ExposureResult, RoadAQIResponse } from '../types';
+import type { Coordinate, AirQualityData, Route, RouteInstruction, TransportModeInfo, AQIFreshness, RouteScoreResult, ExposureResult, RoadAQIResponse, CleanRouteResponse } from '../types';
 
 // API Configuration
 const ORS_API_KEY = import.meta.env.VITE_OPENROUTESERVICE_API_KEY || '';
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
-const GEMINI_MODEL = 'gemini-3.1-pro-preview';
+const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 
 const ORS_BASE_URL = 'https://api.openrouteservice.org';
 
@@ -1157,5 +1157,25 @@ export async function getRoadAQI(
     return await resp.json();
   } catch {
     return null;
+  }
+}
+
+/** Call VAYU clean-route endpoint for AQI-scored alternative routes */
+export async function getCleanRoute(
+  start: [number, number],
+  end: [number, number],
+  profile: string,
+  alternatives: number = 3
+): Promise<CleanRouteResponse> {
+  try {
+    const resp = await fetch('/api/vayu/route-score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start, end, profile, alternatives }),
+    });
+    if (!resp.ok) return { routes: [], meta: { vayu_scored: false, gemini_used: false, response_ms: 0 } };
+    return await resp.json();
+  } catch {
+    return { routes: [], meta: { vayu_scored: false, gemini_used: false, response_ms: 0 } };
   }
 }

@@ -22,19 +22,19 @@
     },
     {
       "path": "/api/vayu/gemini-classify?mode=temporal&region=jakarta",
-      "schedule": "0 6,18 * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/vayu/gemini-classify?mode=temporal&region=bali",
-      "schedule": "5 6,18 * * *"
+      "schedule": "5 6 * * *"
     },
     {
       "path": "/api/vayu/gemini-classify?mode=temporal&region=bandung",
-      "schedule": "10 6,18 * * *"
+      "schedule": "10 6 * * *"
     },
     {
       "path": "/api/vayu/gemini-classify?mode=temporal&region=surabaya",
-      "schedule": "15 6,18 * * *"
+      "schedule": "15 6 * * *"
     },
     {
       "path": "/api/vayu/gemini-classify?mode=error_analysis&region=jakarta",

@@ -66,6 +66,13 @@ export interface Route {
   aqi_confidence?: number;     // 0-100: confidence in estimated AQI
   road_summary?: string;       // e.g. "Through parks and green areas"
   aqi_factors?: string[];      // e.g. ["Near major roads (+20%)", "Park area (-15%)"]
+
+  // VAYU clean-route extension fields
+  vayu_score?: VayuRouteScore;
+  vayu_avg_aqi?: number;
+  vayu_segment_count?: number;
+  gemini_reasoning?: string;
+  route_label?: 'cleanest' | 'balanced' | 'fastest';
 }
 
 // Air Quality Types
@@ -231,6 +238,54 @@ export interface RoadAQIFeature {
   pm10: number;
   highway: string;
   weight: number;
+}
+
+// ── Clean Route (VAYU-scored route) types ────────────────────────
+
+export interface RouteSegmentAQI {
+  osm_way_id: number;
+  highway: string;
+  name: string | null;
+  aqi: number;
+  pm25: number;
+  no2: number;
+  fraction_along: number;  // 0.0–1.0 position along route
+}
+
+export interface VayuRouteScore {
+  avg_aqi: number;
+  max_aqi: number;
+  min_aqi: number;
+  segment_count: number;
+  segments: RouteSegmentAQI[];
+  ai_enhanced: boolean;
+  vayu_scored: boolean;
+}
+
+export interface CleanRouteCandidate {
+  polyline: Array<{ lat: number; lng: number }>;
+  distance_meters: number;
+  duration_seconds: number;
+  instructions: RouteInstruction[];
+  vayu_avg_aqi: number;
+  vayu_max_aqi: number;
+  vayu_segment_count: number;
+  vayu_scored: boolean;
+  route_label: 'cleanest' | 'balanced' | 'fastest';
+  gemini_reasoning: string | null;
+  segments: RouteSegmentAQI[];
+  traffic_level: string;
+  green_score: number;
+}
+
+export interface CleanRouteResponse {
+  routes: CleanRouteCandidate[];
+  meta: {
+    vayu_scored: boolean;
+    gemini_used: boolean;
+    response_ms: number;
+    error?: string;
+  };
 }
 
 export interface RoadAQIResponse {

@@ -1,17 +1,84 @@
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronLeft, Leaf, TreePine, Droplets, Wind, Flame, TrendingUp, Award, Footprints } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import { supabase } from '../lib/supabase';
 import BottomNavigation from '../components/layout/BottomNavigation';
+
+const LazyCharts = lazy(() => import('recharts').then(m => ({
+  default: ({ data, tab }: { data: WeeklyData[]; tab: 'co2' | 'distance' }) => (
+    <m.ResponsiveContainer width="100%" height="100%">
+      {tab === 'co2' ? (
+        <m.BarChart data={data}>
+          <m.XAxis dataKey="week" tick={{ fontSize: 10 }} stroke="#9ca3af" />
+          <m.YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" width={30} />
+          <m.Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(v) => [`${v} kg`, 'CO₂ Saved']} />
+          <m.Bar dataKey="co2" fill="#10b981" radius={[4, 4, 0, 0]} />
+        </m.BarChart>
+      ) : (
+        <m.LineChart data={data}>
+          <m.XAxis dataKey="week" tick={{ fontSize: 10 }} stroke="#9ca3af" />
+          <m.YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" width={30} />
+          <m.Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(v) => [`${v} km`, 'Distance']} />
+          <m.Line type="monotone" dataKey="distance" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+        </m.LineChart>
+      )}
+    </m.ResponsiveContainer>
+  )
+})));
+
+interface WeeklyData {
+  week: string;
+  co2: number;
+  distance: number;
+  walks: number;
+}
 
 export default function EcoImpactPage() {
   const navigate = useNavigate();
-  const { profile } = useAuthStore();
+  const { profile, user } = useAuthStore();
+  const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([]);
+  const [chartTab, setChartTab] = useState<'co2' | 'distance'>('co2');
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const since = new Date();
+      since.setDate(since.getDate() - 56); // 8 weeks
+      const { data: walks } = await supabase
+        .from('walks')
+        .select('distance_meters, co2_saved_grams, completed_at')
+        .eq('user_id', user.id)
+        .gte('completed_at', since.toISOString())
+        .order('completed_at', { ascending: true });
+
+      if (!walks?.length) return;
+
+      const buckets: Record<string, { co2: number; distance: number; walks: number }> = {};
+      for (const w of walks) {
+        const d = new Date(w.completed_at);
+        const weekStart = new Date(d);
+        weekStart.setDate(d.getDate() - d.getDay());
+        const key = `${weekStart.getMonth() + 1}/${weekStart.getDate()}`;
+        if (!buckets[key]) buckets[key] = { co2: 0, distance: 0, walks: 0 };
+        buckets[key].co2 += (w.co2_saved_grams || 0) / 1000;
+        buckets[key].distance += (w.distance_meters || 0) / 1000;
+        buckets[key].walks += 1;
+      }
+      setWeeklyData(Object.entries(buckets).map(([week, v]) => ({
+        week,
+        co2: Number(v.co2.toFixed(2)),
+        distance: Number(v.distance.toFixed(2)),
+        walks: v.walks,
+      })));
+    })();
+  }, [user]);
 
   const totalKm = profile?.total_distance_km || 0;
   const totalWalks = profile?.total_walks || 0;
-  const co2Saved = (totalKm * 0.17).toFixed(1); // 170g CO2/km saved vs driving
-  const treesEquivalent = (totalKm * 0.17 / 22).toFixed(2); // 22kg CO2 absorbed per tree/year
+  const co2Saved = ((profile?.total_co2_saved_grams || 0) / 1000).toFixed(1); // Use server-side value (grams -> kg)
+  const treesEquivalent = (Number(co2Saved) / 22).toFixed(2); // 22kg CO2 absorbed per tree/year
   const caloriesBurned = Math.round(totalKm * 60);
   const waterSaved = (totalKm * 3.8).toFixed(0); // ~3.8L water per km of car driving
   const currentStreak = profile?.current_streak || 0;
@@ -138,6 +205,42 @@ export default function EcoImpactPage() {
             </motion.div>
           ))}
         </div>
+
+        {/* Weekly Charts */}
+        {weeklyData.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className="glass-card p-4"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-primary-500" />
+                Weekly Trends
+              </h3>
+              <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setChartTab('co2')}
+                  className={`px-3 py-1 text-[10px] font-medium transition ${chartTab === 'co2' ? 'bg-primary-500 text-white' : 'text-gray-500 dark:text-gray-400'}`}
+                >
+                  CO₂
+                </button>
+                <button
+                  onClick={() => setChartTab('distance')}
+                  className={`px-3 py-1 text-[10px] font-medium transition ${chartTab === 'distance' ? 'bg-primary-500 text-white' : 'text-gray-500 dark:text-gray-400'}`}
+                >
+                  Distance
+                </button>
+              </div>
+            </div>
+            <div className="h-44">
+              <Suspense fallback={<div className="h-full flex items-center justify-center"><div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                <LazyCharts data={weeklyData} tab={chartTab} />
+              </Suspense>
+            </div>
+          </motion.div>
+        )}
 
         {/* Additional Stats */}
         <motion.div

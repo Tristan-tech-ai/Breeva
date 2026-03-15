@@ -47,6 +47,7 @@ import MapLayersSheet from '../components/map/MapLayersSheet';
 import type { POI } from '../lib/poi-api';
 import type { PollutantType } from '../types';
 import type { RoadLayerMeta } from '../components/map/RoadPollutionLayer';
+import StreakWidget from '../components/features/StreakWidget';
 
 const FILTER_CHIPS = [
   { key: 'restaurant', label: 'Restaurants', icon: UtensilsCrossed, color: '#ef4444' },
@@ -198,12 +199,13 @@ export default function HomePage() {
                 </a>
               </div>
 
-              {/* AQI badge */}
-              {currentAQI && (
-                <div className="mt-2 max-w-2xl mx-auto">
+              {/* AQI badge + Streak */}
+              <div className="mt-2 max-w-2xl mx-auto flex items-center gap-2">
+                {currentAQI && (
                   <AQIBadge aqi={currentAQI.aqi} size="sm" confidence={currentAQI.confidence} />
-                </div>
-              )}
+                )}
+                <StreakWidget />
+              </div>
 
               {/* Active filter pill */}
               {activeFilter && (() => {
@@ -526,6 +528,19 @@ export default function HomePage() {
                   />
                 ))}
               </div>
+
+              {/* Gemini AI reasoning card */}
+              {selectedRoute?.gemini_reasoning && (
+                <div className="mb-3 p-3 rounded-xl bg-violet-50/80 dark:bg-violet-950/20 border border-violet-200/50 dark:border-violet-800/30">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-violet-500" />
+                    <span className="text-[11px] font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider">AI Route Analysis</span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                    {selectedRoute.gemini_reasoning}
+                  </p>
+                </div>
+              )}
 
               {/* Start walking CTA */}
               {selectedRoute && (

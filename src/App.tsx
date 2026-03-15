@@ -26,6 +26,12 @@ const AboutPage = lazy(() => import('./pages/AboutPage'));
 const HelpPage = lazy(() => import('./pages/HelpPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
+const QuestsPage = lazy(() => import('./pages/QuestsPage'));
+const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'));
+const MerchantRegisterPage = lazy(() => import('./pages/MerchantRegisterPage'));
+const MerchantDetailPage = lazy(() => import('./pages/MerchantDetailPage'));
+const WalkDetailPage = lazy(() => import('./pages/WalkDetailPage'));
+const EcoTipsPage = lazy(() => import('./pages/EcoTipsPage'));
 
 // Page loading fallback — minimal skeleton
 function PageLoader() {
@@ -73,6 +79,11 @@ function App() {
                 <WalkHistoryPage />
               </ProtectedRoute>
             } />
+            <Route path="/profile/history/:id" element={
+              <ProtectedRoute>
+                <WalkDetailPage />
+              </ProtectedRoute>
+            } />
             <Route path="/profile/achievements" element={
               <ProtectedRoute>
                 <AchievementsPage />
@@ -93,6 +104,16 @@ function App() {
             <Route path="/merchants" element={
               <ProtectedRoute>
                 <MerchantsPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/merchants/register" element={
+              <ProtectedRoute>
+                <MerchantRegisterPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/merchants/:id" element={
+              <ProtectedRoute>
+                <MerchantDetailPage />
               </ProtectedRoute>
             } />
 
@@ -130,6 +151,23 @@ function App() {
                 <HomePage />
               </ProtectedRoute>
             } />
+
+            {/* Quests */}
+            <Route path="/quests" element={
+              <ProtectedRoute>
+                <QuestsPage />
+              </ProtectedRoute>
+            } />
+
+            {/* Leaderboard */}
+            <Route path="/leaderboard" element={
+              <ProtectedRoute>
+                <LeaderboardPage />
+              </ProtectedRoute>
+            } />
+
+            {/* Eco Tips */}
+            <Route path="/eco-tips" element={<EcoTipsPage />} />
 
             {/* Info Pages (public) */}
             <Route path="/about" element={<AboutPage />} />

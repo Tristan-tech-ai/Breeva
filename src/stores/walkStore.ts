@@ -3,6 +3,7 @@ import type { Coordinate, RoutePoint, WalkSession, ExposureResult } from '../typ
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from './authStore';
 import { getVayuExposure, getVayuVehicleType, submitVayuContribution } from '../lib/api';
+import { checkAndUnlockAchievements } from '../lib/achievements';
 
 interface WalkTrackingState {
   // Walk session
@@ -209,7 +210,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
     }
 
     const avgSpeed = durationSeconds > 0 ? distanceMeters / durationSeconds : 0;
-    const points = calculatePoints(distanceMeters, 50); // Fallback AQI
+    let points = calculatePoints(distanceMeters, 50); // Fallback AQI
 
     const completedSession: WalkSession = {
       ...session,
@@ -241,43 +242,52 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
     try {
       const user = useAuthStore.getState().user;
       if (user) {
-        await supabase.from('walks').insert({
+        // 1. Insert walk with initial data (status 'active')
+        const { error: insertErr } = await supabase.from('walks').insert({
           id: completedSession.id,
           user_id: user.id,
           origin_lat: routePoints[0]?.lat || 0,
           origin_lng: routePoints[0]?.lng || 0,
           destination_lat: routePoints[routePoints.length - 1]?.lat || 0,
           destination_lng: routePoints[routePoints.length - 1]?.lng || 0,
-          distance_km: distanceMeters / 1000,
-          duration_minutes: Math.round(durationSeconds / 60),
-          ecopoints_earned: points,
+          route_polyline: JSON.stringify(routePoints.map(p => [p.lat, p.lng])),
+          distance_meters: Math.round(distanceMeters),
+          duration_seconds: durationSeconds,
           route_type: 'eco',
+          status: 'active',
           started_at: completedSession.start_time,
-          completed_at: completedSession.end_time,
-          is_verified: true,
         });
 
-        // Add EcoPoints
-        await supabase.rpc('add_ecopoints', {
-          p_user_id: user.id,
-          p_amount: points,
-          p_type: 'walk_complete',
-          p_description: `Walk completed: ${(distanceMeters / 1000).toFixed(2)}km`,
-          p_reference_id: completedSession.id,
-        });
+        if (insertErr) {
+          console.error('Failed to insert walk:', insertErr);
+        } else {
+          // 2. Call complete_walk RPC — updates walk record, user stats, awards points
+          const { data: walkResult, error: rpcErr } = await supabase.rpc('complete_walk', {
+            p_walk_id: completedSession.id,
+            p_distance_meters: Math.round(distanceMeters),
+            p_duration_seconds: durationSeconds,
+            p_avg_aqi: 50, // Default AQI; later replaced by VAYU
+          });
 
-        // Update user stats
-        await supabase
-          .from('users')
-          .update({
-            total_walks: supabase.rpc('', {}) as unknown as number, // Will use increment
-            total_distance_km: supabase.rpc('', {}) as unknown as number,
-          })
-          .eq('id', user.id);
+          if (rpcErr) {
+            console.error('complete_walk RPC failed:', rpcErr);
+          } else if (walkResult && walkResult.length > 0) {
+            const { ecopoints_earned } = walkResult[0];
+            points = ecopoints_earned || points;
+          }
+
+          // 3. Update streak
+          await supabase.rpc('update_user_streak', { p_user_id: user.id });
+
+          // 4. Check achievements
+          checkAndUnlockAchievements(user.id).catch(console.error);
+
+          // 5. Refresh profile to pick up new stats
+          useAuthStore.getState().fetchProfile();
+        }
       }
     } catch (error) {
       console.error('Failed to save walk:', error);
-      // Queue for later sync
     }
 
     set({

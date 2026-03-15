@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, BadgeCheck, Star, MapPin } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Search, BadgeCheck, Star, MapPin, Plus } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { supabase } from '../lib/supabase';
 
@@ -31,6 +32,7 @@ const categoryEmoji: Record<string, string> = {
 };
 
 export default function MerchantsPage() {
+  const navigate = useNavigate();
   const [merchants, setMerchants] = useState<MerchantRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -70,9 +72,17 @@ export default function MerchantsPage() {
     <div className="gradient-mesh-bg min-h-screen pb-20">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
-        <div className="safe-area-top px-4 pt-4 pb-3">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Eco-Merchants</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Discover sustainable businesses near you</p>
+        <div className="safe-area-top px-4 pt-4 pb-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Eco-Merchants</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Discover sustainable businesses near you</p>
+          </div>
+          <Link
+            to="/merchants/register"
+            className="w-9 h-9 rounded-xl gradient-primary flex items-center justify-center shadow-sm"
+          >
+            <Plus className="w-5 h-5 text-white" />
+          </Link>
         </div>
 
         {/* Search */}
@@ -133,6 +143,7 @@ export default function MerchantsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
                 className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-4 flex gap-3 cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => navigate(`/merchants/${merchant.id}`)}
               >
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary-100 to-secondary-100 dark:from-primary-900/30 dark:to-secondary-900/30 flex items-center justify-center text-2xl flex-shrink-0">
                   {merchant.logo_url ? (

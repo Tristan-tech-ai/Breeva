@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../stores/authStore';
+import { supabase } from '../lib/supabase';
 import logoBreeva from '../assets/logo-breeva.svg';
 
 type OnboardingStep = 'welcome' | 'location' | 'motion' | 'first-walk';
@@ -30,7 +31,32 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    // Award onboarding bonus (100 EcoPoints, prevent double-award)
+    const user = useAuthStore.getState().user;
+    if (user) {
+      try {
+        const { data: existing } = await supabase
+          .from('points_transactions')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('transaction_type', 'onboarding_bonus')
+          .maybeSingle();
+
+        if (!existing) {
+          await supabase.rpc('add_ecopoints', {
+            p_user_id: user.id,
+            p_amount: 100,
+            p_type: 'onboarding_bonus',
+            p_description: 'Welcome bonus for completing onboarding',
+          });
+          useAuthStore.getState().fetchProfile();
+        }
+      } catch (err) {
+        console.error('Onboarding bonus error:', err);
+      }
+    }
+
     completeOnboarding();
     navigate('/', { replace: true });
   };

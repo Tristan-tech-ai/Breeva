@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, MapPin, Home, Briefcase, Heart, Trash2, Navigation, Plus, Search } from 'lucide-react';
 import { useSavedPlacesStore } from '../stores/savedPlacesStore';
+import { useAuthStore } from '../stores/authStore';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import type { SavedPlace } from '../types';
 
@@ -22,12 +23,18 @@ const categoryColors: Record<string, string> = {
 
 export default function SavedPlacesPage() {
   const navigate = useNavigate();
-  const { places, removePlace, addPlace } = useSavedPlacesStore();
+  const { user } = useAuthStore();
+  const { places, removePlace, addPlace, fetchCloudPlaces } = useSavedPlacesStore();
   const [filter, setFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState<SavedPlace['category']>('favorite');
+
+  // Sync from cloud on mount
+  useEffect(() => {
+    if (user) fetchCloudPlaces(user.id);
+  }, [user, fetchCloudPlaces]);
 
   const filteredPlaces = places.filter(p => {
     if (filter !== 'all' && p.category !== filter) return false;

@@ -15,6 +15,7 @@ import {
   routeGeometrySimilar,
   getVayuRouteScore,
   getVayuVehicleType,
+  getCleanRoute,
 } from '../lib/api';
 import { searchGoogleMaps } from '../lib/searchapi';
 
@@ -278,6 +279,66 @@ export const useMapStore = create<MapState>()((set, get) => ({
 
     const modeInfo = TRANSPORT_MODES.find((m) => m.id === transportMode) || TRANSPORT_MODES[0];
 
+    // ── Try VAYU clean-route first (server-side, VAYU-scored) ──
+    try {
+      const cleanResult = await getCleanRoute(
+        [userLocation.lat, userLocation.lng],
+        [destination.lat, destination.lng],
+        modeInfo.orsProfile,
+        3
+      );
+
+      if (cleanResult && cleanResult.routes.length > 0) {
+        const finalRoutes: Route[] = cleanResult.routes.map((cr) => ({
+          id: crypto.randomUUID(),
+          user_id: '',
+          start_point: userLocation,
+          end_point: destination,
+          waypoints: cr.polyline,
+          instructions: cr.instructions,
+          distance_meters: cr.distance_meters,
+          duration_seconds: cr.duration_seconds,
+          avg_aqi: cr.vayu_avg_aqi,
+          eco_points_earned: Math.round(
+            (cr.distance_meters / 1000) * modeInfo.ecoPointsMultiplier * 10
+          ),
+          route_type: cr.route_label === 'cleanest' ? 'eco'
+                    : cr.route_label === 'fastest' ? 'fast'
+                    : 'balanced',
+          created_at: new Date().toISOString(),
+          traffic_level: cr.traffic_level as Route['traffic_level'],
+          green_score: cr.green_score,
+          aqi_confidence: cr.vayu_scored ? 90 : 60,
+          road_summary: `VAYU-scored (${cr.vayu_segment_count} segments)`,
+          aqi_factors: [`Avg AQI: ${cr.vayu_avg_aqi}`, `Max AQI: ${cr.vayu_max_aqi}`],
+          vayu_score: {
+            avg_aqi: cr.vayu_avg_aqi,
+            max_aqi: cr.vayu_max_aqi,
+            min_aqi: cr.vayu_avg_aqi,
+            segment_count: cr.vayu_segment_count,
+            segments: cr.segments,
+            ai_enhanced: cr.vayu_scored,
+            vayu_scored: cr.vayu_scored,
+          },
+          vayu_avg_aqi: cr.vayu_avg_aqi,
+          vayu_segment_count: cr.vayu_segment_count,
+          gemini_reasoning: cr.gemini_reasoning ?? undefined,
+          route_label: cr.route_label,
+        }));
+
+        set({
+          routes: finalRoutes,
+          selectedRoute: finalRoutes.find((r) => r.route_type === 'eco') || finalRoutes[0] || null,
+          isCalculatingRoutes: false,
+          bottomSheetState: 'half',
+        });
+        return; // Clean-route succeeded — skip legacy flow
+      }
+    } catch (e) {
+      console.warn('Clean-route unavailable, falling back to legacy:', e);
+    }
+
+    // ── Legacy fallback: existing Overpass + Gemini + ORS flow ──
     try {
       const midpoint: Coordinate = {
         lat: (userLocation.lat + destination.lat) / 2,

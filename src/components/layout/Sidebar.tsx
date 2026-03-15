@@ -14,6 +14,11 @@ import {
   Info,
   ChevronRight,
   LogOut,
+  Gift,
+  Trophy,
+  Swords,
+  BarChart3,
+  Store,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -28,6 +33,11 @@ const menuSections = [
       { icon: Bookmark, label: 'Saved Places', path: '/saved', color: 'text-amber-500' },
       { icon: Clock, label: 'Walk History', path: '/profile/history', color: 'text-blue-500' },
       { icon: Leaf, label: 'Eco Impact', path: '/eco-impact', color: 'text-primary-500' },
+      { icon: Gift, label: 'Rewards', path: '/rewards', color: 'text-pink-500' },
+      { icon: Trophy, label: 'Achievements', path: '/profile/achievements', color: 'text-yellow-500' },
+      { icon: Swords, label: 'Quests', path: '/quests', color: 'text-indigo-500' },
+      { icon: BarChart3, label: 'Leaderboard', path: '/leaderboard', color: 'text-emerald-500' },
+      { icon: Store, label: 'Merchants', path: '/merchants', color: 'text-orange-500' },
       { icon: Share2, label: 'Share Location', path: '#share', color: 'text-violet-500' },
     ],
   },
@@ -47,7 +57,7 @@ const menuSections = [
   {
     title: 'Help',
     items: [
-      { icon: Lightbulb, label: 'Eco Tips & Tricks', path: '#tips', color: 'text-amber-500' },
+      { icon: Lightbulb, label: 'Eco Tips & Tricks', path: '/eco-tips', color: 'text-amber-500' },
       { icon: HelpCircle, label: 'Help & Feedback', path: '/help', color: 'text-blue-500' },
       { icon: Info, label: 'About Breeva', path: '/about', color: 'text-gray-500 dark:text-gray-400' },
     ],
@@ -59,11 +69,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const handleItemClick = (path: string) => {
     if (path.startsWith('#')) {
-      // Handle in-app actions
       if (path === '#share') {
         handleShareLocation();
-      } else if (path === '#tips') {
-        handleShowTips();
       }
       return;
     }
@@ -86,21 +93,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       // User cancelled share
     }
     onClose();
-  };
-
-  const handleShowTips = () => {
-    onClose();
-    // Could open a modal; for now navigate to a simple alert
-    setTimeout(() => {
-      const tips = [
-        '🌱 Walking 1 km saves ~170g CO₂ compared to driving',
-        '🌿 Choose routes near parks for better air quality',
-        '♻️ Use your EcoPoints at sustainable merchants',
-        '🚶 Walking 30 minutes daily reduces health risks by 20%',
-        '🌳 Trees can reduce air pollution by up to 24%',
-      ];
-      alert('Eco Tips:\n\n' + tips.join('\n\n'));
-    }, 300);
   };
 
   const handleSignOut = async () => {

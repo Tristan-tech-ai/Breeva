@@ -11,6 +11,7 @@ export interface UserProfile {
   ecopoints_balance: number;
   total_distance_km: number;
   total_walks: number;
+  total_co2_saved_grams: number;
   current_streak: number;
   longest_streak: number;
   last_walk_date: string | null;

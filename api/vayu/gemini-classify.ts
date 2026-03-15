@@ -43,7 +43,7 @@ async function redisSetEx(key: string, ttl: number, value: string): Promise<void
 }
 
 // ─── Gemini API call ────────────────────────────────────────
-async function callGemini(prompt: string, model = 'gemini-2.5-flash-lite-preview-06-17'): Promise<string | null> {
+async function callGemini(prompt: string, model = 'gemini-2.5-flash-lite'): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
   if (!apiKey) return null;
 
@@ -290,7 +290,7 @@ Consider:
 
 Return JSON: { "hourly_factors": [24 numbers], "reasoning": "brief explanation" }`;
 
-  const raw = await callGemini(prompt, 'gemini-2.5-flash');
+  const raw = await callGemini(prompt, 'gemini-2.5-flash-lite');
   if (!raw) {
     return { success: false, error: 'Gemini API call failed' };
   }
@@ -345,7 +345,7 @@ Return JSON array:
 
 Only include entries where |factor - 1.0| > 0.05 (meaningful correction needed).`;
 
-  const raw = await callGemini(prompt, 'gemini-2.5-flash');
+  const raw = await callGemini(prompt, 'gemini-2.5-flash-lite');
   if (!raw) {
     return { success: false, error: 'Gemini API call failed' };
   }
