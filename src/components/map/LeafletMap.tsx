@@ -157,7 +157,6 @@ function MapController({
       center.lat !== prevCenterRef.current.lat ||
       center.lng !== prevCenterRef.current.lng
     ) {
-      console.log('[vayu flyTo]', { from: [prevCenterRef.current.lat.toFixed(4), prevCenterRef.current.lng.toFixed(4)].join(','), to: [center.lat.toFixed(4), center.lng.toFixed(4)].join(','), zoom: map.getZoom() });
       map.flyTo([center.lat, center.lng], map.getZoom(), { duration: 0.8 });
       prevCenterRef.current = center;
     }

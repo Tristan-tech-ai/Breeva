@@ -112,8 +112,8 @@ function getValue(road: RoadAQIFeature, pollutant: PollutantType): number {
   }
 }
 
-// ── Minimum zoom for road overlay ────────────────────────────
-const MIN_ZOOM = 10;
+// ── Minimum zoom for road overlay (14+ = demo-safe, looks great at street level) ──
+const MIN_ZOOM = 14;
 
 // ── Shared Canvas renderer for WebGL-like performance ────────
 // Canvas renderer handles 2000+ polylines at 60fps vs SVG's ~500 limit
@@ -288,7 +288,6 @@ export function useRoadPollutionLayer(
       });
       if (forecastHour > 0) params.set('forecast_hour', String(forecastHour));
 
-      console.log('[vayu fetchData]', { s: s.toFixed(4), w: w.toFixed(4), n: n.toFixed(4), e: e.toFixed(4), zoom, mapCenter: [map.getCenter().lat.toFixed(4), map.getCenter().lng.toFixed(4)].join(',') }, new Error().stack?.split('\n').slice(1, 4).join(' <- '));
       const resp = await fetch(`/api/vayu/road-aqi?${params}`, { signal: ac.signal });
       if (ac.signal.aborted) return;
       if (!resp.ok) {
@@ -310,38 +309,10 @@ export function useRoadPollutionLayer(
     }
   }, [map, visible, forecastHour, pollutant, atomicSwap, viewportCovered]);
 
-  // ── Prefetch 4 adjacent tiles during idle ──────────────────
+  // ── Prefetch disabled for demo stability ──────────────────
   const prefetchAdjacent = useCallback(() => {
-    if (!map || !visible || !dataRef.current) return;
-    const zoom = Math.round(map.getZoom());
-    if (zoom < MIN_ZOOM || zoom <= 11) return; // skip prefetch at low zoom — viewport already large
-
-    const bounds = map.getBounds();
-    const latSpan = bounds.getNorth() - bounds.getSouth();
-    const lngSpan = bounds.getEast() - bounds.getWest();
-    const offsets = [[latSpan, 0], [-latSpan, 0], [0, lngSpan], [0, -lngSpan]];
-
-    for (const [dLat, dLng] of offsets) {
-      const ps = bounds.getSouth() + dLat;
-      const pw = bounds.getWest() + dLng;
-      const pn = bounds.getNorth() + dLat;
-      const pe = bounds.getEast() + dLng;
-      // Skip if already cached
-      if (roadCache.get(ps, pw, pn, pe, zoom)) continue;
-      // Low-priority fetch (no abort tracking — fire-and-forget)
-      const params = new URLSearchParams({
-        south: ps.toFixed(6), west: pw.toFixed(6),
-        north: pn.toFixed(6), east: pe.toFixed(6),
-        zoom: String(zoom),
-      });
-      if (forecastHour > 0) params.set('forecast_hour', String(forecastHour));
-      console.log('[vayu prefetch]', { ps: ps.toFixed(4), pw: pw.toFixed(4), pn: pn.toFixed(4), pe: pe.toFixed(4), zoom, mapCenter: [map.getCenter().lat.toFixed(4), map.getCenter().lng.toFixed(4)].join(',') });
-      fetch(`/api/vayu/road-aqi?${params}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(data => { if (data) roadCache.set(ps, pw, pn, pe, zoom, data); })
-        .catch(() => {});
-    }
-  }, [map, visible, forecastHour]);
+    return; // disabled — eliminates background 400 noise
+  }, []);
 
   // Attach layer group once
   useEffect(() => {
@@ -376,7 +347,6 @@ export function useRoadPollutionLayer(
 
     const onZoomEnd = () => {
       const newZoom = Math.round(map.getZoom());
-      console.log('[vayu zoomEnd]', { from: lastZoom, to: newZoom, center: [map.getCenter().lat.toFixed(4), map.getCenter().lng.toFixed(4)].join(',') });
       if (newZoom === lastZoom) return;
       // ZOOM CHANGED: clear everything, fetch fresh for new LOD
       lastZoom = newZoom;
@@ -389,7 +359,6 @@ export function useRoadPollutionLayer(
 
     const onMoveEnd = () => {
       const currentZoom = Math.round(map.getZoom());
-      console.log('[vayu moveEnd]', { zoom: currentZoom, center: [map.getCenter().lat.toFixed(4), map.getCenter().lng.toFixed(4)].join(','), bounds: [map.getBounds().getSouth().toFixed(4), map.getBounds().getWest().toFixed(4), map.getBounds().getNorth().toFixed(4), map.getBounds().getEast().toFixed(4)].join(',') });
       if (currentZoom !== lastZoom) return; // handled by onZoomEnd
 
       // Pan only: try cache first

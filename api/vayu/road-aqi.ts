@@ -879,7 +879,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { south, west, north, east, zoom, forecast_hour } = req.query;
   if (!south || !west || !north || !east) {
-    return res.status(400).json({ error: 'south, west, north, east query parameters required' });
+    return res.status(200).json({ roads: [], meta: { reason: 'missing_params', count: 0 } });
   }
 
   const s = parseFloat(south as string);
@@ -891,7 +891,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Validate coordinates
   if ([s, w, n, e].some(isNaN) || s > n || w > e) {
-    return res.status(400).json({ error: 'Invalid bounding box' });
+    return res.status(200).json({ roads: [], meta: { reason: 'invalid_bbox', count: 0 } });
   }
 
   // Safety-net bbox size limit — return empty 200 (never 400) for absurdly large bboxes.
