@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, MapPin, Clock, Loader2, SlidersHorizontal } from 'lucide-react';
+import { Search, X, MapPin, Clock, Loader2, Star, SlidersHorizontal } from 'lucide-react';
 import { useMapStore } from '../../stores/mapStore';
 import type { POI } from '../../lib/poi-api';
 import type { LucideIcon } from 'lucide-react';
@@ -215,44 +215,80 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
                   <button
                     key={result.placeId || result.dataId || i}
                     onClick={() => handleSelect(result)}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 active:bg-gray-100 dark:active:bg-gray-800 transition-colors text-left"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors text-left"
                   >
-                    {/* Icon */}
+                    {/* Thumbnail or icon */}
                     {result.thumbnail ? (
                       <img
                         src={result.thumbnail}
                         alt=""
-                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                        className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-gray-100 dark:border-gray-700"
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                        <MapPin className="w-[18px] h-[18px] text-gray-400" />
+                        <MapPin className="w-4 h-4 text-gray-400" />
                       </div>
                     )}
 
-                    {/* Text */}
+                    {/* Text content */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-gray-900 dark:text-white truncate">
-                        {result.name}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                        {[
-                          result.category,
-                          result.openState && (
-                            result.openState.toLowerCase().includes('open') ? 'Open' : 'Closed'
-                          ),
-                          result.address,
-                        ].filter(Boolean).join(' · ')}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[13px] font-semibold text-gray-900 dark:text-white truncate">
+                          {result.name}
+                        </p>
+                        {result.rating != null && (
+                          <div className="flex items-center gap-0.5 flex-shrink-0">
+                            <Star className="w-3 h-3 text-amber-400" fill="currentColor" />
+                            <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                              {result.rating.toFixed(1)}
+                              {result.reviewCount != null && <span className="text-gray-400 dark:text-gray-500"> ({result.reviewCount})</span>}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1 mt-0.5 text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                        {result.category && (
+                          <span className="truncate">{result.category}</span>
+                        )}
+                        {result.category && result.price && (
+                          <span className="text-gray-300 dark:text-gray-600">·</span>
+                        )}
+                        {result.price && <span>{result.price}</span>}
+                        {(result.category || result.price) && result.openState && (
+                          <span className="text-gray-300 dark:text-gray-600">·</span>
+                        )}
+                        {result.openState && (
+                          <span className={`font-medium flex-shrink-0 ${
+                            result.openState.toLowerCase().includes('open')
+                              ? 'text-green-600 dark:text-green-400'
+                              : 'text-red-500 dark:text-red-400'
+                          }`}>
+                            {result.hours || result.openState}
+                          </span>
+                        )}
+                      </div>
+
+                      {result.address && (
+                        <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">
+                          {result.address}
+                        </p>
+                      )}
+
+                      {result.description && !result.address && (
+                        <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">
+                          {result.description}
+                        </p>
+                      )}
                     </div>
 
                     {/* Distance */}
                     {(result.distance != null || userLocation) && (
-                      <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 flex-shrink-0 whitespace-nowrap">
+                      <span className="text-[11px] font-semibold text-primary-600 dark:text-primary-400 flex-shrink-0 whitespace-nowrap">
                         {result.distance != null
                           ? result.distance < 1000
-                            ? `${Math.round(result.distance)}m away`
-                            : `${(result.distance / 1000).toFixed(1)}km away`
+                            ? `${Math.round(result.distance)}m`
+                            : `${(result.distance / 1000).toFixed(1)}km`
                           : userLocation
                             ? getDistanceText(userLocation, result.coordinate)
                             : ''}
