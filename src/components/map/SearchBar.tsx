@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, MapPin, Clock, Loader2, Star, Navigation, SlidersHorizontal } from 'lucide-react';
+import { Search, X, MapPin, Clock, Loader2, SlidersHorizontal } from 'lucide-react';
 import { useMapStore } from '../../stores/mapStore';
 import type { POI } from '../../lib/poi-api';
 import type { LucideIcon } from 'lucide-react';
@@ -208,104 +208,55 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
             transition={{ duration: 0.15 }}
             className="absolute top-full left-0 right-0 mt-2 z-50 max-h-[60vh] overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-100 dark:border-gray-800"
           >
-            {/* Search results — Google Maps style */}
+            {/* Search results */}
             {searchResults.length > 0 && (
-              <div className="py-1.5">
+              <div className="py-1">
                 {searchResults.map((result, i) => (
                   <button
                     key={result.placeId || result.dataId || i}
                     onClick={() => handleSelect(result)}
-                    className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors text-left"
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 active:bg-gray-100 dark:active:bg-gray-800 transition-colors text-left"
                   >
-                    {/* Thumbnail or icon */}
+                    {/* Icon */}
                     {result.thumbnail ? (
                       <img
                         src={result.thumbnail}
                         alt=""
-                        className="w-11 h-11 rounded-xl object-cover flex-shrink-0"
+                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                       />
                     ) : (
-                      <div className="w-11 h-11 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                        <MapPin className="w-5 h-5 text-gray-400" />
+                      <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                        <MapPin className="w-[18px] h-[18px] text-gray-400" />
                       </div>
                     )}
 
-                    {/* Text content */}
+                    {/* Text */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                      <p className="text-[13px] font-semibold text-gray-900 dark:text-white truncate">
                         {result.name}
                       </p>
-
-                      {/* Rating + category + open state row */}
-                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        {result.rating != null && (
-                          <div className="flex items-center gap-0.5">
-                            <Star className="w-3 h-3 text-amber-400" fill="currentColor" />
-                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                              {result.rating.toFixed(1)}
-                            </span>
-                            {result.reviewCount != null && (
-                              <span className="text-[10px] text-gray-400">({result.reviewCount})</span>
-                            )}
-                          </div>
-                        )}
-                        {result.rating != null && result.category && (
-                          <span className="text-gray-300 dark:text-gray-600">·</span>
-                        )}
-                        {result.category && (
-                          <span className="text-xs text-gray-500 dark:text-gray-400">{result.category}</span>
-                        )}
-                        {result.price && (
-                          <>
-                            <span className="text-gray-300 dark:text-gray-600">·</span>
-                            <span className="text-xs text-gray-500">{result.price}</span>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Open state + hours + address */}
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        {result.openState && (
-                          <span className={`text-[10px] font-medium ${
-                            result.openState.toLowerCase().includes('open')
-                              ? 'text-green-600 dark:text-green-400'
-                              : 'text-red-500 dark:text-red-400'
-                          }`}>
-                            {result.hours || result.openState}
-                          </span>
-                        )}
-                        {result.openState && result.address && (
-                          <span className="text-gray-300 dark:text-gray-600">·</span>
-                        )}
-                        {result.address && (
-                          <span className="text-[11px] text-gray-400 dark:text-gray-500 truncate">
-                            {result.address}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Description snippet */}
-                      {result.description && (
-                        <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 line-clamp-1">
-                          {result.description}
-                        </p>
-                      )}
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                        {[
+                          result.category,
+                          result.openState && (
+                            result.openState.toLowerCase().includes('open') ? 'Open' : 'Closed'
+                          ),
+                          result.address,
+                        ].filter(Boolean).join(' · ')}
+                      </p>
                     </div>
 
-                    {/* Distance badge */}
+                    {/* Distance */}
                     {(result.distance != null || userLocation) && (
-                      <div className="flex flex-col items-end flex-shrink-0 pt-0.5">
-                        <span className="text-[11px] font-medium text-primary-600 dark:text-primary-400">
-                          {result.distance != null
-                            ? result.distance < 1000
-                              ? `${Math.round(result.distance)}m`
-                              : `${(result.distance / 1000).toFixed(1)}km`
-                            : userLocation
-                              ? getDistanceText(userLocation, result.coordinate)
-                              : ''}
-                        </span>
-                        <Navigation className="w-3 h-3 text-gray-300 dark:text-gray-600 mt-0.5" />
-                      </div>
+                      <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 flex-shrink-0 whitespace-nowrap">
+                        {result.distance != null
+                          ? result.distance < 1000
+                            ? `${Math.round(result.distance)}m away`
+                            : `${(result.distance / 1000).toFixed(1)}km away`
+                          : userLocation
+                            ? getDistanceText(userLocation, result.coordinate)
+                            : ''}
+                      </span>
                     )}
                   </button>
                 ))}
