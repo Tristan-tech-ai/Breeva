@@ -11,7 +11,6 @@ import {
   Sparkles,
   Flame,
   Trophy,
-  Footprints,
   ChevronRight,
   Menu,
   Bookmark,
@@ -422,8 +421,8 @@ export default function HomePage() {
                 onClick={() => setBottomSheetState('half')}
                 className="w-full gradient-primary text-white py-4 rounded-2xl text-base font-semibold shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2.5"
               >
-                <Footprints className="w-5 h-5" />
-                Start a Walk
+                <Play className="w-5 h-5 fill-current" />
+                Start
                 <ChevronRight className="w-4 h-4 opacity-60" />
               </button>
             </div>
@@ -552,8 +551,8 @@ export default function HomePage() {
                     onClick={() => startWalk(selectedRoute.id, transportMode)}
                     className="w-full gradient-primary text-white py-4 rounded-2xl text-base font-semibold shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2.5"
                   >
-                    <Footprints className="w-5 h-5" />
-                    Start Walking
+                    <Play className="w-5 h-5 fill-current" />
+                    Start
                     <span className="text-xs opacity-75 ml-1">
                       {Math.round(selectedRoute.duration_seconds / 60)} min · +{selectedRoute.eco_points_earned} pts
                     </span>

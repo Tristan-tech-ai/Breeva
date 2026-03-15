@@ -111,7 +111,7 @@ export default function WalkHistoryPage() {
               onClick={() => navigate('/')}
               className="gradient-primary text-white text-sm font-semibold py-3 px-6 rounded-xl"
             >
-              Start Walking
+              Start
             </button>
           </motion.div>
         ) : (
