@@ -25,8 +25,19 @@ export class MerchantSeeder {
         .maybeSingle();
 
       if (existing) {
+        // Update sponsor/owner columns on existing merchants
+        const ownerForThis = inserted.length < 3 ? merchantOwnerId : null;
+        await this.sb
+          .from('merchants')
+          .update({
+            sponsor_tier: m.sponsor_tier,
+            priority_boost: m.priority_boost,
+            ...(ownerForThis ? { owner_id: ownerForThis } : {}),
+          })
+          .eq('id', existing.id);
+
         inserted.push({ id: existing.id, category: existing.category });
-        console.log(`   ↩ ${m.name} already exists`);
+        console.log(`   ↩ ${m.name} updated [${m.sponsor_tier}]`);
         continue;
       }
 
