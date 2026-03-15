@@ -991,42 +991,52 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     const orsStart: [number, number] = [startLng, startLat];
     const orsEnd: [number, number] = [endLng, endLat];
 
-    let orsRoutes: ORSRoute[];
-    try {
-      orsRoutes = await fetchORSAlternatives(orsStart, orsEnd, profile, alternatives);
-    } catch (e) {
-      console.error('ORS error:', e);
-      return res.status(200).json(emptyResponse('routing_unavailable'));
-    }
+    // ── Phase 2: Parallel fetch — ORS alternatives + through-gang-roads ──
+    const bufferDeg = 0.003;
+    const corridorSouth = Math.min(startLat, endLat) - bufferDeg;
+    const corridorNorth = Math.max(startLat, endLat) + bufferDeg;
+    const corridorWest = Math.min(startLng, endLng) - bufferDeg;
+    const corridorEast = Math.max(startLng, endLng) + bufferDeg;
+
+    const [orsRoutes, throughRoads] = await Promise.all([
+      fetchORSAlternatives(orsStart, orsEnd, profile, alternatives).catch((e) => {
+        console.error('ORS error:', e);
+        return [] as ORSRoute[];
+      }),
+      findThroughGangRoads(corridorSouth, corridorWest, corridorNorth, corridorEast).catch(() => [] as ThroughGangRoad[]),
+    ]);
 
     if (orsRoutes.length === 0) {
       return res.status(200).json(emptyResponse('no_routes_found'));
     }
 
+    // Helper: convert ORS route to scored entry
+    const orsToScoredEntry = async (ors: ORSRoute, index: number) => {
+      const polyline = orsToPolyline(ors.geometry);
+      const waypoints = orsToWaypoints(ors.geometry);
+      let score;
+      try {
+        score = await scorePolyline(polyline, 'pedestrian', 0);
+      } catch (e) {
+        console.error(`VAYU scoring failed for route ${index}:`, e);
+        score = null;
+      }
+      const instructions = ors.segments.flatMap((seg) =>
+        seg.steps.map((step) => ({
+          text: step.instruction, distance: step.distance,
+          duration: step.duration, type: step.type,
+          waypoint_index: step.way_points[0] ?? 0,
+        }))
+      );
+      return { index, polyline: waypoints, distance_meters: Math.round(ors.summary.distance), duration_seconds: Math.round(ors.summary.duration), instructions, score };
+    };
+
+    // Score ORS routes
     const scoredRoutes = await Promise.all(
-      orsRoutes.map(async (ors, index) => {
-        const polyline = orsToPolyline(ors.geometry);
-        const waypoints = orsToWaypoints(ors.geometry);
-        let score;
-        try {
-          score = await scorePolyline(polyline, 'pedestrian', 0);
-        } catch (e) {
-          console.error(`VAYU scoring failed for route ${index}:`, e);
-          score = null;
-        }
-        const instructions = ors.segments.flatMap((seg) =>
-          seg.steps.map((step) => ({
-            text: step.instruction, distance: step.distance,
-            duration: step.duration, type: step.type,
-            waypoint_index: step.way_points[0] ?? 0,
-          }))
-        );
-        return { index, polyline: waypoints, distance_meters: Math.round(ors.summary.distance), duration_seconds: Math.round(ors.summary.duration), instructions, score };
-      })
+      orsRoutes.map((ors, index) => orsToScoredEntry(ors, index))
     );
 
-    // ── Fix 4: Gang road waypoint injection ──
-    // If no route has ≥25% gang/footway/path segments, try to generate one via a nearby gang road waypoint
+    // ── Phase 2: Multi-corridor gang road injection ──
     const gangTypes = new Set(['living_street', 'path', 'footway', 'pedestrian']);
     const hasGangRoute = scoredRoutes.some((r) => {
       const segs = r.score?.segments || [];
@@ -1035,104 +1045,93 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       return gangCount / segs.length >= 0.25;
     });
 
-    if (!hasGangRoute && scoredRoutes.length < 4) {
+    if (!hasGangRoute && throughRoads.length > 0) {
       try {
         const midLat = (startLat + endLat) / 2;
         const midLng = (startLng + endLng) / 2;
-        // Fix C: Corridor-wide search
-        const bufferDeg = 0.003;
-        const south = Math.min(startLat, endLat) - bufferDeg;
-        const north = Math.max(startLat, endLat) + bufferDeg;
-        const west = Math.min(startLng, endLng) - bufferDeg;
-        const east = Math.max(startLng, endLng) + bufferDeg;
-        // Phase 1: Use topology-verified through-road RPC (no dead-ends)
-        const throughRoads = await findThroughGangRoads(south, west, north, east);
-        if (throughRoads.length > 0) {
-          // Fix D: Score through-roads by length + alignment + proximity
-          const travelBearing = Math.atan2(endLng - startLng, endLat - startLat);
-          const scoredGangRoads = throughRoads
-            .map(gr => {
-              try {
-                const coords = JSON.parse(gr.geojson).coordinates;
-                if (coords.length < 2) return null;
-                // Use road_length_m from RPC if available, else compute
-                let len = gr.road_length_m || 0;
-                if (len === 0) {
-                  for (let i = 1; i < coords.length; i++) {
-                    len += haversineMeters(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]);
-                  }
+        const travelBearing = Math.atan2(endLng - startLng, endLat - startLat);
+
+        // Score and rank through-roads
+        const rankedGangRoads = throughRoads
+          .map(gr => {
+            try {
+              const coords = JSON.parse(gr.geojson).coordinates;
+              if (coords.length < 2) return null;
+              let len = gr.road_length_m || 0;
+              if (len === 0) {
+                for (let i = 1; i < coords.length; i++) {
+                  len += haversineMeters(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]);
                 }
-                const first = coords[0];
-                const last = coords[coords.length - 1];
-                const roadBearing = Math.atan2(last[0] - first[0], last[1] - first[1]);
-                const angleDiff = Math.abs(travelBearing - roadBearing);
-                const alignment = Math.abs(Math.cos(angleDiff));
-                const mid = coords[Math.floor(coords.length / 2)];
-                const distToMid = haversineMeters(midLat, midLng, mid[1], mid[0]);
-                // Connectivity bonus: more connections = more confident through-road
-                const connScore = Math.min((gr.start_connections + gr.end_connections) / 6, 1);
-                const score = (Math.min(len, 200) / 200) * 0.3
-                            + alignment * 0.25
-                            + (1 - Math.min(distToMid, 500) / 500) * 0.25
-                            + connScore * 0.2;
-                return { ...gr, coords, len, score, mid };
+              }
+              const first = coords[0];
+              const last = coords[coords.length - 1];
+              const roadBearing = Math.atan2(last[0] - first[0], last[1] - first[1]);
+              const angleDiff = Math.abs(travelBearing - roadBearing);
+              const alignment = Math.abs(Math.cos(angleDiff));
+              const mid = coords[Math.floor(coords.length / 2)];
+              const distToMid = haversineMeters(midLat, midLng, mid[1], mid[0]);
+              const connScore = Math.min((gr.start_connections + gr.end_connections) / 6, 1);
+              const score = (Math.min(len, 200) / 200) * 0.3
+                          + alignment * 0.25
+                          + (1 - Math.min(distToMid, 500) / 500) * 0.25
+                          + connScore * 0.2;
+              return { ...gr, coords, len, score, mid };
+            } catch { return null; }
+          })
+          .filter((gr): gr is NonNullable<typeof gr> => gr !== null && gr.len > 30)
+          .sort((a, b) => b.score - a.score);
+
+        // Take top 2 gang roads for multi-corridor routing
+        const topGangRoads = rankedGangRoads.slice(0, 2);
+        const orsApiKey = process.env.VITE_OPENROUTESERVICE_API_KEY || process.env.ORS_API_KEY;
+
+        if (topGangRoads.length > 0 && orsApiKey) {
+          // Generate ORS routes through each gang road IN PARALLEL
+          const gangRouteResults = await Promise.all(
+            topGangRoads.map(async (gr) => {
+              try {
+                const gangWp: [number, number] = [gr.mid[0], gr.mid[1]];
+                const orsResult = await doORSRequest([orsStart, gangWp, orsEnd], profile, orsApiKey);
+                return orsResult[0] || null;
               } catch { return null; }
             })
-            .filter((gr): gr is NonNullable<typeof gr> => gr !== null && gr.len > 30)
-            .sort((a, b) => b.score - a.score);
+          );
 
-          if (scoredGangRoads.length > 0) {
-            const bestRoad = scoredGangRoads[0];
-            const gangWp: [number, number] = [bestRoad.mid[0], bestRoad.mid[1]]; // [lng, lat]
+          // Score and validate gang routes
+          const shortestDuration = Math.min(...scoredRoutes.map(r => r.duration_seconds));
+          for (const gangRoute of gangRouteResults) {
+            if (!gangRoute) continue;
+            // Dedup check against existing routes
+            if (scoredRoutes.some((r) =>
+              isSimilarGeometry(gangRoute.geometry, r.polyline.map((p) => [p.lng, p.lat]), 40)
+            )) continue;
 
-            const orsApiKey = process.env.VITE_OPENROUTESERVICE_API_KEY || process.env.ORS_API_KEY;
-            if (orsApiKey) {
-              const gangOrs = await doORSRequest([orsStart, gangWp, orsEnd], profile, orsApiKey);
-              const gangRoute = gangOrs[0];
-              if (gangRoute && !scoredRoutes.some((r) =>
-                isSimilarGeometry(gangRoute.geometry, r.polyline.map((p) => [p.lng, p.lat]), 40)
-              )) {
-                const polyline = orsToPolyline(gangRoute.geometry);
-                const waypoints = orsToWaypoints(gangRoute.geometry);
-                let gangScore;
-                try { gangScore = await scorePolyline(polyline, 'pedestrian', 0); } catch { gangScore = null; }
-                const instructions = gangRoute.segments.flatMap((seg) =>
-                  seg.steps.map((step) => ({
-                    text: step.instruction, distance: step.distance,
-                    duration: step.duration, type: step.type,
-                    waypoint_index: step.way_points[0] ?? 0,
-                  }))
-                );
-                const gangAvgAqi = gangScore?.avg_aqi ?? 999;
-                const worstIdx = scoredRoutes.reduce((wi, r, i) =>
-                  (r.score?.avg_aqi ?? 0) > (scoredRoutes[wi].score?.avg_aqi ?? 0) ? i : wi, 0);
-                const worstAqi = scoredRoutes[worstIdx].score?.avg_aqi ?? 0;
-                const gangEntry = {
-                  index: scoredRoutes.length,
-                  polyline: waypoints,
-                  distance_meters: Math.round(gangRoute.summary.distance),
-                  duration_seconds: Math.round(gangRoute.summary.duration),
-                  instructions,
-                  score: gangScore,
-                };
-                // Fix B: Reject backtracking routes (duration > 1.4× shortest)
-                const shortestDuration = Math.min(...scoredRoutes.map(r => r.duration_seconds));
-                if (gangEntry.duration_seconds <= shortestDuration * 1.4) {
-                  if (scoredRoutes.length < 3) {
-                    scoredRoutes.push(gangEntry);
-                  } else if (gangAvgAqi < worstAqi) {
-                    scoredRoutes[worstIdx] = gangEntry;
-                  }
-                } else {
-                  console.log('[clean-route] Gang route rejected: duration ratio',
-                    (gangEntry.duration_seconds / shortestDuration).toFixed(2));
-                }
+            const gangEntry = await orsToScoredEntry(gangRoute, scoredRoutes.length);
+
+            // Backtracking rejection: duration > 1.4× shortest
+            if (gangEntry.duration_seconds > shortestDuration * 1.4) {
+              console.log('[clean-route] Gang route rejected: duration ratio',
+                (gangEntry.duration_seconds / shortestDuration).toFixed(2));
+              continue;
+            }
+
+            const gangAvgAqi = gangEntry.score?.avg_aqi ?? 999;
+            if (scoredRoutes.length < 5) {
+              // Room for more candidates — add it
+              scoredRoutes.push(gangEntry);
+            } else {
+              // Replace worst-AQI route if this is cleaner
+              const worstIdx = scoredRoutes.reduce((wi, r, i) =>
+                (r.score?.avg_aqi ?? 0) > (scoredRoutes[wi].score?.avg_aqi ?? 0) ? i : wi, 0);
+              const worstAqi = scoredRoutes[worstIdx].score?.avg_aqi ?? 0;
+              if (gangAvgAqi < worstAqi) {
+                scoredRoutes[worstIdx] = { ...gangEntry, index: scoredRoutes[worstIdx].index };
               }
             }
           }
         }
       } catch (e) {
-        console.error('[clean-route] Gang road injection failed:', e);
+        console.error('[clean-route] Multi-corridor injection failed:', e);
       }
     }
 
@@ -1191,7 +1190,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     return res.status(200).json({
       routes,
-      meta: { vayu_scored: routes.some(r => r.vayu_scored), gemini_used: geminiResult !== null, response_ms: responseMs },
+      meta: { vayu_scored: routes.some(r => r.vayu_scored), gemini_used: reasoning !== null, response_ms: responseMs },
     });
   } catch (error) {
     console.error('Clean-route error:', error);
