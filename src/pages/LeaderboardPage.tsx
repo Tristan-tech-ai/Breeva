@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronLeft, Crown, Medal, Award, Footprints } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 interface LeaderboardEntry {
   user_id: string;
@@ -13,6 +14,66 @@ interface LeaderboardEntry {
   total_distance_km: number;
   total_walks: number;
   ecopoints_balance: number;
+}
+
+function VirtualizedList({ entries, userId, activeTab }: { entries: LeaderboardEntry[]; userId?: string; activeTab: 'points' | 'distance' }) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: entries.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 60,
+    overscan: 5,
+  });
+
+  return (
+    <div ref={parentRef} className="max-h-[60vh] overflow-auto scrollbar-hide rounded-xl">
+      <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+        {virtualizer.getVirtualItems().map((vItem: { index: number; start: number; size: number }) => {
+          const e = entries[vItem.index];
+          const rank = vItem.index + 4;
+          const isMe = e.user_id === userId;
+          return (
+            <div
+              key={e.user_id}
+              ref={virtualizer.measureElement}
+              data-index={vItem.index}
+              className="absolute left-0 right-0"
+              style={{ top: vItem.start }}
+            >
+              <div className={`glass-card p-3 flex items-center gap-3 mb-2 ${isMe ? 'border border-primary-200 dark:border-primary-800' : ''}`}>
+                <span className="w-7 text-center text-xs font-bold text-gray-400">{rank}</span>
+                <div className="w-9 h-9 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-800 flex-shrink-0">
+                  {e.avatar_url ? (
+                    <img src={e.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-gray-400">
+                      {e.name[0]?.toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                    {e.name} {isMe && <span className="text-primary-500">(You)</span>}
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                    <Footprints className="w-3 h-3" /> {e.total_walks} walks
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs font-bold text-primary-500">
+                    {activeTab === 'points' ? `${e.ecopoints_balance}` : e.total_distance_km.toFixed(1)}
+                  </div>
+                  <div className="text-[10px] text-gray-400">
+                    {activeTab === 'points' ? 'pts' : 'km'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export default function LeaderboardPage() {
@@ -157,50 +218,7 @@ export default function LeaderboardPage() {
             <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
-          <div className="space-y-2">
-            {entries.slice(3).map((e, index) => {
-              const rank = index + 4;
-              const isMe = e.user_id === user?.id;
-              return (
-                <motion.div
-                  key={e.user_id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.03 }}
-                  className={`glass-card p-3 flex items-center gap-3 ${
-                    isMe ? 'border border-primary-200 dark:border-primary-800' : ''
-                  }`}
-                >
-                  <span className="w-7 text-center text-xs font-bold text-gray-400">{rank}</span>
-                  <div className="w-9 h-9 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-800 flex-shrink-0">
-                    {e.avatar_url ? (
-                      <img src={e.avatar_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs font-bold text-gray-400">
-                        {e.name[0]?.toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                      {e.name} {isMe && <span className="text-primary-500">(You)</span>}
-                    </div>
-                    <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                      <Footprints className="w-3 h-3" /> {e.total_walks} walks
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs font-bold text-primary-500">
-                      {activeTab === 'points' ? `${e.ecopoints_balance}` : e.total_distance_km.toFixed(1)}
-                    </div>
-                    <div className="text-[10px] text-gray-400">
-                      {activeTab === 'points' ? 'pts' : 'km'}
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
+          <VirtualizedList entries={entries.slice(3)} userId={user?.id} activeTab={activeTab} />
         )}
       </div>
 

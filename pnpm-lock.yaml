@@ -23,6 +23,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.90.20
         version: 5.90.20(react@19.2.4)
+      '@tanstack/react-virtual':
+        specifier: ^3.13.22
+        version: 3.13.22(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -855,14 +858,14 @@ packages:
     peerDependencies:
       react: ^18 || ^19
 
-  '@tanstack/react-virtual@3.13.18':
-    resolution: {integrity: sha512-dZkhyfahpvlaV0rIKnvQiVoWPyURppl6w4m9IwMDpuIjcJ1sD9YGWrt0wISvgU7ewACXx2Ct46WPgI6qAD4v6A==}
+  '@tanstack/react-virtual@3.13.22':
+    resolution: {integrity: sha512-EaOrBBJLi3M0bTMQRjGkxLXRw7Gizwntoy5E2Q2UnSbML7Mo2a1P/Hfkw5tw9FLzK62bj34Jl6VNbQfRV6eJcA==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
-  '@tanstack/virtual-core@3.13.18':
-    resolution: {integrity: sha512-Mx86Hqu1k39icq2Zusq+Ey2J6dDWTjDvEv43PJtRCoEYTLyfaPnxIQ6iy7YAOK0NV/qOEmZQ/uCufrppZxTgcg==}
+  '@tanstack/virtual-core@3.13.22':
+    resolution: {integrity: sha512-isuUGKsc5TAPDoHSbWTbl1SCil54zOS2MiWz/9GCWHPUQOvNTQx8qJEWC7UWR0lShhbK0Lmkcf0SZYxvch7G3g==}
 
   '@ts-morph/common@0.11.1':
     resolution: {integrity: sha512-7hWZS0NRpEsNV8vWJzg7FEz6V8MaLNeJOmwmghqUXTpzk16V1LLZhdo+4QvE/+zv4cVci0OviuJFnqhEfoV3+g==}
@@ -2587,7 +2590,7 @@ snapshots:
       '@floating-ui/react': 0.26.28(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@react-aria/focus': 3.21.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@react-aria/interactions': 3.27.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@tanstack/react-virtual': 3.13.18(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@tanstack/react-virtual': 3.13.22(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
       use-sync-external-store: 1.6.0(react@19.2.4)
@@ -2923,13 +2926,13 @@ snapshots:
       '@tanstack/query-core': 5.90.20
       react: 19.2.4
 
-  '@tanstack/react-virtual@3.13.18(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@tanstack/react-virtual@3.13.22(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
-      '@tanstack/virtual-core': 3.13.18
+      '@tanstack/virtual-core': 3.13.22
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@tanstack/virtual-core@3.13.18': {}
+  '@tanstack/virtual-core@3.13.22': {}
 
   '@ts-morph/common@0.11.1':
     dependencies:

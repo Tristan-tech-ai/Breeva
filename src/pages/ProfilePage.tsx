@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, BarChart3, Trophy, Coins, Settings, HelpCircle, LogOut, Leaf, Flame, TreePine, Pencil, Info, Footprints, MapPin } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BarChart3, Trophy, Coins, Settings, HelpCircle, LogOut, Leaf, Flame, TreePine, Pencil, Info, Footprints, MapPin, Calendar } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { formatNumber } from '../lib/utils';
 import BottomNavigation from '../components/layout/BottomNavigation';
@@ -9,6 +9,9 @@ import AnimatedNumber from '../components/ui/AnimatedNumber';
 import LazyImage from '../components/ui/LazyImage';
 import ActivityRings from '../components/ui/ActivityRings';
 import StreakHeatmap from '../components/features/StreakHeatmap';
+import InAppStories from '../components/features/InAppStories';
+import OnboardingTour from '../components/features/OnboardingTour';
+import type { TourStep } from '../components/features/OnboardingTour';
 import type { HeatmapCategory } from '../components/features/StreakHeatmap';
 import { supabase } from '../lib/supabase';
 
@@ -112,10 +115,18 @@ export default function ProfilePage() {
   const calories = Math.round((profile?.total_distance_km || 0) * 60);
   const treesEquivalent = ((profile?.total_distance_km || 0) * 0.17 / 22).toFixed(2);
 
+  const profileTourSteps: TourStep[] = [
+    { target: '[data-tour="stats-bar"]', title: 'Your Stats at a Glance', description: 'Track your EcoPoints, distance, walks, and streak all in one place.' },
+    { target: '[data-tour="activity-rings"]', title: 'Daily Progress Rings', description: 'Watch your activity rings fill up as you walk. Close all three to earn bonus points!' },
+    { target: '[data-tour="heatmap"]', title: 'Activity Heatmap', description: 'See your walking consistency over time — just like a GitHub contribution graph.' },
+    { target: '[data-tour="impact"]', title: 'Environmental Impact', description: 'Every walk reduces your carbon footprint. See how much CO₂ you\'ve saved!' },
+  ];
+
   const menuItems = [
     { icon: <BarChart3 size={18} />, label: 'Walk History', path: '/profile/history', color: 'text-blue-500' },
     { icon: <Trophy size={18} />, label: 'Achievements', path: '/profile/achievements', color: 'text-amber-500' },
     { icon: <Coins size={18} />, label: 'Point Transactions', path: '/profile/transactions', color: 'text-emerald-500' },
+    { icon: <Calendar size={18} />, label: 'Year in Review', path: '/year-in-review', color: 'text-rose-500' },
     { icon: <Settings size={18} />, label: 'Settings', path: '/profile/settings', color: 'text-gray-500 dark:text-gray-400' },
     { icon: <HelpCircle size={18} />, label: 'Help & Support', path: '/help', color: 'text-violet-500' },
     { icon: <Info size={18} />, label: 'About Breeva', path: '/about', color: 'text-cyan-500' },
@@ -173,7 +184,7 @@ export default function ProfilePage() {
           transition={{ delay: 0.2 }}
           className="mx-4 -mt-12 relative z-10"
         >
-          <div className="rounded-2xl bg-white dark:bg-gray-900/90 backdrop-blur-2xl border border-gray-200 dark:border-gray-700/30 shadow-lg p-5">
+          <div data-tour="stats-bar" className="rounded-2xl bg-white dark:bg-gray-900/90 backdrop-blur-2xl border border-gray-200 dark:border-gray-700/30 shadow-lg p-5">
             <div className="grid grid-cols-4 gap-3 text-center">
               <div>
                 <AnimatedNumber value={profile?.ecopoints_balance || 0} className="text-lg font-bold tabular-nums text-accent-500" />
@@ -195,6 +206,16 @@ export default function ProfilePage() {
           </div>
         </motion.div>
 
+        {/* Stories */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="mx-4 mt-4"
+        >
+          <InAppStories />
+        </motion.div>
+
         {/* Environmental Impact Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -206,7 +227,7 @@ export default function ProfilePage() {
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
               Daily Progress
             </h3>
-            <div className="flex items-center gap-5">
+            <div data-tour="activity-rings" className="flex items-center gap-5">
               <ActivityRings
                 size={100}
                 rings={[
@@ -243,7 +264,7 @@ export default function ProfilePage() {
           transition={{ delay: 0.32 }}
           className="mx-4 mt-4"
         >
-          <div className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
+          <div data-tour="heatmap" className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
               Activity
             </h3>
@@ -258,7 +279,7 @@ export default function ProfilePage() {
           transition={{ delay: 0.35 }}
           className="mx-4 mt-4"
         >
-          <div className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
+          <div data-tour="impact" className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
               Your Environmental Impact
             </h3>
@@ -329,6 +350,7 @@ export default function ProfilePage() {
         </motion.div>
       </div>
 
+      <OnboardingTour tourId="profile" steps={profileTourSteps} />
       <BottomNavigation />
     </div>
   );

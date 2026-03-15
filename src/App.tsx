@@ -39,6 +39,7 @@ const MerchantDetailPage = lazy(() => import('./pages/MerchantDetailPage'));
 const WalkDetailPage = lazy(() => import('./pages/WalkDetailPage'));
 const EcoTipsPage = lazy(() => import('./pages/EcoTipsPage'));
 const ContributionHistoryPage = lazy(() => import('./pages/ContributionHistoryPage'));
+const YearInReviewPage = lazy(() => import('./pages/YearInReviewPage'));
 
 // Page loading fallback — minimal skeleton
 function PageLoader() {
@@ -63,6 +64,9 @@ function App() {
       <AuthProvider>
         <ErrorBoundary>
           <KeyboardShortcutsProvider>
+          <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-primary-500 focus:text-white focus:shadow-lg">
+            Skip to main content
+          </a>
           <OfflineBanner />
           <PWAInstallBanner />
           <CommandPalette />
@@ -74,6 +78,7 @@ function App() {
             }}
           />
           <Suspense fallback={<PageLoader />}>
+          <main id="main-content">
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
@@ -195,6 +200,13 @@ function App() {
               </ProtectedRoute>
             } />
 
+            {/* Year in Review */}
+            <Route path="/year-in-review" element={
+              <ProtectedRoute>
+                <YearInReviewPage />
+              </ProtectedRoute>
+            } />
+
             {/* Eco Tips */}
             <Route path="/eco-tips" element={<EcoTipsPage />} />
 
@@ -207,6 +219,7 @@ function App() {
             {/* Home / Map — public so map always renders */}
             <Route path="/" element={<HomePage />} />
           </Routes>
+          </main>
         </Suspense>
         </KeyboardShortcutsProvider>
         </ErrorBoundary>
