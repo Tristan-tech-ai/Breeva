@@ -40,6 +40,8 @@ interface AuthState {
 
   // Auth actions
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<boolean>;
+  signUpWithEmail: (email: string, password: string, fullName: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   fetchProfile: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
@@ -84,6 +86,52 @@ export const useAuthStore = create<AuthState>()(
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to sign in';
           set({ error: message, isLoading: false });
+        }
+      },
+
+      // Sign in with email/password
+      signInWithEmail: async (email: string, password: string) => {
+        try {
+          set({ isLoading: true, error: null });
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          if (data.user) {
+            set({ user: data.user, session: data.session });
+            await get().fetchProfile();
+            set({ isLoading: false });
+            return true;
+          }
+          return false;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to sign in';
+          set({ error: message, isLoading: false });
+          return false;
+        }
+      },
+
+      // Sign up with email/password
+      signUpWithEmail: async (email: string, password: string, fullName: string) => {
+        try {
+          set({ isLoading: true, error: null });
+          const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: { full_name: fullName },
+            },
+          });
+          if (error) throw error;
+          if (data.user) {
+            set({ user: data.user, session: data.session });
+            await get().fetchProfile();
+            set({ isLoading: false });
+            return true;
+          }
+          return false;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to sign up';
+          set({ error: message, isLoading: false });
+          return false;
         }
       },
 
