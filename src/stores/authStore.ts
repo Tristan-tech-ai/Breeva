@@ -284,10 +284,20 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true, error: null });
           const { error } = await supabase.auth.signOut();
           if (error) throw error;
-          set({ user: null, session: null, profile: null, isLoading: false });
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to sign out';
-          set({ error: message, isLoading: false });
+          console.error('Sign out error:', err);
+        } finally {
+          // Always clear all state regardless of signOut result
+          set({
+            user: null,
+            session: null,
+            profile: null,
+            pendingVerification: null,
+            isLoading: false,
+            error: null,
+          });
+          // Clear persisted auth data
+          localStorage.removeItem('breeva-auth-storage');
         }
       },
 

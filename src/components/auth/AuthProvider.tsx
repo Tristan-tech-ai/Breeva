@@ -17,9 +17,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
-          setUser(session.user);
-          setSession(session);
-          await fetchProfile();
+          // Only set user if store doesn't already have one (prevent re-login race after signOut)
+          const currentUser = useAuthStore.getState().user;
+          if (!currentUser) {
+            setUser(session.user);
+            setSession(session);
+            await fetchProfile();
+          }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setSession(null);

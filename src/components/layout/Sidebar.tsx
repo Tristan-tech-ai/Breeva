@@ -114,6 +114,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const handleSignOut = async () => {
     await signOut();
     onClose();
+    window.location.href = '/login';
   };
 
   return (
