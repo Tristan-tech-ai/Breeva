@@ -6,9 +6,7 @@ interface HeatmapCategory {
   label: string;
   icon: React.ElementType;
   data: Record<string, number>;
-  /** 4 color stops from lightest to darkest */
   colors: [string, string, string, string];
-  /** Empty cell color */
   empty: string;
   unit: string;
 }
@@ -19,7 +17,6 @@ interface StreakHeatmapProps {
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const DAY_LABELS = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
 
 interface Cell {
   date: string;
@@ -28,18 +25,27 @@ interface Cell {
   row: number;
 }
 
+// ── GitHub-accurate grid builder ──
+// GitHub's graph ends on Saturday (row 6) of the current week.
+// Sunday = row 0, Mon = row 1, … Sat = row 6.
+// The rightmost column is the current (potentially partial) week.
 function buildGrid(data: Record<string, number>, weeks: number) {
   const today = new Date();
   const cells: Cell[] = [];
-  const start = new Date(today);
-  start.setDate(start.getDate() - (weeks * 7) + 1);
-  const dayOffset = (start.getDay() + 6) % 7;
-  start.setDate(start.getDate() - dayOffset);
+
+  // End of grid = today. Find the Sunday that starts the last column's week.
+  const todayDay = today.getDay(); // 0=Sun
+  const lastColSunday = new Date(today);
+  lastColSunday.setDate(today.getDate() - todayDay);
+
+  // First column's Sunday
+  const firstColSunday = new Date(lastColSunday);
+  firstColSunday.setDate(lastColSunday.getDate() - (weeks - 1) * 7);
 
   for (let w = 0; w < weeks; w++) {
     for (let d = 0; d < 7; d++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + w * 7 + d);
+      const date = new Date(firstColSunday);
+      date.setDate(firstColSunday.getDate() + w * 7 + d);
       if (date > today) continue;
       const key = date.toISOString().split('T')[0];
       cells.push({ date: key, value: data[key] || 0, col: w, row: d });
@@ -48,39 +54,52 @@ function buildGrid(data: Record<string, number>, weeks: number) {
   return cells;
 }
 
+// GitHub only shows a month label at the first column where that month appears,
+// AND only if there's enough space (≥ 3 columns) before the next label.
 function getMonthLabels(weeks: number) {
   const today = new Date();
-  const start = new Date(today);
-  start.setDate(start.getDate() - (weeks * 7) + 1);
-  const dayOffset = (start.getDay() + 6) % 7;
-  start.setDate(start.getDate() - dayOffset);
+  const todayDay = today.getDay();
+  const lastColSunday = new Date(today);
+  lastColSunday.setDate(today.getDate() - todayDay);
+  const firstColSunday = new Date(lastColSunday);
+  firstColSunday.setDate(lastColSunday.getDate() - (weeks - 1) * 7);
 
-  const labels: { label: string; col: number }[] = [];
+  const raw: { label: string; col: number }[] = [];
   let lastMonth = -1;
 
   for (let w = 0; w < weeks; w++) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + w * 7);
+    const d = new Date(firstColSunday);
+    d.setDate(firstColSunday.getDate() + w * 7);
     const m = d.getMonth();
     if (m !== lastMonth) {
-      labels.push({ label: MONTHS[m], col: w });
+      raw.push({ label: MONTHS[m], col: w });
       lastMonth = m;
     }
   }
-  return labels;
+
+  // Filter out labels that would overlap (need ≥ 3 cols gap, like GitHub)
+  const filtered: typeof raw = [];
+  for (let i = 0; i < raw.length; i++) {
+    if (i === 0) { filtered.push(raw[i]); continue; }
+    if (raw[i].col - raw[i - 1].col >= 3) {
+      filtered.push(raw[i]);
+    }
+  }
+  return filtered;
 }
+
+const CELL = 10;
+const GAP = 3;
+const STEP = CELL + GAP; // 13px per column/row
+const DAY_W = 30; // width reserved for day labels
 
 export default function StreakHeatmap({ categories, weeks = 16 }: StreakHeatmapProps) {
   const [activeKey, setActiveKey] = useState(categories[0]?.key || '');
-  const [tooltip, setTooltip] = useState<{ date: string; value: number; x: number; y: number } | null>(null);
+  const [hoveredCell, setHoveredCell] = useState<Cell | null>(null);
 
   const activeCategory = categories.find(c => c.key === activeKey) || categories[0];
 
-  const grid = useMemo(
-    () => buildGrid(activeCategory.data, weeks),
-    [activeCategory.data, weeks],
-  );
-
+  const grid = useMemo(() => buildGrid(activeCategory.data, weeks), [activeCategory.data, weeks]);
   const monthLabels = useMemo(() => getMonthLabels(weeks), [weeks]);
 
   const maxVal = useMemo(() => Math.max(1, ...grid.map(c => c.value)), [grid]);
@@ -89,49 +108,46 @@ export default function StreakHeatmap({ categories, weeks = 16 }: StreakHeatmapP
 
   const getColor = useCallback((value: number) => {
     if (value === 0) return activeCategory.empty;
-    const intensity = value / maxVal;
-    if (intensity > 0.75) return activeCategory.colors[3];
-    if (intensity > 0.5) return activeCategory.colors[2];
-    if (intensity > 0.25) return activeCategory.colors[1];
+    const r = value / maxVal;
+    if (r > 0.75) return activeCategory.colors[3];
+    if (r > 0.5) return activeCategory.colors[2];
+    if (r > 0.25) return activeCategory.colors[1];
     return activeCategory.colors[0];
   }, [maxVal, activeCategory]);
 
-  const cellSize = 11;
-  const gap = 3;
-  const dayLabelWidth = 28;
-  const gridWidth = weeks * (cellSize + gap);
+  // SVG dimensions — GitHub uses SVG, we mirror it
+  const svgW = DAY_W + weeks * STEP - GAP;
+  const monthRowH = 15;
+  const gridH = 7 * STEP - GAP;
+  const svgH = monthRowH + gridH;
 
-  const handleCellHover = (cell: Cell, e: React.MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const container = (e.currentTarget as HTMLElement).closest('[data-heatmap-root]')?.getBoundingClientRect();
-    if (!container) return;
-    setTooltip({
-      date: cell.date,
-      value: cell.value,
-      x: rect.left - container.left + cellSize / 2,
-      y: rect.top - container.top - 4,
-    });
-  };
+  // Tooltip position calculated from cell col/row (px-perfect, no getBoundingClientRect)
+  const tooltipStyle = useMemo(() => {
+    if (!hoveredCell) return null;
+    const x = DAY_W + hoveredCell.col * STEP + CELL / 2;
+    const y = monthRowH + hoveredCell.row * STEP - 6;
+    return { left: x, top: y };
+  }, [hoveredCell]);
 
   return (
-    <div data-heatmap-root className="relative">
+    <div className="relative">
       {/* Category tabs */}
       {categories.length > 1 && (
         <div className="flex gap-1.5 mb-4">
           {categories.map(cat => {
             const Icon = cat.icon;
-            const isActive = cat.key === activeKey;
+            const active = cat.key === activeKey;
             return (
               <button
                 key={cat.key}
-                onClick={() => setActiveKey(cat.key)}
+                onClick={() => { setActiveKey(cat.key); setHoveredCell(null); }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
-                  isActive
+                  active
                     ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 shadow-sm border border-primary-200 dark:border-primary-800'
                     : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 border border-transparent'
                 }`}
               >
-                <Icon size={12} strokeWidth={isActive ? 2.5 : 2} />
+                <Icon size={12} strokeWidth={active ? 2.5 : 2} />
                 {cat.label}
               </button>
             );
@@ -139,128 +155,133 @@ export default function StreakHeatmap({ categories, weeks = 16 }: StreakHeatmapP
         </div>
       )}
 
-      {/* Summary line — GitHub style */}
-      <div className="flex items-baseline gap-1.5 mb-3">
+      {/* Summary */}
+      <div className="flex items-baseline gap-1.5 mb-2">
         <span className="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{totalActivity}</span>
         <span className="text-xs text-gray-500 dark:text-gray-400">
           {activeCategory.unit} in the last {weeks} weeks
         </span>
         {activeDays > 0 && (
-          <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto">
+          <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto tabular-nums">
             {activeDays} active day{activeDays !== 1 ? 's' : ''}
           </span>
         )}
       </div>
 
-      {/* Heatmap grid */}
-      <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
-        <div style={{ minWidth: dayLabelWidth + gridWidth + 4 }}>
-          {/* Month labels row */}
-          <div className="flex" style={{ paddingLeft: dayLabelWidth }}>
-            {monthLabels.map((m, i) => (
-              <span
-                key={i}
-                className="text-[10px] text-gray-500 dark:text-gray-400 leading-none"
-                style={{
-                  position: 'relative',
-                  left: m.col * (cellSize + gap),
-                  marginLeft: i === 0 ? 0 : -(monthLabels[i - 1]?.label.length ?? 0) * 4,
-                }}
-              >
-                {m.label}
-              </span>
-            ))}
-          </div>
-
-          {/* Grid body */}
-          <div className="flex mt-1.5">
-            {/* Day labels */}
-            <div className="flex flex-col" style={{ width: dayLabelWidth, gap }}>
-              {DAY_LABELS.map((label, i) => (
-                <div
-                  key={i}
-                  style={{ height: cellSize }}
-                  className="flex items-center justify-end pr-1.5"
-                >
-                  <span className="text-[9px] text-gray-400 dark:text-gray-500 leading-none">{label}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Week columns */}
-            <div className="flex" style={{ gap }}>
-              {Array.from({ length: weeks }, (_, w) => (
-                <div key={w} className="flex flex-col" style={{ gap }}>
-                  {Array.from({ length: 7 }, (_, d) => {
-                    const cell = grid.find(c => c.col === w && c.row === d);
-                    if (!cell) {
-                      return <div key={d} style={{ width: cellSize, height: cellSize }} />;
-                    }
-                    return (
-                      <motion.div
-                        key={d}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: (w * 7 + d) * 0.002, duration: 0.15 }}
-                        style={{ width: cellSize, height: cellSize }}
-                        className={`rounded-[3px] ${getColor(cell.value)} cursor-pointer transition-all hover:ring-1 hover:ring-gray-400 dark:hover:ring-gray-500 hover:ring-offset-1 hover:ring-offset-white dark:hover:ring-offset-gray-900`}
-                        onMouseEnter={(e) => handleCellHover(cell, e)}
-                        onMouseLeave={() => setTooltip(null)}
-                      />
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Legend row */}
-      <div className="flex items-center justify-between mt-3">
-        <a
-          href="#"
-          onClick={(e) => e.preventDefault()}
-          className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-primary-500 transition-colors"
+      {/* SVG Heatmap — pixel-perfect like GitHub */}
+      <div className="overflow-x-auto scrollbar-hide -mx-1 px-1 relative" style={{ minHeight: svgH + 8 }}>
+        <svg
+          width={svgW}
+          height={svgH}
+          className="block"
+          role="img"
+          aria-label={`${activeCategory.label} activity over ${weeks} weeks`}
         >
-          Learn how we count {activeCategory.label.toLowerCase()}
-        </a>
-        <div className="flex items-center gap-[3px]">
-          <span className="text-[9px] text-gray-400 dark:text-gray-500 mr-1">Less</span>
-          <div style={{ width: cellSize - 1, height: cellSize - 1 }} className={`rounded-[2px] ${activeCategory.empty}`} />
-          {activeCategory.colors.map((c, i) => (
-            <div key={i} style={{ width: cellSize - 1, height: cellSize - 1 }} className={`rounded-[2px] ${c}`} />
+          {/* Month labels — absolutely positioned text at exact column x */}
+          {monthLabels.map((m, i) => (
+            <text
+              key={i}
+              x={DAY_W + m.col * STEP}
+              y={10}
+              className="fill-gray-500 dark:fill-gray-400"
+              fontSize={10}
+              fontFamily="inherit"
+            >
+              {m.label}
+            </text>
           ))}
-          <span className="text-[9px] text-gray-400 dark:text-gray-500 ml-1">More</span>
-        </div>
+
+          {/* Day labels — Sun(0) Mon(1) Tue(2) Wed(3) Thu(4) Fri(5) Sat(6) */}
+          {/* GitHub shows Mon(1), Wed(3), Fri(5) */}
+          {[1, 3, 5].map(d => (
+            <text
+              key={d}
+              x={DAY_W - 6}
+              y={monthRowH + d * STEP + CELL - 1}
+              textAnchor="end"
+              className="fill-gray-400 dark:fill-gray-500"
+              fontSize={9}
+              fontFamily="inherit"
+            >
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]}
+            </text>
+          ))}
+
+          {/* Grid cells */}
+          {grid.map(cell => (
+            <rect
+              key={`${cell.col}-${cell.row}`}
+              x={DAY_W + cell.col * STEP}
+              y={monthRowH + cell.row * STEP}
+              width={CELL}
+              height={CELL}
+              rx={2}
+              ry={2}
+              className={`${getColor(cell.value)} transition-colors`}
+              style={{ outline: hoveredCell?.date === cell.date ? '1.5px solid var(--color-gray-400)' : 'none', outlineOffset: '-0.5px' }}
+              onMouseEnter={() => setHoveredCell(cell)}
+              onMouseLeave={() => setHoveredCell(null)}
+            />
+          ))}
+        </svg>
+
+        {/* Tooltip — HTML overlay for rich styling, positioned by grid math */}
+        <AnimatePresence>
+          {hoveredCell && tooltipStyle && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.08 }}
+              className="absolute z-50 pointer-events-none"
+              style={{
+                left: tooltipStyle.left,
+                top: tooltipStyle.top,
+                transform: 'translate(-50%, -100%)',
+              }}
+            >
+              <div className="bg-[#24292f] dark:bg-[#3d444d] text-white text-[11px] leading-tight px-2 py-1.5 rounded-md shadow-lg whitespace-nowrap text-center">
+                {hoveredCell.value === 0 ? (
+                  <span>No {activeCategory.unit} on {fmtDate(hoveredCell.date)}</span>
+                ) : (
+                  <>
+                    <span className="font-semibold">{hoveredCell.value} {hoveredCell.value === 1 ? activeCategory.unit.replace(/s$/, '') : activeCategory.unit}</span>
+                    <span className="text-[#9198a1]"> on {fmtDate(hoveredCell.date)}</span>
+                  </>
+                )}
+              </div>
+              {/* Caret triangle */}
+              <div className="flex justify-center -mt-[1px]">
+                <div
+                  className="w-0 h-0 border-l-[4px] border-r-[4px] border-t-[4px] border-l-transparent border-r-transparent border-t-[#24292f] dark:border-t-[#3d444d]"
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Tooltip */}
-      <AnimatePresence>
-        {tooltip && (
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.1 }}
-            className="absolute z-50 pointer-events-none"
-            style={{ left: tooltip.x, top: tooltip.y, transform: 'translate(-50%, -100%)' }}
-          >
-            <div className="bg-gray-900 dark:bg-gray-700 text-white text-[10px] font-medium px-2.5 py-1.5 rounded-md shadow-lg whitespace-nowrap">
-              <span className="font-bold">{tooltip.value} {activeCategory.unit}</span>
-              <span className="text-gray-300 dark:text-gray-400"> on {formatTooltipDate(tooltip.date)}</span>
-            </div>
-            <div className="w-2 h-2 bg-gray-900 dark:bg-gray-700 rotate-45 mx-auto -mt-1" />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Legend — GitHub style: right-aligned with Less/More */}
+      <div className="flex items-center justify-between mt-2">
+        <span className="text-[10px] text-gray-400 dark:text-gray-500">
+          {activeCategory.label} activity
+        </span>
+        <div className="flex items-center gap-[3px]">
+          <span className="text-[10px] text-gray-400 dark:text-gray-500 mr-0.5">Less</span>
+          <svg width={CELL} height={CELL}><rect width={CELL} height={CELL} rx={2} className={activeCategory.empty} /></svg>
+          {activeCategory.colors.map((c, i) => (
+            <svg key={i} width={CELL} height={CELL}><rect width={CELL} height={CELL} rx={2} className={c} /></svg>
+          ))}
+          <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-0.5">More</span>
+        </div>
+      </div>
     </div>
   );
 }
 
-function formatTooltipDate(dateStr: string) {
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+function fmtDate(s: string) {
+  const d = new Date(s + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export { type HeatmapCategory };
