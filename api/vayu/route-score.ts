@@ -486,6 +486,47 @@ async function findGangRoadsInBBoxFallback(
   } catch { return []; }
 }
 
+// ─── Supabase RPC: find_aqi_optimal_route (pgRouting graph pathfinder) ──
+interface GraphRouteEdge {
+  seq: number;
+  osm_way_id: number;
+  highway: string;
+  name: string | null;
+  length_m: number;
+  aqi_cost: number;
+  geojson: string;
+}
+
+async function findGraphOptimalRoute(
+  startLat: number, startLng: number,
+  endLat: number, endLng: number,
+): Promise<GraphRouteEdge[]> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return [];
+  try {
+    const resp = await fetch(`${url}/rest/v1/rpc/find_aqi_optimal_route`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        start_lat: startLat,
+        start_lng: startLng,
+        end_lat: endLat,
+        end_lng: endLng,
+      }),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
 // ─── Open-Meteo fallback for single point ───────────────────
 async function getPointAQI(lat: number, lon: number): Promise<{ aqi: number; pm25: number }> {
   try {
@@ -991,19 +1032,20 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     const orsStart: [number, number] = [startLng, startLat];
     const orsEnd: [number, number] = [endLng, endLat];
 
-    // ── Phase 2: Parallel fetch — ORS alternatives + through-gang-roads ──
+    // ── Phase 2+3: Parallel fetch — ORS alternatives + through-gang-roads + graph route ──
     const bufferDeg = 0.003;
     const corridorSouth = Math.min(startLat, endLat) - bufferDeg;
     const corridorNorth = Math.max(startLat, endLat) + bufferDeg;
     const corridorWest = Math.min(startLng, endLng) - bufferDeg;
     const corridorEast = Math.max(startLng, endLng) + bufferDeg;
 
-    const [orsRoutes, throughRoads] = await Promise.all([
+    const [orsRoutes, throughRoads, graphEdges] = await Promise.all([
       fetchORSAlternatives(orsStart, orsEnd, profile, alternatives).catch((e) => {
         console.error('ORS error:', e);
         return [] as ORSRoute[];
       }),
       findThroughGangRoads(corridorSouth, corridorWest, corridorNorth, corridorEast).catch(() => [] as ThroughGangRoad[]),
+      findGraphOptimalRoute(startLat, startLng, endLat, endLng).catch(() => [] as GraphRouteEdge[]),
     ]);
 
     if (orsRoutes.length === 0) {
@@ -1132,6 +1174,103 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
         }
       } catch (e) {
         console.error('[clean-route] Multi-corridor injection failed:', e);
+      }
+    }
+
+    // ── Phase 3: Graph-optimal route (pgRouting AQI-weighted Dijkstra) ──
+    if (graphEdges.length > 0) {
+      try {
+        // Build polyline from ordered edge geometries
+        const graphWaypoints: Array<{ lat: number; lng: number }> = [];
+        let totalDistanceM = 0;
+
+        for (const edge of graphEdges) {
+          const coords: number[][] = JSON.parse(edge.geojson).coordinates;
+          if (coords.length < 2) continue;
+          totalDistanceM += edge.length_m;
+
+          if (graphWaypoints.length === 0) {
+            // First edge — add all points
+            for (const c of coords) graphWaypoints.push({ lat: c[1], lng: c[0] });
+          } else {
+            // Subsequent edges — check orientation and connect
+            const prevEnd = graphWaypoints[graphWaypoints.length - 1];
+            const edgeStart = coords[0];
+            const edgeEnd = coords[coords.length - 1];
+            const distToStart = haversineMeters(prevEnd.lat, prevEnd.lng, edgeStart[1], edgeStart[0]);
+            const distToEnd = haversineMeters(prevEnd.lat, prevEnd.lng, edgeEnd[1], edgeEnd[0]);
+
+            const orderedCoords = distToEnd < distToStart ? [...coords].reverse() : coords;
+            // Skip first point (shared with previous edge's endpoint)
+            for (let i = 1; i < orderedCoords.length; i++) {
+              graphWaypoints.push({ lat: orderedCoords[i][1], lng: orderedCoords[i][0] });
+            }
+          }
+        }
+
+        if (graphWaypoints.length >= 2 && totalDistanceM > 0) {
+          // Duration estimate: 5 km/h pedestrian walking speed
+          const durationSeconds = Math.round(totalDistanceM * 0.72);
+
+          // Build polyline in [lat, lng] format for VAYU scoring
+          const polyline: [number, number][] = graphWaypoints.map(w => [w.lat, w.lng]);
+
+          let score;
+          try {
+            score = await scorePolyline(polyline, 'pedestrian', 0);
+          } catch { score = null; }
+
+          const instructions = graphEdges.map((e, i) => ({
+            text: `Walk along ${e.name || e.highway}`,
+            distance: e.length_m,
+            duration: e.length_m * 0.72,
+            type: 0,
+            waypoint_index: i,
+          }));
+
+          const graphEntry = {
+            index: scoredRoutes.length,
+            polyline: graphWaypoints,
+            distance_meters: Math.round(totalDistanceM),
+            duration_seconds: durationSeconds,
+            instructions,
+            score,
+          };
+
+          // Validate: dedup + duration guard
+          const shortestDuration = Math.min(...scoredRoutes.map(r => r.duration_seconds));
+          const isDuplicate = scoredRoutes.some(r =>
+            isSimilarGeometry(
+              graphWaypoints.map(w => [w.lng, w.lat]),
+              r.polyline.map(p => [p.lng, p.lat]),
+              40
+            )
+          );
+
+          if (!isDuplicate && graphEntry.duration_seconds <= shortestDuration * 1.5) {
+            const graphAqi = graphEntry.score?.avg_aqi ?? 999;
+            if (scoredRoutes.length < 5) {
+              scoredRoutes.push(graphEntry);
+              console.log('[clean-route] Phase 3 graph route added: distance=%dm, duration=%ds, aqi=%s',
+                graphEntry.distance_meters, graphEntry.duration_seconds, graphAqi.toFixed(1));
+            } else {
+              // Replace worst-AQI route if graph route is cleaner
+              const worstIdx = scoredRoutes.reduce((wi, r, i) =>
+                (r.score?.avg_aqi ?? 0) > (scoredRoutes[wi].score?.avg_aqi ?? 0) ? i : wi, 0);
+              const worstAqi = scoredRoutes[worstIdx].score?.avg_aqi ?? 0;
+              if (graphAqi < worstAqi) {
+                scoredRoutes[worstIdx] = { ...graphEntry, index: scoredRoutes[worstIdx].index };
+                console.log('[clean-route] Phase 3 graph route replaced worst candidate: aqi=%s < %s',
+                  graphAqi.toFixed(1), worstAqi.toFixed(1));
+              }
+            }
+          } else {
+            console.log('[clean-route] Phase 3 graph route skipped: duplicate=%s, durationRatio=%s',
+              isDuplicate, (graphEntry.duration_seconds / shortestDuration).toFixed(2));
+          }
+        }
+      } catch (e) {
+        console.error('[clean-route] Phase 3 graph routing failed:', e);
       }
     }
 
