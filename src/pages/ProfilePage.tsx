@@ -16,7 +16,7 @@ import type { HeatmapCategory } from '../components/features/StreakHeatmap';
 import { supabase } from '../lib/supabase';
 
 export default function ProfilePage() {
-  const { profile, user, signOut } = useAuthStore();
+  const { profile, user, signOut, isLoading } = useAuthStore();
   const navigate = useNavigate();
   const [walkDays, setWalkDays] = useState<Record<string, number>>({});
   const [contributionDays, setContributionDays] = useState<Record<string, number>>({});
@@ -131,6 +131,119 @@ export default function ProfilePage() {
     { icon: <HelpCircle size={18} />, label: 'Help & Support', path: '/help', color: 'text-violet-500' },
     { icon: <Info size={18} />, label: 'About Breeva', path: '/about', color: 'text-cyan-500' },
   ];
+
+  // Skeleton loading state
+  if (!profile || isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24">
+        {/* Header skeleton */}
+        <div className="relative gradient-primary pb-20 pt-12 px-6">
+          <div className="absolute inset-0 bg-white/10 dark:bg-gray-900/20" />
+          <div className="max-w-2xl mx-auto relative z-10">
+            <div className="w-6 h-6 rounded bg-white/20 mb-6" />
+            <div className="flex flex-col items-center">
+              <div className="w-24 h-24 rounded-full bg-white/20 animate-pulse" />
+              <div className="mt-3 w-32 h-5 rounded-lg bg-white/20 animate-pulse" />
+              <div className="mt-2 w-24 h-3.5 rounded-lg bg-white/10 animate-pulse" />
+              <div className="mt-2 w-16 h-3 rounded bg-white/10 animate-pulse" />
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-2xl mx-auto">
+          {/* Stats bar skeleton */}
+          <div className="mx-4 -mt-12 relative z-10">
+            <div className="rounded-2xl bg-white dark:bg-gray-900/90 border border-gray-200 dark:border-gray-700/30 shadow-lg p-5">
+              <div className="grid grid-cols-4 gap-3 text-center">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="flex flex-col items-center gap-1.5">
+                    <div className="w-12 h-5 rounded-md bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="w-8 h-2.5 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Stories skeleton */}
+          <div className="mx-4 mt-4">
+            <div className="flex gap-4 overflow-hidden">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-1.5 shrink-0">
+                  <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse" />
+                  <div className="w-10 h-2.5 rounded bg-gray-100 dark:bg-gray-800/60 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Daily Progress skeleton */}
+          <div className="mx-4 mt-4">
+            <div className="rounded-2xl bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
+              <div className="w-24 h-3 rounded bg-gray-200 dark:bg-gray-700 animate-pulse mb-4" />
+              <div className="flex items-center gap-5">
+                <div className="w-[100px] h-[100px] rounded-full border-[10px] border-gray-200 dark:border-gray-700 animate-pulse" />
+                <div className="flex-1 space-y-3">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                      <div className="w-14 h-3 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                      <div className="w-10 h-3 rounded bg-gray-100 dark:bg-gray-800 animate-pulse ml-auto" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Heatmap skeleton */}
+          <div className="mx-4 mt-4">
+            <div className="rounded-2xl bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
+              <div className="w-16 h-3 rounded bg-gray-200 dark:bg-gray-700 animate-pulse mb-3" />
+              <div className="grid grid-cols-[repeat(20,1fr)] gap-[3px]">
+                {[...Array(140)].map((_, i) => (
+                  <div key={i} className="aspect-square rounded-[2px] bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Impact skeleton */}
+          <div className="mx-4 mt-4">
+            <div className="rounded-2xl bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
+              <div className="w-36 h-3 rounded bg-gray-200 dark:bg-gray-700 animate-pulse mb-4" />
+              <div className="grid grid-cols-3 gap-4 text-center">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex flex-col items-center gap-1.5">
+                    <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                    <div className="w-12 h-4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="w-10 h-2.5 rounded bg-gray-100 dark:bg-gray-800/60 animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Menu skeleton */}
+          <div className="mx-4 mt-4">
+            <div className="rounded-2xl bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700/30 shadow-sm overflow-hidden divide-y divide-gray-100 dark:divide-gray-800/50">
+              {[...Array(7)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-[18px] h-[18px] rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="w-24 h-3.5 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                  </div>
+                  <div className="w-4 h-4 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <BottomNavigation />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24">
