@@ -23,6 +23,7 @@ import { TransactionSeeder } from './seeders/TransactionSeeder';
 import { ReviewSeeder } from './seeders/ReviewSeeder';
 import { SettingsSeeder } from './seeders/SettingsSeeder';
 import { SavedPlacesSeeder } from './seeders/SavedPlacesSeeder';
+import { LeaderboardSeeder } from './seeders/LeaderboardSeeder';
 import { DEMO_CREDENTIALS } from './data/indonesian-names';
 
 // ─── CLI Flags ───────────────────────────────────────────
@@ -44,6 +45,7 @@ const SEEDER_ORDER = [
   'saved_places',
   'quests',
   'achievements',
+  'leaderboard',
 ] as const;
 
 type SeederName = (typeof SEEDER_ORDER)[number];
@@ -257,6 +259,14 @@ async function main() {
       const seeder = new AchievementSeeder(supabaseAdmin);
       const result = await seeder.run(userMap);
       summary['achievements'] = result.count;
+    }
+
+    // ── 13. Leaderboard ──
+    if (shouldRun('leaderboard')) {
+      console.log('\n🏅 Seeding leaderboard...');
+      const seeder = new LeaderboardSeeder(supabaseAdmin);
+      const result = await seeder.run(userMap);
+      summary['leaderboard'] = result.count;
     }
 
     // ── Summary ──
