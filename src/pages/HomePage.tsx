@@ -46,7 +46,6 @@ import MapLayersSheet from '../components/map/MapLayersSheet';
 import type { POI } from '../lib/poi-api';
 import type { PollutantType } from '../types';
 import type { RoadLayerMeta } from '../components/map/RoadPollutionLayer';
-import StreakWidget from '../components/features/StreakWidget';
 
 const FILTER_CHIPS = [
   { key: 'restaurant', label: 'Restaurants', icon: UtensilsCrossed, color: '#ef4444' },
@@ -200,13 +199,12 @@ export default function HomePage() {
                 </a>
               </div>
 
-              {/* AQI badge + Streak */}
-              <div className="mt-2 max-w-2xl mx-auto flex items-center gap-2">
-                {currentAQI && (
+              {/* AQI badge */}
+              {currentAQI && (
+                <div className="mt-2 max-w-2xl mx-auto flex items-center gap-2">
                   <AQIBadge aqi={currentAQI.aqi} size="sm" confidence={currentAQI.confidence} />
-                )}
-                <StreakWidget />
-              </div>
+                </div>
+              )}
 
               {/* Active filter pill */}
               {activeFilter && (() => {
