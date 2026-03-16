@@ -285,7 +285,7 @@ export default function SettingsPage() {
         <div className="w-6" />
       </div>
 
-      <div className="px-4 pt-4 pb-12 space-y-6">
+      <div className="max-w-2xl mx-auto px-4 pt-4 pb-12 space-y-6">
         {sections.map((section, sIdx) => (
           <motion.div
             key={section.title}

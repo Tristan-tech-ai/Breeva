@@ -103,7 +103,7 @@ export default function QuestsPage() {
         </div>
       </div>
 
-      <div className="px-4 pt-4 pb-12">
+      <div className="max-w-2xl mx-auto px-4 pt-4 pb-12">
         {/* Summary */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}

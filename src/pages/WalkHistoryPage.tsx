@@ -132,7 +132,7 @@ export default function WalkHistoryPage() {
         <div className="w-6" />
       </div>
 
-      <div className="px-4 pt-4 pb-12">
+      <div className="max-w-2xl mx-auto px-4 pt-4 pb-12">
         <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
 
         {/* Group-by selector */}

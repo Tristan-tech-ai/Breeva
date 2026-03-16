@@ -184,7 +184,7 @@ export default function EcoImpactPage() {
           <p className="text-white/60 text-xs mt-1">{totalWalks} eco-walks completed</p>
 
           {/* Streak */}
-          <div className="flex items-center justify-center gap-2 mt-3 bg-white dark:bg-gray-900/10 rounded-xl py-2 px-4">
+          <div className="flex items-center justify-center gap-2 mt-3 bg-white/20 backdrop-blur-sm rounded-xl py-2 px-4">
             <Flame className="w-4 h-4 text-amber-300" />
             <span className="text-white text-sm font-medium">{currentStreak} day streak</span>
           </div>

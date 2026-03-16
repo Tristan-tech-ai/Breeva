@@ -116,7 +116,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Filter Tabs */}
-      <div className="px-4 pt-4 pb-2 flex gap-2">
+      <div className="max-w-2xl mx-auto px-4 pt-4 pb-2 flex gap-2">
         {filters.map((f, i) => (
           <motion.button
             key={f.value}
@@ -135,7 +135,7 @@ export default function TransactionsPage() {
         ))}
       </div>
 
-      <div className="px-4 pt-2 pb-12">
+      <div className="max-w-2xl mx-auto px-4 pt-2 pb-12">
         {isLoading ? (
           <SkeletonList rows={5} />
         ) : transactions.length === 0 ? (

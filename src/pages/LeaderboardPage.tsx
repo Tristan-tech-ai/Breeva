@@ -85,24 +85,37 @@ export default function LeaderboardPage() {
 
   const fetchLeaderboard = useCallback(async () => {
     setIsLoading(true);
-    const sortCol = activeTab === 'points' ? 'ecopoints_balance' : 'total_distance_km';
+    const sortCol = activeTab === 'points' ? 'total_points_earned' : 'total_distance_meters';
+
+    // Get current week start (Monday)
+    const now = new Date();
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    const weekStart = new Date(now);
+    weekStart.setDate(diff);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekStr = weekStart.toISOString().split('T')[0];
 
     const { data } = await supabase
-      .from('users')
-      .select('id, full_name, avatar_url, total_distance_km, total_walks, ecopoints_balance')
+      .from('leaderboard_weekly')
+      .select('user_id, total_distance_meters, total_walks, total_points_earned, rank, users!inner(full_name, avatar_url)')
+      .eq('week_start', weekStr)
       .order(sortCol, { ascending: false })
       .limit(50);
 
     if (data) {
       setEntries(
-        data.map((u) => ({
-          user_id: u.id,
-          name: u.full_name || 'Green Walker',
-          avatar_url: u.avatar_url,
-          total_distance_km: u.total_distance_km || 0,
-          total_walks: u.total_walks || 0,
-          ecopoints_balance: u.ecopoints_balance || 0,
-        }))
+        data.map((row) => {
+          const u = row.users as unknown as { full_name: string | null; avatar_url: string | null };
+          return {
+            user_id: row.user_id,
+            name: u?.full_name || 'Green Walker',
+            avatar_url: u?.avatar_url || null,
+            total_distance_km: (row.total_distance_meters || 0) / 1000,
+            total_walks: row.total_walks || 0,
+            ecopoints_balance: row.total_points_earned || 0,
+          };
+        })
       );
     }
     setIsLoading(false);
@@ -131,7 +144,7 @@ export default function LeaderboardPage() {
         <div className="w-6" />
       </div>
 
-      <div className="px-4 pt-4 pb-12">
+      <div className="max-w-2xl mx-auto px-4 pt-4 pb-12">
         {/* My Rank */}
         {myRank > 0 && (
           <motion.div
