@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Clock, Leaf, Flame, Sparkles, Star, Map, ChevronRight, Wind, Shield } from 'lucide-react';
+import { MapPin, Clock, Leaf, Flame, Sparkles, Star, Map, ChevronRight, Wind, Shield, AlertTriangle } from 'lucide-react';
 import type { WalkSession, ExposureResult } from '../../types';
 import PostWalkRating from './PostWalkRating';
 import CelebrationBurst from '../ui/CelebrationBurst';
@@ -16,6 +16,7 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
   const navigate = useNavigate();
   const [showRating, setShowRating] = useState(false);
   const [rated, setRated] = useState(false);
+  const isFailed = session.status === 'failed';
 
   const distKm = (session.distance_meters / 1000).toFixed(2);
   const durMin = Math.floor(session.duration_seconds / 60);
@@ -54,15 +55,15 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.2 }}
-            className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-emerald-400 to-primary-500 mb-3 shadow-lg shadow-primary-500/30"
+            className={`inline-flex items-center justify-center w-16 h-16 rounded-full ${isFailed ? 'bg-gradient-to-br from-amber-400 to-orange-500' : 'bg-gradient-to-br from-emerald-400 to-primary-500'} mb-3 shadow-lg ${isFailed ? 'shadow-orange-500/30' : 'shadow-primary-500/30'}`}
           >
-            <Sparkles size={28} className="text-white" />
+            {isFailed ? <AlertTriangle size={28} className="text-white" /> : <Sparkles size={28} className="text-white" />}
           </motion.div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            Walk Complete!
+            {isFailed ? 'Walk Save Failed' : 'Walk Complete!'}
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Great job making a difference!
+            {isFailed ? 'Your walk was recorded locally but failed to sync. It will retry next session.' : 'Great job making a difference!'}
           </p>
         </div>
 

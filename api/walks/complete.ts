@@ -21,6 +21,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // Authenticate the request
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !authUser) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+
     const {
       walk_id,
       user_id,
@@ -32,6 +43,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!walk_id || !user_id || !distance_meters || !duration_seconds) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Verify the user_id matches the authenticated user
+    if (user_id !== authUser.id) {
+      return res.status(403).json({ error: 'Forbidden: user mismatch' });
     }
 
     // Anti-cheat: Validate the walk

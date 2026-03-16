@@ -276,6 +276,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
 
         if (insertErr) {
           console.error('Failed to insert walk:', insertErr);
+          throw new Error('Walk save failed');
         } else {
           // 2. Call complete_walk RPC — updates walk record, user stats, awards points
           const { data: walkResult, error: rpcErr } = await supabase.rpc('complete_walk', {
@@ -316,6 +317,8 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       }
     } catch (error) {
       console.error('Failed to save walk:', error);
+      // Mark session as failed so UI can inform user
+      completedSession.status = 'failed' as WalkSession['status'];
     }
 
     set({
@@ -324,7 +327,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       isPaused: false,
       watchId: null,
       timerInterval: null,
-      pointsEarned: points,
+      pointsEarned: completedSession.status === 'completed' ? points : 0,
     });
 
     return completedSession;

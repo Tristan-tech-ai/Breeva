@@ -17,10 +17,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // Authenticate the request
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !authUser) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+
     const { qr_code, merchant_id }: VerifyRewardRequest = req.body;
 
     if (!qr_code || !merchant_id) {
       return res.status(400).json({ error: 'QR code and merchant ID required' });
+    }
+
+    // Verify the authenticated user owns this merchant
+    const { data: merchant, error: merchantErr } = await supabase
+      .from('merchants')
+      .select('id, owner_id')
+      .eq('id', merchant_id)
+      .single();
+
+    if (merchantErr || !merchant) {
+      return res.status(404).json({ error: 'Merchant not found' });
+    }
+    if (merchant.owner_id !== authUser.id) {
+      return res.status(403).json({ error: 'Forbidden: not merchant owner' });
     }
 
     // Find the redeemed reward

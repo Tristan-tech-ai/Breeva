@@ -167,7 +167,7 @@ export interface WalkSession {
   duration_seconds: number;
   avg_speed_mps: number;
   eco_points_earned: number;
-  status: 'active' | 'paused' | 'completed' | 'cancelled';
+  status: 'active' | 'paused' | 'completed' | 'cancelled' | 'failed';
 }
 
 // Achievement Types

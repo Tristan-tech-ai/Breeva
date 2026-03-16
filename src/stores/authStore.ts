@@ -408,8 +408,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         // Only persist minimal data — session is managed by Supabase
         profile: state.profile,
-        // Persist pending verification so it survives page navigation/refresh
-        pendingVerification: state.pendingVerification,
+        // Do NOT persist pendingVerification — contains password and OTP
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
