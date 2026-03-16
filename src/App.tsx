@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './components/auth/AuthProvider';
@@ -61,6 +61,41 @@ function KeyboardShortcutsProvider({ children }: { children: React.ReactNode }) 
 }
 
 function App() {
+  useEffect(() => {
+    const flagKey = 'breeva:chunk-reload-once';
+
+    const shouldHandle = (reason: unknown): boolean => {
+      const message = reason instanceof Error
+        ? reason.message
+        : typeof reason === 'string'
+          ? reason
+          : '';
+      return message.includes('Failed to fetch dynamically imported module');
+    };
+
+    const reloadOnce = () => {
+      if (sessionStorage.getItem(flagKey) === '1') return;
+      sessionStorage.setItem(flagKey, '1');
+      window.location.reload();
+    };
+
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      if (shouldHandle(event.reason)) reloadOnce();
+    };
+
+    const onWindowError = (event: ErrorEvent) => {
+      if (shouldHandle(event.error ?? event.message)) reloadOnce();
+    };
+
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+    window.addEventListener('error', onWindowError);
+
+    return () => {
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+      window.removeEventListener('error', onWindowError);
+    };
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>
