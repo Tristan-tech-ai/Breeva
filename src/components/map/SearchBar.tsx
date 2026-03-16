@@ -109,7 +109,7 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
       {/* Search Input */}
       <div
         className={`
-          flex items-center gap-3 px-4 py-2.5 h-12 rounded-full transition-all duration-200
+          flex items-center gap-3 px-4 py-2.5 h-12 rounded-full transition-all duration-200 overflow-hidden
           bg-white dark:bg-gray-900/80 backdrop-blur-xl
           ${isFocused
             ? 'shadow-lg ring-2 ring-primary-400/30 dark:ring-primary-600/30'

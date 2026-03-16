@@ -174,7 +174,7 @@ export default function HomePage() {
                 </button>
 
                 {/* Search bar */}
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <SearchBar
                     onPlaceSelect={(poi) => setSelectedPOI(poi)}
                     filterChips={FILTER_CHIPS}
