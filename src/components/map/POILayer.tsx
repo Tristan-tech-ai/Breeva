@@ -307,8 +307,9 @@ export default function POILayer({
       const poi = f.poi;
       const mp = poi as POI & { _isMerchant?: boolean; _merchantId?: string };
       marker.on('click', () => {
-        if (mp._isMerchant && mp._merchantId) {
-          navigate(`/merchants/${mp._merchantId}`);
+        if (mp._isMerchant && mp._merchantId && mp._merchantId.startsWith('merchant-')) {
+          // Real merchant from Supabase — navigate to merchant page
+          navigate(`/merchants/${mp._merchantId.replace('merchant-', '')}`);
         } else {
           onPlaceSelect?.(poi);
         }

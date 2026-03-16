@@ -169,8 +169,39 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
       const newFetched = new Set(state.fetchedTiles);
       const newFlight = new Set(state.inflightTiles);
 
+      // Demo sponsor tier cycle for commercial → eco_merchant conversion
+      const DEMO_TIERS: Array<{ tier: string; boost: number }> = [
+        { tier: 'featured', boost: 3 },
+        { tier: 'premium', boost: 2 },
+        { tier: 'basic', boost: 1 },
+        { tier: 'free', boost: 0 },
+      ];
+      let demoIdx = 0;
+
       for (const r of batch) {
-        for (const poi of r.pois) newAll.set(poi.id, poi);
+        for (const poi of r.pois) {
+          // DEMO: convert commercial POIs to eco_merchant with sponsor tiers
+          const isCommercial = poi.category === 'commercial' ||
+            poi.types?.some(t => t.startsWith('commercial'));
+          if (isCommercial) {
+            const { tier, boost } = DEMO_TIERS[demoIdx % DEMO_TIERS.length];
+            demoIdx++;
+            const cat = `eco_merchant.${(poi.subcategory || 'general').replace(/\s+/g, '_')}`;
+            const demoPoi = {
+              ...poi,
+              category: 'eco_merchant',
+              subcategory: cat,
+              types: ['eco_merchant', cat],
+              _isMerchant: true,
+              _merchantId: poi.id,
+              _sponsorTier: tier,
+              _priorityBoost: boost,
+            } as POI & { _isMerchant: boolean; _merchantId: string; _sponsorTier: string; _priorityBoost: number };
+            newAll.set(poi.id, demoPoi);
+          } else {
+            newAll.set(poi.id, poi);
+          }
+        }
         newFetched.add(r.key);
         newFlight.delete(r.key);
       }
