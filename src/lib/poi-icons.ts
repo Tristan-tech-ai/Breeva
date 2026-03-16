@@ -417,7 +417,7 @@ const merchantIconCache = new Map<string, L.DivIcon>();
  * free tier uses a simple leaf marker.
  */
 export function getMerchantDivIcon(tier: string, name?: string): L.DivIcon {
-  const cacheKey = `${tier}_${name || ''}`;
+  const cacheKey = `badge_${tier}`;
   if (merchantIconCache.has(cacheKey)) return merchantIconCache.get(cacheKey)!;
 
   const svgInner = ICONS['eco_merchant'] || ICONS['generic'];
@@ -438,8 +438,8 @@ export function getMerchantDivIcon(tier: string, name?: string): L.DivIcon {
     return icon;
   }
 
-  // Sponsored tiers: horizontal badge with name
-  const displayName = name.length > 16 ? name.slice(0, 15) + '…' : name;
+  // Sponsored tiers: horizontal badge with "Eco Merchant" label
+  const displayName = 'Eco Merchant';
   let tierCls: string;
   let iconSize: number;
   switch (tier) {
