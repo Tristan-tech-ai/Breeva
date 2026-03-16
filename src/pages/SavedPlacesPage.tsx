@@ -1,40 +1,40 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, MapPin, Home, Briefcase, Heart, Trash2, Navigation, Plus, Search, Share2, Clock } from 'lucide-react';
+import {
+  ChevronLeft, MapPin, Home, Briefcase, Heart, Trash2, Navigation, Plus, Search, Share2, Clock,
+  Coffee, UtensilsCrossed, TreePine, Dumbbell, GraduationCap, Cross,
+  Church, ShoppingBag, Landmark, Hotel, Bus,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useSavedPlacesStore } from '../stores/savedPlacesStore';
 import { useAuthStore } from '../stores/authStore';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import EmptyState from '../components/ui/EmptyState';
 import type { SavedPlace } from '../types';
 
-const categoryIcons: Record<string, React.ReactNode> = {
-  home: <Home className="w-5 h-5" />,
-  work: <Briefcase className="w-5 h-5" />,
-  favorite: <Heart className="w-5 h-5" />,
-  custom: <MapPin className="w-5 h-5" />,
+const CATEGORY_CONFIG: Record<string, { icon: LucideIcon; color: string; gradient: string; label: string }> = {
+  home:      { icon: Home,             color: 'bg-blue-50 dark:bg-blue-500/10 text-blue-500',      gradient: 'from-blue-500 to-blue-600',      label: 'Home' },
+  work:      { icon: Briefcase,        color: 'bg-amber-50 dark:bg-amber-500/10 text-amber-500',    gradient: 'from-amber-500 to-amber-600',    label: 'Work' },
+  favorite:  { icon: Heart,            color: 'bg-rose-50 dark:bg-rose-500/10 text-rose-500',       gradient: 'from-rose-500 to-rose-600',      label: 'Favorite' },
+  food:      { icon: UtensilsCrossed,  color: 'bg-orange-50 dark:bg-orange-500/10 text-orange-500', gradient: 'from-orange-500 to-orange-600',  label: 'Food' },
+  cafe:      { icon: Coffee,           color: 'bg-yellow-50 dark:bg-yellow-500/10 text-yellow-600', gradient: 'from-yellow-500 to-yellow-600',  label: 'Cafe' },
+  park:      { icon: TreePine,         color: 'bg-green-50 dark:bg-green-500/10 text-green-500',    gradient: 'from-green-500 to-green-600',    label: 'Park' },
+  gym:       { icon: Dumbbell,         color: 'bg-violet-50 dark:bg-violet-500/10 text-violet-500', gradient: 'from-violet-500 to-violet-600',  label: 'Gym' },
+  school:    { icon: GraduationCap,    color: 'bg-sky-50 dark:bg-sky-500/10 text-sky-500',          gradient: 'from-sky-500 to-sky-600',        label: 'School' },
+  hospital:  { icon: Cross,            color: 'bg-red-50 dark:bg-red-500/10 text-red-500',          gradient: 'from-red-500 to-red-600',        label: 'Hospital' },
+  mosque:    { icon: Landmark,         color: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600', gradient: 'from-emerald-500 to-emerald-600', label: 'Mosque' },
+  church:    { icon: Church,           color: 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500', gradient: 'from-indigo-500 to-indigo-600',  label: 'Church' },
+  shop:      { icon: ShoppingBag,      color: 'bg-pink-50 dark:bg-pink-500/10 text-pink-500',       gradient: 'from-pink-500 to-pink-600',      label: 'Shop' },
+  landmark:  { icon: Landmark,         color: 'bg-teal-50 dark:bg-teal-500/10 text-teal-500',       gradient: 'from-teal-500 to-teal-600',      label: 'Landmark' },
+  hotel:     { icon: Hotel,            color: 'bg-purple-50 dark:bg-purple-500/10 text-purple-500', gradient: 'from-purple-500 to-purple-600',  label: 'Hotel' },
+  transport: { icon: Bus,              color: 'bg-cyan-50 dark:bg-cyan-500/10 text-cyan-500',       gradient: 'from-cyan-500 to-cyan-600',      label: 'Transport' },
+  custom:    { icon: MapPin,           color: 'bg-primary-50 dark:bg-primary-500/10 text-primary-500', gradient: 'from-primary-500 to-primary-600', label: 'Custom' },
 };
 
-const categoryColors: Record<string, string> = {
-  home: 'bg-blue-50 dark:bg-blue-500/10 text-blue-500',
-  work: 'bg-amber-50 dark:bg-amber-500/10 text-amber-500',
-  favorite: 'bg-rose-50 dark:bg-rose-500/10 text-rose-500',
-  custom: 'bg-primary-50 dark:bg-primary-500/10 text-primary-500',
-};
-
-const categoryGradients: Record<string, string> = {
-  home: 'from-blue-500 to-blue-600',
-  work: 'from-amber-500 to-amber-600',
-  favorite: 'from-rose-500 to-rose-600',
-  custom: 'from-primary-500 to-primary-600',
-};
-
-const categoryLabels: Record<string, string> = {
-  home: 'Home',
-  work: 'Work',
-  favorite: 'Favorite',
-  custom: 'Custom',
-};
+function getCategoryConfig(cat: string) {
+  return CATEGORY_CONFIG[cat] ?? CATEGORY_CONFIG.custom;
+}
 
 function getTimeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -107,7 +107,7 @@ export default function SavedPlacesPage() {
     );
   };
 
-  const categories = ['all', 'home', 'work', 'favorite', 'custom'];
+  const categories = ['all', ...Object.keys(CATEGORY_CONFIG)];
 
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24">
@@ -140,19 +140,24 @@ export default function SavedPlacesPage() {
 
         {/* Category filter */}
         <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setFilter(cat)}
-              className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition capitalize ${
-                filter === cat
-                  ? 'gradient-primary text-white shadow-sm'
-                  : 'bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700/30 text-gray-600 dark:text-gray-400'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
+          {categories.map((cat) => {
+            const cfg = CATEGORY_CONFIG[cat];
+            const CatIcon = cfg?.icon;
+            return (
+              <button
+                key={cat}
+                onClick={() => setFilter(cat)}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition capitalize ${
+                  filter === cat
+                    ? 'gradient-primary text-white shadow-sm'
+                    : 'bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700/30 text-gray-600 dark:text-gray-400'
+                }`}
+              >
+                {CatIcon && <CatIcon className="w-3.5 h-3.5" />}
+                {cfg?.label ?? cat}
+              </button>
+            );
+          })}
         </div>
 
         {/* Add Place Form */}
@@ -173,21 +178,24 @@ export default function SavedPlacesPage() {
                   onChange={e => setNewName(e.target.value)}
                   className="w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none border border-gray-200 dark:border-gray-700/50 focus:border-primary-500 mb-3"
                 />
-                <div className="flex gap-2 mb-3">
-                  {(['home', 'work', 'favorite', 'custom'] as const).map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setNewCategory(cat)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition capitalize ${
-                        newCategory === cat
-                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 border border-primary-200 dark:border-primary-800'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                      }`}
-                    >
-                      {categoryIcons[cat]}
-                      {cat}
-                    </button>
-                  ))}
+                <div className="flex gap-2 mb-3 overflow-x-auto scrollbar-hide pb-1">
+                  {Object.entries(CATEGORY_CONFIG).map(([key, cfg]) => {
+                    const CatIcon = cfg.icon;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setNewCategory(key as SavedPlace['category'])}
+                        className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                          newCategory === key
+                            ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 border border-primary-200 dark:border-primary-800'
+                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                        }`}
+                      >
+                        <CatIcon className="w-3.5 h-3.5" />
+                        {cfg.label}
+                      </button>
+                    );
+                  })}
                 </div>
                 <button
                   onClick={handleAddCurrentLocation}
@@ -226,21 +234,27 @@ export default function SavedPlacesPage() {
                   className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm overflow-hidden"
                 >
                   {/* Top accent bar */}
-                  <div className={`h-1 bg-gradient-to-r ${categoryGradients[place.category]}`} />
+                  <div className={`h-1 bg-gradient-to-r ${getCategoryConfig(place.category).gradient}`} />
 
                   <div className="p-4">
                     <div className="flex items-start gap-3.5">
                       {/* Category icon */}
-                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${categoryColors[place.category]}`}>
-                        {categoryIcons[place.category]}
-                      </div>
+                      {(() => {
+                        const cfg = getCategoryConfig(place.category);
+                        const CatIcon = cfg.icon;
+                        return (
+                          <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${cfg.color}`}>
+                            <CatIcon className="w-5 h-5" />
+                          </div>
+                        );
+                      })()}
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{place.name}</h4>
-                          <span className={`shrink-0 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider rounded-md ${categoryColors[place.category]}`}>
-                            {categoryLabels[place.category]}
+                          <span className={`shrink-0 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider rounded-md ${getCategoryConfig(place.category).color}`}>
+                            {getCategoryConfig(place.category).label}
                           </span>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate flex items-center gap-1">

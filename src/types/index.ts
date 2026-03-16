@@ -202,7 +202,7 @@ export interface SavedPlace {
   name: string;
   address?: string;
   coordinate: Coordinate;
-  category: 'home' | 'work' | 'favorite' | 'custom';
+  category: 'home' | 'work' | 'favorite' | 'custom' | 'food' | 'cafe' | 'park' | 'gym' | 'school' | 'hospital' | 'mosque' | 'church' | 'shop' | 'landmark' | 'hotel' | 'transport';
   icon?: string;
   createdAt: string;
 }
