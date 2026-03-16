@@ -18,8 +18,12 @@ export const supabase = createClient(
       persistSession: true,
       detectSessionInUrl: true,
       flowType: 'pkce',
-      lock: false,
       storageKey: 'breeva-auth-token',
+      // Bypass navigator.locks to prevent AbortError in environments
+      // with stale service workers or multi-tab lock contention
+      lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<unknown>) => {
+        return await fn();
+      },
     },
   }
 );
