@@ -616,6 +616,109 @@
   100% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
 }
 
+/* ── Eco-merchant standout badge ────────────────────────────── */
+
+.poi-merchant-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 3px;
+  background: linear-gradient(135deg, #059669, #10b981);
+  border: 2px solid white;
+  border-radius: 20px;
+  box-shadow: 0 2px 10px rgba(5, 150, 105, 0.35), 0 0 0 1px rgba(0,0,0,0.06);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.poi-merchant-badge:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 18px rgba(5, 150, 105, 0.5), 0 0 0 2px rgba(255,255,255,0.7);
+}
+
+.poi-merchant-badge-icon {
+  width: 24px;
+  height: 24px;
+  background: rgba(255,255,255,0.25);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.poi-merchant-badge-icon svg {
+  flex-shrink: 0;
+}
+
+.poi-merchant-badge-name {
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+
+/* Featured badge — largest, with animated shine + pulse ring */
+.poi-merchant-badge-featured {
+  padding: 4px 12px 4px 4px;
+  background: linear-gradient(135deg, #047857, #059669, #10b981);
+  border-width: 2.5px;
+  box-shadow: 0 3px 14px rgba(5, 150, 105, 0.45), 0 0 0 1px rgba(0,0,0,0.06);
+  animation: badge-featured-pulse 2.5s ease-in-out infinite;
+}
+.poi-merchant-badge-featured .poi-merchant-badge-icon {
+  width: 28px;
+  height: 28px;
+  background: rgba(255,255,255,0.3);
+}
+.poi-merchant-badge-featured .poi-merchant-badge-name {
+  font-size: 12px;
+  max-width: 130px;
+}
+
+/* Premium badge — medium with subtle glow */
+.poi-merchant-badge-premium {
+  padding: 3px 10px 3px 3px;
+  background: linear-gradient(135deg, #059669, #34d399);
+  animation: badge-premium-glow 3s ease-in-out infinite;
+}
+.poi-merchant-badge-premium .poi-merchant-badge-icon {
+  width: 26px;
+  height: 26px;
+}
+
+/* Basic badge — compact */
+.poi-merchant-badge-basic {
+  padding: 2px 8px 2px 2px;
+  background: linear-gradient(135deg, #10b981, #6ee7b7);
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.2);
+}
+.poi-merchant-badge-basic .poi-merchant-badge-icon {
+  width: 22px;
+  height: 22px;
+}
+.poi-merchant-badge-basic .poi-merchant-badge-name {
+  font-size: 10px;
+  max-width: 100px;
+}
+
+@keyframes badge-featured-pulse {
+  0% { box-shadow: 0 3px 14px rgba(5, 150, 105, 0.45), 0 0 0 0 rgba(5, 150, 105, 0.4); }
+  50% { box-shadow: 0 3px 14px rgba(5, 150, 105, 0.45), 0 0 0 6px rgba(5, 150, 105, 0); }
+  100% { box-shadow: 0 3px 14px rgba(5, 150, 105, 0.45), 0 0 0 0 rgba(5, 150, 105, 0.4); }
+}
+
+@keyframes badge-premium-glow {
+  0%, 100% { filter: brightness(1); box-shadow: 0 2px 10px rgba(5, 150, 105, 0.3); }
+  50% { filter: brightness(1.1); box-shadow: 0 2px 16px rgba(5, 150, 105, 0.5); }
+}
+
 /* Custom marker resets */
 .user-location-marker,
 .dest-location-marker {

@@ -5,6 +5,7 @@ import {
   Bookmark, BookmarkCheck, ChevronLeft, ChevronRight,
   ExternalLink, Share2, Copy, ChevronDown, ChevronUp,
   Check, Image, MessageCircle, Users, BarChart3, Ticket,
+  Leaf, Gift,
 } from 'lucide-react';
 import {
   getGooglePlaceDetails,
@@ -312,6 +313,50 @@ export default function PlaceDetailSheet({
                       {description}
                     </p>
                   )}
+
+                  {/* ── Eco Merchant Voucher Section ── */}
+                  {(() => {
+                    const mp = poi as POI & { _isMerchant?: boolean; _sponsorTier?: string; _vouchers?: Array<{ title: string; discount: string; points: number; emoji: string }> };
+                    if (!mp._isMerchant || !mp._vouchers?.length) return null;
+                    const tierLabel = mp._sponsorTier === 'featured' ? 'Featured Partner' : mp._sponsorTier === 'premium' ? 'Premium Partner' : 'Eco Partner';
+                    const tierColor = mp._sponsorTier === 'featured' ? 'bg-emerald-600' : mp._sponsorTier === 'premium' ? 'bg-emerald-500' : 'bg-emerald-400';
+                    return (
+                      <div className="mt-4">
+                        {/* Eco badge */}
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-white text-xs font-bold ${tierColor}`}>
+                            <Leaf className="w-3 h-3" />
+                            {tierLabel}
+                          </span>
+                          <span className="text-xs text-gray-400">Eco-verified merchant</span>
+                        </div>
+                        {/* Vouchers */}
+                        <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-200/60 dark:border-emerald-800/40">
+                          <div className="flex items-center gap-2 mb-2.5">
+                            <Gift className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">Vouchers Available</h4>
+                          </div>
+                          <div className="space-y-2">
+                            {mp._vouchers.map((v, i) => (
+                              <div
+                                key={i}
+                                className="flex items-center gap-3 p-2.5 rounded-xl bg-white dark:bg-gray-900/60 border border-emerald-100 dark:border-emerald-900/40 shadow-sm"
+                              >
+                                <span className="text-lg flex-shrink-0">{v.emoji}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 dark:text-white leading-tight">{v.title}</p>
+                                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">{v.points} EcoPoints</p>
+                                </div>
+                                <button className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-colors flex-shrink-0 shadow-sm shadow-emerald-500/20">
+                                  Redeem
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Info rows */}
                   <div className="mt-4 space-y-0 divide-y divide-gray-100 dark:divide-gray-800/50">

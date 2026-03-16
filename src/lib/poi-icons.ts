@@ -412,49 +412,69 @@ export function getClusterDivIcon(count: number, color?: string): L.DivIcon {
 const merchantIconCache = new Map<string, L.DivIcon>();
 
 /**
- * Creates a merchant-specific marker icon with tier-based sizing and glow effect.
- * free=14px, basic=18px, premium=22px, featured=26px with animated pulse.
+ * Creates a standout horizontal badge icon for eco merchants.
+ * Sponsored tiers show the store name in a pill next to the leaf icon.
+ * free tier uses a simple leaf marker.
  */
-export function getMerchantDivIcon(tier: string): L.DivIcon {
-  if (merchantIconCache.has(tier)) return merchantIconCache.get(tier)!;
+export function getMerchantDivIcon(tier: string, name?: string): L.DivIcon {
+  const cacheKey = `${tier}_${name || ''}`;
+  if (merchantIconCache.has(cacheKey)) return merchantIconCache.get(cacheKey)!;
 
-  const color = ROOT_COLORS['eco_merchant'];
   const svgInner = ICONS['eco_merchant'] || ICONS['generic'];
 
-  let px: number, svgPx: number, extraCls: string, glowStyle: string;
-  switch (tier) {
-    case 'featured':
-      px = 34; svgPx = 18;
-      extraCls = 'poi-merchant-featured';
-      glowStyle = `box-shadow: 0 0 12px ${color}80, 0 0 24px ${color}40;`;
-      break;
-    case 'premium':
-      px = 30; svgPx = 16;
-      extraCls = 'poi-merchant-premium';
-      glowStyle = `box-shadow: 0 0 8px ${color}60;`;
-      break;
-    case 'basic':
-      px = 26; svgPx = 14;
-      extraCls = '';
-      glowStyle = `box-shadow: 0 2px 6px ${color}40;`;
-      break;
-    default: // free
-      px = 22; svgPx = 12;
-      extraCls = '';
-      glowStyle = '';
+  // Free tier: simple small leaf marker (no badge)
+  if (tier === 'free' || !name) {
+    const px = 24;
+    const html = `<div class="poi-icon-marker" style="--poi-color:#059669;border-radius:50%;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="13" height="13">${svgInner}</svg>
+    </div>`;
+    const icon = L.divIcon({
+      className: 'poi-icon-wrapper',
+      html,
+      iconSize: [px, px],
+      iconAnchor: [px / 2, px / 2],
+    });
+    merchantIconCache.set(cacheKey, icon);
+    return icon;
   }
 
-  const html = `<div class="poi-icon-marker ${extraCls}" style="--poi-color:${color};${glowStyle}">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="${svgPx}" height="${svgPx}">${svgInner}</svg>
+  // Sponsored tiers: horizontal badge with name
+  const displayName = name.length > 16 ? name.slice(0, 15) + '…' : name;
+  let tierCls: string;
+  let iconSize: number;
+  switch (tier) {
+    case 'featured':
+      tierCls = 'poi-merchant-badge-featured';
+      iconSize = 18;
+      break;
+    case 'premium':
+      tierCls = 'poi-merchant-badge-premium';
+      iconSize = 16;
+      break;
+    default: // basic
+      tierCls = 'poi-merchant-badge-basic';
+      iconSize = 14;
+      break;
+  }
+
+  const html = `<div class="poi-merchant-badge ${tierCls}">
+    <div class="poi-merchant-badge-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="${iconSize}" height="${iconSize}">${svgInner}</svg>
+    </div>
+    <span class="poi-merchant-badge-name">${displayName}</span>
   </div>`;
+
+  // Estimate width based on name length
+  const estWidth = Math.min(32 + displayName.length * 7, 180);
+  const h = tier === 'featured' ? 36 : tier === 'premium' ? 32 : 28;
 
   const icon = L.divIcon({
     className: 'poi-icon-wrapper',
     html,
-    iconSize: [px, px],
-    iconAnchor: [px / 2, px / 2],
+    iconSize: [estWidth, h],
+    iconAnchor: [estWidth / 2, h / 2],
   });
-  merchantIconCache.set(tier, icon);
+  merchantIconCache.set(cacheKey, icon);
   return icon;
 }
 

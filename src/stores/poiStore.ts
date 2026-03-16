@@ -169,39 +169,8 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
       const newFetched = new Set(state.fetchedTiles);
       const newFlight = new Set(state.inflightTiles);
 
-      // Demo sponsor tier cycle for commercial → eco_merchant conversion
-      const DEMO_TIERS: Array<{ tier: string; boost: number }> = [
-        { tier: 'featured', boost: 3 },
-        { tier: 'premium', boost: 2 },
-        { tier: 'basic', boost: 1 },
-        { tier: 'free', boost: 0 },
-      ];
-      let demoIdx = 0;
-
       for (const r of batch) {
-        for (const poi of r.pois) {
-          // DEMO: convert commercial POIs to eco_merchant with sponsor tiers
-          const isCommercial = poi.category === 'commercial' ||
-            poi.types?.some(t => t.startsWith('commercial'));
-          if (isCommercial) {
-            const { tier, boost } = DEMO_TIERS[demoIdx % DEMO_TIERS.length];
-            demoIdx++;
-            const cat = `eco_merchant.${(poi.subcategory || 'general').replace(/\s+/g, '_')}`;
-            const demoPoi = {
-              ...poi,
-              category: 'eco_merchant',
-              subcategory: cat,
-              types: ['eco_merchant', cat],
-              _isMerchant: true,
-              _merchantId: poi.id,
-              _sponsorTier: tier,
-              _priorityBoost: boost,
-            } as POI & { _isMerchant: boolean; _merchantId: string; _sponsorTier: string; _priorityBoost: number };
-            newAll.set(poi.id, demoPoi);
-          } else {
-            newAll.set(poi.id, poi);
-          }
-        }
+        for (const poi of r.pois) newAll.set(poi.id, poi);
         newFetched.add(r.key);
         newFlight.delete(r.key);
       }
@@ -222,6 +191,54 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
       }
     };
 
+    // ── Demo: convert commercial POIs → eco_merchant with tiers + vouchers ─
+    const DEMO_VOUCHERS: Array<{ title: string; discount: string; points: number; emoji: string }[]> = [
+      [
+        { title: 'Diskon 15% Semua Menu', discount: '15%', points: 50, emoji: '🍽️' },
+        { title: 'Gratis Tote Bag Eco', discount: 'Free', points: 100, emoji: '👜' },
+      ],
+      [
+        { title: 'Buy 1 Get 1 Minuman', discount: 'B1G1', points: 75, emoji: '🥤' },
+        { title: 'Cashback 20% via Breeva', discount: '20%', points: 120, emoji: '💰' },
+        { title: 'Free Dessert', discount: 'Free', points: 60, emoji: '🍰' },
+      ],
+      [
+        { title: 'Diskon 10% untuk Member', discount: '10%', points: 30, emoji: '🏷️' },
+        { title: 'Stempel Eco-Walker x2', discount: '2x', points: 40, emoji: '🌱' },
+      ],
+      [
+        { title: 'Gratis Ongkir Eco-Delivery', discount: 'Free', points: 80, emoji: '🚲' },
+        { title: 'Diskon 25% Produk Organik', discount: '25%', points: 150, emoji: '🥬' },
+      ],
+    ];
+    const TIER_CYCLE: Array<{ tier: string; boost: number }> = [
+      { tier: 'featured', boost: 3 },
+      { tier: 'premium', boost: 2 },
+      { tier: 'premium', boost: 2 },
+      { tier: 'basic', boost: 1 },
+      { tier: 'basic', boost: 1 },
+      { tier: 'basic', boost: 1 },
+    ];
+    const convertCommercialToEco = (pois: POI[]): POI[] => {
+      let tierIdx = 0;
+      return pois.map((poi) => {
+        if (poi.category !== 'commercial') return poi;
+        const cycle = TIER_CYCLE[tierIdx % TIER_CYCLE.length];
+        const vouchers = DEMO_VOUCHERS[tierIdx % DEMO_VOUCHERS.length];
+        tierIdx++;
+        return {
+          ...poi,
+          category: 'eco_merchant',
+          types: ['eco_merchant', `eco_merchant.${(poi.subcategory || 'general').split('.').pop()}`],
+          _isMerchant: true,
+          _isDemo: true,
+          _sponsorTier: cycle.tier,
+          _priorityBoost: cycle.boost,
+          _vouchers: vouchers,
+        } as any;
+      });
+    };
+
     const fetchTile = async (t: { x: number; y: number; key: string; z: number }) => {
       const t0 = performance.now();
       try {
@@ -232,7 +249,7 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
         diagLog(`tile ${t.key}`, { ms: Math.round(elapsed), pois: pois.length });
 
         if (get()._fetchGen !== gen) return;
-        pendingResults.push({ key: t.key, pois });
+        pendingResults.push({ key: t.key, pois: convertCommercialToEco(pois) });
         scheduleFlush();
       } catch {
         diagLog(`tile ${t.key} FAILED`, { ms: Math.round(performance.now() - t0) });

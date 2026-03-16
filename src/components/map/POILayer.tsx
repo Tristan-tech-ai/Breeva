@@ -39,10 +39,10 @@ const FILTER_CHIP_COLORS: Record<string, string> = {
 
 /** Get the appropriate DivIcon for a POI using hierarchical resolution */
 function getPoiIcon(poi: POI, size: 'sm' | 'lg' = 'sm'): L.DivIcon {
-  // Merchant POIs get tier-specific icons
+  // Merchant POIs get standout badge icons with name
   const mp = poi as POI & { _isMerchant?: boolean; _sponsorTier?: string };
   if (mp._isMerchant) {
-    return getMerchantDivIcon(mp._sponsorTier || 'free');
+    return getMerchantDivIcon(mp._sponsorTier || 'free', poi.name);
   }
   const { iconKey, color } = resolveIcon(poi.types || []);
   return getCategoryDivIcon(iconKey, color, size);
@@ -305,11 +305,10 @@ export default function POILayer({
       });
 
       const poi = f.poi;
-      const mp = poi as POI & { _isMerchant?: boolean; _merchantId?: string };
+      const mp = poi as POI & { _isMerchant?: boolean; _merchantId?: string; _isDemo?: boolean };
       marker.on('click', () => {
-        if (mp._isMerchant && mp._merchantId && mp._merchantId.startsWith('merchant-')) {
-          // Real merchant from Supabase — navigate to merchant page
-          navigate(`/merchants/${mp._merchantId.replace('merchant-', '')}`);
+        if (mp._isMerchant && mp._merchantId && !mp._isDemo) {
+          navigate(`/merchants/${mp._merchantId}`);
         } else {
           onPlaceSelect?.(poi);
         }
