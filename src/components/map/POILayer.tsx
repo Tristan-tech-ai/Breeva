@@ -251,7 +251,7 @@ export default function POILayer({
         if (placement?.show) {
           const tt = existing.getTooltip();
           if (!tt) {
-            existing.bindTooltip(placement.displayName, {
+            existing.bindTooltip(placement.displayName || '', {
               permanent: true,
               direction: placement.direction,
               offset: placement.offset,
@@ -272,7 +272,7 @@ export default function POILayer({
 
       const hasLabel = !!placement?.show;
       if (hasLabel) {
-        marker.bindTooltip(placement.displayName, {
+        marker.bindTooltip(placement.displayName || '', {
           permanent: true,
           direction: placement.direction,
           offset: placement.offset,
@@ -281,7 +281,7 @@ export default function POILayer({
       }
 
       // Hover: bring marker + label to front
-      const hoverName = f.poi.name.length > 20 ? f.poi.name.slice(0, 20) + '…' : f.poi.name;
+      const hoverName = (f.poi.name || 'Unnamed').length > 20 ? (f.poi.name || 'Unnamed').slice(0, 20) + '…' : (f.poi.name || 'Unnamed');
       marker.on('mouseover', () => {
         marker.setZIndexOffset(9000);
         const el = (marker as any)._icon as HTMLElement | undefined;

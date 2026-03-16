@@ -147,7 +147,7 @@ export async function getNearbyPOIs(
 
       pois.push({
         id: `geo-${props.place_id}`,
-        name: props.name,
+        name: props.name || props.formatted || 'Unnamed',
         category: rootCat,
         subcategory: subCat,
         coordinate: coord,
@@ -249,7 +249,7 @@ export async function getPOIsInRect(
 
       pois.push({
         id: `geo-${props.place_id}`,
-        name: props.name,
+        name: props.name || props.formatted || 'Unnamed',
         category: rootCat,
         subcategory: subCat,
         coordinate: coord,
