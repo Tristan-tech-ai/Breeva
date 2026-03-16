@@ -828,7 +828,7 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
 }
 
 function isSimilarGeometry(coords1: number[][], coords2: number[][], thresholdMeters = 40): boolean {
-  const n = 5;
+  const n = 10;
   let totalDev = 0;
   for (let i = 0; i < n; i++) {
     const idx1 = Math.min(Math.floor((i / n) * coords1.length), coords1.length - 1);
@@ -1073,9 +1073,17 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       return { index, polyline: waypoints, distance_meters: Math.round(ors.summary.distance), duration_seconds: Math.round(ors.summary.duration), instructions, score };
     };
 
+    // Deduplicate ORS routes before scoring (ORS sometimes returns near-identical routes for short paths)
+    const dedupedOrs: ORSRoute[] = [];
+    for (const ors of orsRoutes) {
+      if (!dedupedOrs.some(existing => isSimilarGeometry(existing.geometry, ors.geometry, 35))) {
+        dedupedOrs.push(ors);
+      }
+    }
+
     // Score ORS routes
     const scoredRoutes = await Promise.all(
-      orsRoutes.map((ors, index) => orsToScoredEntry(ors, index))
+      dedupedOrs.map((ors, index) => orsToScoredEntry(ors, index))
     );
 
     // ── Phase 2: Multi-corridor gang road injection ──
@@ -1306,11 +1314,22 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
 
     const balancedRoute = scoredRoutes.find((r) => !usedIndices.has(r.index)) || scoredRoutes[0];
 
-    const labeled: Array<typeof scoredRoutes[0] & { label: 'cleanest' | 'balanced' | 'fastest'; reasoning: string | null }> = [
+    // Build labeled array, but deduplicate near-identical routes post-labeling
+    const allLabeled: Array<typeof scoredRoutes[0] & { label: 'cleanest' | 'balanced' | 'fastest'; reasoning: string | null }> = [
       { ...cleanestRoute, label: 'cleanest' as const, reasoning },
       { ...balancedRoute, label: 'balanced' as const, reasoning },
       { ...fastestRoute, label: 'fastest' as const, reasoning },
     ];
+
+    // Remove labeled routes whose geometry is near-identical to an already-seen route
+    const labeled: typeof allLabeled = [];
+    for (const r of allLabeled) {
+      const rCoords = r.polyline.map((p) => [p.lng, p.lat]);
+      const isDup = labeled.some((existing) =>
+        isSimilarGeometry(rCoords, existing.polyline.map((p) => [p.lng, p.lat]), 35)
+      );
+      if (!isDup) labeled.push(r);
+    }
 
     const routes = labeled.map((r) => ({
       polyline: r.polyline, distance_meters: r.distance_meters, duration_seconds: r.duration_seconds, instructions: r.instructions,
