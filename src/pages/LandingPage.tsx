@@ -3,7 +3,12 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, Wind, Shield, Cpu, MapPin, Radio, Flame } from 'lucide-react';
+import {
+  ArrowRight, Wind, Shield, Cpu, MapPin, Radio, Flame,
+  Satellite, Microscope, MapPinned, TreePine, Store, Trophy,
+  Radar, BrainCircuit, BarChart3, Leaf, Heart, Github, Twitter, Mail,
+  type LucideIcon,
+} from 'lucide-react';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -284,6 +289,14 @@ function CameraRig({ scrollRef }: { scrollRef: { current: number } }) {
   return null;
 }
 
+// ── Breeva Logo ─────────────────────────────────────────────────────────────
+
+function BreevaLogo({ className = 'h-6' }: { className?: string }) {
+  return (
+    <img src="/favicon.svg" alt="Breeva" className={className} />
+  );
+}
+
 // ── Shared Animation ────────────────────────────────────────────────────────
 
 const fadeUp = {
@@ -323,7 +336,10 @@ export default function LandingPage() {
 
       {/* Navigation */}
       <nav className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-white/70 backdrop-blur-xl px-6 py-2.5 rounded-full flex items-center gap-6 shadow-lg border border-white/50">
-        <span className="text-sm font-bold text-emerald-600">🍃 Breeva</span>
+        <a href="#" className="flex items-center gap-1.5">
+          <BreevaLogo className="h-5 w-5" />
+          <span className="text-sm font-bold text-emerald-600">Breeva</span>
+        </a>
         <a href="#problem" className="text-xs font-medium text-slate-500 hover:text-emerald-600 transition-colors hidden sm:block">Why</a>
         <a href="#solution" className="text-xs font-medium text-slate-500 hover:text-emerald-600 transition-colors hidden sm:block">How</a>
         <a href="#science" className="text-xs font-medium text-slate-500 hover:text-emerald-600 transition-colors hidden sm:block">Science</a>
@@ -421,13 +437,15 @@ export default function LandingPage() {
               to map air quality at street-level resolution in real-time.
             </p>
             <div className="grid sm:grid-cols-3 gap-4">
-              {[
-                ['🛰️', 'Real-time AQI', 'Continuous air quality scoring across every street segment.'],
-                ['🔬', 'Multi-source Fusion', 'Satellite, ground stations, traffic and weather combined.'],
-                ['📍', 'Street-level', 'Resolution accurate to individual road sections.'],
-              ].map(([icon, title, desc]) => (
-                <div key={title as string} className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
-                  <div className="text-2xl mb-2">{icon}</div>
+              {([
+                [Satellite, 'Real-time AQI', 'Continuous air quality scoring across every street segment.'],
+                [Microscope, 'Multi-source Fusion', 'Satellite, ground stations, traffic and weather combined.'],
+                [MapPinned, 'Street-level', 'Resolution accurate to individual road sections.'],
+              ] as [LucideIcon, string, string][]).map(([Icon, title, desc]) => (
+                <div key={title} className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center mb-2">
+                    <Icon className="w-4 h-4 text-emerald-600" />
+                  </div>
                   <div className="font-semibold text-sm text-slate-800">{title}</div>
                   <div className="text-xs text-slate-500 mt-1">{desc}</div>
                 </div>
@@ -480,13 +498,15 @@ export default function LandingPage() {
               Support eco-friendly merchants and earn EcoPoints for every step.
             </p>
             <div className="space-y-3">
-              {[
-                ['🌿', 'Green Spaces', 'Parks, nature trails and low-traffic streets mapped by air quality.'],
-                ['🏪', 'Eco Merchants', 'Support sustainable businesses and earn bonus rewards.'],
-                ['🏆', 'Leaderboard', 'Compete with your community for the cleanest walking streak.'],
-              ].map(([icon, title, desc]) => (
-                <div key={title as string} className="flex items-start gap-3 p-4 rounded-xl bg-green-50 border border-green-100">
-                  <span className="text-xl mt-0.5">{icon}</span>
+              {([
+                [TreePine, 'Green Spaces', 'Parks, nature trails and low-traffic streets mapped by air quality.'],
+                [Store, 'Eco Merchants', 'Support sustainable businesses and earn bonus rewards.'],
+                [Trophy, 'Leaderboard', 'Compete with your community for the cleanest walking streak.'],
+              ] as [LucideIcon, string, string][]).map(([Icon, title, desc]) => (
+                <div key={title} className="flex items-start gap-3 p-4 rounded-xl bg-green-50 border border-green-100">
+                  <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Icon className="w-4 h-4 text-green-600" />
+                  </div>
                   <div>
                     <div className="font-semibold text-sm text-slate-800">{title}</div>
                     <div className="text-xs text-slate-500 mt-0.5">{desc}</div>
@@ -511,14 +531,16 @@ export default function LandingPage() {
               OpenAQ ground stations and proprietary sensor networks — calibrated with machine learning.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                ['🛰️', 'Satellite Data'],
-                ['📡', 'Ground Truth'],
-                ['🤖', 'ML Calibration'],
-                ['📊', 'Open Data'],
-              ].map(([icon, label]) => (
-                <div key={label as string} className="text-center p-4 rounded-2xl bg-cyan-50 border border-cyan-100">
-                  <div className="text-2xl mb-1">{icon}</div>
+              {([
+                [Satellite, 'Satellite Data'],
+                [Radar, 'Ground Truth'],
+                [BrainCircuit, 'ML Calibration'],
+                [BarChart3, 'Open Data'],
+              ] as [LucideIcon, string][]).map(([Icon, label]) => (
+                <div key={label} className="text-center p-4 rounded-2xl bg-cyan-50 border border-cyan-100">
+                  <div className="w-9 h-9 rounded-xl bg-cyan-100 flex items-center justify-center mx-auto mb-2">
+                    <Icon className="w-4 h-4 text-cyan-600" />
+                  </div>
                   <div className="text-xs font-semibold text-slate-600">{label}</div>
                 </div>
               ))}
@@ -546,15 +568,71 @@ export default function LandingPage() {
         </section>
 
         {/* ── Footer ── */}
-        <footer className="py-12 px-6 border-t border-slate-100">
-          <div className="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <span className="text-sm font-bold text-emerald-600">🍃 Breeva</span>
-            <div className="flex gap-6 text-xs text-slate-400">
-              <Link to="/about" className="hover:text-slate-600 transition-colors">About</Link>
-              <Link to="/terms" className="hover:text-slate-600 transition-colors">Terms</Link>
-              <Link to="/privacy" className="hover:text-slate-600 transition-colors">Privacy</Link>
+        <footer className="py-16 px-6 bg-slate-50 border-t border-slate-100">
+          <div className="max-w-5xl mx-auto">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-12">
+              {/* Brand */}
+              <div className="col-span-2 md:col-span-1">
+                <div className="flex items-center gap-2 mb-3">
+                  <BreevaLogo className="h-6 w-6" />
+                  <span className="text-base font-bold text-emerald-600">Breeva</span>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                  Cleaner routes, healthier walks. We map air quality at street-level so you can breathe easier every day.
+                </p>
+                <div className="flex gap-3">
+                  <a href="https://github.com/Tristan-tech-ai/Breeva" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors">
+                    <Github className="w-3.5 h-3.5" />
+                  </a>
+                  <a href="#" className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors">
+                    <Twitter className="w-3.5 h-3.5" />
+                  </a>
+                  <a href="#" className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors">
+                    <Mail className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+
+              {/* Product */}
+              <div>
+                <h4 className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-3">Product</h4>
+                <ul className="space-y-2">
+                  <li><a href="#solution" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">VAYU Engine</a></li>
+                  <li><a href="#science" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">Science</a></li>
+                  <li><Link to="/login" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">Get Started</Link></li>
+                </ul>
+              </div>
+
+              {/* Company */}
+              <div>
+                <h4 className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-3">Company</h4>
+                <ul className="space-y-2">
+                  <li><Link to="/about" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">About</Link></li>
+                  <li><Link to="/help" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">Help & Support</Link></li>
+                  <li><Link to="/eco-tips" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">Eco Tips</Link></li>
+                </ul>
+              </div>
+
+              {/* Legal */}
+              <div>
+                <h4 className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-3">Legal</h4>
+                <ul className="space-y-2">
+                  <li><Link to="/terms" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">Terms of Service</Link></li>
+                  <li><Link to="/privacy" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">Privacy Policy</Link></li>
+                </ul>
+              </div>
             </div>
-            <div className="text-xs text-slate-400">© {new Date().getFullYear()} Breeva</div>
+
+            {/* Bottom bar */}
+            <div className="pt-8 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                Made with <Heart className="w-3 h-3 text-red-400 fill-red-400" /> for cleaner cities
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                <Leaf className="w-3 h-3 text-emerald-500" />
+                © {new Date().getFullYear()} Breeva. All rights reserved.
+              </div>
+            </div>
           </div>
         </footer>
 
