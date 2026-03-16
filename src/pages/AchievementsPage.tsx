@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
+import { cacheCollection, getCachedCollection } from '../lib/offline-db';
 import { useAuthStore } from '../stores/authStore';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { SkeletonGrid } from '../components/ui/Skeleton';
@@ -22,6 +23,10 @@ interface UserAchievementData {
   unlocked_at: string;
 }
 
+type CachedAchievement = Achievement & {
+  unlocked_at?: string;
+}
+
 export default function AchievementsPage() {
   const { user, profile } = useAuthStore();
   const navigate = useNavigate();
@@ -35,6 +40,15 @@ export default function AchievementsPage() {
       setIsLoading(true);
 
       try {
+        if (!navigator.onLine) {
+          const cached = await getCachedCollection<CachedAchievement>('achievements');
+          if (cached.length > 0) {
+            setAchievements(cached.map(({ unlocked_at: _unlockedAt, ...achievement }) => achievement));
+            setUnlockedIds(new Set(cached.filter((achievement) => achievement.unlocked_at).map((achievement) => achievement.id)));
+            return;
+          }
+        }
+
         // Fetch all achievements
         const { data: allAchievements } = await supabase
           .from('achievements')
@@ -51,8 +65,26 @@ export default function AchievementsPage() {
         if (userAchievements) {
           setUnlockedIds(new Set(userAchievements.map((ua: UserAchievementData) => ua.achievement_id)));
         }
+
+        if (allAchievements) {
+          const unlockedMap = new Map<string, string>();
+          userAchievements?.forEach((achievement: UserAchievementData) => {
+            unlockedMap.set(achievement.achievement_id, achievement.unlocked_at);
+          });
+
+          cacheCollection('achievements', allAchievements.map((achievement) => ({
+            ...achievement,
+            unlocked_at: unlockedMap.get(achievement.id),
+          }))).catch(() => {});
+        }
       } catch (err) {
         console.error('Failed to fetch achievements:', err);
+
+        const cached = await getCachedCollection<CachedAchievement>('achievements');
+        if (cached.length > 0) {
+          setAchievements(cached.map(({ unlocked_at: _unlockedAt, ...achievement }) => achievement));
+          setUnlockedIds(new Set(cached.filter((achievement) => achievement.unlocked_at).map((achievement) => achievement.id)));
+        }
       } finally {
         setIsLoading(false);
       }

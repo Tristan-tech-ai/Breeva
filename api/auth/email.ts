@@ -121,7 +121,7 @@ function escapeHtml(str: string): string {
 }
 
 // ── Send via Resend ──────────────────────────────────────────────
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, subject: string, html: string): Promise<{ id: string }> {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -140,7 +140,7 @@ async function sendEmail(to: string, subject: string, html: string) {
     const err = await res.text();
     throw new Error(`Resend error ${res.status}: ${err}`);
   }
-  return res.json();
+  return res.json() as Promise<{ id: string }>;
 }
 
 // ── API Handler ──────────────────────────────────────────────────

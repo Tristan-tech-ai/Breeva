@@ -13,6 +13,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { cacheCollection, getCachedCollection } from '../lib/offline-db';
 import { useAuthStore } from '../stores/authStore';
 import BottomNavigation from '../components/layout/BottomNavigation';
 
@@ -32,6 +33,10 @@ interface UserQuest {
   current_value: number;
   is_completed: boolean;
   completed_at: string | null;
+}
+
+type CachedQuest = Quest & {
+  progress?: UserQuest;
 }
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -55,22 +60,50 @@ export default function QuestsPage() {
     if (!user) return;
     setIsLoading(true);
 
-    const [{ data: allQuests }, { data: progress }] = await Promise.all([
-      supabase.from('quests').select('*').eq('is_active', true).order('reward_points'),
-      supabase
-        .from('user_quests')
-        .select('quest_id, current_value, is_completed, completed_at')
-        .eq('user_id', user.id)
-        .eq('quest_date', new Date().toISOString().split('T')[0]),
-    ]);
-
-    if (allQuests) setQuests(allQuests);
-    if (progress) {
-      const map = new Map<string, UserQuest>();
-      progress.forEach((p) => map.set(p.quest_id, p));
-      setUserProgress(map);
+    if (!navigator.onLine) {
+      const cached = await getCachedCollection<CachedQuest>('quests');
+      if (cached.length > 0) {
+        setQuests(cached.map(({ progress: _progress, ...quest }) => quest));
+        setUserProgress(new Map(cached.filter((quest) => quest.progress).map((quest) => [quest.id, quest.progress as UserQuest])));
+        setIsLoading(false);
+        return;
+      }
     }
-    setIsLoading(false);
+
+    try {
+      const [{ data: allQuests }, { data: progress }] = await Promise.all([
+        supabase.from('quests').select('*').eq('is_active', true).order('reward_points'),
+        supabase
+          .from('user_quests')
+          .select('quest_id, current_value, is_completed, completed_at')
+          .eq('user_id', user.id)
+          .eq('quest_date', new Date().toISOString().split('T')[0]),
+      ]);
+
+      if (allQuests) {
+        setQuests(allQuests);
+
+        const progressMap = new Map<string, UserQuest>();
+        progress?.forEach((entry) => progressMap.set(entry.quest_id, entry));
+        setUserProgress(progressMap);
+
+        const merged = allQuests.map((quest) => ({
+          ...quest,
+          progress: progressMap.get(quest.id),
+        }));
+
+        cacheCollection('quests', merged).catch(() => {});
+      }
+    } catch (error) {
+      console.error('Failed to fetch quests:', error);
+      const cached = await getCachedCollection<CachedQuest>('quests');
+      if (cached.length > 0) {
+        setQuests(cached.map(({ progress: _progress, ...quest }) => quest));
+        setUserProgress(new Map(cached.filter((quest) => quest.progress).map((quest) => [quest.id, quest.progress as UserQuest])));
+      }
+    } finally {
+      setIsLoading(false);
+    }
   }, [user]);
 
   useEffect(() => {

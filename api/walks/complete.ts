@@ -13,6 +13,7 @@ interface CompleteWalkRequest {
   duration_seconds: number;
   avg_aqi?: number;
   route_points?: Array<{ lat: number; lng: number; timestamp: string }>;
+  started_at?: string;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -39,6 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       duration_seconds,
       avg_aqi,
       route_points,
+      started_at,
     }: CompleteWalkRequest = req.body;
 
     if (!walk_id || !user_id || !distance_meters || !duration_seconds) {
@@ -59,6 +61,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    const firstPoint = route_points?.[0];
+    const lastPoint = route_points?.[route_points.length - 1];
+
+    const { error: upsertError } = await supabase.from('walks').upsert({
+      id: walk_id,
+      user_id,
+      origin_lat: firstPoint?.lat || 0,
+      origin_lng: firstPoint?.lng || 0,
+      destination_lat: lastPoint?.lat || 0,
+      destination_lng: lastPoint?.lng || 0,
+      route_polyline: JSON.stringify((route_points || []).map((p) => [p.lat, p.lng])),
+      distance_meters,
+      duration_seconds,
+      route_type: 'eco',
+      status: 'active',
+      started_at: started_at || new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+    if (upsertError) {
+      console.error('Walk upsert error:', upsertError);
+      return res.status(500).json({ error: 'Failed to save walk data' });
+    }
+
     // Call Supabase function to complete walk and award points
     const { data, error } = await supabase.rpc('complete_walk', {
       p_walk_id: walk_id,
@@ -66,6 +91,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       p_duration_seconds: duration_seconds,
       p_avg_aqi: avg_aqi || null,
     });
+  await supabase.rpc('update_user_streak', { p_user_id: user_id });
+
 
     if (error) {
       console.error('Supabase error:', error);

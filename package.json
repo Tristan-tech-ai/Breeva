@@ -25,6 +25,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.31.0",
+    "idb": "^8.0.3",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.563.0",
     "ngeohash": "^0.6.3",
@@ -38,6 +39,7 @@
     "supercluster": "^8.0.1",
     "tailwind-merge": "^3.4.0",
     "three": "^0.183.2",
+    "workbox-window": "^7.4.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
@@ -62,7 +64,13 @@
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "npm:rolldown-vite@7.2.5"
+    "vite": "npm:rolldown-vite@7.2.5",
+    "vite-plugin-pwa": "^1.1.0",
+    "workbox-core": "^7.4.0",
+    "workbox-expiration": "^7.4.0",
+    "workbox-precaching": "^7.4.0",
+    "workbox-routing": "^7.4.0",
+    "workbox-strategies": "^7.4.0"
   },
   "pnpm": {
     "overrides": {

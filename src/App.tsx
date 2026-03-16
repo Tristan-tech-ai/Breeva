@@ -5,6 +5,7 @@ import { AuthProvider } from './components/auth/AuthProvider';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import OfflineBanner from './components/ui/OfflineBanner';
+import PWAStatusToast from './components/ui/PWAStatusToast';
 import PWAInstallBanner from './components/features/PWAInstallBanner';
 import CommandPalette from './components/features/CommandPalette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -105,6 +106,7 @@ function App() {
             Skip to main content
           </a>
           <OfflineBanner />
+          <PWAStatusToast />
           <PWAInstallBanner />
           <CommandPalette />
           <Toaster

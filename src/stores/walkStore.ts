@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Coordinate, RoutePoint, WalkSession, ExposureResult } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from './authStore';
-import { getVayuExposure, getVayuVehicleType, submitVayuContribution } from '../lib/api';
+import { completeWalkViaApi, getVayuExposure, getVayuVehicleType, submitVayuContribution } from '../lib/api';
 import { checkAndUnlockAchievements } from '../lib/achievements';
 import { showNotification, isNotificationEnabled } from '../lib/notifications';
 
@@ -254,65 +254,38 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       }).catch(() => {});
     }
 
-    // Save to Supabase
+    // Complete walk via API (with offline queue fallback)
     try {
       const user = useAuthStore.getState().user;
       if (user) {
-        // 1. Insert walk with initial data (status 'active')
-        const { error: insertErr } = await supabase.from('walks').insert({
-          id: completedSession.id,
+        const completionResult = await completeWalkViaApi({
+          walk_id: completedSession.id,
           user_id: user.id,
-          origin_lat: routePoints[0]?.lat || 0,
-          origin_lng: routePoints[0]?.lng || 0,
-          destination_lat: routePoints[routePoints.length - 1]?.lat || 0,
-          destination_lng: routePoints[routePoints.length - 1]?.lng || 0,
-          route_polyline: JSON.stringify(routePoints.map(p => [p.lat, p.lng])),
           distance_meters: Math.round(distanceMeters),
           duration_seconds: durationSeconds,
-          route_type: 'eco',
-          status: 'active',
+          avg_aqi: 50,
           started_at: completedSession.start_time,
+          route_points: routePoints,
         });
 
-        if (insertErr) {
-          console.error('Failed to insert walk:', insertErr);
-          throw new Error('Walk save failed');
-        } else {
-          // 2. Call complete_walk RPC — updates walk record, user stats, awards points
-          const { data: walkResult, error: rpcErr } = await supabase.rpc('complete_walk', {
-            p_walk_id: completedSession.id,
-            p_distance_meters: Math.round(distanceMeters),
-            p_duration_seconds: durationSeconds,
-            p_avg_aqi: 50, // Default AQI; later replaced by VAYU
-          });
+        if (!completionResult.success) {
+          throw new Error('Walk completion failed');
+        }
 
-          if (rpcErr) {
-            console.error('complete_walk RPC failed:', rpcErr);
-          } else if (walkResult && walkResult.length > 0) {
-            const { ecopoints_earned } = walkResult[0];
-            points = ecopoints_earned || points;
-          }
-
-          // 3. Update streak
-          await supabase.rpc('update_user_streak', { p_user_id: user.id });
-
-          // 4. Check achievements
+        if (!completionResult.queued && completionResult.ecopoints_earned > 0) {
+          points = completionResult.ecopoints_earned;
           checkAndUnlockAchievements(user.id).catch(console.error);
+        }
 
-          // 5. Refresh profile to pick up new stats
-          useAuthStore.getState().fetchProfile();
+        useAuthStore.getState().fetchProfile();
+        localStorage.setItem('breeva_last_walk_date', new Date().toISOString().split('T')[0]);
 
-          // 6. Save last walk date for streak reminder
-          localStorage.setItem('breeva_last_walk_date', new Date().toISOString().split('T')[0]);
+        if (isNotificationEnabled()) {
+          const body = completionResult.queued
+            ? `${(distanceMeters / 1000).toFixed(2)} km saved offline. Akan sinkron saat online.`
+            : `${(distanceMeters / 1000).toFixed(2)} km walked — +${points} EcoPoints earned`;
 
-          // 7. Walk completion notification
-          if (isNotificationEnabled()) {
-            showNotification(
-              '🚶 Walk Complete!',
-              `${(distanceMeters / 1000).toFixed(2)} km walked — +${points} EcoPoints earned`,
-              { url: '/eco-impact', tag: 'walk-complete' }
-            ).catch(() => {});
-          }
+          showNotification('🚶 Walk Complete!', body, { url: '/eco-impact', tag: 'walk-complete' }).catch(() => {});
         }
       }
     } catch (error) {

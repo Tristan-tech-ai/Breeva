@@ -77,32 +77,6 @@ async function callGemini(prompt: string, model = 'gemini-2.5-flash-lite'): Prom
   }
 }
 
-// ─── Supabase helpers ───────────────────────────────────────
-async function supabaseQuery(query: string, body?: unknown): Promise<unknown> {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Missing Supabase credentials');
-
-  const resp = await fetch(`${url}/rest/v1/${query}`, {
-    method: body ? 'PATCH' : 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      ...(body ? { Prefer: 'return=minimal' } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Supabase error: ${resp.status} ${text}`);
-  }
-
-  if (body) return null; // PATCH returns minimal
-  return resp.json();
-}
-
 // ─── Fetch unclassified roads ───────────────────────────────
 interface UnclassifiedRoad {
   osm_way_id: number;
@@ -136,7 +110,7 @@ async function fetchUnclassifiedRoads(
       }
     );
     if (!resp.ok) return [];
-    return await resp.json();
+    return await resp.json() as UnclassifiedRoad[];
   } catch { return []; }
 }
 

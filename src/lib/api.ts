@@ -1,4 +1,7 @@
 import type { Coordinate, AirQualityData, Route, RouteInstruction, TransportModeInfo, AQIFreshness, RouteScoreResult, ExposureResult, RoadAQIResponse, CleanRouteResponse } from '../types';
+import { supabase } from './supabase';
+import { getAqiCache, putAqiCache } from './offline-db';
+import { sendOrQueueMutation } from './offline-queue';
 
 // API Configuration
 const ORS_API_KEY = import.meta.env.VITE_OPENROUTESERVICE_API_KEY || '';
@@ -257,6 +260,12 @@ export async function getAirQuality(
       return { data: cached.data, error: null };
     }
 
+    const persistentCached = await getAqiCache<AirQualityData>(key);
+    if (persistentCached) {
+      aqiCache.set(key, { data: persistentCached, fetchedAt: Date.now() });
+      return { data: persistentCached, error: null };
+    }
+
     const resp = await fetch(
       `/api/vayu/aqi?lat=${coordinate.lat}&lon=${coordinate.lng}`
     );
@@ -289,6 +298,7 @@ export async function getAirQuality(
     };
 
     aqiCache.set(key, { data, fetchedAt: Date.now() });
+    putAqiCache(key, data).catch(() => {});
 
     return { data, error: null };
   } catch (error) {
@@ -324,6 +334,7 @@ export async function getAirQuality(
       };
 
       aqiCache.set(aqiCacheKey(coordinate.lat, coordinate.lng), { data, fetchedAt: Date.now() });
+      putAqiCache(aqiCacheKey(coordinate.lat, coordinate.lng), data).catch(() => {});
       return { data, error: null };
     } catch (fallbackError) {
       console.error('Open-Meteo fallback also failed:', fallbackError);
@@ -333,6 +344,67 @@ export async function getAirQuality(
       };
     }
   }
+}
+
+export interface CompleteWalkPayload {
+  walk_id: string;
+  user_id: string;
+  distance_meters: number;
+  duration_seconds: number;
+  avg_aqi?: number;
+  route_points?: Array<{ lat: number; lng: number; timestamp?: string }>;
+  started_at?: string;
+}
+
+export interface CompleteWalkResult {
+  success: boolean;
+  queued: boolean;
+  ecopoints_earned: number;
+}
+
+/** Complete walk via server API with offline queue fallback */
+export async function completeWalkViaApi(payload: CompleteWalkPayload): Promise<CompleteWalkResult> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  const result = await sendOrQueueMutation({
+    url: '/api/walks/complete',
+    method: 'POST',
+    headers,
+    body: payload,
+    dedupeKey: `walk-complete:${payload.walk_id}`,
+  });
+
+  if (result.queued) {
+    return {
+      success: true,
+      queued: true,
+      ecopoints_earned: 0,
+    };
+  }
+
+  if (!result.ok) {
+    return {
+      success: false,
+      queued: false,
+      ecopoints_earned: 0,
+    };
+  }
+
+  const json = (result.data || {}) as { ecopoints_earned?: number };
+  return {
+    success: true,
+    queued: false,
+    ecopoints_earned: Number(json.ecopoints_earned || 0),
+  };
 }
 
 /**
@@ -1123,12 +1195,14 @@ export async function submitVayuContribution(
       body.off_road_geohash = 'unknown';
     }
 
-    const resp = await fetch('/api/vayu/contribute', {
+    const result = await sendOrQueueMutation({
+      url: '/api/vayu/contribute',
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body,
+      dedupeKey: `vayu:${sessionId}:${vehicleType}:${osmWayId || 'offroad'}`,
     });
-    return resp.ok || resp.status === 201;
+    return result.ok && !result.queued;
   } catch {
     return false;
   }

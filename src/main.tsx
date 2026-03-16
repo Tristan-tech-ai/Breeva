@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { initNotifications } from './lib/notifications'
+import { initOfflineQueueSync } from './lib/offline-queue'
+import { initPwaLifecycle } from './lib/pwa'
 
 // Force light mode as default. Only enable dark if user explicitly toggled it.
 // This overrides device-level dark mode (prefers-color-scheme: dark).
@@ -73,5 +75,9 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-// Initialize service worker & notification system
+// Register PWA service worker and lifecycle events
+initPwaLifecycle();
+
+// Initialize notification system + offline mutation replay
 initNotifications().catch(() => {})
+initOfflineQueueSync();

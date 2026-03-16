@@ -5,6 +5,7 @@ import { Footprints } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { formatDistance, formatDuration, formatNumber } from '../lib/utils';
+import { cacheCollection, getCachedCollection } from '../lib/offline-db';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { SkeletonList } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
@@ -37,6 +38,15 @@ export default function WalkHistoryPage() {
     setIsLoading(true);
 
     try {
+      if (!navigator.onLine) {
+        const offlineWalks = await getCachedCollection<Walk>('walks');
+        if (offlineWalks.length > 0) {
+          setWalks(prev => append ? [...prev, ...offlineWalks] : offlineWalks);
+          setHasMore(false);
+          return;
+        }
+      }
+
       const { data, error } = await supabase
         .from('walks')
         .select('*')
@@ -49,9 +59,17 @@ export default function WalkHistoryPage() {
       if (data) {
         setWalks(prev => append ? [...prev, ...data] : data);
         setHasMore(data.length === LIMIT);
+        if (!append) {
+          cacheCollection('walks', data).catch(() => {});
+        }
       }
     } catch (err) {
       console.error('Failed to fetch walks:', err);
+      const offlineWalks = await getCachedCollection<Walk>('walks');
+      if (offlineWalks.length > 0) {
+        setWalks(prev => append ? [...prev, ...offlineWalks] : offlineWalks);
+        setHasMore(false);
+      }
     } finally {
       setIsLoading(false);
     }

@@ -10,6 +10,7 @@ import type { LucideIcon } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
+import { cacheCollection, getCachedCollection } from '../lib/offline-db';
 import RewardRedemptionModal from '../components/features/RewardRedemptionModal';
 import { SkeletonGrid } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
@@ -101,6 +102,14 @@ export default function RewardsPage() {
   const fetchRewards = useCallback(async () => {
     setIsLoading(true);
     try {
+      if (!navigator.onLine) {
+        const offlineRewards = await getCachedCollection<RewardRow>('rewards');
+        if (offlineRewards.length > 0) {
+          setRewards(offlineRewards);
+          return;
+        }
+      }
+
       const { data, error } = await supabase
         .from('rewards')
         .select('id, title, description, points_required, remaining_stock, discount_percentage, merchant:merchants(name)')
@@ -110,8 +119,13 @@ export default function RewardsPage() {
 
       if (error) throw error;
       setRewards((data || []) as unknown as RewardRow[]);
+      cacheCollection('rewards', (data || []) as unknown as RewardRow[]).catch(() => {});
     } catch (err) {
       console.error('Failed to fetch rewards:', err);
+      const offlineRewards = await getCachedCollection<RewardRow>('rewards');
+      if (offlineRewards.length > 0) {
+        setRewards(offlineRewards);
+      }
     } finally {
       setIsLoading(false);
     }

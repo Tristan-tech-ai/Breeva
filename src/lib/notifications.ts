@@ -1,16 +1,5 @@
 // Breeva Notification System — Service Worker registration + local notifications
 
-/** Register service worker */
-export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (!('serviceWorker' in navigator)) return null;
-  try {
-    const reg = await navigator.serviceWorker.register('/sw.js');
-    return reg;
-  } catch {
-    return null;
-  }
-}
-
 /** Request notification permission */
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
   if (!('Notification' in window)) return 'denied';
@@ -37,13 +26,13 @@ export async function showNotification(
     if (reg) {
       await reg.showNotification(title, {
         body,
-        icon: options?.icon || '/icon-192.png',
-        badge: '/icon-192.png',
+        icon: options?.icon || '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
         tag: options?.tag,
         data: options?.url ? { url: options.url } : undefined,
       });
     } else {
-      new Notification(title, { body, icon: options?.icon || '/icon-192.png', tag: options?.tag });
+      new Notification(title, { body, icon: options?.icon || '/icons/icon-192.png', tag: options?.tag });
     }
   } catch {
     // Silently fail
@@ -116,8 +105,6 @@ export function scheduleQuestReminder(): void {
 
 /** Initialize notification system */
 export async function initNotifications(): Promise<void> {
-  await registerServiceWorker();
-
   if (isNotificationEnabled()) {
     scheduleStreakReminder();
     scheduleQuestReminder();
