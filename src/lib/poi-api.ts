@@ -1,7 +1,7 @@
 import type { Coordinate } from '../types';
 import { diagLog } from './poi-diagnostics';
 
-const GEOAPIFY_KEY = '113d32cb776247bcb192cbb67b91330e';
+const GEOAPIFY_KEY = import.meta.env.VITE_GEOAPIFY_API_KEY || '';
 
 export interface POI {
   id: string;
@@ -83,6 +83,10 @@ export async function getNearbyPOIs(
   radiusMeters: number = 1500,
   categories?: string[],
 ): Promise<{ pois: POI[]; error: string | null }> {
+  if (!GEOAPIFY_KEY) {
+    return { pois: [], error: 'Geoapify API key not configured' };
+  }
+
   const cats = categories && categories.length > 0
     ? categories.join(',')
     : DEFAULT_CATEGORIES;
@@ -196,6 +200,10 @@ export async function getPOIsInRect(
   bounds: TileBounds,
   categories?: string[],
 ): Promise<{ pois: POI[]; error: string | null }> {
+  if (!GEOAPIFY_KEY) {
+    return { pois: [], error: 'Geoapify API key not configured' };
+  }
+
   const cats = categories && categories.length > 0
     ? categories.join(',')
     : DEFAULT_CATEGORIES;
@@ -277,6 +285,8 @@ export async function getPOIsInRect(
 export async function getPlaceAtPoint(
   point: Coordinate,
 ): Promise<POI | null> {
+  if (!GEOAPIFY_KEY) return null;
+
   try {
     const url = `https://api.geoapify.com/v2/places?categories=${encodeURIComponent(DEFAULT_CATEGORIES)}&filter=circle:${point.lng},${point.lat},100&bias=proximity:${point.lng},${point.lat}&limit=3&lang=id&apiKey=${GEOAPIFY_KEY}`;
     const res = await fetch(url);

@@ -16,6 +16,13 @@ interface LeaderboardEntry {
   ecopoints_balance: number;
 }
 
+function formatLocalDateYYYYMMDD(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function VirtualizedList({ entries, userId, activeTab }: { entries: LeaderboardEntry[]; userId?: string; activeTab: 'points' | 'distance' }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
@@ -94,19 +101,42 @@ export default function LeaderboardPage() {
     const weekStart = new Date(now);
     weekStart.setDate(diff);
     weekStart.setHours(0, 0, 0, 0);
-    const weekStr = weekStart.toISOString().split('T')[0];
+    const weekStr = formatLocalDateYYYYMMDD(weekStart);
 
-    const { data } = await supabase
+    let { data } = await supabase
       .from('leaderboard_weekly')
-      .select('user_id, total_distance_meters, total_walks, total_points_earned, rank, users!inner(full_name, avatar_url)')
+      .select('user_id, week_start, total_distance_meters, total_walks, total_points_earned, rank, users(full_name, avatar_url)')
       .eq('week_start', weekStr)
       .order(sortCol, { ascending: false })
       .limit(50);
 
+    // Fallback: if current week is empty, show latest available seeded week.
+    if (!data || data.length === 0) {
+      const { data: latestWeekRow } = await supabase
+        .from('leaderboard_weekly')
+        .select('week_start')
+        .order('week_start', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestWeekRow?.week_start) {
+        const fallback = await supabase
+          .from('leaderboard_weekly')
+          .select('user_id, week_start, total_distance_meters, total_walks, total_points_earned, rank, users(full_name, avatar_url)')
+          .eq('week_start', latestWeekRow.week_start)
+          .order(sortCol, { ascending: false })
+          .limit(50);
+        data = fallback.data ?? [];
+      }
+    }
+
     if (data) {
       setEntries(
         data.map((row) => {
-          const u = row.users as unknown as { full_name: string | null; avatar_url: string | null };
+          const rawUsers = row.users as unknown;
+          const u = Array.isArray(rawUsers)
+            ? (rawUsers[0] as { full_name: string | null; avatar_url: string | null } | undefined)
+            : (rawUsers as { full_name: string | null; avatar_url: string | null } | null);
           return {
             user_id: row.user_id,
             name: u?.full_name || 'Green Walker',
