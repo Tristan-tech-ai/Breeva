@@ -33,6 +33,138 @@ async function redisSetEx(key: string, ttl: number, value: string): Promise<void
   } catch { /* non-fatal */ }
 }
 
+// ─── Region detection (for Module B/C corrections) ──────────
+function detectRegion(lat: number, lon: number): string {
+  if (lat >= -8.85 && lat <= -8.06 && lon >= 114.43 && lon <= 115.71) return 'bali';
+  if (lat >= -6.50 && lat <= -6.08 && lon >= 106.60 && lon <= 107.10) return 'jakarta';
+  if (lat >= -7.02 && lat <= -6.82 && lon >= 107.45 && lon <= 107.77) return 'bandung';
+  if (lat >= -7.40 && lat <= -7.15 && lon >= 112.55 && lon <= 112.85) return 'surabaya';
+  if (lat >= -7.10 && lat <= -6.90 && lon >= 110.30 && lon <= 110.50) return 'semarang';
+  if (lat >= -7.87 && lat <= -7.72 && lon >= 110.30 && lon <= 110.50) return 'yogyakarta';
+  return 'default';
+}
+
+// ─── Sentinel-5P Satellite NO₂ correction ───────────────────
+interface SatelliteNO2Grid {
+  grid: number[];
+  rows: number;
+  cols: number;
+  bounds: { south: number; west: number; north: number; east: number };
+}
+
+async function fetchSatelliteNO2(
+  south: number, west: number, north: number, east: number,
+): Promise<((lat: number, lon: number) => number) | null> {
+  const clientId = process.env.COPERNICUS_CLIENT_ID;
+  const clientSecret = process.env.COPERNICUS_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  const q = (v: number) => (Math.round(v * 2) / 2).toFixed(1);
+  const cacheKey = `vayu:sat:no2:${q(south)}:${q(west)}:${q(north)}:${q(east)}`;
+
+  let gridData: SatelliteNO2Grid | null = null;
+  const cached = await redisGet(cacheKey);
+  if (cached) {
+    try { gridData = JSON.parse(cached); } catch { /* fall through */ }
+  }
+
+  if (!gridData) {
+    try {
+      const tokenResp = await fetch(
+        'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'client_credentials',
+            client_id: clientId,
+            client_secret: clientSecret,
+          }),
+        },
+      );
+      if (!tokenResp.ok) return null;
+      const { access_token } = await tokenResp.json();
+
+      const to = new Date();
+      const from = new Date(to.getTime() - 5 * 24 * 60 * 60 * 1000);
+
+      const processResp = await fetch('https://sh.dataspace.copernicus.eu/api/v1/process', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${access_token}`,
+        },
+        body: JSON.stringify({
+          input: {
+            bounds: {
+              bbox: [west, south, east, north],
+              properties: { crs: 'http://www.opengis.net/def/crs/EPSG/0/4326' },
+            },
+            data: [{
+              type: 'sentinel-5p-l2',
+              dataFilter: {
+                timeRange: { from: from.toISOString(), to: to.toISOString() },
+                mosaickingOrder: 'mostRecent',
+              },
+            }],
+          },
+          output: {
+            width: 8, height: 8,
+            responses: [{ identifier: 'default', format: { type: 'image/tiff' } }],
+          },
+          evalscript: `//VERSION=3
+function setup() {
+  return { input: [{ bands: ["NO2","dataMask"], units: "DN" }], output: { bands: 1, sampleType: "FLOAT32" } };
+}
+function evaluatePixel(s) {
+  if (s.dataMask === 0) return [NaN];
+  return [s.NO2 * 1e6];
+}`,
+        }),
+      });
+
+      if (processResp.ok) {
+        const buffer = await processResp.arrayBuffer();
+        const floatView = new Float32Array(buffer, buffer.byteLength - 8 * 8 * 4, 64);
+        const grid: number[] = [];
+        for (let i = 0; i < floatView.length; i++) {
+          grid.push(isNaN(floatView[i]) || floatView[i] <= 0 ? -1 : floatView[i]);
+        }
+        if (grid.some((v) => v > 0)) {
+          gridData = { grid, rows: 8, cols: 8, bounds: { south, west, north, east } };
+          await redisSetEx(cacheKey, 43200, JSON.stringify(gridData));
+        }
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  if (!gridData || gridData.grid.every((v) => v <= 0)) return null;
+
+  const { grid, rows, cols, bounds } = gridData;
+  const valid = grid.filter((v) => v > 0);
+  if (valid.length === 0) return null;
+  const gridMean = valid.reduce((a, b) => a + b, 0) / valid.length;
+
+  return (lat: number, lon: number): number => {
+    const latSpan = bounds.north - bounds.south || 0.01;
+    const lonSpan = bounds.east - bounds.west || 0.01;
+    const fy = Math.max(0, Math.min(rows - 1, ((lat - bounds.south) / latSpan) * (rows - 1)));
+    const fx = Math.max(0, Math.min(cols - 1, ((lon - bounds.west) / lonSpan) * (cols - 1)));
+    const y0 = Math.floor(fy), x0 = Math.floor(fx);
+    const y1 = Math.min(rows - 1, y0 + 1), x1 = Math.min(cols - 1, x0 + 1);
+    const ty = fy - y0, tx = fx - x0;
+    const get = (r: number, c: number) => {
+      const v = grid[r * cols + c];
+      return v > 0 ? v : gridMean;
+    };
+    const bilinear = get(y0, x0) * (1 - tx) * (1 - ty) + get(y0, x1) * tx * (1 - ty) +
+                     get(y1, x0) * (1 - tx) * ty + get(y1, x1) * tx * ty;
+    return Math.max(0.7, Math.min(1.5, bilinear / gridMean));
+  };
+}
+
 // ─── Gaussian dispersion (copied from road-aqi.ts) ─────────
 function sigmaY(x: number): number { return 0.08 * x * Math.pow(1 + 0.0001 * x, -0.5); }
 function sigmaZ(x: number): number { return 0.06 * x * Math.pow(1 + 0.0015 * x, -0.5); }
@@ -619,25 +751,49 @@ export async function scorePolyline(
   // Fetch baseline grid (Redis cached)
   const { center: baselineCenter, interpolate: interpBaseline } = await fetchBaselineGrid(south, west, north, east, forecastHour);
 
-  // WAQI bias correction
+  // WAQI bias correction + Sentinel-5P satellite NO₂ (Module A)
   const cLat = (south + north) / 2;
   const cLon = (west + east) / 2;
-  const bias = await fetchWAQIBias(cLat, cLon, baselineCenter);
+  const [bias, satNO2Interp] = await Promise.all([
+    fetchWAQIBias(cLat, cLon, baselineCenter),
+    fetchSatelliteNO2(south, west, north, east).catch(() => null),
+  ]);
 
   const interpCorrected = (lat: number, lon: number): BaselineData => {
     const raw = interpBaseline(lat, lon);
+    let correctedNO2 = Math.max(0, raw.no2 + bias.no2);
+    // Apply Sentinel-5P spatial NO₂ correction if available
+    if (satNO2Interp) {
+      correctedNO2 *= satNO2Interp(lat, lon);
+    }
     return {
       ...raw,
       pm25: Math.max(0, raw.pm25 + bias.pm25),
       pm10: Math.max(0, raw.pm10 + bias.pm10),
-      no2: Math.max(0, raw.no2 + bias.no2),
+      no2: correctedNO2,
       o3: Math.max(0, raw.o3 + bias.o3),
     } as BaselineData;
   };
 
   const targetHour = (new Date().getHours() + forecastHour) % 24;
-  const diurnal = HOURLY_TRAFFIC[targetHour] ?? 1.0;
+  let diurnal = HOURLY_TRAFFIC[targetHour] ?? 1.0;
   const weights = VEHICLE_WEIGHTS[vehicleType] || VEHICLE_WEIGHTS.pedestrian;
+
+  // ── Module B: Temporal AI correction — blend Gemini-predicted hourly factors ──
+  if (forecastHour === 0) {
+    const region = detectRegion(cLat, cLon);
+    const today = new Date().toISOString().slice(0, 10);
+    const temporalRaw = await redisGet(`vayu:temporal:${region}:${today}`);
+    if (temporalRaw) {
+      try {
+        const tc = JSON.parse(temporalRaw);
+        const aiFactor = tc.hourly_factors?.[targetHour];
+        if (typeof aiFactor === 'number' && aiFactor > 0) {
+          diurnal = aiFactor * 0.6 + diurnal * 0.4;
+        }
+      } catch { /* use static diurnal */ }
+    }
+  }
 
   if (roads.length === 0) {
     // Fallback: Open-Meteo baseline per-point (original behavior)
@@ -684,6 +840,20 @@ export async function scorePolyline(
     scoredRoads = roads.filter((_, i) => i === 0 || i === roads.length - 1 || i % step === 0);
   }
 
+  // ── Module C: Pre-fetch residual error corrections per highway class ──
+  const errorCorrections = new Map<string, number>();
+  if (forecastHour === 0) {
+    const region = detectRegion(cLat, cLon);
+    const hwClasses = [...new Set(scoredRoads.map(r => r.highway))];
+    await Promise.all(hwClasses.map(async (hw) => {
+      const raw = await redisGet(`vayu:correction:${region}:${hw}:${targetHour}`);
+      if (raw) {
+        const f = parseFloat(raw);
+        if (f > 0 && Math.abs(f - 1.0) > 0.01) errorCorrections.set(hw, f);
+      }
+    }));
+  }
+
   // Score each road segment with VAYU Gaussian model
   const segments: RouteScoreV2Result['segments'] = [];
   let sumAqi = 0;
@@ -701,7 +871,16 @@ export async function scorePolyline(
     } catch { /* use center */ }
 
     const baseline = interpCorrected(roadLat, roadLon);
-    const result = computeRoadAQI(road, baseline, diurnal);
+    let result = computeRoadAQI(road, baseline, diurnal);
+
+    // Apply Module C residual error correction
+    const corrFactor = errorCorrections.get(road.highway);
+    if (corrFactor) {
+      const corrPm25 = Math.round(result.pm25 * corrFactor * 100) / 100;
+      const corrNo2 = Math.round(result.no2 * corrFactor * 100) / 100;
+      const corrPm10 = Math.round(result.pm10 * corrFactor * 100) / 100;
+      result = { ...result, pm25: corrPm25, no2: corrNo2, pm10: corrPm10, aqi: pm25ToAQI(corrPm25) };
+    }
 
     if (road.ai_pollution_factor != null || road.micro_class != null) aiEnhanced = true;
 
@@ -1302,8 +1481,11 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     } catch { /* skip */ }
 
     // Assign labels based on actual metrics: fastest=shortest duration, cleanest=lowest AQI
+    // Use blended pollution score: 60% avg + 40% max to penalize routes with hot-spot segments
+    const pollutionScore = (r: typeof scoredRoutes[0]) =>
+      (r.score?.avg_aqi ?? 999) * 0.6 + (r.score?.max_aqi ?? 999) * 0.4;
     const byDuration = [...scoredRoutes].sort((a, b) => a.duration_seconds - b.duration_seconds);
-    const byAqi = [...scoredRoutes].sort((a, b) => (a.score?.avg_aqi ?? 999) - (b.score?.avg_aqi ?? 999));
+    const byAqi = [...scoredRoutes].sort((a, b) => pollutionScore(a) - pollutionScore(b));
     const usedIndices = new Set<number>();
 
     const fastestRoute = byDuration[0];
