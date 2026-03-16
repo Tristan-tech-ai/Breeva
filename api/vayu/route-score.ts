@@ -780,12 +780,18 @@ function buildSquareAvoidPolygon(lng: number, lat: number, radiusMeters: number)
   ]];
 }
 
+const DIRTY_AQI_THRESHOLD = 120;
+const MAX_AVOID_POLYGONS = 3;
+const MIN_ROAD_LENGTH_TO_AVOID = 200;
+
 function buildAvoidPolygons(roads: CorridorRoadScore[]): { type: 'MultiPolygon'; coordinates: number[][][][] } | null {
   const candidates = roads
     .filter((road) => !['footway', 'path', 'pedestrian', 'cycleway', 'living_street'].includes(road.road.highway))
+    .filter((road) => road.score.aqi >= DIRTY_AQI_THRESHOLD)
+    .filter((road) => road.length_m >= MIN_ROAD_LENGTH_TO_AVOID)
     .filter((road) => road.progress >= 0.1 && road.progress <= 0.9)
-    .sort((a, b) => b.score.pm25_delta - a.score.pm25_delta)
-    .slice(0, 6);
+    .sort((a, b) => b.score.aqi - a.score.aqi)
+    .slice(0, MAX_AVOID_POLYGONS);
 
   if (candidates.length === 0) return null;
   return {
@@ -1425,6 +1431,8 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     // ORS expects [lng, lat]
     const orsStart: [number, number] = [startLng, startLat];
     const orsEnd: [number, number] = [endLng, endLat];
+    const directDistanceM = haversineMeters(startLat, startLng, endLat, endLng);
+    console.log(`[clean-route] start=${startLat.toFixed(6)},${startLng.toFixed(6)} end=${endLat.toFixed(6)},${endLng.toFixed(6)} direct=${directDistanceM.toFixed(0)}m`);
 
     const orsApiKey = process.env.VITE_OPENROUTESERVICE_API_KEY || process.env.ORS_API_KEY;
 
@@ -1504,6 +1512,12 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       dedupedOrs.map((ors, index) => orsToScoredEntry(ors, index, 'ors'))
     );
 
+    const directCandidate = scoredRoutes[0] ?? null;
+    const skipAvoidPolygons = !!directCandidate && !!directCandidate.score && directCandidate.score.avg_aqi <= 50;
+    if (skipAvoidPolygons) {
+      console.log('[clean-route] Direct route is already clean (AQI <= 50). Skipping avoid_polygons.');
+    }
+
     const corridorScores = await scoreCorridorRoads(
       corridorRoadRows,
       startLat,
@@ -1529,7 +1543,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       scoredRoutes.push(entry);
     };
 
-    if (orsApiKey && corridorScores.length > 0) {
+    if (orsApiKey && corridorScores.length > 0 && !skipAvoidPolygons) {
       const avoidPolygons = buildAvoidPolygons(corridorScores);
       if (avoidPolygons) {
         try {
@@ -1700,28 +1714,36 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    if (uniqueCandidates.length === 0) {
+    const MAX_DETOUR_RATIO = 2.5;
+    let filteredCandidates = uniqueCandidates.filter((route) => route.distance_meters <= directDistanceM * MAX_DETOUR_RATIO);
+    if (filteredCandidates.length === 0 && uniqueCandidates.length > 0) {
+      console.log(`[clean-route] All candidates exceed ${MAX_DETOUR_RATIO}x direct distance (${directDistanceM.toFixed(0)}m). Falling back to shortest candidate.`);
+      const shortest = [...uniqueCandidates].sort((a, b) => a.distance_meters - b.distance_meters)[0];
+      filteredCandidates = [shortest];
+    }
+
+    if (filteredCandidates.length === 0) {
       return res.status(200).json(emptyResponse('no_distinct_routes_found'));
     }
 
     const cleanCost = (route: ScoredCandidate) => route.score?.pollution_index ?? route.score?.avg_aqi ?? 999;
-    const shortestDuration = Math.min(...uniqueCandidates.map((route) => route.duration_seconds));
-    const cleanValues = uniqueCandidates.map(cleanCost);
+    const shortestDuration = Math.min(...filteredCandidates.map((route) => route.duration_seconds));
+    const cleanValues = filteredCandidates.map(cleanCost);
     const minClean = Math.min(...cleanValues);
     const maxClean = Math.max(...cleanValues);
     const normalizeClean = (route: ScoredCandidate) => maxClean > minClean ? (cleanCost(route) - minClean) / (maxClean - minClean) : 0;
     const normalizeDuration = (route: ScoredCandidate) => Math.max(0, (route.duration_seconds - shortestDuration) / Math.max(shortestDuration, 1));
 
-    const byDuration = [...uniqueCandidates].sort((a, b) => a.duration_seconds - b.duration_seconds);
-    const byClean = [...uniqueCandidates].sort((a, b) => cleanCost(a) - cleanCost(b));
+    const byDuration = [...filteredCandidates].sort((a, b) => a.duration_seconds - b.duration_seconds);
+    const byClean = [...filteredCandidates].sort((a, b) => cleanCost(a) - cleanCost(b));
     const fastestRoute = byDuration[0];
     const cleanestRoute = byClean.find((route) => route.index !== fastestRoute.index) || byClean[0];
     const usedIndices = new Set([fastestRoute.index, cleanestRoute.index]);
-    const balancedRoute = [...uniqueCandidates]
+    const balancedRoute = [...filteredCandidates]
       .filter((route) => !usedIndices.has(route.index))
       .sort((a, b) => ((normalizeDuration(a) * 0.55) + (normalizeClean(a) * 0.45)) - ((normalizeDuration(b) * 0.55) + (normalizeClean(b) * 0.45)))[0]
       || byDuration[1]
-      || uniqueCandidates[0];
+      || filteredCandidates[0];
 
     const selectedRoutes = [cleanestRoute, balancedRoute, fastestRoute].filter((route, index, self) => self.findIndex((candidate) => candidate.index === route.index) === index);
 
@@ -1772,6 +1794,11 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       traffic_level: estimateTrafficLevel(r.score?.avg_aqi ?? 50),
       green_score: estimateGreenScore(r.score?.segments || []),
     }));
+
+    routes.forEach((candidate, index) => {
+      const ratio = directDistanceM > 0 ? candidate.distance_meters / directDistanceM : 1;
+      console.log(`[clean-route] candidate[${index}] label=${candidate.route_label} dist=${candidate.distance_meters}m ratio=${ratio.toFixed(2)}x aqi=${candidate.vayu_avg_aqi}`);
+    });
 
     const responseMs = Date.now() - startTime;
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
