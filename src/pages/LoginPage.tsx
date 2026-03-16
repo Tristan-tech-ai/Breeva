@@ -103,11 +103,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="gradient-mesh-bg min-h-screen flex flex-col">
+    <div className="gradient-mesh-bg min-h-screen flex flex-col overflow-hidden scrollbar-hide">
       {/* Desktop: Split layout / Mobile: Single column */}
-      <div className="flex flex-1 flex-col lg:flex-row">
-        {/* Left Panel - Branding (Desktop only) */}
-        <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center p-12">
+      <div className="flex flex-1 flex-col lg:flex-row h-screen">
+        {/* Left Panel - Branding (Desktop only, fixed position) */}
+        <div className="hidden lg:flex lg:w-1/2 lg:h-screen lg:sticky lg:top-0 relative overflow-hidden items-center justify-center p-12">
           {/* Decorative gradient blobs */}
           <div className="absolute inset-0">
             <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary-500/20 rounded-full blur-3xl animate-pulse" />
@@ -161,7 +161,7 @@ export default function LoginPage() {
         </div>
 
         {/* Right Panel / Main (Login Card) */}
-        <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
+        <div className="flex-1 flex items-center justify-center p-6 lg:p-12 lg:overflow-y-auto lg:h-screen scrollbar-hide">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
