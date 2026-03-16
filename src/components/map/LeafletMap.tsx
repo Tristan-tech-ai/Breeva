@@ -163,8 +163,13 @@ function MapController({
       center.lat !== prevCenterRef.current.lat ||
       center.lng !== prevCenterRef.current.lng
     ) {
-      map.flyTo([center.lat, center.lng], map.getZoom(), { duration: 0.8 });
-      prevCenterRef.current = center;
+      try {
+        const container = map.getContainer();
+        if (!container || !document.body.contains(container)) return;
+        if (!isFinite(center.lat) || !isFinite(center.lng)) return;
+        map.flyTo([center.lat, center.lng], map.getZoom(), { duration: 0.8 });
+        prevCenterRef.current = center;
+      } catch { /* map already removed */ }
     }
   }, [center, map]);
 
@@ -212,7 +217,12 @@ function MapController({
   // Fly to viewTarget (search POI select)
   useEffect(() => {
     if (viewTarget) {
-      map.flyTo([viewTarget.lat, viewTarget.lng], Math.max(map.getZoom(), 16), { duration: 0.8 });
+      try {
+        const container = map.getContainer();
+        if (!container || !document.body.contains(container)) return;
+        if (!isFinite(viewTarget.lat) || !isFinite(viewTarget.lng)) return;
+        map.flyTo([viewTarget.lat, viewTarget.lng], Math.max(map.getZoom(), 16), { duration: 0.8 });
+      } catch { /* map already removed */ }
       setViewTarget(null);
     }
   }, [viewTarget, map, setViewTarget]);
