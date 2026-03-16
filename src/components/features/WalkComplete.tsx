@@ -170,7 +170,7 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
             </button>
           )}
           <button
-            onClick={() => { onClose(); navigate('/'); }}
+            onClick={() => { onClose(); navigate('/home'); }}
             className="flex items-center justify-center gap-2 gradient-primary text-white text-sm font-semibold py-3 rounded-xl shadow-lg shadow-primary-500/25 hover:shadow-xl transition-all"
           >
             <Map size={16} />

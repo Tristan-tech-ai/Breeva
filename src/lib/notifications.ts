@@ -75,7 +75,7 @@ export function scheduleStreakReminder(): void {
       showNotification(
         '🔥 Streak Warning!',
         "You haven't walked today. Don't break your streak!",
-        { url: '/', tag: 'streak-warning' }
+        { url: '/home', tag: 'streak-warning' }
       );
     }
     // Reschedule for next day

@@ -1,6 +1,6 @@
 import Supercluster from 'supercluster';
 import type { POI } from './poi-api';
-import { resolvePriority } from './poi-icons';
+import { resolvePriority, merchantPriority } from './poi-icons';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -52,7 +52,11 @@ export function reindex(pois: POI[], serial: number, zoom: number, showAll: bool
   const features: GeoJSON.Feature<GeoJSON.Point, PointProps>[] = [];
 
   for (const poi of pois) {
-    const priority = resolvePriority(poi.types || []);
+    // Merchant POIs use their own priority based on sponsor tier boost
+    const mp = poi as POI & { _isMerchant?: boolean; _priorityBoost?: number };
+    const priority = mp._isMerchant
+      ? merchantPriority(mp._priorityBoost || 0)
+      : resolvePriority(poi.types || []);
     // Skip POIs whose priority tier is above current zoom (unless showAll)
     if (!showAll && priority > effectiveZoom) continue;
 

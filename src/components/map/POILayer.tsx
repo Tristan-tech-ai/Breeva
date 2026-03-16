@@ -67,12 +67,14 @@ interface POILayerProps {
   visible?: boolean;
   activeFilter?: string | null;
   onPlaceSelect?: (poi: POI) => void;
+  showMerchants?: boolean;
 }
 
 export default function POILayer({
   visible = true,
   activeFilter = null,
   onPlaceSelect,
+  showMerchants = true,
 }: POILayerProps) {
   const map = useMap();
   const navigate = useNavigate();
@@ -161,7 +163,11 @@ export default function POILayer({
     // Reindex supercluster — only priority-eligible POIs enter the index
     diagStart('render-cycle');
     diagStart('reindex');
-    const allPOIs = getPOIArray();
+    let allPOIs = getPOIArray();
+    // Filter out merchants if toggle is off
+    if (!showMerchants) {
+      allPOIs = allPOIs.filter(p => !(p as any)._isMerchant);
+    }
     reindex(allPOIs, serial, zoomLevel, showAll);
     diagEnd('reindex', { pois: allPOIs.length });
 
@@ -264,10 +270,12 @@ export default function POILayer({
         continue;
       }
 
-      // New marker
+      // New marker — merchants get elevated z-index so they render on top
+      const isMerchant = !!(f.poi as any)._isMerchant;
       const marker = L.marker([f.lat, f.lng], {
         icon: getPoiIcon(f.poi, markerSize),
         bubblingMouseEvents: false,
+        zIndexOffset: isMerchant ? 5000 : 0,
       }).addTo(map);
 
       const hasLabel = !!placement?.show;
@@ -295,7 +303,7 @@ export default function POILayer({
         }
       });
       marker.on('mouseout', () => {
-        marker.setZIndexOffset(0);
+        marker.setZIndexOffset(isMerchant ? 5000 : 0);
         const el = (marker as any)._icon as HTMLElement | undefined;
         if (el) el.classList.remove('poi-marker-hover');
         if ((marker as any)._hoverTooltip) {
@@ -317,7 +325,7 @@ export default function POILayer({
     }
     diagEnd('render-cycle', { markers: pool.size });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serial, visible, zoomLevel, bboxKey, activeFilter]);
+  }, [serial, visible, zoomLevel, bboxKey, activeFilter, showMerchants]);
 
   // Full cleanup on unmount
   useEffect(() => {

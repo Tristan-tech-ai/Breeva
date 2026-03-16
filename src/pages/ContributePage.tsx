@@ -214,7 +214,7 @@ export default function ContributePage() {
                 Add Another
               </button>
               <button
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/home')}
                 className="flex-1 gradient-primary text-white py-3 rounded-xl text-sm font-semibold"
               >
                 Back to Map

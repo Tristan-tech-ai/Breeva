@@ -5,7 +5,7 @@ import logoBreeva from '../../assets/logo-breeva.svg';
 import { haptic } from '../../lib/haptic';
 
 const tabs = [
-  { path: '/', label: 'Home', Icon: Home, badgeKey: null },
+  { path: '/home', label: 'Home', Icon: Home, badgeKey: null },
   { path: '/merchants', label: 'Merchants', Icon: Store, badgeKey: null },
   { path: '/walk', label: 'Breeva', Icon: null as unknown as typeof Home, isCenter: true, badgeKey: null },
   { path: '/rewards', label: 'Rewards', Icon: Gift, badgeKey: 'rewards' as const },
@@ -26,7 +26,7 @@ export default function BottomNavigation({ badges }: BottomNavigationProps) {
           {tabs.map((tab) => {
             const isActive =
               location.pathname === tab.path ||
-              (tab.path !== '/' && location.pathname.startsWith(tab.path));
+              (tab.path !== '/home' && location.pathname.startsWith(tab.path));
 
             if (tab.isCenter) {
               return (

@@ -86,7 +86,6 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
-            <Route path="/landing" element={<LandingPage />} />
 
             {/* Onboarding (requires auth but not full protection) */}
             <Route path="/onboarding/*" element={
@@ -224,8 +223,17 @@ function App() {
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
 
-            {/* Home / Map — public so map always renders */}
-            <Route path="/" element={<HomePage />} />
+            {/* Home / Map — protected, requires auth */}
+            <Route path="/home" element={
+              <ProtectedRoute>
+                <HomePage />
+              </ProtectedRoute>
+            } />
+
+            {/* Landing Page — public root */}
+            <Route path="/" element={<LandingPage />} />
+            {/* Legacy /landing redirect */}
+            <Route path="/landing" element={<LandingPage />} />
           </Routes>
           </main>
         </Suspense>

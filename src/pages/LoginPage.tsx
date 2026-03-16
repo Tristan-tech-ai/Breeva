@@ -23,7 +23,7 @@ export default function LoginPage() {
   const [resetEmail, setResetEmail] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/home';
 
   // If there's a pending verification, redirect to the dedicated verify page
   if (pendingVerification) {

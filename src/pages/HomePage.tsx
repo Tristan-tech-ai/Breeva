@@ -101,6 +101,7 @@ export default function HomePage() {
   const [showAQIOverlay, setShowAQIOverlay] = useState(false);
   const [showAQIStations, setShowAQIStations] = useState(false);
   const [showPOIs, setShowPOIs] = useState(true);
+  const [showMerchants, setShowMerchants] = useState(true);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [forecastHour, setForecastHour] = useState(0);
   const [roadLayerMeta, setRoadLayerMeta] = useState<RoadLayerMeta | null>(null);
@@ -145,6 +146,7 @@ export default function HomePage() {
         showAQIOverlay={showAQIOverlay}
         showAQIStations={showAQIStations}
         showPOIs={showPOIs}
+        showMerchants={showMerchants}
         mapStyle={mapStyle}
         activeFilter={activeFilter}
         pollutant={pollutant}
@@ -594,6 +596,8 @@ export default function HomePage() {
         onAQIStationsToggle={() => setShowAQIStations(!showAQIStations)}
         showPOIs={showPOIs}
         onPOIsToggle={() => setShowPOIs(!showPOIs)}
+        showMerchants={showMerchants}
+        onMerchantsToggle={() => setShowMerchants(!showMerchants)}
         currentAQI={currentAQI}
         pollutant={pollutant}
         onPollutantChange={setPollutant}

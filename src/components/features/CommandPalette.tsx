@@ -15,7 +15,7 @@ interface Command {
 }
 
 const commands: Command[] = [
-  { id: 'home', label: 'Go to Home', icon: Home, path: '/', keywords: ['map', 'dashboard'] },
+  { id: 'home', label: 'Go to Home', icon: Home, path: '/home', keywords: ['map', 'dashboard'] },
   { id: 'profile', label: 'My Profile', icon: User, path: '/profile', keywords: ['account', 'me'] },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', keywords: ['preferences', 'config'] },
   { id: 'rewards', label: 'Rewards', icon: Gift, path: '/rewards', keywords: ['vouchers', 'redeem', 'points'] },

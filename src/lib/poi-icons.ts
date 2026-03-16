@@ -483,6 +483,10 @@ export function getMerchantDivIcon(tier: string, name?: string): L.DivIcon {
  * Higher boost = visible at lower zoom = higher priority.
  */
 export function merchantPriority(boost: number): number {
-  if (boost >= 3) return 10; // featured — visible at all zoom levels
-  return 17; // other tiers: same as regular commercial POIs
+  switch (boost) {
+    case 3: return 1;  // featured — visible at ALL zoom levels
+    case 2: return 10; // premium — visible very early
+    case 1: return 13; // basic — visible before most POIs
+    default: return 15; // free
+  }
 }

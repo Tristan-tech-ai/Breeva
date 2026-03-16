@@ -40,7 +40,7 @@ export function useKeyboardShortcuts() {
         gPressed = false;
         clearTimeout(gTimer);
         switch (e.key) {
-          case 'h': navigate('/'); break;
+          case 'h': navigate('/home'); break;
           case 'p': navigate('/profile'); break;
           case 'm': navigate('/merchants'); break;
           case 'r': navigate('/rewards'); break;

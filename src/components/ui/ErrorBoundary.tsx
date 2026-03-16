@@ -50,7 +50,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 Try Again
               </button>
               <a
-                href="/"
+                href="/home"
                 className="flex items-center gap-2 glass-button px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300"
               >
                 <Home className="w-4 h-4" />

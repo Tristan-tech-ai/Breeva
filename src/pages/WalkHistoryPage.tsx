@@ -159,7 +159,7 @@ export default function WalkHistoryPage() {
             title="No walks yet"
             description="Start your first eco-walk to see your history here!"
             actionLabel="Start Walking"
-            onAction={() => navigate('/')}
+            onAction={() => navigate('/home')}
           />
         ) : (
           <div>

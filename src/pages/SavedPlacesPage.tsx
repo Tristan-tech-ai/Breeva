@@ -85,7 +85,7 @@ export default function SavedPlacesPage() {
 
   const handleNavigate = (place: SavedPlace) => {
     // Navigate to home and set destination
-    navigate('/', { state: { destination: place.coordinate, destinationName: place.name } });
+    navigate('/home', { state: { destination: place.coordinate, destinationName: place.name } });
   };
 
   const handleAddCurrentLocation = () => {

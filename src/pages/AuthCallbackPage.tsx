@@ -31,7 +31,7 @@ export default function AuthCallbackPage() {
         const onboardingCompleted = localStorage.getItem('breeva_onboarding_completed');
 
         if (onboardingCompleted === 'true') {
-          navigate('/', { replace: true });
+          navigate('/home', { replace: true });
         } else {
           navigate('/onboarding/welcome', { replace: true });
         }

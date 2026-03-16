@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Map, Satellite, Mountain, Wind, Store,
-  TreePine, Activity, Clock, Radio, ShieldCheck, Radar,
+  TreePine, Activity, Clock, Radio, ShieldCheck, Radar, Leaf,
 } from 'lucide-react';
 import type { AirQualityData, PollutantType } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
@@ -18,6 +18,8 @@ interface MapLayersSheetProps {
   onAQIStationsToggle: () => void;
   showPOIs: boolean;
   onPOIsToggle: () => void;
+  showMerchants: boolean;
+  onMerchantsToggle: () => void;
   currentAQI?: AirQualityData | null;
   pollutant?: PollutantType;
   onPollutantChange?: (p: PollutantType) => void;
@@ -58,6 +60,8 @@ export default function MapLayersSheet({
   onAQIStationsToggle,
   showPOIs,
   onPOIsToggle,
+  showMerchants,
+  onMerchantsToggle,
   currentAQI,
   pollutant = 'aqi',
   onPollutantChange,
@@ -167,7 +171,7 @@ export default function MapLayersSheet({
               <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
                 Map Details
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {/* Places toggle */}
                 <button
                   onClick={onPOIsToggle}
@@ -239,6 +243,31 @@ export default function MapLayersSheet({
                     </p>
                     <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
                       10,000+ global monitors
+                    </p>
+                  </div>
+                </button>
+
+                {/* Eco Merchants toggle */}
+                <button
+                  onClick={onMerchantsToggle}
+                  className={`
+                    flex flex-col items-start gap-2 p-3.5 rounded-2xl border-2 transition-all text-left
+                    ${showMerchants
+                      ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/20'
+                      : 'border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700'
+                    }
+                  `}
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                    style={{ backgroundColor: showMerchants ? '#05966918' : undefined }}>
+                    <Leaf className="w-4.5 h-4.5" style={{ color: showMerchants ? '#059669' : '#9ca3af' }} />
+                  </div>
+                  <div>
+                    <p className={`text-sm font-semibold ${showMerchants ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
+                      Eco Merchants
+                    </p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
+                      Sponsored green stores
                     </p>
                   </div>
                 </button>

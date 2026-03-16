@@ -78,7 +78,7 @@ export default function VerifyEmailPage() {
     if (ok) {
       setVerified(true);
       // Brief success animation then redirect
-      setTimeout(() => navigate('/', { replace: true }), 1500);
+      setTimeout(() => navigate('/home', { replace: true }), 1500);
     } else {
       setOtpDigits(['', '', '', '', '', '']);
       otpRefs.current[0]?.focus();

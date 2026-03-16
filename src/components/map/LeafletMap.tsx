@@ -100,6 +100,7 @@ interface LeafletMapProps {
   showAQIOverlay?: boolean;
   showAQIStations?: boolean;
   showPOIs?: boolean;
+  showMerchants?: boolean;
   mapStyle?: 'voyager' | 'osm' | 'satellite';
   activeFilter?: string | null;
   pollutant?: PollutantType;
@@ -114,12 +115,13 @@ function MapController({
   showAQIOverlay,
   showAQIStations,
   showPOIs,
+  showMerchants,
   activeFilter,
   pollutant,
   forecastHour,
   onRoadLayerMeta,
   onPlaceSelect,
-}: Pick<LeafletMapProps, 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'onRoadLayerMeta' | 'onPlaceSelect'>) {
+}: Pick<LeafletMapProps, 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'onRoadLayerMeta' | 'onPlaceSelect'>) {
   const map = useMap();
   const {
     center,
@@ -290,7 +292,7 @@ function MapController({
   useAQIStationLayer(map, !!showAQIStations);
 
   return showPOIs ? (
-    <POILayer visible={showPOIs} activeFilter={activeFilter} onPlaceSelect={onPlaceSelect} />
+    <POILayer visible={showPOIs} activeFilter={activeFilter} onPlaceSelect={onPlaceSelect} showMerchants={showMerchants} />
   ) : null;
 }
 
@@ -302,6 +304,7 @@ export default function LeafletMap({
   showAQIOverlay = false,
   showAQIStations = false,
   showPOIs = true,
+  showMerchants = true,
   mapStyle = 'voyager',
   activeFilter = null,
   pollutant = 'aqi',
@@ -337,6 +340,7 @@ export default function LeafletMap({
           showAQIOverlay={showAQIOverlay}
           showAQIStations={showAQIStations}
           showPOIs={showPOIs}
+          showMerchants={showMerchants}
           activeFilter={activeFilter}
           pollutant={pollutant}
           forecastHour={forecastHour}

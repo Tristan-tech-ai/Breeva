@@ -58,7 +58,7 @@ export default function OnboardingPage() {
     }
 
     completeOnboarding();
-    navigate('/', { replace: true });
+    navigate('/home', { replace: true });
   };
 
   const handleEnableLocation = async () => {
