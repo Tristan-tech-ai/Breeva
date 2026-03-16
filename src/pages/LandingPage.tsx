@@ -335,15 +335,15 @@ export default function LandingPage() {
       </div>
 
       {/* Navigation */}
-      <nav className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-white/70 backdrop-blur-xl px-6 py-2.5 rounded-full flex items-center gap-6 shadow-lg border border-white/50">
-        <a href="#" className="flex items-center gap-1.5">
+      <nav className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-1rem)] sm:w-auto max-w-max bg-white/70 backdrop-blur-xl px-3 sm:px-6 py-2 sm:py-2.5 rounded-full flex items-center justify-between sm:justify-center gap-3 sm:gap-6 shadow-lg border border-white/50">
+        <a href="#" className="flex items-center gap-1.5 min-w-0">
           <BreevaLogo className="h-5 w-5" />
-          <span className="text-sm font-bold text-emerald-600">Breeva</span>
+          <span className="text-xs sm:text-sm font-bold text-emerald-600 whitespace-nowrap">Breeva</span>
         </a>
         <a href="#problem" className="text-xs font-medium text-slate-500 hover:text-emerald-600 transition-colors hidden sm:block">Why</a>
         <a href="#solution" className="text-xs font-medium text-slate-500 hover:text-emerald-600 transition-colors hidden sm:block">How</a>
         <a href="#science" className="text-xs font-medium text-slate-500 hover:text-emerald-600 transition-colors hidden sm:block">Science</a>
-        <Link to="/login" className="bg-emerald-600 text-white text-xs font-semibold py-1.5 px-4 rounded-full hover:bg-emerald-700 transition-colors">
+        <Link to="/login" className="bg-emerald-600 text-white text-[11px] sm:text-xs font-semibold py-1.5 px-3 sm:px-4 rounded-full hover:bg-emerald-700 transition-colors whitespace-nowrap shrink-0">
           Sign In
         </Link>
       </nav>
