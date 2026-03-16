@@ -219,13 +219,24 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
       { tier: 'basic', boost: 1 },
       { tier: 'basic', boost: 1 },
     ];
+    // Simple deterministic hash to pick ~1 commercial POI per tile
+    const nameHash = (s: string) => {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+      return Math.abs(h);
+    };
     const convertCommercialToEco = (pois: POI[]): POI[] => {
-      let tierIdx = 0;
+      // Only convert 1 commercial POI per tile batch (the one with lowest hash)
+      const commercials = pois.filter(p => p.category === 'commercial' && p.name);
+      if (commercials.length === 0) return pois;
+      // Pick the single best candidate per batch
+      const picked = commercials.reduce((best, p) => nameHash(p.name) < nameHash(best.name) ? p : best);
+      const pickedId = picked.id;
+      const tierIdx = nameHash(picked.name);
+      const cycle = TIER_CYCLE[tierIdx % TIER_CYCLE.length];
+      const vouchers = DEMO_VOUCHERS[tierIdx % DEMO_VOUCHERS.length];
       return pois.map((poi) => {
-        if (poi.category !== 'commercial') return poi;
-        const cycle = TIER_CYCLE[tierIdx % TIER_CYCLE.length];
-        const vouchers = DEMO_VOUCHERS[tierIdx % DEMO_VOUCHERS.length];
-        tierIdx++;
+        if (poi.id !== pickedId) return poi;
         return {
           ...poi,
           category: 'eco_merchant',
