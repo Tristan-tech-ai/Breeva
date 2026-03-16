@@ -72,6 +72,8 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
   }, [filterOpen]);
 
   const handleSelect = (result: (typeof searchResults)[number]) => {
+    useMapStore.getState().setViewTarget(result.coordinate);
+
     if ((result.placeId || result.dataId) && onPlaceSelect) {
       const poi: POI = {
         id: `gmap-${result.placeId || result.dataId}`,
@@ -90,7 +92,6 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
         price: result.price,
       };
       onPlaceSelect(poi);
-      useMapStore.getState().setViewTarget(result.coordinate);
     } else {
       setDestination(result.coordinate, result.name);
     }

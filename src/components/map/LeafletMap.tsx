@@ -206,8 +206,6 @@ function MapController({
         destMarkerRef.current.setLatLng([destination.lat, destination.lng]);
         destMarkerRef.current.setPopupContent(popupHtml);
       }
-      // Fly to destination when set
-      map.flyTo([destination.lat, destination.lng], Math.max(map.getZoom(), 16), { duration: 0.8 });
     } else if (destMarkerRef.current) {
       destMarkerRef.current.remove();
       destMarkerRef.current = null;
