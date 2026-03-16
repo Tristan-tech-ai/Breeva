@@ -784,12 +784,45 @@ const DIRTY_AQI_THRESHOLD = 120;
 const MAX_AVOID_POLYGONS = 3;
 const MIN_ROAD_LENGTH_TO_AVOID = 200;
 
-function buildAvoidPolygons(roads: CorridorRoadScore[]): { type: 'MultiPolygon'; coordinates: number[][][][] } | null {
+function isOnDirectCorridor(
+  roadCoords: number[][],
+  start: [number, number],
+  end: [number, number],
+): boolean {
+  if (roadCoords.length === 0) return false;
+  const roadMid = roadCoords[Math.floor(roadCoords.length / 2)] || roadCoords[0];
+  const dx = end[0] - start[0];
+  const dy = end[1] - start[1];
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return false;
+
+  const t = Math.max(0, Math.min(1,
+    ((roadMid[0] - start[0]) * dx + (roadMid[1] - start[1]) * dy) / lenSq
+  ));
+  const projLng = start[0] + t * dx;
+  const projLat = start[1] + t * dy;
+  const distM = haversineMeters(roadMid[1], roadMid[0], projLat, projLng);
+  return distM < 80;
+}
+
+function buildAvoidPolygons(
+  roads: CorridorRoadScore[],
+  start: [number, number],
+  end: [number, number],
+): { type: 'MultiPolygon'; coordinates: number[][][][] } | null {
   const candidates = roads
     .filter((road) => !['footway', 'path', 'pedestrian', 'cycleway', 'living_street'].includes(road.road.highway))
     .filter((road) => road.score.aqi >= DIRTY_AQI_THRESHOLD)
     .filter((road) => road.length_m >= MIN_ROAD_LENGTH_TO_AVOID)
     .filter((road) => road.progress >= 0.1 && road.progress <= 0.9)
+    .filter((road) => {
+      const coords = parseLineCoords(road.road.geojson);
+      if (isOnDirectCorridor(coords, start, end)) {
+        console.log(`[avoid] Skipping corridor road: ${road.road.name || road.road.highway} (AQI ${road.score.aqi}) — on direct path`);
+        return false;
+      }
+      return true;
+    })
     .sort((a, b) => b.score.aqi - a.score.aqi)
     .slice(0, MAX_AVOID_POLYGONS);
 
@@ -1513,8 +1546,9 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     );
 
     const directCandidate = scoredRoutes[0] ?? null;
-    const skipAvoidPolygons = !!directCandidate && !!directCandidate.score && directCandidate.score.avg_aqi <= 50;
-    if (skipAvoidPolygons) {
+    let skipAvoidPolygons = false;
+    if (directCandidate?.score?.avg_aqi && directCandidate.score.avg_aqi <= 50) {
+      skipAvoidPolygons = true;
       console.log('[clean-route] Direct route is already clean (AQI <= 50). Skipping avoid_polygons.');
     }
 
@@ -1530,6 +1564,18 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       corridorEast,
       0,
     ).catch(() => [] as CorridorRoadScore[]);
+
+    if (!skipAvoidPolygons && corridorScores.length > 0) {
+      const corridorAqiValues = corridorScores.map((road) => road.score.aqi);
+      const minCorridorAqi = Math.min(...corridorAqiValues);
+      const maxCorridorAqi = Math.max(...corridorAqiValues);
+      const spread = maxCorridorAqi - minCorridorAqi;
+      if (spread < 30) {
+        skipAvoidPolygons = true;
+        console.log(`[clean-route] Corridor AQI spread too low (${spread.toFixed(1)}). Skipping avoid_polygons.`);
+      }
+    }
+
     const corridorByWayId = new Map(corridorScores.map((road) => [road.road.osm_way_id, road]));
 
     const addCandidate = async (candidateRoute: ORSRoute, source: ScoredCandidate['source']) => {
@@ -1544,7 +1590,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     };
 
     if (orsApiKey && corridorScores.length > 0 && !skipAvoidPolygons) {
-      const avoidPolygons = buildAvoidPolygons(corridorScores);
+      const avoidPolygons = buildAvoidPolygons(corridorScores, orsStart as [number, number], orsEnd as [number, number]);
       if (avoidPolygons) {
         try {
           const avoided = await doORSRequest([orsStart, orsEnd], profile, orsApiKey, undefined, { avoid_polygons: avoidPolygons }, 'recommended');
@@ -1714,7 +1760,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const MAX_DETOUR_RATIO = 2.5;
+    const MAX_DETOUR_RATIO = 2.0;
     let filteredCandidates = uniqueCandidates.filter((route) => route.distance_meters <= directDistanceM * MAX_DETOUR_RATIO);
     if (filteredCandidates.length === 0 && uniqueCandidates.length > 0) {
       console.log(`[clean-route] All candidates exceed ${MAX_DETOUR_RATIO}x direct distance (${directDistanceM.toFixed(0)}m). Falling back to shortest candidate.`);
