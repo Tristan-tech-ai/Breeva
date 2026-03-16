@@ -17,6 +17,9 @@ export const supabase = createClient(
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
+      flowType: 'pkce',
+      lock: false,
+      storageKey: 'breeva-auth-token',
     },
   }
 );

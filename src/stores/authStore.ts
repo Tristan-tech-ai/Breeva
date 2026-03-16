@@ -388,6 +388,18 @@ export const useAuthStore = create<AuthState>()(
 
           set({ isLoading: false, isInitialized: true });
         } catch (err) {
+          // AbortError from navigator.locks is non-fatal — retry once silently
+          if (err instanceof Error && err.name === 'AbortError') {
+            try {
+              const { data } = await supabase.auth.getSession();
+              if (data.session) {
+                set({ user: data.session.user, session: data.session });
+                await get().fetchProfile().catch(console.error);
+              }
+            } catch { /* give up */ }
+            set({ isLoading: false, isInitialized: true });
+            return;
+          }
           const message = err instanceof Error ? err.message : 'Failed to initialize';
           set({ error: message, isLoading: false, isInitialized: true });
         }
