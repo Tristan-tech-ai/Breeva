@@ -70,6 +70,8 @@ export interface Route {
   // VAYU clean-route extension fields
   vayu_score?: VayuRouteScore;
   vayu_avg_aqi?: number;
+  vayu_min_aqi?: number;
+  vayu_pollution_index?: number;
   vayu_segment_count?: number;
   gemini_reasoning?: string;
   route_label?: 'cleanest' | 'balanced' | 'fastest';
@@ -250,6 +252,7 @@ export interface RouteSegmentAQI {
   pm25: number;
   no2: number;
   fraction_along: number;  // 0.0–1.0 position along route
+  pm25_delta?: number;
 }
 
 export interface VayuRouteScore {
@@ -269,6 +272,8 @@ export interface CleanRouteCandidate {
   instructions: RouteInstruction[];
   vayu_avg_aqi: number;
   vayu_max_aqi: number;
+  vayu_min_aqi?: number;
+  vayu_pollution_index?: number;
   vayu_segment_count: number;
   vayu_scored: boolean;
   route_label: 'cleanest' | 'balanced' | 'fastest';

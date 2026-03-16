@@ -256,12 +256,30 @@ interface RoadRow {
   elevation_avg: number | null;
   micro_class: string | null;
   ai_pollution_factor: number | null;
-  fraction_along: number;
+  fraction_along?: number | null;
 }
 
 interface BaselineData {
   pm25: number; pm10: number; no2: number;
   co: number; o3: number; wind_speed: number;
+}
+
+interface RoadAQIComputation {
+  aqi: number;
+  pm25: number;
+  no2: number;
+  o3: number;
+  pm10: number;
+  pm25_delta: number;
+  no2_delta: number;
+}
+
+interface CorridorRoadScore {
+  road: RoadRow;
+  midpoint: [number, number];
+  progress: number;
+  length_m: number;
+  score: RoadAQIComputation;
 }
 
 // ─── Traffic estimation (from road-aqi.ts) ──────────────────
@@ -307,7 +325,7 @@ function computeRoadAQI(
   road: RoadRow,
   baseline: { pm25: number; pm10: number; no2: number; o3: number; wind_speed: number },
   diurnal: number
-): { aqi: number; pm25: number; no2: number; o3: number; pm10: number } {
+): RoadAQIComputation {
   const traffic = estimateTraffic(road, diurnal);
   const jitter = roadJitter(road.osm_way_id);
   const dist = 10;
@@ -350,6 +368,8 @@ function computeRoadAQI(
     no2: Math.round(no2 * 100) / 100,
     o3: Math.round(o3 * 100) / 100,
     pm10: Math.round(pm10 * 100) / 100,
+    pm25_delta: Math.round(pm25Delta * 1000) / 1000,
+    no2_delta: Math.round(no2Delta * 1000) / 1000,
   };
 }
 
@@ -543,6 +563,60 @@ async function findRoadsAlongRoute(routeGeoJson: string, bufferMeters = 30): Pro
   } catch { return []; }
 }
 
+async function findRoadsInBBox(
+  south: number,
+  west: number,
+  north: number,
+  east: number,
+  roadLimit = 500,
+  highwayTypes: string[] | null = null,
+): Promise<RoadRow[]> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return [];
+
+  const body: Record<string, unknown> = {
+    south,
+    west,
+    north,
+    east,
+    road_limit: roadLimit,
+    simplify_tolerance: 0,
+  };
+  if (highwayTypes && highwayTypes.length > 0) body.highway_types = highwayTypes;
+
+  const headers = {
+    'Content-Type': 'application/json',
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+  };
+
+  try {
+    let resp = await fetch(`${url}/rest/v1/rpc/find_roads_in_bbox`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok && body.highway_types) {
+      const fallbackBody = { ...body } as Record<string, unknown>;
+      delete fallbackBody.highway_types;
+      resp = await fetch(`${url}/rest/v1/rpc/find_roads_in_bbox`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(fallbackBody),
+      });
+    }
+
+    if (!resp.ok) return [];
+    const rows = await resp.json();
+    if (!Array.isArray(rows)) return [];
+    return rows.map((row) => ({ ...(row as RoadRow), fraction_along: null }));
+  } catch {
+    return [];
+  }
+}
+
 // ─── Supabase RPC: find_through_gang_roads (topology-verified) ──
 interface ThroughGangRoad {
   osm_way_id: number; geojson: string; highway: string;
@@ -571,51 +645,12 @@ async function findThroughGangRoads(
         connection_distance_m: connectionDistanceM,
       }),
     });
-    if (!resp.ok) {
-      // Fallback to old bbox query if new RPC not deployed yet
-      return await findGangRoadsInBBoxFallback(south, west, north, east);
-    }
+    if (!resp.ok) return [];
     const data = await resp.json();
     return Array.isArray(data) && data.length > 0 ? data : [];
   } catch {
-    return await findGangRoadsInBBoxFallback(south, west, north, east);
+    return [];
   }
-}
-
-// Fallback: old bbox query (used if migration 007 not yet applied)
-async function findGangRoadsInBBoxFallback(
-  south: number, west: number, north: number, east: number,
-): Promise<ThroughGangRoad[]> {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return [];
-  try {
-    const resp = await fetch(`${url}/rest/v1/rpc/find_roads_in_bbox`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        south, west, north, east,
-        road_limit: 10,
-        simplify_tolerance: 0,
-        highway_types: ['living_street', 'path', 'footway', 'pedestrian'],
-      }),
-    });
-    if (!resp.ok) return [];
-    const rows = await resp.json();
-    return (rows || []).map((r: Record<string, unknown>) => ({
-      osm_way_id: r.osm_way_id as number,
-      geojson: r.geojson as string,
-      highway: r.highway as string,
-      name: (r.name as string) ?? null,
-      road_length_m: 0,
-      start_connections: 1,
-      end_connections: 1,
-    }));
-  } catch { return []; }
 }
 
 // ─── Supabase RPC: find_aqi_optimal_route (pgRouting graph pathfinder) ──
@@ -695,11 +730,151 @@ function polylineHash(polyline: [number, number][]): string {
   return `${first[0].toFixed(4)}_${first[1].toFixed(4)}_${last[0].toFixed(4)}_${last[1].toFixed(4)}_${mid[0].toFixed(4)}_${mid[1].toFixed(4)}_${polyline.length}`;
 }
 
+function parseLineCoords(geojson: string): number[][] {
+  try {
+    const parsed = JSON.parse(geojson) as { coordinates?: number[][] };
+    return Array.isArray(parsed.coordinates) ? parsed.coordinates : [];
+  } catch {
+    return [];
+  }
+}
+
+function roadMidpoint(coords: number[][]): [number, number] {
+  const mid = coords[Math.floor(coords.length / 2)] || coords[0] || [0, 0];
+  return [mid[0], mid[1]];
+}
+
+function lineLengthMeters(coords: number[][]): number {
+  let total = 0;
+  for (let index = 1; index < coords.length; index += 1) {
+    total += haversineMeters(coords[index - 1][1], coords[index - 1][0], coords[index][1], coords[index][0]);
+  }
+  return total;
+}
+
+function projectProgressOnLine(
+  startLat: number,
+  startLng: number,
+  endLat: number,
+  endLng: number,
+  lat: number,
+  lng: number,
+): number {
+  const ax = endLng - startLng;
+  const ay = endLat - startLat;
+  const denom = ax * ax + ay * ay;
+  if (denom === 0) return 0.5;
+  const projection = ((lng - startLng) * ax + (lat - startLat) * ay) / denom;
+  return Math.max(0, Math.min(1, projection));
+}
+
+function buildSquareAvoidPolygon(lng: number, lat: number, radiusMeters: number): number[][][] {
+  const latDelta = radiusMeters / 111320;
+  const lonDelta = radiusMeters / (111320 * Math.max(Math.cos(lat * Math.PI / 180), 0.2));
+  return [[
+    [lng - lonDelta, lat - latDelta],
+    [lng + lonDelta, lat - latDelta],
+    [lng + lonDelta, lat + latDelta],
+    [lng - lonDelta, lat + latDelta],
+    [lng - lonDelta, lat - latDelta],
+  ]];
+}
+
+function buildAvoidPolygons(roads: CorridorRoadScore[]): { type: 'MultiPolygon'; coordinates: number[][][][] } | null {
+  const candidates = roads
+    .filter((road) => !['footway', 'path', 'pedestrian', 'cycleway', 'living_street'].includes(road.road.highway))
+    .filter((road) => road.progress >= 0.1 && road.progress <= 0.9)
+    .sort((a, b) => b.score.pm25_delta - a.score.pm25_delta)
+    .slice(0, 6);
+
+  if (candidates.length === 0) return null;
+  return {
+    type: 'MultiPolygon',
+    coordinates: candidates.map((road) => {
+      const [lng, lat] = road.midpoint;
+      return buildSquareAvoidPolygon(lng, lat, 28);
+    }),
+  };
+}
+
+async function scoreCorridorRoads(
+  roads: RoadRow[],
+  startLat: number,
+  startLng: number,
+  endLat: number,
+  endLng: number,
+  south: number,
+  west: number,
+  north: number,
+  east: number,
+  forecastHour = 0,
+): Promise<CorridorRoadScore[]> {
+  if (roads.length === 0) return [];
+
+  const { center: baselineCenter, interpolate: interpBaseline } = await fetchBaselineGrid(south, west, north, east, forecastHour);
+  const cLat = (south + north) / 2;
+  const cLon = (west + east) / 2;
+  const [bias, satNO2Interp] = await Promise.all([
+    fetchWAQIBias(cLat, cLon, baselineCenter),
+    fetchSatelliteNO2(south, west, north, east).catch(() => null),
+  ]);
+
+  const interpCorrected = (lat: number, lon: number): BaselineData => {
+    const raw = interpBaseline(lat, lon);
+    let correctedNO2 = Math.max(0, raw.no2 + bias.no2);
+    if (satNO2Interp) correctedNO2 *= satNO2Interp(lat, lon);
+    return {
+      ...raw,
+      pm25: Math.max(0, raw.pm25 + bias.pm25),
+      pm10: Math.max(0, raw.pm10 + bias.pm10),
+      no2: correctedNO2,
+      o3: Math.max(0, raw.o3 + bias.o3),
+    } as BaselineData;
+  };
+
+  const targetHour = (new Date().getHours() + forecastHour) % 24;
+  let diurnal = HOURLY_TRAFFIC[targetHour] ?? 1.0;
+  if (forecastHour === 0) {
+    const region = detectRegion(cLat, cLon);
+    const today = new Date().toISOString().slice(0, 10);
+    const temporalRaw = await redisGet(`vayu:temporal:${region}:${today}`);
+    if (temporalRaw) {
+      try {
+        const temporal = JSON.parse(temporalRaw);
+        const aiFactor = temporal.hourly_factors?.[targetHour];
+        if (typeof aiFactor === 'number' && aiFactor > 0) diurnal = aiFactor * 0.6 + diurnal * 0.4;
+      } catch {
+        // Keep static diurnal fallback.
+      }
+    }
+  }
+
+  return roads
+    .map((road) => {
+      const coords = parseLineCoords(road.geojson);
+      if (coords.length < 2) return null;
+      const midpoint = roadMidpoint(coords);
+      const baseline = interpCorrected(midpoint[1], midpoint[0]);
+      const score = computeRoadAQI(road, baseline, diurnal);
+      return {
+        road,
+        midpoint,
+        progress: projectProgressOnLine(startLat, startLng, endLat, endLng, midpoint[1], midpoint[0]),
+        length_m: lineLengthMeters(coords),
+        score,
+      } satisfies CorridorRoadScore;
+    })
+    .filter((road): road is CorridorRoadScore => road !== null);
+}
+
 // ─── Exported scoring function (used by clean-route.ts too) ─
 export interface RouteScoreV2Result {
   avg_aqi: number;
   max_aqi: number;
   min_aqi: number;
+  avg_pm25_delta: number;
+  max_pm25_delta: number;
+  pollution_index: number;
   combined_score: number;
   vehicle_type: string;
   segment_count: number;
@@ -717,6 +892,7 @@ export interface RouteScoreV2Result {
     pm25: number;
     no2: number;
     fraction_along: number;
+    pm25_delta: number;
   }>;
 }
 
@@ -812,6 +988,9 @@ export async function scorePolyline(
       avg_aqi: Math.round(avgAqi),
       max_aqi: Math.max(...aqiValues),
       min_aqi: Math.min(...aqiValues),
+      avg_pm25_delta: 0,
+      max_pm25_delta: 0,
+      pollution_index: 0,
       combined_score: Math.round((weights.aqi * aqiScore + weights.time * timeScore) * 1000) / 1000,
       vehicle_type: vehicleType,
       segment_count: results.length,
@@ -829,6 +1008,7 @@ export async function scorePolyline(
         pm25: r.pm25,
         no2: 0,
         fraction_along: i / (results.length - 1 || 1),
+        pm25_delta: 0,
       })),
     };
   }
@@ -859,6 +1039,8 @@ export async function scorePolyline(
   let sumAqi = 0;
   let maxAqi = 0;
   let minAqi = Infinity;
+  let sumPm25Delta = 0;
+  let maxPm25Delta = 0;
   let aiEnhanced = false;
 
   for (const road of scoredRoads) {
@@ -885,8 +1067,10 @@ export async function scorePolyline(
     if (road.ai_pollution_factor != null || road.micro_class != null) aiEnhanced = true;
 
     sumAqi += result.aqi;
+    sumPm25Delta += result.pm25_delta;
     if (result.aqi > maxAqi) maxAqi = result.aqi;
     if (result.aqi < minAqi) minAqi = result.aqi;
+    if (result.pm25_delta > maxPm25Delta) maxPm25Delta = result.pm25_delta;
 
     segments.push({
       osm_way_id: road.osm_way_id,
@@ -895,11 +1079,14 @@ export async function scorePolyline(
       aqi: result.aqi,
       pm25: result.pm25,
       no2: result.no2,
-      fraction_along: road.fraction_along,
+      fraction_along: road.fraction_along ?? 0,
+      pm25_delta: result.pm25_delta,
     });
   }
 
   const avgAqi = Math.round(sumAqi / segments.length);
+  const avgPm25Delta = segments.length > 0 ? Math.round((sumPm25Delta / segments.length) * 1000) / 1000 : 0;
+  const pollutionIndex = Math.round((avgPm25Delta * 0.75 + maxPm25Delta * 0.25) * 1000) / 1000;
   const aqiScore = avgAqi / 500;
   const timeScore = 0.5;
 
@@ -907,6 +1094,9 @@ export async function scorePolyline(
     avg_aqi: avgAqi,
     max_aqi: maxAqi,
     min_aqi: minAqi === Infinity ? 0 : minAqi,
+    avg_pm25_delta: avgPm25Delta,
+    max_pm25_delta: Math.round(maxPm25Delta * 1000) / 1000,
+    pollution_index: pollutionIndex,
     combined_score: Math.round((weights.aqi * aqiScore + weights.time * timeScore) * 1000) / 1000,
     vehicle_type: vehicleType,
     segment_count: segments.length,
@@ -1007,16 +1197,37 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
 }
 
 function isSimilarGeometry(coords1: number[][], coords2: number[][], thresholdMeters = 40): boolean {
-  const n = 10;
+  const n = 14;
   let totalDev = 0;
+  let maxDev = 0;
   for (let i = 0; i < n; i++) {
     const idx1 = Math.min(Math.floor((i / n) * coords1.length), coords1.length - 1);
     const idx2 = Math.min(Math.floor((i / n) * coords2.length), coords2.length - 1);
     const [lng1, lat1] = coords1[idx1];
     const [lng2, lat2] = coords2[idx2];
-    totalDev += haversineMeters(lat1, lng1, lat2, lng2);
+    const deviation = haversineMeters(lat1, lng1, lat2, lng2);
+    totalDev += deviation;
+    maxDev = Math.max(maxDev, deviation);
   }
-  return (totalDev / n) < thresholdMeters;
+  const avgDev = totalDev / n;
+  return avgDev < thresholdMeters && maxDev < thresholdMeters * 2.6;
+}
+
+function routeHasBacktracking(coords: number[][]): boolean {
+  if (coords.length < 6) return false;
+  const step = Math.max(1, Math.floor(coords.length / 12));
+  let reversals = 0;
+  for (let index = step; index < coords.length - step; index += step) {
+    const prev = coords[index - step];
+    const curr = coords[index];
+    const next = coords[Math.min(index + step, coords.length - 1)];
+    const bearingA = Math.atan2(curr[0] - prev[0], curr[1] - prev[1]);
+    const bearingB = Math.atan2(next[0] - curr[0], next[1] - curr[1]);
+    let diff = Math.abs(bearingA - bearingB);
+    while (diff > Math.PI) diff = Math.abs(diff - 2 * Math.PI);
+    if (diff > 2.5) reversals += 1;
+  }
+  return reversals >= 2;
 }
 
 function getPerpendicularPoint(
@@ -1038,9 +1249,13 @@ async function doORSRequest(
   coordinates: [number, number][],
   profile: string, apiKey: string,
   altParams?: { share_factor: number; target_count: number; weight_factor: number },
+  orsOptions?: Record<string, unknown>,
+  preference?: 'fastest' | 'shortest' | 'recommended',
 ): Promise<ORSRoute[]> {
   const body: Record<string, unknown> = { coordinates, instructions: true, geometry: true };
   if (altParams) body.alternative_routes = altParams;
+  if (orsOptions && Object.keys(orsOptions).length > 0) body.options = orsOptions;
+  if (preference) body.preference = preference;
 
   const resp = await fetch(
     `https://api.openrouteservice.org/v2/directions/${profile}/geojson`,
@@ -1211,28 +1426,46 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     const orsStart: [number, number] = [startLng, startLat];
     const orsEnd: [number, number] = [endLng, endLat];
 
-    // ── Phase 2+3: Parallel fetch — ORS alternatives + through-gang-roads + graph route ──
+    const orsApiKey = process.env.VITE_OPENROUTESERVICE_API_KEY || process.env.ORS_API_KEY;
+
     const bufferDeg = 0.003;
     const corridorSouth = Math.min(startLat, endLat) - bufferDeg;
     const corridorNorth = Math.max(startLat, endLat) + bufferDeg;
     const corridorWest = Math.min(startLng, endLng) - bufferDeg;
     const corridorEast = Math.max(startLng, endLng) + bufferDeg;
 
-    const [orsRoutes, throughRoads, graphEdges] = await Promise.all([
+    const corridorHighways = [
+      'motorway', 'motorway_link', 'trunk', 'trunk_link',
+      'primary', 'primary_link', 'secondary', 'secondary_link',
+      'tertiary', 'tertiary_link', 'residential', 'living_street',
+      'service', 'unclassified', 'footway', 'pedestrian', 'path', 'cycleway',
+    ];
+
+    const [orsRoutes, throughRoads, graphEdges, corridorRoadRows] = await Promise.all([
       fetchORSAlternatives(orsStart, orsEnd, profile, alternatives).catch((e) => {
         console.error('ORS error:', e);
         return [] as ORSRoute[];
       }),
       findThroughGangRoads(corridorSouth, corridorWest, corridorNorth, corridorEast).catch(() => [] as ThroughGangRoad[]),
       findGraphOptimalRoute(startLat, startLng, endLat, endLng).catch(() => [] as GraphRouteEdge[]),
+      findRoadsInBBox(corridorSouth, corridorWest, corridorNorth, corridorEast, 700, corridorHighways).catch(() => [] as RoadRow[]),
     ]);
 
-    if (orsRoutes.length === 0) {
+    if (orsRoutes.length === 0 && graphEdges.length === 0) {
       return res.status(200).json(emptyResponse('no_routes_found'));
     }
 
-    // Helper: convert ORS route to scored entry
-    const orsToScoredEntry = async (ors: ORSRoute, index: number) => {
+    type ScoredCandidate = {
+      index: number;
+      source: 'ors' | 'avoid-pollution' | 'through-road' | 'graph' | 'perpendicular';
+      polyline: Array<{ lat: number; lng: number }>;
+      distance_meters: number;
+      duration_seconds: number;
+      instructions: Array<{ text: string; distance: number; duration: number; type: number; waypoint_index: number }>;
+      score: RouteScoreV2Result | null;
+    };
+
+    const orsToScoredEntry = async (ors: ORSRoute, index: number, source: ScoredCandidate['source']): Promise<ScoredCandidate> => {
       const polyline = orsToPolyline(ors.geometry);
       const waypoints = orsToWaypoints(ors.geometry);
       let score;
@@ -1249,125 +1482,120 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
           waypoint_index: step.way_points[0] ?? 0,
         }))
       );
-      return { index, polyline: waypoints, distance_meters: Math.round(ors.summary.distance), duration_seconds: Math.round(ors.summary.duration), instructions, score };
+      return {
+        index,
+        source,
+        polyline: waypoints,
+        distance_meters: Math.round(ors.summary.distance),
+        duration_seconds: Math.round(ors.summary.duration),
+        instructions,
+        score,
+      };
     };
 
-    // Deduplicate ORS routes before scoring (ORS sometimes returns near-identical routes for short paths)
     const dedupedOrs: ORSRoute[] = [];
     for (const ors of orsRoutes) {
-      if (!dedupedOrs.some(existing => isSimilarGeometry(existing.geometry, ors.geometry, 35))) {
+      if (!routeHasBacktracking(ors.geometry) && !dedupedOrs.some(existing => isSimilarGeometry(existing.geometry, ors.geometry, 55))) {
         dedupedOrs.push(ors);
       }
     }
 
-    // Score ORS routes
-    const scoredRoutes = await Promise.all(
-      dedupedOrs.map((ors, index) => orsToScoredEntry(ors, index))
+    const scoredRoutes: ScoredCandidate[] = await Promise.all(
+      dedupedOrs.map((ors, index) => orsToScoredEntry(ors, index, 'ors'))
     );
 
-    // ── Phase 2: Multi-corridor gang road injection ──
-    const gangTypes = new Set(['living_street', 'path', 'footway', 'pedestrian']);
-    const hasGangRoute = scoredRoutes.some((r) => {
-      const segs = r.score?.segments || [];
-      if (segs.length === 0) return false;
-      const gangCount = segs.filter((s) => gangTypes.has(s.highway)).length;
-      return gangCount / segs.length >= 0.25;
-    });
+    const corridorScores = await scoreCorridorRoads(
+      corridorRoadRows,
+      startLat,
+      startLng,
+      endLat,
+      endLng,
+      corridorSouth,
+      corridorWest,
+      corridorNorth,
+      corridorEast,
+      0,
+    ).catch(() => [] as CorridorRoadScore[]);
+    const corridorByWayId = new Map(corridorScores.map((road) => [road.road.osm_way_id, road]));
 
-    if (!hasGangRoute && throughRoads.length > 0) {
-      try {
-        const midLat = (startLat + endLat) / 2;
-        const midLng = (startLng + endLng) / 2;
-        const travelBearing = Math.atan2(endLng - startLng, endLat - startLat);
+    const addCandidate = async (candidateRoute: ORSRoute, source: ScoredCandidate['source']) => {
+      if (routeHasBacktracking(candidateRoute.geometry)) return;
+      if (scoredRoutes.some((existing) => isSimilarGeometry(existing.polyline.map((point) => [point.lng, point.lat]), candidateRoute.geometry, 60))) {
+        return;
+      }
+      const entry = await orsToScoredEntry(candidateRoute, scoredRoutes.length, source);
+      const shortestDuration = Math.min(...scoredRoutes.map((route) => route.duration_seconds), entry.duration_seconds);
+      if (entry.duration_seconds > shortestDuration * 1.45) return;
+      scoredRoutes.push(entry);
+    };
 
-        // Score and rank through-roads
-        const rankedGangRoads = throughRoads
-          .map(gr => {
-            try {
-              const coords = JSON.parse(gr.geojson).coordinates;
-              if (coords.length < 2) return null;
-              let len = gr.road_length_m || 0;
-              if (len === 0) {
-                for (let i = 1; i < coords.length; i++) {
-                  len += haversineMeters(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]);
-                }
-              }
-              const first = coords[0];
-              const last = coords[coords.length - 1];
-              const roadBearing = Math.atan2(last[0] - first[0], last[1] - first[1]);
-              const angleDiff = Math.abs(travelBearing - roadBearing);
-              const alignment = Math.abs(Math.cos(angleDiff));
-              const mid = coords[Math.floor(coords.length / 2)];
-              const distToMid = haversineMeters(midLat, midLng, mid[1], mid[0]);
-              const connScore = Math.min((gr.start_connections + gr.end_connections) / 6, 1);
-              const score = (Math.min(len, 200) / 200) * 0.3
-                          + alignment * 0.25
-                          + (1 - Math.min(distToMid, 500) / 500) * 0.25
-                          + connScore * 0.2;
-              return { ...gr, coords, len, score, mid };
-            } catch { return null; }
-          })
-          .filter((gr): gr is NonNullable<typeof gr> => gr !== null && gr.len > 30)
-          .sort((a, b) => b.score - a.score);
-
-        // Take top 2 gang roads for multi-corridor routing
-        const topGangRoads = rankedGangRoads.slice(0, 2);
-        const orsApiKey = process.env.VITE_OPENROUTESERVICE_API_KEY || process.env.ORS_API_KEY;
-
-        if (topGangRoads.length > 0 && orsApiKey) {
-          // Generate ORS routes through each gang road IN PARALLEL
-          const gangRouteResults = await Promise.all(
-            topGangRoads.map(async (gr) => {
-              try {
-                const gangWp: [number, number] = [gr.mid[0], gr.mid[1]];
-                const orsResult = await doORSRequest([orsStart, gangWp, orsEnd], profile, orsApiKey);
-                return orsResult[0] || null;
-              } catch { return null; }
-            })
-          );
-
-          // Score and validate gang routes
-          const shortestDuration = Math.min(...scoredRoutes.map(r => r.duration_seconds));
-          for (const gangRoute of gangRouteResults) {
-            if (!gangRoute) continue;
-            // Dedup check against existing routes
-            if (scoredRoutes.some((r) =>
-              isSimilarGeometry(gangRoute.geometry, r.polyline.map((p) => [p.lng, p.lat]), 40)
-            )) continue;
-
-            const gangEntry = await orsToScoredEntry(gangRoute, scoredRoutes.length);
-
-            // Backtracking rejection: duration > 1.4× shortest
-            if (gangEntry.duration_seconds > shortestDuration * 1.4) {
-              console.log('[clean-route] Gang route rejected: duration ratio',
-                (gangEntry.duration_seconds / shortestDuration).toFixed(2));
-              continue;
-            }
-
-            const gangAvgAqi = gangEntry.score?.avg_aqi ?? 999;
-            if (scoredRoutes.length < 5) {
-              // Room for more candidates — add it
-              scoredRoutes.push(gangEntry);
-            } else {
-              // Replace worst-AQI route if this is cleaner
-              const worstIdx = scoredRoutes.reduce((wi, r, i) =>
-                (r.score?.avg_aqi ?? 0) > (scoredRoutes[wi].score?.avg_aqi ?? 0) ? i : wi, 0);
-              const worstAqi = scoredRoutes[worstIdx].score?.avg_aqi ?? 0;
-              if (gangAvgAqi < worstAqi) {
-                scoredRoutes[worstIdx] = { ...gangEntry, index: scoredRoutes[worstIdx].index };
-              }
-            }
-          }
+    if (orsApiKey && corridorScores.length > 0) {
+      const avoidPolygons = buildAvoidPolygons(corridorScores);
+      if (avoidPolygons) {
+        try {
+          const avoided = await doORSRequest([orsStart, orsEnd], profile, orsApiKey, undefined, { avoid_polygons: avoidPolygons }, 'recommended');
+          if (avoided[0]) await addCandidate(avoided[0], 'avoid-pollution');
+        } catch (error) {
+          console.error('[clean-route] avoid_polygons candidate failed:', error);
         }
-      } catch (e) {
-        console.error('[clean-route] Multi-corridor injection failed:', e);
       }
     }
 
-    // ── Phase 3: Graph-optimal route (pgRouting AQI-weighted Dijkstra) ──
+    if (orsApiKey && throughRoads.length > 0 && corridorScores.length > 0) {
+      try {
+        const deltaValues = corridorScores.map((road) => road.score.pm25_delta);
+        const minDelta = Math.min(...deltaValues);
+        const maxDelta = Math.max(...deltaValues);
+        const travelBearing = Math.atan2(endLng - startLng, endLat - startLat);
+
+        const rankedThroughRoads = throughRoads
+          .map((throughRoad) => {
+            const corridorRoad = corridorByWayId.get(throughRoad.osm_way_id);
+            const coords = parseLineCoords(throughRoad.geojson);
+            if (!corridorRoad || coords.length < 2) return null;
+            const first = coords[0];
+            const last = coords[coords.length - 1];
+            const roadBearing = Math.atan2(last[0] - first[0], last[1] - first[1]);
+            const angleDiff = Math.abs(travelBearing - roadBearing);
+            const alignment = Math.abs(Math.cos(angleDiff));
+            const connections = Math.min((throughRoad.start_connections + throughRoad.end_connections) / 6, 1);
+            const normalizedDelta = maxDelta > minDelta
+              ? (corridorRoad.score.pm25_delta - minDelta) / (maxDelta - minDelta)
+              : 0;
+            const cleanScore = 1 - normalizedDelta;
+            const centrality = 1 - Math.abs(corridorRoad.progress - 0.5) * 2;
+            const lengthScore = Math.min((throughRoad.road_length_m || corridorRoad.length_m) / 120, 1);
+            const routeScore = cleanScore * 0.45 + alignment * 0.2 + connections * 0.2 + centrality * 0.1 + lengthScore * 0.05;
+            return { throughRoad, corridorRoad, routeScore };
+          })
+          .filter((road): road is NonNullable<typeof road> => road !== null)
+          .sort((a, b) => b.routeScore - a.routeScore);
+
+        const chosenThroughRoads: typeof rankedThroughRoads = [];
+        for (const candidate of rankedThroughRoads) {
+          if (chosenThroughRoads.some((existing) => Math.abs(existing.corridorRoad.progress - candidate.corridorRoad.progress) < 0.18)) {
+            continue;
+          }
+          chosenThroughRoads.push(candidate);
+          if (chosenThroughRoads.length >= 2) break;
+        }
+
+        for (const candidate of chosenThroughRoads) {
+          const waypoint: [number, number] = [candidate.corridorRoad.midpoint[0], candidate.corridorRoad.midpoint[1]];
+          try {
+            const routeResult = await doORSRequest([orsStart, waypoint, orsEnd], profile, orsApiKey, undefined, undefined, 'recommended');
+            if (routeResult[0]) await addCandidate(routeResult[0], 'through-road');
+          } catch (error) {
+            console.error('[clean-route] through-road candidate failed:', error);
+          }
+        }
+      } catch (error) {
+        console.error('[clean-route] AQI-aware through-road routing failed:', error);
+      }
+    }
+
     if (graphEdges.length > 0) {
       try {
-        // Build polyline from ordered edge geometries
         const graphWaypoints: Array<{ lat: number; lng: number }> = [];
         let totalDistanceM = 0;
 
@@ -1396,10 +1624,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
         }
 
         if (graphWaypoints.length >= 2 && totalDistanceM > 0) {
-          // Duration estimate: 5 km/h pedestrian walking speed
           const durationSeconds = Math.round(totalDistanceM * 0.72);
-
-          // Build polyline in [lat, lng] format for VAYU scoring
           const polyline: [number, number][] = graphWaypoints.map(w => [w.lat, w.lng]);
 
           let score;
@@ -1417,6 +1642,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
 
           const graphEntry = {
             index: scoredRoutes.length,
+            source: 'graph' as const,
             polyline: graphWaypoints,
             distance_meters: Math.round(totalDistanceM),
             duration_seconds: durationSeconds,
@@ -1424,36 +1650,27 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
             score,
           };
 
-          // Validate: dedup + duration guard
           const shortestDuration = Math.min(...scoredRoutes.map(r => r.duration_seconds));
           const isDuplicate = scoredRoutes.some(r =>
             isSimilarGeometry(
               graphWaypoints.map(w => [w.lng, w.lat]),
               r.polyline.map(p => [p.lng, p.lat]),
-              40
+              60
             )
           );
 
-          if (!isDuplicate && graphEntry.duration_seconds <= shortestDuration * 1.5) {
-            const graphAqi = graphEntry.score?.avg_aqi ?? 999;
-            if (scoredRoutes.length < 5) {
+          if (!isDuplicate && graphEntry.duration_seconds <= shortestDuration * 1.5 && !routeHasBacktracking(graphWaypoints.map(w => [w.lng, w.lat]))) {
+            const graphAqi = graphEntry.score?.pollution_index ?? 999;
+            if (scoredRoutes.length < 6) {
               scoredRoutes.push(graphEntry);
-              console.log('[clean-route] Phase 3 graph route added: distance=%dm, duration=%ds, aqi=%s',
-                graphEntry.distance_meters, graphEntry.duration_seconds, graphAqi.toFixed(1));
             } else {
-              // Replace worst-AQI route if graph route is cleaner
               const worstIdx = scoredRoutes.reduce((wi, r, i) =>
-                (r.score?.avg_aqi ?? 0) > (scoredRoutes[wi].score?.avg_aqi ?? 0) ? i : wi, 0);
-              const worstAqi = scoredRoutes[worstIdx].score?.avg_aqi ?? 0;
+                (r.score?.pollution_index ?? 0) > (scoredRoutes[wi].score?.pollution_index ?? 0) ? i : wi, 0);
+              const worstAqi = scoredRoutes[worstIdx].score?.pollution_index ?? 0;
               if (graphAqi < worstAqi) {
                 scoredRoutes[worstIdx] = { ...graphEntry, index: scoredRoutes[worstIdx].index };
-                console.log('[clean-route] Phase 3 graph route replaced worst candidate: aqi=%s < %s',
-                  graphAqi.toFixed(1), worstAqi.toFixed(1));
               }
             }
-          } else {
-            console.log('[clean-route] Phase 3 graph route skipped: duplicate=%s, durationRatio=%s',
-              isDuplicate, (graphEntry.duration_seconds / shortestDuration).toFixed(2));
           }
         }
       } catch (e) {
@@ -1461,7 +1678,54 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const geminiInput = scoredRoutes.map((r) => {
+    if (orsApiKey && scoredRoutes.length < 3) {
+      const offsets = [250, -250, 400, -400];
+      for (const offset of offsets) {
+        if (scoredRoutes.length >= 3) break;
+        try {
+          const wp = getPerpendicularPoint(orsStart, orsEnd, offset);
+          const routeResult = await doORSRequest([orsStart, wp, orsEnd], profile, orsApiKey);
+          if (routeResult[0]) await addCandidate(routeResult[0], 'perpendicular');
+        } catch {
+          // Ignore perpendicular fallback failures.
+        }
+      }
+    }
+
+    const uniqueCandidates: ScoredCandidate[] = [];
+    for (const route of scoredRoutes) {
+      const routeCoords = route.polyline.map((point) => [point.lng, point.lat] as [number, number]);
+      if (!uniqueCandidates.some((existing) => isSimilarGeometry(routeCoords, existing.polyline.map((point) => [point.lng, point.lat]), 60))) {
+        uniqueCandidates.push(route);
+      }
+    }
+
+    if (uniqueCandidates.length === 0) {
+      return res.status(200).json(emptyResponse('no_distinct_routes_found'));
+    }
+
+    const cleanCost = (route: ScoredCandidate) => route.score?.pollution_index ?? route.score?.avg_aqi ?? 999;
+    const shortestDuration = Math.min(...uniqueCandidates.map((route) => route.duration_seconds));
+    const cleanValues = uniqueCandidates.map(cleanCost);
+    const minClean = Math.min(...cleanValues);
+    const maxClean = Math.max(...cleanValues);
+    const normalizeClean = (route: ScoredCandidate) => maxClean > minClean ? (cleanCost(route) - minClean) / (maxClean - minClean) : 0;
+    const normalizeDuration = (route: ScoredCandidate) => Math.max(0, (route.duration_seconds - shortestDuration) / Math.max(shortestDuration, 1));
+
+    const byDuration = [...uniqueCandidates].sort((a, b) => a.duration_seconds - b.duration_seconds);
+    const byClean = [...uniqueCandidates].sort((a, b) => cleanCost(a) - cleanCost(b));
+    const fastestRoute = byDuration[0];
+    const cleanestRoute = byClean.find((route) => route.index !== fastestRoute.index) || byClean[0];
+    const usedIndices = new Set([fastestRoute.index, cleanestRoute.index]);
+    const balancedRoute = [...uniqueCandidates]
+      .filter((route) => !usedIndices.has(route.index))
+      .sort((a, b) => ((normalizeDuration(a) * 0.55) + (normalizeClean(a) * 0.45)) - ((normalizeDuration(b) * 0.55) + (normalizeClean(b) * 0.45)))[0]
+      || byDuration[1]
+      || uniqueCandidates[0];
+
+    const selectedRoutes = [cleanestRoute, balancedRoute, fastestRoute].filter((route, index, self) => self.findIndex((candidate) => candidate.index === route.index) === index);
+
+    const geminiInput = selectedRoutes.map((r) => {
       const segments = r.score?.segments || [];
       const sortedByAqi = [...segments].sort((a, b) => b.aqi - a.aqi);
       return {
@@ -1473,42 +1737,23 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       };
     });
 
-    // Fix A: Always use metric-based labels. Gemini only provides reasoning text.
     let reasoning: string | null = null;
     try {
       const geminiResult = await rankWithGemini(geminiInput);
       reasoning = geminiResult?.reasoning ?? null;
     } catch { /* skip */ }
 
-    // Assign labels based on actual metrics: fastest=shortest duration, cleanest=lowest AQI
-    // Use blended pollution score: 60% avg + 40% max to penalize routes with hot-spot segments
-    const pollutionScore = (r: typeof scoredRoutes[0]) =>
-      (r.score?.avg_aqi ?? 999) * 0.6 + (r.score?.max_aqi ?? 999) * 0.4;
-    const byDuration = [...scoredRoutes].sort((a, b) => a.duration_seconds - b.duration_seconds);
-    const byAqi = [...scoredRoutes].sort((a, b) => pollutionScore(a) - pollutionScore(b));
-    const usedIndices = new Set<number>();
-
-    const fastestRoute = byDuration[0];
-    usedIndices.add(fastestRoute.index);
-
-    const cleanestRoute = byAqi.find((r) => !usedIndices.has(r.index)) || byAqi[0];
-    usedIndices.add(cleanestRoute.index);
-
-    const balancedRoute = scoredRoutes.find((r) => !usedIndices.has(r.index)) || scoredRoutes[0];
-
-    // Build labeled array, but deduplicate near-identical routes post-labeling
-    const allLabeled: Array<typeof scoredRoutes[0] & { label: 'cleanest' | 'balanced' | 'fastest'; reasoning: string | null }> = [
+    const allLabeled: Array<ScoredCandidate & { label: 'cleanest' | 'balanced' | 'fastest'; reasoning: string | null }> = [
       { ...cleanestRoute, label: 'cleanest' as const, reasoning },
       { ...balancedRoute, label: 'balanced' as const, reasoning },
       { ...fastestRoute, label: 'fastest' as const, reasoning },
     ];
 
-    // Remove labeled routes whose geometry is near-identical to an already-seen route
     const labeled: typeof allLabeled = [];
     for (const r of allLabeled) {
       const rCoords = r.polyline.map((p) => [p.lng, p.lat]);
       const isDup = labeled.some((existing) =>
-        isSimilarGeometry(rCoords, existing.polyline.map((p) => [p.lng, p.lat]), 35)
+        isSimilarGeometry(rCoords, existing.polyline.map((p) => [p.lng, p.lat]), 60)
       );
       if (!isDup) labeled.push(r);
     }
@@ -1516,11 +1761,13 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     const routes = labeled.map((r) => ({
       polyline: r.polyline, distance_meters: r.distance_meters, duration_seconds: r.duration_seconds, instructions: r.instructions,
       vayu_avg_aqi: r.score?.avg_aqi ?? 50, vayu_max_aqi: r.score?.max_aqi ?? 50,
+      vayu_min_aqi: r.score?.min_aqi ?? 50,
       vayu_segment_count: r.score?.segment_count ?? 0, vayu_scored: r.score?.vayu_scored ?? false,
+      vayu_pollution_index: r.score?.pollution_index ?? 0,
       route_label: r.label, gemini_reasoning: r.reasoning,
       segments: (r.score?.segments || []).map((s) => ({
         osm_way_id: s.osm_way_id, highway: s.highway, name: s.name,
-        aqi: s.aqi, pm25: s.pm25, no2: s.no2, fraction_along: s.fraction_along,
+        aqi: s.aqi, pm25: s.pm25, no2: s.no2, fraction_along: s.fraction_along, pm25_delta: s.pm25_delta,
       })),
       traffic_level: estimateTrafficLevel(r.score?.avg_aqi ?? 50),
       green_score: estimateGreenScore(r.score?.segments || []),
