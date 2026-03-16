@@ -4,12 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Home, User, Settings, Trophy, Gift, MapPin, Leaf,
   HelpCircle, BarChart3, History, Coins, BookOpen,
+  type LucideIcon,
 } from 'lucide-react';
 
 interface Command {
   id: string;
   label: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   path: string;
   keywords: string[];
 }

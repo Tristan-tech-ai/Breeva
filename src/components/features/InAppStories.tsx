@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronLeft, ChevronRight, Leaf, Wind, Footprints, Gift, Sparkles } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Leaf, Wind, Footprints, Gift, Sparkles, type LucideIcon } from 'lucide-react';
 
 interface Story {
   id: string;
   title: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   gradient: string;
   slides: { heading: string; body: string; emoji: string }[];
 }

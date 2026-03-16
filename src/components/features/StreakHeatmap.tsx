@@ -2,10 +2,12 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
+import type { LucideIcon } from 'lucide-react';
+
 interface HeatmapCategory {
   key: string;
   label: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   data: Record<string, number>;
   /** 4 color stops from lightest to darkest (Tailwind classes for legend) */
   colors: [string, string, string, string];
