@@ -563,7 +563,7 @@ export default function LandingPage() {
             <Link to="/login" className="inline-flex items-center gap-2 bg-emerald-600 text-white font-semibold py-3.5 px-10 rounded-xl hover:bg-emerald-700 shadow-lg transition-all text-lg">
               Get Started Free <ArrowRight className="w-5 h-5" />
             </Link>
-            <p className="mt-4 text-xs text-slate-400">No credit card required</p>
+            <p className="mt-4 text-xs text-slate-400">Free forever · No account fees</p>
           </motion.div>
         </section>
 
