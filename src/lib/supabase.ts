@@ -21,7 +21,7 @@ export const supabase = createClient(
       storageKey: 'breeva-auth-token',
       // Bypass navigator.locks to prevent AbortError in environments
       // with stale service workers or multi-tab lock contention
-      lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<unknown>) => {
+      lock: async <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> => {
         return await fn();
       },
     },
