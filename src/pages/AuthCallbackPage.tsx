@@ -1,63 +1,43 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 
 export default function AuthCallbackPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { setUser, setSession, fetchProfile } = useAuthStore();
+  const { user, fetchProfile } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
+  const navigatedRef = useRef(false);
 
+  // React to user becoming available in the auth store.
+  // The actual PKCE code exchange is handled automatically by Supabase's
+  // detectSessionInUrl: true + AuthProvider's onAuthStateChange / initialize().
   useEffect(() => {
-    const handleCallback = async () => {
-      try {
-        const code = searchParams.get('code');
+    if (user && !navigatedRef.current) {
+      navigatedRef.current = true;
 
-        let session;
+      // Ensure profile is loaded, then navigate
+      fetchProfile()
+        .catch(console.error)
+        .finally(() => {
+          const onboardingCompleted = localStorage.getItem('breeva_onboarding_completed');
+          navigate(
+            onboardingCompleted === 'true' ? '/home' : '/onboarding/welcome',
+            { replace: true }
+          );
+        });
+    }
+  }, [user, fetchProfile, navigate]);
 
-        if (code) {
-          // PKCE flow: exchange the authorization code for a session
-          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (exchangeError) throw exchangeError;
-          session = data.session;
-        } else {
-          // Implicit flow fallback: try to get session from URL hash/storage
-          const { data, error: sessionError } = await supabase.auth.getSession();
-          if (sessionError) throw sessionError;
-          session = data.session;
-        }
-
-        if (!session) {
-          throw new Error('No session found after authentication');
-        }
-
-        // Update store
-        setUser(session.user);
-        setSession(session);
-
-        // Fetch or create user profile
-        await fetchProfile();
-
-        // Check if onboarding is completed
-        const onboardingCompleted = localStorage.getItem('breeva_onboarding_completed');
-
-        if (onboardingCompleted === 'true') {
-          navigate('/home', { replace: true });
-        } else {
-          navigate('/onboarding/welcome', { replace: true });
-        }
-      } catch (err) {
-        console.error('Auth callback error:', err);
-        const message = err instanceof Error ? err.message : 'Authentication failed';
-        setError(message);
-        // Redirect to login after showing error
+  // Safety timeout: if no user after 10 seconds, show error and redirect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!useAuthStore.getState().user && !navigatedRef.current) {
+        setError('Authentication timed out. Please try again.');
         setTimeout(() => navigate('/login', { replace: true }), 3000);
       }
-    };
-
-    handleCallback();
-  }, [navigate, searchParams, setUser, setSession, fetchProfile]);
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [navigate]);
 
   if (error) {
     return (
