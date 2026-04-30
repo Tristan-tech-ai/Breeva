@@ -1,20 +1,32 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 
 export default function AuthCallbackPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { setUser, setSession, fetchProfile } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Get session from URL hash/params (Supabase handles this)
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const code = searchParams.get('code');
 
-        if (sessionError) throw sessionError;
+        let session;
+
+        if (code) {
+          // PKCE flow: exchange the authorization code for a session
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) throw exchangeError;
+          session = data.session;
+        } else {
+          // Implicit flow fallback: try to get session from URL hash/storage
+          const { data, error: sessionError } = await supabase.auth.getSession();
+          if (sessionError) throw sessionError;
+          session = data.session;
+        }
 
         if (!session) {
           throw new Error('No session found after authentication');
@@ -36,6 +48,7 @@ export default function AuthCallbackPage() {
           navigate('/onboarding/welcome', { replace: true });
         }
       } catch (err) {
+        console.error('Auth callback error:', err);
         const message = err instanceof Error ? err.message : 'Authentication failed';
         setError(message);
         // Redirect to login after showing error
@@ -44,7 +57,7 @@ export default function AuthCallbackPage() {
     };
 
     handleCallback();
-  }, [navigate, setUser, setSession, fetchProfile]);
+  }, [navigate, searchParams, setUser, setSession, fetchProfile]);
 
   if (error) {
     return (

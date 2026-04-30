@@ -23,7 +23,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+    const userClient = createClient(
+      process.env.VITE_SUPABASE_URL || '',
+      process.env.VITE_SUPABASE_ANON_KEY || '',
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+    const { data: { user: authUser }, error: authError } = await userClient.auth.getUser();
     if (authError || !authUser) {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }

@@ -106,7 +106,6 @@ export const useAuthStore = create<AuthState>()(
               redirectTo: `${window.location.origin}/auth/callback`,
               queryParams: {
                 access_type: 'offline',
-                prompt: 'consent',
               },
             },
           });
