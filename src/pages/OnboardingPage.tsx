@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Footprints, MapPin, Smartphone, Gift, CheckCircle2, Navigation2, Activity } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
 import logoBreeva from '../assets/logo-breeva.svg';
@@ -140,29 +141,35 @@ export default function OnboardingPage() {
               transition={{ duration: 0.3, ease: 'easeInOut' }}
               className="w-full max-w-md text-center"
             >
-              {/* Illustration */}
-              <div className="mb-8">
-                <div className="w-40 h-40 mx-auto rounded-full gradient-primary flex items-center justify-center opacity-90">
-                  <span className="text-7xl">🚶</span>
-                </div>
+              <div className="mb-10 mt-8">
+                <motion.div 
+                  className="w-36 h-36 mx-auto rounded-full bg-gradient-to-tr from-primary-400 to-primary-600 shadow-2xl shadow-primary-500/40 flex items-center justify-center relative"
+                  animate={{ y: [0, -10, 0] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <div className="absolute inset-2 border border-white/20 rounded-full" />
+                  <Footprints className="w-16 h-16 text-white" />
+                </motion.div>
               </div>
 
-              <div className="glass-card p-8">
+              <div className="glass-card p-10 border border-white/40 dark:border-gray-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]">
                 {logoBreeva ? (
-                  <img src={logoBreeva} alt="Breeva" className="h-10 w-auto mx-auto mb-2" />
+                  <img src={logoBreeva} alt="Breeva" className="h-10 w-auto mx-auto mb-4" />
                 ) : (
-                  <div className="text-3xl mb-2">🍃</div>
+                  <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <Footprints className="w-6 h-6 text-primary-600 dark:text-primary-400" />
+                  </div>
                 )}
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+                <h1 className="text-2xl font-black text-gray-900 dark:text-white mb-3 tracking-tight">
                   Welcome to Breeva
                 </h1>
-                <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed mb-8">
+                <p className="text-gray-500 dark:text-gray-400 text-[15px] leading-relaxed mb-10">
                   Earn real rewards for choosing healthier, eco-friendly routes. Walk more, earn EcoPoints, and redeem them at sustainable merchants.
                 </p>
 
                 <button
                   onClick={goNext}
-                  className="w-full py-3.5 rounded-xl gradient-primary text-white font-semibold text-sm shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+                  className="w-full py-4 rounded-xl bg-gray-900 dark:bg-primary-600 text-white font-bold text-[15px] shadow-xl hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
                 >
                   Get Started
                 </button>
@@ -182,64 +189,70 @@ export default function OnboardingPage() {
               className="w-full max-w-md text-center"
             >
               {/* Animated Location Icon */}
-              <div className="mb-8 relative">
-                <div className="w-32 h-32 mx-auto rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+              <div className="mb-10 mt-8 relative">
+                <div className="w-36 h-36 mx-auto rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center shadow-lg shadow-blue-500/10">
                   <motion.div
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                    className="text-6xl"
+                    animate={{ y: [0, -8, 0] }}
+                    transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                    className="relative z-10"
                   >
-                    📍
+                    <MapPin className="w-16 h-16 text-blue-500 drop-shadow-md" fill="currentColor" />
                   </motion.div>
                 </div>
                 {/* Pulse rings */}
                 <motion.div
-                  animate={{ scale: [1, 1.5], opacity: [0.4, 0] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="absolute inset-0 mx-auto w-32 h-32 rounded-full border-2 border-primary-400"
+                  animate={{ scale: [1, 1.6], opacity: [0.3, 0] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+                  className="absolute inset-0 mx-auto w-36 h-36 rounded-full border-2 border-blue-400"
+                  style={{ top: 0 }}
+                />
+                <motion.div
+                  animate={{ scale: [1, 1.4], opacity: [0.3, 0] }}
+                  transition={{ duration: 2, repeat: Infinity, delay: 1, ease: "easeOut" }}
+                  className="absolute inset-0 mx-auto w-36 h-36 rounded-full border-2 border-blue-400"
                   style={{ top: 0 }}
                 />
               </div>
 
-              <div className="glass-card p-8">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+              <div className="glass-card p-10 border border-white/40 dark:border-gray-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]">
+                <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
                   Enable Location
                 </h2>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-                  We use your location to power your eco-walks.
+                <p className="text-gray-500 dark:text-gray-400 text-[15px] mb-8 leading-relaxed">
+                  We use your location to map eco-friendly routes and track your rewards.
                 </p>
 
                 {/* Benefits Checklist */}
-                <div className="text-left space-y-3 mb-8">
+                <div className="text-left space-y-4 mb-10">
                   {[
                     'Find eco-merchants near you',
                     'Track your walking distance',
                     'Show real-time air quality',
                     'Calculate earned EcoPoints',
                   ].map((benefit) => (
-                    <div key={benefit} className="flex items-center gap-3">
-                      <div className="w-5 h-5 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
-                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
+                    <div key={benefit} className="flex items-center gap-3.5">
+                      <div className="flex items-center justify-center flex-shrink-0">
+                        <CheckCircle2 className="w-5 h-5 text-blue-500" />
                       </div>
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{benefit}</span>
+                      <span className="text-[15px] text-gray-700 dark:text-gray-300 font-medium">{benefit}</span>
                     </div>
                   ))}
                 </div>
 
-                <button
-                  onClick={handleEnableLocation}
-                  className="w-full py-3.5 rounded-xl gradient-primary text-white font-semibold text-sm shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 mb-3"
-                >
-                  Enable Location
-                </button>
-                <button
-                  onClick={goNext}
-                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 dark:text-gray-600 transition-colors"
-                >
-                  Skip for now
-                </button>
+                <div className="space-y-3">
+                  <button
+                    onClick={handleEnableLocation}
+                    className="w-full py-4 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-[15px] shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200"
+                  >
+                    Enable Location
+                  </button>
+                  <button
+                    onClick={goNext}
+                    className="w-full py-3.5 text-sm font-semibold text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                  >
+                    Skip for now
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}
@@ -255,44 +268,47 @@ export default function OnboardingPage() {
               transition={{ duration: 0.3, ease: 'easeInOut' }}
               className="w-full max-w-md text-center"
             >
-              <div className="mb-8">
-                <div className="w-32 h-32 mx-auto rounded-full bg-accent-100 dark:bg-accent-900/30 flex items-center justify-center">
+              <div className="mb-10 mt-8 relative">
+                <div className="w-36 h-36 mx-auto rounded-full bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center shadow-lg shadow-violet-500/10">
                   <motion.div
-                    animate={{ rotate: [0, 10, -10, 0] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                    className="text-6xl"
+                    animate={{ rotate: [0, -10, 10, -10, 0] }}
+                    transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                    className="relative z-10"
                   >
-                    📱
+                    <Smartphone className="w-16 h-16 text-violet-500 drop-shadow-md" />
                   </motion.div>
                 </div>
               </div>
 
-              <div className="glass-card p-8">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+              <div className="glass-card p-10 border border-white/40 dark:border-gray-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]">
+                <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
                   Motion Tracking
                 </h2>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
-                  Allow motion access to verify your walks and earn full rewards.
+                <p className="text-gray-500 dark:text-gray-400 text-[15px] mb-8 leading-relaxed">
+                  Allow motion access to accurately verify your steps and earn full rewards.
                 </p>
 
-                <div className="glass-card mb-6 p-3 bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-800">
-                  <p className="text-xs text-accent-700 dark:text-accent-400">
-                    ⚠️ Without motion access, you'll earn reduced rewards (50% EcoPoints per walk).
+                <div className="mb-8 p-4 rounded-xl bg-orange-50 dark:bg-orange-950/30 border border-orange-100 dark:border-orange-900/40 flex gap-3 text-left">
+                  <Activity className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-[13px] text-orange-800 dark:text-orange-400 font-medium leading-relaxed">
+                    Without motion access, your walks may not be verified fully, yielding reduced rewards (50% EcoPoints).
                   </p>
                 </div>
 
-                <button
-                  onClick={handleRequestMotion}
-                  className="w-full py-3.5 rounded-xl gradient-primary text-white font-semibold text-sm shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 mb-3"
-                >
-                  Enable Motion
-                </button>
-                <button
-                  onClick={goNext}
-                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 dark:text-gray-600 transition-colors"
-                >
-                  Skip for now
-                </button>
+                <div className="space-y-3">
+                  <button
+                    onClick={handleRequestMotion}
+                    className="w-full py-4 rounded-xl bg-violet-500 hover:bg-violet-600 text-white font-bold text-[15px] shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200"
+                  >
+                    Enable Motion
+                  </button>
+                  <button
+                    onClick={goNext}
+                    className="w-full py-3.5 text-sm font-semibold text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                  >
+                    Skip for now
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}
@@ -308,46 +324,53 @@ export default function OnboardingPage() {
               transition={{ duration: 0.3, ease: 'easeInOut' }}
               className="w-full max-w-md text-center"
             >
-              <div className="mb-8">
-                <motion.div
-                  animate={{ scale: [1, 1.05, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="w-40 h-40 mx-auto rounded-full gradient-premium flex items-center justify-center"
-                >
-                  <span className="text-7xl">🎁</span>
-                </motion.div>
+              <div className="mb-10 mt-8 relative">
+                <div className="w-36 h-36 mx-auto rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+                  <motion.div
+                    animate={{ rotate: [0, -10, 10, -10, 0] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                    className="relative z-10"
+                  >
+                    <Gift className="w-16 h-16 text-emerald-500 drop-shadow-md" />
+                  </motion.div>
+                </div>
               </div>
 
-              <div className="glass-card p-8">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+              <div className="glass-card p-10 border border-white/40 dark:border-gray-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]">
+                <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
                   Welcome Bonus!
                 </h2>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-                  Complete your first walk and earn a special welcome bonus.
+                <p className="text-gray-500 dark:text-gray-400 text-[15px] mb-8 leading-relaxed">
+                  Start your first eco-walk right now and unlock a special welcome bonus!
                 </p>
 
                 {/* Bonus Display */}
-                <div className="glass-card p-5 mb-8 glow-accent">
-                  <div className="text-3xl font-bold text-accent-500 mb-1">
-                    +100 EcoPoints
+                <div className="p-6 mb-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-xl shadow-emerald-500/20 text-white relative overflow-hidden">
+                  {/* Background decoration */}
+                  <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
+                  
+                  <div className="relative z-10">
+                    <p className="text-[13px] font-bold text-emerald-100 uppercase tracking-widest mb-1 shadow-sm">Welcome Reward</p>
+                    <div className="text-4xl font-black mb-1 drop-shadow-md">+100 EP</div>
+                    <p className="text-[13px] text-emerald-100 font-medium">On your first completed walk</p>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    On your first completed walk
-                  </p>
                 </div>
 
-                <button
-                  onClick={handleFinish}
-                  className="w-full py-3.5 rounded-xl gradient-primary text-white font-semibold text-sm shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 mb-3"
-                >
-                  Start My First Walk 🚶
-                </button>
-                <button
-                  onClick={handleFinish}
-                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 dark:text-gray-600 transition-colors"
-                >
-                  I'll do it later
-                </button>
+                <div className="space-y-3">
+                  <button
+                    onClick={handleFinish}
+                    className="w-full py-4 rounded-xl bg-gray-900 dark:bg-primary-600 text-white font-bold text-[15px] shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2"
+                  >
+                    <Navigation2 className="w-5 h-5" />
+                    Start My First Walk
+                  </button>
+                  <button
+                    onClick={handleFinish}
+                    className="w-full py-3.5 text-sm font-semibold text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                  >
+                    I'll do it later
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}

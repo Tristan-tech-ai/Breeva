@@ -96,7 +96,7 @@ export default function MapLayersSheet({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl max-h-[80vh] overflow-y-auto"
+            className="fixed bottom-0 left-0 right-0 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-md md:bottom-24 z-50 bg-white dark:bg-gray-900 rounded-t-3xl md:rounded-3xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.15)] dark:shadow-[0_-10px_40px_-5px_rgba(0,0,0,0.5)] md:shadow-2xl md:border border-gray-100 dark:border-gray-800 max-h-[80vh] overflow-hidden flex flex-col"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
@@ -114,7 +114,9 @@ export default function MapLayersSheet({
               </button>
             </div>
 
-            {/* Map Type section */}
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto overscroll-contain pb-6">
+              {/* Map Type section */}
             <div className="px-5 pb-4">
               <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
                 Map Type
@@ -459,6 +461,7 @@ export default function MapLayersSheet({
                 </motion.div>
               )}
             </AnimatePresence>
+            </div>
           </motion.div>
         </>
       )}

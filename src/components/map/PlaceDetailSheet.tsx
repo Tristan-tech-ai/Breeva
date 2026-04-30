@@ -176,7 +176,7 @@ export default function PlaceDetailSheet({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 max-h-[92vh] flex flex-col bg-white dark:bg-gray-950 rounded-t-3xl shadow-2xl overflow-hidden"
+            className="fixed bottom-0 left-0 right-0 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-md md:bottom-24 z-50 max-h-[92vh] md:max-h-[85vh] flex flex-col bg-white dark:bg-gray-950 rounded-t-3xl md:rounded-3xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] md:shadow-2xl md:border border-gray-100 dark:border-gray-800 overflow-hidden"
           >
             {/* Drag handle */}
             <div className="flex justify-center pt-2.5 pb-1 flex-shrink-0">
