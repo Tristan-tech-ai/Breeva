@@ -28,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       process.env.VITE_SUPABASE_ANON_KEY || '',
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
-    const { data: { user: authUser }, error: authError } = await userClient.auth.getUser();
+    const { data: { user: authUser }, error: authError } = await (userClient.auth as any).getUser();
     if (authError || !authUser) {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }

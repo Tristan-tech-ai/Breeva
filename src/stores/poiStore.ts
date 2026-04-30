@@ -226,8 +226,8 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
       return Math.abs(h);
     };
     const convertCommercialToEco = (pois: POI[]): POI[] => {
-      // Only convert 1 commercial POI per tile batch (the one with lowest hash)
-      const commercials = pois.filter(p => p.category === 'commercial' && p.name);
+      // Pick any POI with a name to act as our demo merchant for this tile (avoid administrative boundaries)
+      const commercials = pois.filter(p => p.name && p.category !== 'administrative');
       if (commercials.length === 0) return pois;
       // Pick the single best candidate per batch
       const picked = commercials.reduce((best, p) => nameHash(p.name) < nameHash(best.name) ? p : best);
