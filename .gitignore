@@ -19,6 +19,9 @@ dist-ssr
 .env.*.local
 eve/
 
+# Local documentation
+CLAUDE.md
+
 # Python
 vayu/.venv/
 __pycache__/
