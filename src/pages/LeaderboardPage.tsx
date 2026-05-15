@@ -155,6 +155,31 @@ export default function LeaderboardPage() {
     fetchLeaderboard();
   }, [fetchLeaderboard]);
 
+  // Realtime subscription — Migration 0013 added leaderboard_weekly to
+  // supabase_realtime publication. Debounce refetch so a burst of walk
+  // completions doesn't hammer the API.
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const channel = supabase
+      .channel('leaderboard:weekly')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'leaderboard_weekly' },
+        () => {
+          if (refetchTimer.current) clearTimeout(refetchTimer.current);
+          refetchTimer.current = setTimeout(() => {
+            fetchLeaderboard();
+          }, 1000);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (refetchTimer.current) clearTimeout(refetchTimer.current);
+      supabase.removeChannel(channel);
+    };
+  }, [fetchLeaderboard]);
+
   const myRank = entries.findIndex((e) => e.user_id === user?.id) + 1;
 
   const podiumIcons = [

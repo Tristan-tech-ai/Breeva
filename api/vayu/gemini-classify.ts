@@ -353,20 +353,34 @@ Only include entries where |factor - 1.0| > 0.05 (meaningful correction needed).
 
 // ─── Handler ────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Accept POST (manual/API) or GET (Vercel cron)
+  // Accept POST (manual/API) or GET (pg_cron via pg_net.http_post)
   const isCron = req.method === 'GET';
 
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed. Use POST or GET (cron).' });
   }
 
-  // Auth: POST requires service role key, GET (cron) requires CRON_SECRET
+  // Auth: three accepted modes
+  //   (1) pg_cron via pg_net (Migration 0012, current): POST with header
+  //       `x-breeva-cron-secret: <BREEVA_CRON_SECRET>`
+  //   (2) Legacy Vercel cron (deprecated, kept for one release cycle):
+  //       GET with `Authorization: Bearer <CRON_SECRET>`
+  //   (3) Manual API (developer/admin): POST with
+  //       `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>`
   const authHeader = req.headers.authorization;
+  const pgCronSecretHeader = (req.headers['x-breeva-cron-secret'] as string | undefined)?.trim();
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const cronSecret = process.env.CRON_SECRET;
+  const breevaCronSecret = process.env.BREEVA_CRON_SECRET?.trim();
 
-  if (isCron) {
-    // Vercel cron sends Authorization: Bearer <CRON_SECRET>
+  const isPgCron = !!pgCronSecretHeader;
+  const isLegacyCron = isCron && !isPgCron;
+
+  if (isPgCron) {
+    if (!breevaCronSecret || pgCronSecretHeader !== breevaCronSecret) {
+      return res.status(401).json({ error: 'Invalid pg_cron secret' });
+    }
+  } else if (isLegacyCron) {
     if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
       return res.status(401).json({ error: 'Unauthorized cron request' });
     }

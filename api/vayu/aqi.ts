@@ -220,6 +220,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Cron auth guard (Migration 0012 — pg_cron → Vercel webhook).
+  // If header is present, it MUST match BREEVA_CRON_SECRET. Absent header
+  // means a normal user request — continue without auth.
+  // .trim() defends against env vars that ship with stray whitespace/newlines.
+  const cronSecret = (req.headers['x-breeva-cron-secret'] as string | undefined)?.trim();
+  const expectedSecret = process.env.BREEVA_CRON_SECRET?.trim();
+  if (cronSecret && cronSecret !== expectedSecret) {
+    return res.status(401).json({ error: 'Invalid cron secret' });
+  }
+
   const { lat, lon } = req.query;
   if (!lat || !lon) {
     return res.status(400).json({ error: 'lat and lon query parameters required' });
