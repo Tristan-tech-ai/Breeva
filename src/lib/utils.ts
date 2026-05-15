@@ -9,6 +9,18 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Local-date YYYY-MM-DD string. Use this — NOT toISOString().split('T')[0] —
+ * to compare "today" against stored walk dates, otherwise a 9 PM walk in
+ * Jakarta (UTC+7) is stored as tomorrow's UTC date and breaks streak logic.
+ */
+export function formatLocalDateYYYYMMDD(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
  * Format distance in meters to human readable string
  */
 export function formatDistance(meters: number): string {

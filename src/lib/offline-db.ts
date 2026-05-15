@@ -63,7 +63,10 @@ interface BreevaOfflineDB extends DBSchema {
 }
 
 const DB_NAME = 'breeva-offline';
-const DB_VERSION = 1;
+// v2: SW and main thread now share the same 6-store schema. Bumping the
+// version forces a single upgrade on existing installs so both contexts see
+// the same object stores regardless of which one opens the DB first.
+const DB_VERSION = 2;
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
 const AQI_TTL_MS = 1000 * 60 * 15;
 
@@ -77,24 +80,33 @@ export function getOfflineDb() {
   if (!dbPromise) {
     dbPromise = openDB<BreevaOfflineDB>(DB_NAME, DB_VERSION, {
       upgrade(db: IDBPDatabase<BreevaOfflineDB>) {
-        const pending = db.createObjectStore('pending-actions', { keyPath: 'id', autoIncrement: true });
-        pending.createIndex('by-created-at', 'createdAt');
-        pending.createIndex('by-dedupe-key', 'dedupeKey');
-
-        const walks = db.createObjectStore('cache-walks', { keyPath: 'id' });
-        walks.createIndex('by-cached-at', 'cachedAt');
-
-        const rewards = db.createObjectStore('cache-rewards', { keyPath: 'id' });
-        rewards.createIndex('by-cached-at', 'cachedAt');
-
-        const quests = db.createObjectStore('cache-quests', { keyPath: 'id' });
-        quests.createIndex('by-cached-at', 'cachedAt');
-
-        const achievements = db.createObjectStore('cache-achievements', { keyPath: 'id' });
-        achievements.createIndex('by-cached-at', 'cachedAt');
-
-        const aqi = db.createObjectStore('aqi-cache', { keyPath: 'key' });
-        aqi.createIndex('by-cached-at', 'cachedAt');
+        // Use contains() guards so a half-initialized DB from SW v1 can be
+        // upgraded without "store already exists" errors.
+        if (!db.objectStoreNames.contains('pending-actions')) {
+          const pending = db.createObjectStore('pending-actions', { keyPath: 'id', autoIncrement: true });
+          pending.createIndex('by-created-at', 'createdAt');
+          pending.createIndex('by-dedupe-key', 'dedupeKey');
+        }
+        if (!db.objectStoreNames.contains('cache-walks')) {
+          const walks = db.createObjectStore('cache-walks', { keyPath: 'id' });
+          walks.createIndex('by-cached-at', 'cachedAt');
+        }
+        if (!db.objectStoreNames.contains('cache-rewards')) {
+          const rewards = db.createObjectStore('cache-rewards', { keyPath: 'id' });
+          rewards.createIndex('by-cached-at', 'cachedAt');
+        }
+        if (!db.objectStoreNames.contains('cache-quests')) {
+          const quests = db.createObjectStore('cache-quests', { keyPath: 'id' });
+          quests.createIndex('by-cached-at', 'cachedAt');
+        }
+        if (!db.objectStoreNames.contains('cache-achievements')) {
+          const achievements = db.createObjectStore('cache-achievements', { keyPath: 'id' });
+          achievements.createIndex('by-cached-at', 'cachedAt');
+        }
+        if (!db.objectStoreNames.contains('aqi-cache')) {
+          const aqi = db.createObjectStore('aqi-cache', { keyPath: 'key' });
+          aqi.createIndex('by-cached-at', 'cachedAt');
+        }
       },
     });
   }

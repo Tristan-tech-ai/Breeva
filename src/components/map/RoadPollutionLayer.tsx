@@ -20,86 +20,72 @@ const roadCache = new SpatialTileCache<RoadAQIResponse>(120, 15);
 // ── Color scales per pollutant ───────────────────────────────
 
 function getConcentrationColor(value: number, pollutant: PollutantType): string {
-  // Continuous gradient: dark blue → cyan → green → yellow → orange → red
+  // Step-based categorization at standard breakpoints (EPA for AQI, WHO/EU for
+  // pollutants). Color represents the category the value falls into — NOT a
+  // smooth gradient — so AQI 49 and AQI 51 cross a real category boundary.
   const stops = getColorStops(pollutant);
-  // Find bracketing stops
   for (let i = 0; i < stops.length - 1; i++) {
-    if (value <= stops[i + 1].v) {
-      const t = (value - stops[i].v) / (stops[i + 1].v - stops[i].v);
-      return lerpColor(stops[i].c, stops[i + 1].c, Math.max(0, Math.min(1, t)));
+    if (value < stops[i + 1].v) {
+      return stops[i].c;
     }
   }
   return stops[stops.length - 1].c;
 }
 
 function getColorStops(pollutant: PollutantType): { v: number; c: string }[] {
+  // Stops define the LOWER bound of each category. A value v is colored stops[i].c
+  // when stops[i].v <= v < stops[i+1].v.
   switch (pollutant) {
     case 'pm25':
+      // WHO/EPA PM2.5 24h breakpoints (µg/m³).
       return [
-        { v: 0, c: '#1e3a5f' },     // dark blue
-        { v: 5, c: '#0ea5e9' },     // cyan
-        { v: 12, c: '#22c55e' },    // green
-        { v: 25, c: '#eab308' },    // yellow
-        { v: 35, c: '#f97316' },    // orange
-        { v: 55, c: '#ef4444' },    // red
-        { v: 150, c: '#7f1d1d' },   // dark red
+        { v: 0,    c: '#00E400' },  // 0–12     Good
+        { v: 12,   c: '#FFFF00' },  // 12–35.4  Moderate
+        { v: 35.4, c: '#FF7E00' },  // 35.4–55.4 USG
+        { v: 55.4, c: '#FF0000' },  // 55.4–150.4 Unhealthy
+        { v: 150.4,c: '#8F3F97' },  // 150.4–250.4 Very Unhealthy
+        { v: 250.4,c: '#7E0023' },  // 250.4+ Hazardous
       ];
     case 'no2':
+      // WHO/EU NO2 hourly guidance (µg/m³).
       return [
-        { v: 0, c: '#1e3a5f' },
-        { v: 10, c: '#0ea5e9' },
-        { v: 20, c: '#22c55e' },
-        { v: 40, c: '#eab308' },
-        { v: 80, c: '#f97316' },
-        { v: 150, c: '#ef4444' },
-        { v: 300, c: '#7f1d1d' },
+        { v: 0,   c: '#00E400' },
+        { v: 40,  c: '#FFFF00' },
+        { v: 100, c: '#FF7E00' },
+        { v: 200, c: '#FF0000' },
+        { v: 400, c: '#8F3F97' },
+        { v: 1000,c: '#7E0023' },
       ];
     case 'o3':
+      // WHO O3 8h guidance (µg/m³).
       return [
-        { v: 0, c: '#1e3a5f' },
-        { v: 30, c: '#0ea5e9' },
-        { v: 60, c: '#22c55e' },
-        { v: 90, c: '#eab308' },
-        { v: 120, c: '#f97316' },
-        { v: 180, c: '#ef4444' },
-        { v: 240, c: '#7f1d1d' },
+        { v: 0,   c: '#00E400' },
+        { v: 60,  c: '#FFFF00' },
+        { v: 100, c: '#FF7E00' },
+        { v: 140, c: '#FF0000' },
+        { v: 240, c: '#8F3F97' },
+        { v: 380, c: '#7E0023' },
       ];
     case 'pm10':
+      // WHO/EPA PM10 24h breakpoints (µg/m³).
       return [
-        { v: 0, c: '#1e3a5f' },
-        { v: 15, c: '#0ea5e9' },
-        { v: 30, c: '#22c55e' },
-        { v: 50, c: '#eab308' },
-        { v: 80, c: '#f97316' },
-        { v: 120, c: '#ef4444' },
-        { v: 250, c: '#7f1d1d' },
+        { v: 0,   c: '#00E400' },
+        { v: 54,  c: '#FFFF00' },
+        { v: 154, c: '#FF7E00' },
+        { v: 254, c: '#FF0000' },
+        { v: 354, c: '#8F3F97' },
+        { v: 424, c: '#7E0023' },
       ];
-    default: // AQI
+    default: // AQI — US EPA breakpoints
       return [
-        { v: 0, c: '#1e3a5f' },
-        { v: 25, c: '#0ea5e9' },
-        { v: 50, c: '#22c55e' },
-        { v: 100, c: '#eab308' },
-        { v: 150, c: '#f97316' },
-        { v: 200, c: '#ef4444' },
-        { v: 300, c: '#a855f7' },
-        { v: 500, c: '#7f1d1d' },
+        { v: 0,   c: '#00E400' },  // 0–50     Good
+        { v: 50,  c: '#FFFF00' },  // 51–100   Moderate
+        { v: 100, c: '#FF7E00' },  // 101–150  USG
+        { v: 150, c: '#FF0000' },  // 151–200  Unhealthy
+        { v: 200, c: '#8F3F97' },  // 201–300  Very Unhealthy
+        { v: 300, c: '#7E0023' },  // 301+     Hazardous
       ];
   }
-}
-
-// Linear interpolation between two hex colors
-function lerpColor(a: string, b: string, t: number): string {
-  const parse = (hex: string) => {
-    const h = hex.replace('#', '');
-    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
-  };
-  const [r1, g1, b1] = parse(a);
-  const [r2, g2, b2] = parse(b);
-  const r = Math.round(r1 + (r2 - r1) * t);
-  const g = Math.round(g1 + (g2 - g1) * t);
-  const bl = Math.round(b1 + (b2 - b1) * t);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
 function getValue(road: RoadAQIFeature, pollutant: PollutantType): number {
@@ -150,33 +136,16 @@ export function useRoadPollutionLayer(
       const group = L.layerGroup();
       const zoom = map?.getZoom() ?? 14;
 
-      // Local normalization: compute min/max for current viewport data
-      // so the full color spectrum is used regardless of absolute AQI values
-      const values = data.roads.map(r => getValue(r, currentPollutant));
-      const minVal = values.length > 0 ? Math.min(...values) : 0;
-      const maxVal = values.length > 0 ? Math.max(...values) : 1;
-      const range = maxVal - minVal;
-      // Use local normalization when range is narrow (< 30% of scale)
-      // This makes color differences visible even when all roads are 30-50 AQI
-      const stops = getColorStops(currentPollutant);
-      const scaleRange = stops[stops.length - 1].v - stops[0].v;
-      const useLocalNorm = range > 0 && range < scaleRange * 0.3;
-
       for (const road of data.roads) {
         const coords = road.geometry.coordinates.map(
           ([lng, lat]) => [lat, lng] as L.LatLngTuple,
         );
         if (coords.length < 2) continue;
 
-        let color: string;
-        if (useLocalNorm) {
-          // Map local range to full color spectrum for sharp differentiation
-          const t = (getValue(road, currentPollutant) - minVal) / range;
-          const mappedValue = stops[0].v + t * scaleRange * 0.6; // use 60% of scale for visual spread
-          color = getConcentrationColor(mappedValue, currentPollutant);
-        } else {
-          color = getConcentrationColor(getValue(road, currentPollutant), currentPollutant);
-        }
+        // Colors represent ABSOLUTE pollutant levels against standard breakpoints
+        // (EPA AQI / WHO pollutant guidance). Do not rescale per-viewport — that
+        // would make a clean city look identical to a polluted one.
+        const color = getConcentrationColor(getValue(road, currentPollutant), currentPollutant);
 
         const zoomScale = zoom >= 16 ? 1.6 : zoom >= 15 ? 1.3 : zoom >= 13 ? 1.0 : zoom >= 12 ? 0.7 : 0.5;
         const weight = road.weight * zoomScale;

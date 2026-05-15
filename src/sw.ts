@@ -36,14 +36,34 @@ interface SyncLikeEvent extends ExtendableEvent {
   tag: string;
 }
 
+// Schema mirrors src/lib/offline-db.ts. Both contexts MUST agree on version +
+// stores; otherwise the first opener wins and the other context's reads throw
+// NotFoundError. Keep version in sync with DB_VERSION in offline-db.ts.
+interface CachedEntity {
+  id: string;
+  payload: unknown;
+  cachedAt: number;
+}
+interface AQICacheEntry {
+  key: string;
+  payload: unknown;
+  cachedAt: number;
+}
+
 interface BreevaOfflineDB extends DBSchema {
   'pending-actions': {
     key: number;
     value: PendingAction;
     indexes: {
       'by-created-at': number;
+      'by-dedupe-key': string;
     };
   };
+  'cache-walks': { key: string; value: CachedEntity; indexes: { 'by-cached-at': number } };
+  'cache-rewards': { key: string; value: CachedEntity; indexes: { 'by-cached-at': number } };
+  'cache-quests': { key: string; value: CachedEntity; indexes: { 'by-cached-at': number } };
+  'cache-achievements': { key: string; value: CachedEntity; indexes: { 'by-cached-at': number } };
+  'aqi-cache': { key: string; value: AQICacheEntry; indexes: { 'by-cached-at': number } };
 }
 
 const SYNC_TAG = 'breeva-sync-pending-actions';
@@ -186,11 +206,15 @@ async function replayPendingActions(): Promise<void> {
         body: action.body ? JSON.stringify(action.body) : undefined,
       });
 
-      if (response.ok || (response.status >= 400 && response.status < 500 && response.status !== 429)) {
+      // Same rule as the foreground queue: drop on success or permanent 4xx
+      // (except 401/429), continue on transient errors. Never break — other
+      // queued items may target a different endpoint.
+      if (response.ok || (response.status >= 400 && response.status < 500
+        && response.status !== 429 && response.status !== 401)) {
         await db.delete('pending-actions', action.id);
       }
     } catch {
-      break;
+      continue;
     }
   }
 }
@@ -199,11 +223,29 @@ let dbPromise: ReturnType<typeof openDB<BreevaOfflineDB>> | null = null;
 
 function getDb() {
   if (!dbPromise) {
-    dbPromise = openDB<BreevaOfflineDB>('breeva-offline', 1, {
+    // Keep version in sync with DB_VERSION in src/lib/offline-db.ts.
+    dbPromise = openDB<BreevaOfflineDB>('breeva-offline', 2, {
       upgrade(db: IDBPDatabase<BreevaOfflineDB>) {
         if (!db.objectStoreNames.contains('pending-actions')) {
           const store = db.createObjectStore('pending-actions', { keyPath: 'id', autoIncrement: true });
           store.createIndex('by-created-at', 'createdAt');
+          store.createIndex('by-dedupe-key', 'dedupeKey');
+        }
+        // The SW only reads/writes pending-actions, but the other stores must
+        // exist if the SW opens the DB first; otherwise the main thread would
+        // see NotFoundError on cold start.
+        const cacheStores = [
+          'cache-walks', 'cache-rewards', 'cache-quests', 'cache-achievements',
+        ] as const;
+        for (const name of cacheStores) {
+          if (!db.objectStoreNames.contains(name)) {
+            const s = db.createObjectStore(name, { keyPath: 'id' });
+            s.createIndex('by-cached-at', 'cachedAt');
+          }
+        }
+        if (!db.objectStoreNames.contains('aqi-cache')) {
+          const aqi = db.createObjectStore('aqi-cache', { keyPath: 'key' });
+          aqi.createIndex('by-cached-at', 'cachedAt');
         }
       },
     });

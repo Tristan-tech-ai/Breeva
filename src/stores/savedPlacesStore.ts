@@ -45,33 +45,39 @@ export const useSavedPlacesStore = create<SavedPlacesState>()((set, get) => ({
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
-    if (data && data.length > 0) {
-      const places: SavedPlace[] = data.map((r) => ({
-        id: r.id,
-        name: r.name,
-        address: r.address || undefined,
-        coordinate: { lat: r.latitude, lng: r.longitude },
-        category: r.category || 'favorite',
-        createdAt: r.created_at,
+    const cloud: SavedPlace[] = (data || []).map((r) => ({
+      id: r.id,
+      name: r.name,
+      address: r.address || undefined,
+      coordinate: { lat: r.latitude, lng: r.longitude },
+      category: r.category || 'favorite',
+      createdAt: r.created_at,
+    }));
+    const cloudIds = new Set(cloud.map((p) => p.id));
+
+    // Merge cloud + local-only items rather than overwriting. Local items
+    // (added while offline or before a sync) must survive the next mount.
+    const local = loadFromStorage();
+    const localOnly = local.filter((p) => !cloudIds.has(p.id));
+    const merged = [...cloud, ...localOnly];
+
+    set({ places: merged });
+    saveToStorage(merged);
+
+    // Push any local-only items to cloud (non-blocking, RLS allows
+    // user-owned inserts).
+    if (localOnly.length > 0) {
+      const rows = localOnly.map((p) => ({
+        id: p.id,
+        user_id: userId,
+        name: p.name,
+        address: p.address || null,
+        latitude: p.coordinate.lat,
+        longitude: p.coordinate.lng,
+        category: p.category || 'favorite',
+        created_at: p.createdAt,
       }));
-      set({ places });
-      saveToStorage(places);
-    } else {
-      // If cloud is empty but local has data, sync local → cloud
-      const local = loadFromStorage();
-      if (local.length > 0) {
-        const rows = local.map((p) => ({
-          id: p.id,
-          user_id: userId,
-          name: p.name,
-          address: p.address || null,
-          latitude: p.coordinate.lat,
-          longitude: p.coordinate.lng,
-          category: p.category || 'favorite',
-          created_at: p.createdAt,
-        }));
-        await supabase.from('saved_places').upsert(rows, { onConflict: 'id' });
-      }
+      await supabase.from('saved_places').upsert(rows, { onConflict: 'id' });
     }
   },
 

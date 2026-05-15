@@ -722,12 +722,20 @@ function samplePolyline(polyline: [number, number][], maxSamples: number): [numb
   return samples;
 }
 
-/** Simple hash for cache key from polyline endpoints + length */
+/** Hash for cache key from polyline waypoints. Samples every 20th coord (plus
+ * endpoints) so that two ORS alternatives with the same start/end/length but
+ * different geometry don't collide on the same cache entry. */
 function polylineHash(polyline: [number, number][]): string {
-  const first = polyline[0];
+  if (polyline.length === 0) return 'empty';
+  const parts: string[] = [];
+  const step = Math.max(1, Math.floor(polyline.length / 20));
+  for (let i = 0; i < polyline.length; i += step) {
+    const p = polyline[i];
+    parts.push(`${p[0].toFixed(4)},${p[1].toFixed(4)}`);
+  }
   const last = polyline[polyline.length - 1];
-  const mid = polyline[Math.floor(polyline.length / 2)];
-  return `${first[0].toFixed(4)}_${first[1].toFixed(4)}_${last[0].toFixed(4)}_${last[1].toFixed(4)}_${mid[0].toFixed(4)}_${mid[1].toFixed(4)}_${polyline.length}`;
+  parts.push(`${last[0].toFixed(4)},${last[1].toFixed(4)}`);
+  return `${parts.join('|')}_${polyline.length}`;
 }
 
 function parseLineCoords(geojson: string): number[][] {
@@ -923,6 +931,12 @@ export interface RouteScoreV2Result {
   baseline_no2: number;
   wind_speed: number;
   waqi_station: string | null;
+  /**
+   * Length-weighted absolute average AQI along the matched segments. This is
+   * the field that should be used to compare cleanliness across routes — it
+   * includes baseline AQI of the area, not just the marginal traffic delta.
+   */
+  length_weighted_aqi: number;
   segments: Array<{
     osm_way_id: number;
     highway: string;
@@ -932,6 +946,7 @@ export interface RouteScoreV2Result {
     no2: number;
     fraction_along: number;
     pm25_delta: number;
+    length_m: number;
   }>;
 }
 
@@ -1011,7 +1026,10 @@ export async function scorePolyline(
   }
 
   if (roads.length === 0) {
-    // Fallback: Open-Meteo baseline per-point (original behavior)
+    // Fallback: Open-Meteo baseline per-point. Previous version returned
+    // pollution_index=0 for every route here, making cleanest-vs-fastest
+    // comparison meaningless. Now we return a real length-weighted AQI so
+    // routes through cleaner regions still win.
     const samples = samplePolyline(polyline, 20);
     const results = await Promise.all(
       samples.map(async ([lat, lon]) => {
@@ -1023,13 +1041,17 @@ export async function scorePolyline(
     const avgAqi = aqiValues.reduce((a, b) => a + b, 0) / aqiValues.length;
     const aqiScore = avgAqi / 500;
     const timeScore = 0.5;
+    // Approximate length between sample points along the polyline.
+    const polyLen = lineLengthMeters(polyline.map(([lat, lon]) => [lon, lat]));
+    const perSampleLen = polyLen / Math.max(1, results.length);
     return {
       avg_aqi: Math.round(avgAqi),
       max_aqi: Math.max(...aqiValues),
       min_aqi: Math.min(...aqiValues),
       avg_pm25_delta: 0,
       max_pm25_delta: 0,
-      pollution_index: 0,
+      pollution_index: avgAqi, // use absolute AQI as proxy when no traffic data
+      length_weighted_aqi: Math.round(avgAqi),
       combined_score: Math.round((weights.aqi * aqiScore + weights.time * timeScore) * 1000) / 1000,
       vehicle_type: vehicleType,
       segment_count: results.length,
@@ -1048,6 +1070,7 @@ export async function scorePolyline(
         no2: 0,
         fraction_along: i / (results.length - 1 || 1),
         pm25_delta: 0,
+        length_m: perSampleLen,
       })),
     };
   }
@@ -1082,13 +1105,18 @@ export async function scorePolyline(
   let maxPm25Delta = 0;
   let aiEnhanced = false;
 
+  let sumLength = 0;
+  let sumAqiTimesLength = 0;
+
   for (const road of scoredRoads) {
-    // Get road centroid for baseline interpolation
+    // Get road centroid for baseline interpolation + actual segment length
     let roadLat = cLat, roadLon = cLon;
+    let segLength = 50; // sensible default if geojson parse fails
     try {
       const coords = JSON.parse(road.geojson).coordinates;
       const mid = coords[Math.floor(coords.length / 2)];
       roadLon = mid[0]; roadLat = mid[1];
+      segLength = lineLengthMeters(coords);
     } catch { /* use center */ }
 
     const baseline = interpCorrected(roadLat, roadLon);
@@ -1107,6 +1135,8 @@ export async function scorePolyline(
 
     sumAqi += result.aqi;
     sumPm25Delta += result.pm25_delta;
+    sumLength += segLength;
+    sumAqiTimesLength += result.aqi * segLength;
     if (result.aqi > maxAqi) maxAqi = result.aqi;
     if (result.aqi < minAqi) minAqi = result.aqi;
     if (result.pm25_delta > maxPm25Delta) maxPm25Delta = result.pm25_delta;
@@ -1120,10 +1150,14 @@ export async function scorePolyline(
       no2: result.no2,
       fraction_along: road.fraction_along ?? 0,
       pm25_delta: result.pm25_delta,
+      length_m: segLength,
     });
   }
 
   const avgAqi = Math.round(sumAqi / segments.length);
+  const lengthWeightedAqi = sumLength > 0
+    ? Math.round(sumAqiTimesLength / sumLength)
+    : avgAqi;
   const avgPm25Delta = segments.length > 0 ? Math.round((sumPm25Delta / segments.length) * 1000) / 1000 : 0;
   const pollutionIndex = Math.round((avgPm25Delta * 0.75 + maxPm25Delta * 0.25) * 1000) / 1000;
   const aqiScore = avgAqi / 500;
@@ -1136,6 +1170,7 @@ export async function scorePolyline(
     avg_pm25_delta: avgPm25Delta,
     max_pm25_delta: Math.round(maxPm25Delta * 1000) / 1000,
     pollution_index: pollutionIndex,
+    length_weighted_aqi: lengthWeightedAqi,
     combined_score: Math.round((weights.aqi * aqiScore + weights.time * timeScore) * 1000) / 1000,
     vehicle_type: vehicleType,
     segment_count: segments.length,
@@ -1772,7 +1807,15 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(emptyResponse('no_distinct_routes_found'));
     }
 
-    const cleanCost = (route: ScoredCandidate) => route.score?.pollution_index ?? route.score?.avg_aqi ?? 999;
+    // Use absolute length-weighted AQI for cleanest comparison. The old
+    // pollution_index was just the traffic-induced PM2.5 delta — it ignored
+    // baseline AQI, so routes through polluted areas could "win" if their
+    // roads happened to have low traffic delta.
+    const cleanCost = (route: ScoredCandidate) =>
+      route.score?.length_weighted_aqi
+        ?? route.score?.avg_aqi
+        ?? route.score?.pollution_index
+        ?? 999;
     const shortestDuration = Math.min(...filteredCandidates.map((route) => route.duration_seconds));
     const cleanValues = filteredCandidates.map(cleanCost);
     const minClean = Math.min(...cleanValues);
@@ -1783,7 +1826,10 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     const byDuration = [...filteredCandidates].sort((a, b) => a.duration_seconds - b.duration_seconds);
     const byClean = [...filteredCandidates].sort((a, b) => cleanCost(a) - cleanCost(b));
     const fastestRoute = byDuration[0];
-    const cleanestRoute = byClean.find((route) => route.index !== fastestRoute.index) || byClean[0];
+    // Cleanest = lowest length-weighted AQI, full stop. If the cleanest IS
+    // also the fastest, that's fine — duplicate labels are deduped by geometry
+    // similarity later, and the UI can collapse identical entries.
+    const cleanestRoute = byClean[0];
     const usedIndices = new Set([fastestRoute.index, cleanestRoute.index]);
     const balancedRoute = [...filteredCandidates]
       .filter((route) => !usedIndices.has(route.index))
@@ -1806,16 +1852,65 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     });
 
     let reasoning: string | null = null;
+    let geminiRanking: GeminiRanking | null = null;
     try {
-      const geminiResult = await rankWithGemini(geminiInput);
-      reasoning = geminiResult?.reasoning ?? null;
+      geminiRanking = await rankWithGemini(geminiInput);
+      reasoning = geminiRanking?.reasoning ?? null;
     } catch { /* skip */ }
 
-    const allLabeled: Array<ScoredCandidate & { label: 'cleanest' | 'balanced' | 'fastest'; reasoning: string | null }> = [
-      { ...cleanestRoute, label: 'cleanest' as const, reasoning },
-      { ...balancedRoute, label: 'balanced' as const, reasoning },
-      { ...fastestRoute, label: 'fastest' as const, reasoning },
-    ];
+    // Wire up Gemini's ranking. If Gemini returned a usable ranking +
+    // labels[], reassign labels based on Gemini's judgement. Otherwise fall
+    // back to the metric-based labels above. Gemini's `ranking` is the
+    // 1-indexed route order (best-to-worst); `labels[i]` corresponds to
+    // ranking[i] (i.e., labels[0] is for the best-ranked route).
+    let allLabeled: Array<ScoredCandidate & { label: 'cleanest' | 'balanced' | 'fastest'; reasoning: string | null }>;
+    const validLabels: Array<'cleanest' | 'balanced' | 'fastest'> = ['cleanest', 'balanced', 'fastest'];
+    if (
+      geminiRanking
+      && Array.isArray(geminiRanking.ranking)
+      && Array.isArray(geminiRanking.labels)
+      && geminiRanking.ranking.length === selectedRoutes.length
+      && geminiRanking.labels.length === selectedRoutes.length
+      && geminiRanking.labels.every((l) => validLabels.includes(l as typeof validLabels[number]))
+    ) {
+      // Map Gemini's 1-indexed route numbers back to candidates via .index.
+      // Use index === gemini's (route_number - 1) when possible.
+      const reordered: typeof allLabeled = [];
+      const seen = new Set<number>();
+      for (let i = 0; i < geminiRanking.ranking.length; i++) {
+        const routeNum = geminiRanking.ranking[i];
+        const candidate = selectedRoutes.find((c) => c.index === routeNum - 1)
+          ?? selectedRoutes[Math.min(i, selectedRoutes.length - 1)];
+        if (!candidate || seen.has(candidate.index)) continue;
+        seen.add(candidate.index);
+        reordered.push({
+          ...candidate,
+          label: geminiRanking.labels[i] as 'cleanest' | 'balanced' | 'fastest',
+          reasoning,
+        });
+      }
+      // Make sure all 3 labels are represented; fill from metric-based fallback.
+      const labelsPresent = new Set(reordered.map((r) => r.label));
+      const metricFallback: Array<[ScoredCandidate, 'cleanest' | 'balanced' | 'fastest']> = [
+        [cleanestRoute, 'cleanest'],
+        [balancedRoute, 'balanced'],
+        [fastestRoute, 'fastest'],
+      ];
+      for (const [cand, lbl] of metricFallback) {
+        if (!labelsPresent.has(lbl) && !seen.has(cand.index)) {
+          reordered.push({ ...cand, label: lbl, reasoning });
+          labelsPresent.add(lbl);
+          seen.add(cand.index);
+        }
+      }
+      allLabeled = reordered;
+    } else {
+      allLabeled = [
+        { ...cleanestRoute, label: 'cleanest' as const, reasoning },
+        { ...balancedRoute, label: 'balanced' as const, reasoning },
+        { ...fastestRoute, label: 'fastest' as const, reasoning },
+      ];
+    }
 
     const labeled: typeof allLabeled = [];
     for (const r of allLabeled) {

@@ -90,6 +90,7 @@ export async function replayPendingMutations(): Promise<void> {
   if (queue.length === 0) return;
 
   let syncedCount = 0;
+  let droppedCount = 0;
 
   for (const action of queue) {
     if (typeof action.id !== 'number') continue;
@@ -102,17 +103,27 @@ export async function replayPendingMutations(): Promise<void> {
         continue;
       }
 
-      if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-        await removePendingAction(action.id);
-        syncedCount += 1;
+      // 401: token expired during offline window. Don't silently drop — keep
+      // for retry after the next successful auth refresh.
+      if (response.status === 401) {
+        await handleRetry(action.id, action.retryCount);
         continue;
       }
 
+      // Other 4xx (except 429): permanent client error, drop the action.
+      if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+        await removePendingAction(action.id);
+        droppedCount += 1;
+        continue;
+      }
+
+      // 5xx / 429 / network error: per-item retry; DO NOT break — other queued
+      // items may target a different endpoint and should still attempt.
       await handleRetry(action.id, action.retryCount);
-      break;
+      continue;
     } catch {
       await handleRetry(action.id, action.retryCount);
-      break;
+      continue;
     }
   }
 
@@ -122,6 +133,15 @@ export async function replayPendingMutations(): Promise<void> {
       title: 'Sinkronisasi selesai',
       message: `${syncedCount} perubahan offline sudah berhasil dikirim ke server.`,
       autoHideMs: 3200,
+    });
+  }
+
+  if (droppedCount > 0) {
+    dispatchPwaStatus({
+      kind: 'sync-error',
+      title: 'Beberapa perubahan tidak bisa disinkron',
+      message: `${droppedCount} perubahan ditolak server dan dihapus dari antrian.`,
+      autoHideMs: 4000,
     });
   }
 }

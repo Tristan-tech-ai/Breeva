@@ -313,10 +313,18 @@ export const useAuthStore = create<AuthState>()(
             .single();
 
           if (error && error.code === 'PGRST116') {
-            // User not found, create new profile
+            // User row not found yet (auth trigger may still be running).
+            // Use upsert with ON CONFLICT DO NOTHING + a follow-up select to
+            // avoid a unique-key violation race with the handle_new_user
+            // trigger defined in schema.sql.
+            const emailFallback =
+              user.email ?? (user.user_metadata?.email as string | undefined) ?? '';
+            if (!emailFallback) {
+              throw new Error('User has no email — cannot create profile');
+            }
             const newProfile = {
               id: user.id,
-              email: user.email!,
+              email: emailFallback,
               full_name: user.user_metadata?.full_name || user.user_metadata?.name || null,
               avatar_url: user.user_metadata?.avatar_url || null,
               ecopoints_balance: 0,
@@ -328,13 +336,17 @@ export const useAuthStore = create<AuthState>()(
               subscription_tier: 'free',
             };
 
-            const { data: created, error: createError } = await supabase
+            const { error: upsertError } = await supabase
               .from('users')
-              .insert(newProfile)
-              .select()
-              .single();
+              .upsert(newProfile, { onConflict: 'id', ignoreDuplicates: true });
+            if (upsertError) throw upsertError;
 
-            if (createError) throw createError;
+            const { data: created, error: refetchError } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', user.id)
+              .single();
+            if (refetchError) throw refetchError;
             set({ profile: created as UserProfile });
           } else if (error) {
             throw error;
@@ -404,13 +416,22 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Mark onboarding as completed
+      // Mark onboarding as completed. Persist server-side so the flag survives
+      // device reinstall — relying on localStorage alone forces re-onboarding
+      // every time the PWA is reinstalled or the browser is reset.
       completeOnboarding: () => {
-        const { profile } = get();
+        const { profile, user } = get();
         if (profile) {
           set({ profile: { ...profile, onboarding_completed: true } });
         }
         localStorage.setItem('breeva_onboarding_completed', 'true');
+        if (user) {
+          supabase
+            .from('users')
+            .update({ onboarding_completed: true })
+            .eq('id', user.id)
+            .then(() => { /* non-blocking */ });
+        }
       },
     }),
     {

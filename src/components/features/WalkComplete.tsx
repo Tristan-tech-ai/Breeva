@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { MapPin, Clock, Leaf, Flame, Sparkles, Star, Map, ChevronRight, Wind, Shield, AlertTriangle } from 'lucide-react';
 import type { WalkSession, ExposureResult } from '../../types';
 import PostWalkRating from './PostWalkRating';
 import CelebrationBurst from '../ui/CelebrationBurst';
+import { submitAQCalibration } from '../../lib/api';
+import { supabase } from '../../lib/supabase';
+import { useAuthStore } from '../../stores/authStore';
 
 interface WalkCompleteProps {
   session: WalkSession;
@@ -16,6 +20,7 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
   const navigate = useNavigate();
   const [showRating, setShowRating] = useState(false);
   const [rated, setRated] = useState(false);
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
   const isFailed = session.status === 'failed';
 
   const distKm = (session.distance_meters / 1000).toFixed(2);
@@ -23,10 +28,40 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
   const co2Saved = (session.distance_meters * 0.00021).toFixed(2);
   const calories = Math.round(session.distance_meters * 0.05);
 
-  const handleRatingSubmit = (rating: number, _photo?: File) => {
-    console.log('AQI Rating:', rating);
+  const handleRatingSubmit = async (rating: number, _photo?: File) => {
+    if (ratingSubmitting || rated) return;
+    setRatingSubmitting(true);
+    const user = useAuthStore.getState().user;
+    const lastPoint = session.route_points?.[session.route_points.length - 1];
+    if (!user || !lastPoint) {
+      toast.error('Unable to save rating right now.');
+      setRatingSubmitting(false);
+      return;
+    }
+
+    const ok = await submitAQCalibration(session.id, user.id, rating, lastPoint.lat, lastPoint.lng);
+    if (!ok) {
+      toast.error('Rating failed to save — try again later.');
+      setRatingSubmitting(false);
+      return;
+    }
+
+    try {
+      await supabase.rpc('add_ecopoints', {
+        p_user_id: user.id,
+        p_amount: 5,
+        p_type: 'aqi_rating',
+        p_description: 'AQI rating bonus',
+        p_reference_type: 'walk',
+        p_reference_id: session.id,
+      });
+      await useAuthStore.getState().fetchProfile();
+    } catch { /* points failed, rating still saved */ }
+
     setRated(true);
     setShowRating(false);
+    setRatingSubmitting(false);
+    toast.success('+5 EcoPoints — terima kasih sudah rate!');
   };
 
   if (showRating) {

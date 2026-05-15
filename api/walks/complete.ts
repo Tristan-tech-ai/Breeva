@@ -1,10 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || '' // Use service role for server-side operations
-);
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || '';
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+  // Fail loud at cold start: silently falling back to anon key would cause
+  // every walk INSERT to be denied by RLS.
+  console.error('[walks/complete] FATAL: missing VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+}
+
+const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 interface CompleteWalkRequest {
   walk_id: string;
@@ -19,6 +25,10 @@ interface CompleteWalkRequest {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+    return res.status(500).json({ error: 'Server misconfigured: missing Supabase service role' });
   }
 
   try {
@@ -89,6 +99,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Failed to save walk data' });
     }
 
+    // Update streak FIRST: update_user_streak reads users.last_walk_date,
+    // and complete_walk sets last_walk_date = CURRENT_DATE. If we call streak
+    // after complete_walk, the previous walk date is gone and the streak
+    // function silently leaves current_streak unchanged.
+    await supabase.rpc('update_user_streak', { p_user_id: user_id });
+
     // Call Supabase function to complete walk and award points
     const { data, error } = await supabase.rpc('complete_walk', {
       p_walk_id: walk_id,
@@ -96,8 +112,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       p_duration_seconds: duration_seconds,
       p_avg_aqi: avg_aqi || null,
     });
-  await supabase.rpc('update_user_streak', { p_user_id: user_id });
-
 
     if (error) {
       console.error('Supabase error:', error);
@@ -141,8 +155,10 @@ function validateWalk(
     return { valid: false, reason: 'Speed too high for walking' };
   }
 
-  // Minimum speed check (to prevent stationary "walks")
-  if (avgSpeed < 0.3) {
+  // Minimum speed check (to prevent stationary "walks"). 0.1 m/s tolerates
+  // stop-and-go walks (red lights, photo stops) which inflate duration; truly
+  // stationary walks still trip this.
+  if (avgSpeed < 0.1) {
     return { valid: false, reason: 'Speed too low' };
   }
 

@@ -197,7 +197,9 @@ END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Service write contributions') THEN
-    CREATE POLICY "Service write contributions" ON vayu_contributions FOR INSERT WITH CHECK (true);
+    -- Scope to service_role only; api/vayu/contribute.ts uses service-role key.
+    -- Previously WITH CHECK (true) which let any anon-key client INSERT.
+    CREATE POLICY "Service write contributions" ON vayu_contributions FOR INSERT WITH CHECK (auth.role() = 'service_role');
   END IF;
 END $$;
 

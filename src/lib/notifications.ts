@@ -1,4 +1,5 @@
 // Breeva Notification System — Service Worker registration + local notifications
+import { formatLocalDateYYYYMMDD } from './utils';
 
 /** Request notification permission */
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
@@ -58,7 +59,7 @@ export function scheduleStreakReminder(): void {
 
   const timerId = setTimeout(() => {
     const lastWalkDate = localStorage.getItem('breeva_last_walk_date');
-    const today = new Date().toISOString().split('T')[0];
+    const today = formatLocalDateYYYYMMDD();
 
     if (lastWalkDate !== today) {
       showNotification(

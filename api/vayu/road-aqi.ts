@@ -59,13 +59,6 @@ const HIGHWAY_TRAFFIC: Record<string, number> = {
   pedestrian: 2, footway: 0, cycleway: 0, path: 0,
 };
 
-// ─── Deterministic per-road jitter from osm_way_id ──────────
-// Produces ±20% variation so same-class roads don't appear identical
-function roadJitter(osmWayId: number): number {
-  const hash = ((osmWayId * 2654435761) >>> 0) / 4294967296;
-  return 0.80 + hash * 0.40; // range [0.8, 1.2]
-}
-
 // ─── Estimate traffic from highway class + lanes when no calibrated data ──
 function estimateTraffic(road: RoadRow, diurnal: number): number {
   // Use calibrated data if available
@@ -799,7 +792,6 @@ function computeRoadAQI(
   diurnal: number
 ): { aqi: number; pm25: number; no2: number; o3: number; pm10: number } {
   const traffic = estimateTraffic(road, diurnal);
-  const jitter = roadJitter(road.osm_way_id);
 
   // Self-road contribution at ~10m distance (on-road exposure)
   const dist = 10;
@@ -829,8 +821,8 @@ function computeRoadAQI(
   // Elevation correction: higher altitude = faster dispersion
   const elevFactor = elevationFactor(road.elevation_avg);
 
-  let pm25Delta = gaussianConc(qPM25, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * elevFactor * jitter;
-  let no2Delta  = gaussianConc(qNOx, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * elevFactor * jitter;
+  let pm25Delta = gaussianConc(qPM25, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * elevFactor;
+  let no2Delta  = gaussianConc(qNOx, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * elevFactor;
 
   // ── AI pollution factor override (from Gemini batch classification) ──
   // Gang/lorong gets ai_pollution_factor ~0.05-0.2, heavy traffic roads ~1.0-1.5
@@ -878,6 +870,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Cron auth guard (Migration 0012 — pg_cron → Vercel webhook).
+  // If header is present, it MUST match BREEVA_CRON_SECRET. Absent header
+  // means a normal user request — continue without auth.
+  // .trim() defends against env vars that ship with stray whitespace/newlines.
+  const cronSecret = (req.headers['x-breeva-cron-secret'] as string | undefined)?.trim();
+  const expectedSecret = process.env.BREEVA_CRON_SECRET?.trim();
+  if (cronSecret && cronSecret !== expectedSecret) {
+    return res.status(401).json({ error: 'Invalid cron secret' });
+  }
+
   const { south, west, north, east, zoom, forecast_hour } = req.query;
   if (!south || !west || !north || !east) {
     return res.status(200).json({ roads: [], meta: { reason: 'missing_params', count: 0 } });
@@ -914,28 +916,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const cacheKey = bboxCacheKey(s, w, n, e, z, fh);
-
-    // One-time Redis flush: clear stale pre-fix road cache entries.
-    // Safe to remove this block after first deploy (2026-03-15).
-    const flushKey = 'vayu:road:cache_flushed_v3';
-    const flushed = await redisGet(flushKey);
-    if (!flushed) {
-      // Scan and delete all road cache keys via pattern
-      const scanUrl = process.env.UPSTASH_REDIS_REST_URL;
-      const scanToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-      if (scanUrl && scanToken) {
-        try {
-          // Upstash REST: use EVAL to delete matching keys
-          await fetch(`${scanUrl}`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${scanToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(["EVAL", "local keys = redis.call('keys', ARGV[1]) for i=1,#keys do redis.call('del', keys[i]) end return #keys", "0", "vayu:road:*"]),
-          });
-        } catch { /* non-fatal */ }
-      }
-      await redisSetEx(flushKey, 86400, '1'); // flag: don't flush again for 24h
-      console.log('[vayu] One-time Redis road cache flush executed');
-    }
 
     // Check Redis cache first
     const cached = await redisGet(cacheKey);

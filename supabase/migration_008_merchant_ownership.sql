@@ -63,8 +63,8 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Check points
-  SELECT eco_points INTO v_current_points FROM users WHERE id = p_user_id;
+  -- Check points (fixed: column is ecopoints_balance, not eco_points)
+  SELECT ecopoints_balance INTO v_current_points FROM users WHERE id = p_user_id;
   IF v_current_points < p_cost THEN
     RETURN QUERY SELECT false, 'Insufficient EcoPoints'::TEXT;
     RETURN;
@@ -86,13 +86,16 @@ BEGIN
     updated_at = NOW()
   WHERE id = p_merchant_id;
 
-  -- Deduct points
-  UPDATE users SET eco_points = eco_points - p_cost WHERE id = p_user_id;
-
-  -- Log transaction
-  INSERT INTO eco_points_transactions (user_id, amount, type, source, description)
-  VALUES (p_user_id, -p_cost, 'redeemed', 'redemption',
-    'Sponsor upgrade to ' || p_tier || ' for merchant');
+  -- Deduct points via canonical helper (fixes: previous code used wrong table
+  -- name `eco_points_transactions` and updated `eco_points` column directly).
+  PERFORM add_ecopoints(
+    p_user_id,
+    -p_cost,
+    'redemption',
+    'Sponsor upgrade to ' || p_tier || ' for merchant',
+    'merchant_sponsor',
+    p_merchant_id
+  );
 
   RETURN QUERY SELECT true, ('Upgraded to ' || p_tier)::TEXT;
 END;

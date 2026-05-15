@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
   longest_streak INTEGER DEFAULT 0,
   last_walk_date DATE,
   subscription_tier VARCHAR(20) DEFAULT 'free',
+  onboarding_completed BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -274,8 +275,35 @@ ALTER TABLE user_achievements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE points_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leaderboard_weekly ENABLE ROW LEVEL SECURITY;
 
--- Public read access tables (no RLS needed for SELECT)
--- merchants, rewards, quests, achievements
+-- Tables below: RLS enabled with public-read + owner/service-role write,
+-- applied via Migration 010 (merchants) and Migration 011 (achievements,
+-- quests, rewards). Comment above used to say "Public read access tables
+-- (no RLS needed)" — outdated. RLS now enforced everywhere except PostGIS
+-- system tables (spatial_ref_sys: superuser-owned, advisor false positive).
+ALTER TABLE merchants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE achievements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rewards ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can view active merchants" ON merchants
+  FOR SELECT USING (is_active = true OR auth.uid() = owner_id);
+CREATE POLICY "Owner can update own merchant" ON merchants
+  FOR UPDATE USING (auth.uid() = owner_id);
+CREATE POLICY "Authenticated users can register merchant" ON merchants
+  FOR INSERT WITH CHECK (auth.uid() = owner_id);
+CREATE POLICY "Owner can delete own merchant" ON merchants
+  FOR DELETE USING (auth.uid() = owner_id);
+
+CREATE POLICY "Anyone can view achievements" ON achievements FOR SELECT USING (true);
+CREATE POLICY "Anyone can view quests" ON quests FOR SELECT USING (true);
+CREATE POLICY "Anyone can view rewards" ON rewards FOR SELECT USING (true);
+
+-- NOTE: This file is a reference SSOT for greenfield setup. Production state
+-- = baseline schema.sql + migration_009_audit_fixes.sql +
+-- migration_010_supabase_audit_fixes.sql + migration_0012_pg_cron_setup.sql +
+-- migration_0013_realtime_leaderboard.sql + RLS lint migration 011 applied
+-- via Supabase MCP. To refresh this file from production, run:
+--   supabase db pull (requires CLI + SUPABASE_PROJECT_REF + SUPABASE_DB_PASSWORD)
 
 -- ============================================
 -- RLS POLICIES - USERS
@@ -399,15 +427,16 @@ BEGIN
   -- Get user_id from walk
   SELECT user_id INTO v_user_id FROM walks WHERE id = p_walk_id;
   
-  -- Calculate points (10 points per km + AQI bonus)
+  -- Calculate points (10 points per km + AQI bonus). At least 1 point per
+  -- recorded walk (anti-cheat already enforces 50m minimum).
   v_distance_km := p_distance_meters / 1000.0;
-  v_points := FLOOR(v_distance_km * 10);
-  
+  v_points := GREATEST(1, ROUND(v_distance_km * 10)::INTEGER);
+
   -- AQI bonus
   IF p_avg_aqi IS NOT NULL AND p_avg_aqi <= 50 THEN
-    v_points := v_points + FLOOR(v_points * 0.5);
+    v_points := v_points + ROUND(v_points * 0.5)::INTEGER;
   ELSIF p_avg_aqi IS NOT NULL AND p_avg_aqi <= 100 THEN
-    v_points := v_points + FLOOR(v_points * 0.25);
+    v_points := v_points + ROUND(v_points * 0.25)::INTEGER;
   END IF;
   
   -- Calculate CO2 saved (120g per km vs driving)
@@ -544,14 +573,16 @@ BEGIN
   INTO v_last_walk, v_current_streak, v_longest_streak
   FROM users WHERE id = p_user_id;
   
-  IF v_last_walk IS NULL OR v_last_walk < CURRENT_DATE - INTERVAL '1 day' THEN
+  IF v_last_walk = CURRENT_DATE THEN
+    -- Already walked today; leave streak unchanged.
+    RETURN COALESCE(v_current_streak, 0);
+  ELSIF v_last_walk IS NULL OR v_last_walk < CURRENT_DATE - INTERVAL '1 day' THEN
     -- Reset streak
     v_current_streak := 1;
-  ELSIF v_last_walk = CURRENT_DATE - INTERVAL '1 day' THEN
-    -- Continue streak
-    v_current_streak := v_current_streak + 1;
+  ELSE
+    -- v_last_walk = yesterday; continue streak
+    v_current_streak := COALESCE(v_current_streak, 0) + 1;
   END IF;
-  -- If walked today already, don't change streak
   
   -- Update longest streak if needed
   IF v_current_streak > v_longest_streak THEN

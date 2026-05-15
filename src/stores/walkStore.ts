@@ -1,10 +1,12 @@
 import { create } from 'zustand';
+import ngeohash from 'ngeohash';
+import toast from 'react-hot-toast';
 import type { Coordinate, RoutePoint, WalkSession, ExposureResult } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from './authStore';
 import { completeWalkViaApi, getVayuExposure, getVayuVehicleType, submitVayuContribution } from '../lib/api';
-import { checkAndUnlockAchievements } from '../lib/achievements';
 import { showNotification, isNotificationEnabled } from '../lib/notifications';
+import { formatLocalDateYYYYMMDD } from '../lib/utils';
 
 interface WalkTrackingState {
   // Walk session
@@ -36,6 +38,10 @@ interface WalkTrackingState {
   // VAYU exposure result
   exposureResult: ExposureResult | null;
   activeTransportMode: string;
+
+  // Live AQI refresh throttle — last time we asked mapStore to refetch AQI
+  // for the user's current location during a walk.
+  _lastAqiAt: number;
 
   // Actions
   startWalk: (routeId?: string, transportMode?: string) => void;
@@ -94,6 +100,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
   stepCount: 0,
   exposureResult: null,
   activeTransportMode: 'walking',
+  _lastAqiAt: 0,
 
   startWalk: (routeId, transportMode) => {
     const user = useAuthStore.getState().user;
@@ -142,6 +149,18 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
 
           get().addRoutePoint(point);
           set({ currentPosition: point });
+
+          // Refresh AQI for the user's new location at most once per 60s.
+          // Otherwise the LiveExposureTracker accumulates dose against the
+          // AQI value that was loaded when the app started — could be hours
+          // old and far from where the user actually is.
+          const now = Date.now();
+          if (now - get()._lastAqiAt > 60_000) {
+            set({ _lastAqiAt: now });
+            import('./mapStore')
+              .then(({ useMapStore }) => useMapStore.getState().fetchAirQuality(point))
+              .catch(() => { /* non-fatal */ });
+          }
         },
         (error) => {
           console.warn('GPS error during walk:', error.message);
@@ -199,7 +218,8 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
     }
 
     if (!session || distanceMeters < 50) {
-      // Minimum 50m to count as a walk
+      // Minimum 50m to count as a walk. Show feedback so users don't tap
+      // "End Walk" into a void.
       set({
         session: null,
         isTracking: false,
@@ -207,11 +227,15 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
         watchId: null,
         timerInterval: null,
       });
+      if (session) {
+        toast('Jalan terlalu pendek (<50m) — tidak dicatat.', { icon: '🚶' });
+      }
       return null;
     }
 
     const avgSpeed = durationSeconds > 0 ? distanceMeters / durationSeconds : 0;
-    let points = calculatePoints(distanceMeters, 50); // Fallback AQI
+    const clientEstimate = calculatePoints(distanceMeters, 50); // Fallback AQI
+    let points = clientEstimate;
 
     const completedSession: WalkSession = {
       ...session,
@@ -224,20 +248,29 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       status: 'completed',
     };
 
-    // Compute VAYU exposure (non-blocking for UX)
+    // Compute VAYU exposure. Await with a 3s timeout so the WalkComplete modal
+    // can render the "Air Exposure" card with real data. Without the await,
+    // the modal opens with exposureResult=null and the user never sees this.
     const polyline: [number, number][] = routePoints.map(p => [p.lat, p.lng]);
     if (polyline.length >= 2) {
       const vehicleType = getVayuVehicleType(get().activeTransportMode);
       const durationMin = Math.max(1, Math.round(durationSeconds / 60));
-      getVayuExposure(polyline, vehicleType, durationMin).then((result) => {
-        if (result) {
-          set({ exposureResult: result });
-        }
-      });
 
-      // Auto-contribute walk trace to VAYU crowdsource (non-blocking)
-      // Award 5 bonus EcoPoints if contribution succeeds
-      submitVayuContribution(session.id, vehicleType).then(async (ok) => {
+      const exposurePromise = getVayuExposure(polyline, vehicleType, durationMin);
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), 3000),
+      );
+      try {
+        const result = await Promise.race([exposurePromise, timeoutPromise]);
+        if (result) set({ exposureResult: result });
+      } catch { /* ignore */ }
+
+      // Auto-contribute walk trace. Geohash from route midpoint (precision 7
+      // ≈ 153m × 153m cells) replaces the literal 'unknown' string that was
+      // polluting the contributions table.
+      const midPoint = polyline[Math.floor(polyline.length / 2)];
+      const geohash = ngeohash.encode(midPoint[0], midPoint[1], 7);
+      submitVayuContribution(session.id, vehicleType, undefined, geohash).then(async (ok) => {
         if (ok) {
           const user = useAuthStore.getState().user;
           if (user) {
@@ -274,11 +307,18 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
 
         if (!completionResult.queued && completionResult.ecopoints_earned > 0) {
           points = completionResult.ecopoints_earned;
-          checkAndUnlockAchievements(user.id).catch(console.error);
+          // Mutate the session object too — the WalkComplete modal reads
+          // session.eco_points_earned, so without this it would display the
+          // stale clientEstimate.
+          completedSession.eco_points_earned = points;
+          // Achievement unlocks are now done server-side inside complete.ts —
+          // no client-side double-fire (was causing double-pay races).
         }
 
-        useAuthStore.getState().fetchProfile();
-        localStorage.setItem('breeva_last_walk_date', new Date().toISOString().split('T')[0]);
+        // Await profile refresh so ProfilePage / header chips show the new
+        // balance immediately, not on next session.
+        await useAuthStore.getState().fetchProfile();
+        localStorage.setItem('breeva_last_walk_date', formatLocalDateYYYYMMDD());
 
         if (isNotificationEnabled()) {
           const body = completionResult.queued

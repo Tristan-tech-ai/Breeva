@@ -6,6 +6,7 @@ export type PwaStatusKind =
   | 'installed'
   | 'sync-queued'
   | 'sync-complete'
+  | 'sync-error'
 
 export interface PwaStatusEventDetail {
   kind: PwaStatusKind

@@ -1181,7 +1181,8 @@ export async function getVayuExposure(
 export async function submitVayuContribution(
   sessionId: string,
   vehicleType: string,
-  osmWayId?: number
+  osmWayId?: number,
+  offRoadGeohash?: string,
 ): Promise<boolean> {
   try {
     const body: Record<string, unknown> = {
@@ -1190,9 +1191,14 @@ export async function submitVayuContribution(
     };
     if (osmWayId) {
       body.osm_way_id = osmWayId;
-    } else {
+    } else if (offRoadGeohash && offRoadGeohash !== 'unknown') {
       body.is_off_road = true;
-      body.off_road_geohash = 'unknown';
+      body.off_road_geohash = offRoadGeohash;
+    } else {
+      // No spatial reference available — caller must compute a real geohash
+      // before contributing. Refuse rather than pollute the dataset with
+      // literal 'unknown' geohashes.
+      return false;
     }
 
     const result = await sendOrQueueMutation({

@@ -87,7 +87,20 @@ export default function LiveExposureTracker({ currentAQI, isPaused }: LiveExposu
     lastTickRef.current = Date.now();
   }, [isPaused]);
 
-  if (currentAQI === null) return null;
+  // Placeholder when AQI hasn't loaded yet. The tracker must always be visible
+  // during an active walk so users know the feature exists; silently returning
+  // null hides it entirely.
+  if (currentAQI === null) {
+    return (
+      <div className="mt-3 rounded-2xl border border-gray-200 dark:border-gray-700/30 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 flex items-center gap-2">
+        <Wind size={12} className="text-gray-400 animate-pulse" />
+        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+          Live Exposure
+        </span>
+        <span className="ml-auto text-[10px] text-gray-400">Sampling air quality…</span>
+      </div>
+    );
+  }
 
   const risk = getRiskLevel(displayCig);
   const cfg = RISK_CONFIG[risk];
