@@ -257,7 +257,7 @@ export default function POILayer({
         if (placement?.show) {
           const tt = existing.getTooltip();
           if (!tt) {
-            existing.bindTooltip(placement.displayName || '', {
+            existing.bindTooltip(String(placement.displayName ?? ''), {
               permanent: true,
               direction: placement.direction,
               offset: placement.offset,
@@ -280,26 +280,33 @@ export default function POILayer({
 
       const hasLabel = !!placement?.show;
       if (hasLabel) {
-        marker.bindTooltip(placement.displayName || '', {
-          permanent: true,
-          direction: placement.direction,
-          offset: placement.offset,
-          className: 'poi-label-tooltip poi-label-fadein',
-        });
+        try {
+          marker.bindTooltip(String(placement.displayName ?? ''), {
+            permanent: true,
+            direction: placement.direction,
+            offset: placement.offset,
+            className: 'poi-label-tooltip poi-label-fadein',
+          });
+        } catch { /* swallow: marker may already be detached during fast pan/zoom */ }
       }
 
       // Hover: bring marker + label to front
-      const hoverName = (f.poi.name || 'Unnamed').length > 20 ? (f.poi.name || 'Unnamed').slice(0, 20) + '…' : (f.poi.name || 'Unnamed');
+      const rawName = String(f.poi.name ?? 'Unnamed');
+      const hoverName = rawName.length > 20 ? rawName.slice(0, 20) + '…' : rawName;
       marker.on('mouseover', () => {
         marker.setZIndexOffset(9000);
         const el = (marker as any)._icon as HTMLElement | undefined;
         if (el) el.classList.add('poi-marker-hover');
-        if (!hasLabel) {
-          marker.bindTooltip(hoverName, {
-            permanent: true, direction: 'top', offset: [0, -markerPx / 2 - 2],
-            className: 'poi-label-tooltip poi-label-fadein',
-          });
-          (marker as any)._hoverTooltip = true;
+        // Guard: marker must still be on a map AND not already have a hover tooltip.
+        // openTooltip → appendChild fails if marker was removed mid-event.
+        if (!hasLabel && (marker as any)._map && !(marker as any)._hoverTooltip) {
+          try {
+            marker.bindTooltip(hoverName, {
+              permanent: true, direction: 'top', offset: [0, -markerPx / 2 - 2],
+              className: 'poi-label-tooltip poi-label-fadein',
+            });
+            (marker as any)._hoverTooltip = true;
+          } catch { /* swallow: race with marker removal */ }
         }
       });
       marker.on('mouseout', () => {
@@ -307,7 +314,9 @@ export default function POILayer({
         const el = (marker as any)._icon as HTMLElement | undefined;
         if (el) el.classList.remove('poi-marker-hover');
         if ((marker as any)._hoverTooltip) {
-          marker.unbindTooltip();
+          try {
+            marker.unbindTooltip();
+          } catch { /* swallow */ }
           (marker as any)._hoverTooltip = false;
         }
       });

@@ -103,10 +103,13 @@ export default function HomePage() {
   const [showMerchants, setShowMerchants] = useState(true);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [forecastHour, setForecastHour] = useState(0);
-  // 'total' = absolute pollutant vs EPA breakpoints (default).
-  // 'delta' = road-only contribution (CALINE3 dispersion) → surfaces
-  //           road-level 50-100m resolution because baseline is removed.
-  const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('total');
+  // 'delta' = road-only contribution (CALINE3 dispersion) — surfaces
+  //   road-level 50-100m resolution because baseline is removed. Default
+  //   per recommendation in eve/diagnostics/road-color-uniformity-regression.md:
+  //   honest data display that also reveals per-segment variance.
+  //   For pollutant='aqi' the mode silently falls back to absolute values
+  //   (delta has no meaning for the composite AQI index).
+  const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('delta');
   const [roadLayerMeta, setRoadLayerMeta] = useState<RoadLayerMeta | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'voyager' | 'osm' | 'satellite'>('voyager');
