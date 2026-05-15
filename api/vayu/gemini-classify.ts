@@ -395,12 +395,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     switch (mode) {
       case 'classify': {
-        const { region = 'bali', batch_size = 100, offset = 0 } = req.body || {};
-        const result = await classifyRoads(
-          String(region),
-          Math.min(Number(batch_size) || 100, 200),
-          Number(offset) || 0
+        // Prefer query string over body so GET callers (pg_cron via pg_net.http_get)
+        // can drive the region/batch parameters. Body kept as fallback for POST
+        // callers (manual admin/API).
+        const body = req.body || {};
+        const region = String(req.query.region ?? body.region ?? 'bali');
+        const batchSize = Math.min(
+          Number(req.query.batch_size ?? body.batch_size ?? 100) || 100,
+          200
         );
+        const offset = Number(req.query.offset ?? body.offset ?? 0) || 0;
+        const result = await classifyRoads(region, batchSize, offset);
         return res.status(200).json(result);
       }
 
