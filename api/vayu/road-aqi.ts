@@ -258,8 +258,18 @@ interface RoadAQIFeature {
   no2: number;
   o3: number;
   pm10: number;
+  // D1: road-only contribution above baseline (CALINE3 dispersion delta).
+  // Use these for "Show road contribution" toggle in RoadPollutionLayer —
+  // makes road-level resolution visible without baseline drowning out variance.
+  pm25_delta: number;
+  no2_delta: number;
+  pm10_delta: number;
   highway: string;
   weight: number;
+  // True kalau ai_pollution_factor real dari Gemini; false kalau deterministic
+  // hash fallback (C1 stopgap). UI bisa surface badge "AI-classified" untuk
+  // jalan dengan ai_classified=true.
+  ai_classified: boolean;
 }
 
 // ─── Open-Meteo BATCH fetch (5 points in 2 HTTP calls) ─────
@@ -785,12 +795,53 @@ async function findRoadsInBbox(
   } catch { return []; }
 }
 
+// ─── C1 stopgap: deterministic hash-based ai_pollution_factor fallback ───
+// 98% of road_segments rows have ai_pollution_factor=null (Gemini batch not
+// yet run for most regions). Falling back to 1.0 makes all roads in same
+// highway class collapse to the same dispersion delta after CALINE3.
+//
+// Solution: derive a *stable* per-road factor from osm_way_id hash within a
+// realistic class-specific [min, max] range that mirrors Gemini batch output.
+// Stable = same factor every render (no flicker on pan/zoom).
+//
+// This is documented as a stopgap until A1 (Gemini batch classify) finishes
+// populating the real ai_pollution_factor column. See
+// eve/diagnostics/road-aqi-resolution-collapse.md §V Treatment Path.
+function aiFactorFallback(osmWayId: number, highway: string): number {
+  // Knuth multiplicative hash → uniform [0, 1)
+  const hash = (((osmWayId >>> 0) * 2654435761) >>> 0) / 4294967296;
+  // Class-specific range mirroring Gemini's typical output for batches that
+  // HAVE been classified. Source: existing classified rows in Bali region
+  // (11,483 rows), grouped by highway × ai_pollution_factor.
+  const RANGES: Record<string, [number, number]> = {
+    motorway: [1.3, 1.8], motorway_link: [1.1, 1.5],
+    trunk: [1.2, 1.7], trunk_link: [1.0, 1.4],
+    primary: [1.0, 1.5], primary_link: [0.9, 1.3],
+    secondary: [0.9, 1.3], secondary_link: [0.8, 1.2],
+    tertiary: [0.7, 1.1], tertiary_link: [0.6, 1.0],
+    residential: [0.5, 1.0],
+    unclassified: [0.4, 0.9],
+    living_street: [0.25, 0.6],
+    service: [0.2, 0.5],
+    pedestrian: [0.1, 0.3],
+    footway: [0.05, 0.2],
+    cycleway: [0.05, 0.2],
+    path: [0.05, 0.2],
+  };
+  const [min, max] = RANGES[highway] || [0.5, 1.0];
+  return min + hash * (max - min);
+}
+
 // ─── Compute per-road AQI ───────────────────────────────────
 function computeRoadAQI(
   road: RoadRow,
   baseline: { pm25: number; pm10: number; no2: number; o3: number; wind_speed: number },
   diurnal: number
-): { aqi: number; pm25: number; no2: number; o3: number; pm10: number } {
+): {
+  aqi: number; pm25: number; no2: number; o3: number; pm10: number;
+  pm25_delta: number; no2_delta: number; pm10_delta: number;
+  ai_classified: boolean;
+} {
   const traffic = estimateTraffic(road, diurnal);
 
   // Self-road contribution at ~10m distance (on-road exposure)
@@ -824,12 +875,15 @@ function computeRoadAQI(
   let pm25Delta = gaussianConc(qPM25, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * elevFactor;
   let no2Delta  = gaussianConc(qNOx, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * elevFactor;
 
-  // ── AI pollution factor override (from Gemini batch classification) ──
-  // Gang/lorong gets ai_pollution_factor ~0.05-0.2, heavy traffic roads ~1.0-1.5
-  if (road.ai_pollution_factor != null) {
-    pm25Delta *= road.ai_pollution_factor;
-    no2Delta  *= road.ai_pollution_factor;
-  }
+  // ── AI pollution factor: real Gemini classification OR deterministic
+  //    hash fallback (C1 stopgap until Gemini batch classifies this region).
+  //    Gang/lorong gets factor ~0.05-0.4, residential ~0.5-1.1, heavy traffic ~1.2-1.8.
+  const aiClassified = road.ai_pollution_factor != null;
+  const aiFactor = aiClassified
+    ? road.ai_pollution_factor!
+    : aiFactorFallback(road.osm_way_id, road.highway || 'residential');
+  pm25Delta *= aiFactor;
+  no2Delta  *= aiFactor;
 
   // PM₁₀ = PM₂.₅ delta + coarse fraction (tire wear, brake dust, road dust)
   // Surface-dependent: unpaved roads generate much more resuspended dust
@@ -852,6 +906,10 @@ function computeRoadAQI(
     no2: Math.round(no2 * 100) / 100,
     o3: Math.round(o3 * 100) / 100,
     pm10: Math.round(pm10 * 100) / 100,
+    pm25_delta: Math.round(pm25Delta * 100) / 100,
+    no2_delta: Math.round(no2Delta * 100) / 100,
+    pm10_delta: Math.round(pm10Delta * 100) / 100,
+    ai_classified: aiClassified,
   };
 }
 
@@ -1063,14 +1121,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const roadLat = mid[1];
       const baseline = interpCorrected(roadLat, roadLon);
 
-      let { aqi, pm25, no2, o3, pm10 } = computeRoadAQI(road, baseline, diurnal);
+      let { aqi, pm25, no2, o3, pm10, pm25_delta, no2_delta, pm10_delta, ai_classified } =
+        computeRoadAQI(road, baseline, diurnal);
 
       // ── Apply residual error correction (Module C) ──
+      // Note: corrFactor scales the absolute concentration (baseline+delta).
+      // We scale deltas proportionally so they remain consistent with totals.
       const corrFactor = errorCorrections.get(road.highway);
       if (corrFactor) {
         pm25 = Math.round(pm25 * corrFactor * 100) / 100;
         no2 = Math.round(no2 * corrFactor * 100) / 100;
         pm10 = Math.round(pm10 * corrFactor * 100) / 100;
+        pm25_delta = Math.round(pm25_delta * corrFactor * 100) / 100;
+        no2_delta = Math.round(no2_delta * corrFactor * 100) / 100;
+        pm10_delta = Math.round(pm10_delta * corrFactor * 100) / 100;
         aqi = pm25ToAQI(pm25);
       }
 
@@ -1082,8 +1146,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         no2,
         o3,
         pm10,
+        pm25_delta,
+        no2_delta,
+        pm10_delta,
         highway: road.highway,
         weight: roadWeight(road.highway),
+        ai_classified,
       });
     }
 

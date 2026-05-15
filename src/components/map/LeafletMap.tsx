@@ -9,7 +9,7 @@ import { useAQIStationLayer } from './AQIStationLayer';
 import POILayer from './POILayer';
 import type { POI } from '../../lib/poi-api';
 import type { Route } from '../../types';
-import type { PollutantType } from '../../types';
+import type { PollutantType, RoadDisplayMode } from '../../types';
 
 // ── Route / AQI color helpers ────────────────────────────────────────
 
@@ -105,6 +105,9 @@ interface LeafletMapProps {
   activeFilter?: string | null;
   pollutant?: PollutantType;
   forecastHour?: number;
+  // 'total' = absolute pollutant vs EPA breakpoints (default)
+  // 'delta' = road-only contribution above baseline (highlights per-segment variance)
+  roadDisplayMode?: RoadDisplayMode;
   onRoadLayerMeta?: (meta: RoadLayerMeta | null) => void;
   onPlaceSelect?: (poi: POI) => void;
 }
@@ -119,9 +122,10 @@ function MapController({
   activeFilter,
   pollutant,
   forecastHour,
+  roadDisplayMode,
   onRoadLayerMeta,
   onPlaceSelect,
-}: Pick<LeafletMapProps, 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'onRoadLayerMeta' | 'onPlaceSelect'>) {
+}: Pick<LeafletMapProps, 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect'>) {
   const map = useMap();
   const {
     center,
@@ -289,7 +293,13 @@ function MapController({
   }, [routes, map]);
 
   // Road pollution overlay (eLichens-style colored polylines)
-  const roadMeta = useRoadPollutionLayer(map, !!showAQIOverlay, pollutant || 'aqi', forecastHour || 0);
+  const roadMeta = useRoadPollutionLayer(
+    map,
+    !!showAQIOverlay,
+    pollutant || 'aqi',
+    forecastHour || 0,
+    roadDisplayMode || 'total',
+  );
 
   // Forward road layer meta to parent
   useEffect(() => {
@@ -317,6 +327,7 @@ export default function LeafletMap({
   activeFilter = null,
   pollutant = 'aqi',
   forecastHour = 0,
+  roadDisplayMode = 'total',
   onRoadLayerMeta,
   onPlaceSelect,
 }: LeafletMapProps) {
@@ -352,6 +363,7 @@ export default function LeafletMap({
           activeFilter={activeFilter}
           pollutant={pollutant}
           forecastHour={forecastHour}
+          roadDisplayMode={roadDisplayMode}
           onRoadLayerMeta={onRoadLayerMeta}
           onPlaceSelect={onPlaceSelect}
         />

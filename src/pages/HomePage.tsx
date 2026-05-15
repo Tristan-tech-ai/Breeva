@@ -44,7 +44,7 @@ import TurnByTurn from '../components/map/TurnByTurn';
 import PlaceDetailSheet from '../components/map/PlaceDetailSheet';
 import MapLayersSheet from '../components/map/MapLayersSheet';
 import type { POI } from '../lib/poi-api';
-import type { PollutantType } from '../types';
+import type { PollutantType, RoadDisplayMode } from '../types';
 import type { RoadLayerMeta } from '../components/map/RoadPollutionLayer';
 
 const FILTER_CHIPS = [
@@ -103,6 +103,10 @@ export default function HomePage() {
   const [showMerchants, setShowMerchants] = useState(true);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [forecastHour, setForecastHour] = useState(0);
+  // 'total' = absolute pollutant vs EPA breakpoints (default).
+  // 'delta' = road-only contribution (CALINE3 dispersion) → surfaces
+  //           road-level 50-100m resolution because baseline is removed.
+  const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('total');
   const [roadLayerMeta, setRoadLayerMeta] = useState<RoadLayerMeta | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'voyager' | 'osm' | 'satellite'>('voyager');
@@ -150,6 +154,7 @@ export default function HomePage() {
         activeFilter={activeFilter}
         pollutant={pollutant}
         forecastHour={forecastHour}
+        roadDisplayMode={roadDisplayMode}
         onRoadLayerMeta={setRoadLayerMeta}
         onPlaceSelect={(poi) => setSelectedPOI(poi)}
       />
@@ -601,6 +606,8 @@ export default function HomePage() {
         onPollutantChange={setPollutant}
         forecastHour={forecastHour}
         onForecastHourChange={setForecastHour}
+        roadDisplayMode={roadDisplayMode}
+        onRoadDisplayModeChange={setRoadDisplayMode}
         roadLayerMeta={roadLayerMeta}
       />
 

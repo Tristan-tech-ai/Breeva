@@ -1,6 +1,11 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import L from 'leaflet';
-import type { PollutantType, RoadAQIFeature, RoadAQIResponse } from '../../types';
+import type {
+  PollutantType,
+  RoadAQIFeature,
+  RoadAQIResponse,
+  RoadDisplayMode,
+} from '../../types';
 import { SpatialTileCache } from '../../lib/spatial-tile-cache';
 
 // Meta info exposed to UI
@@ -19,17 +24,64 @@ const roadCache = new SpatialTileCache<RoadAQIResponse>(120, 15);
 
 // ── Color scales per pollutant ───────────────────────────────
 
-function getConcentrationColor(value: number, pollutant: PollutantType): string {
+function getConcentrationColor(
+  value: number,
+  pollutant: PollutantType,
+  mode: RoadDisplayMode = 'total',
+): string {
   // Step-based categorization at standard breakpoints (EPA for AQI, WHO/EU for
   // pollutants). Color represents the category the value falls into — NOT a
   // smooth gradient — so AQI 49 and AQI 51 cross a real category boundary.
-  const stops = getColorStops(pollutant);
+  //
+  // In 'delta' mode, breakpoints are much tighter (µg/m³ scale of road-only
+  // contribution, not absolute), so road-level resolution becomes visible.
+  const stops = mode === 'delta' ? getDeltaColorStops(pollutant) : getColorStops(pollutant);
   for (let i = 0; i < stops.length - 1; i++) {
     if (value < stops[i + 1].v) {
       return stops[i].c;
     }
   }
   return stops[stops.length - 1].c;
+}
+
+// Delta-mode breakpoints (road contribution above baseline, µg/m³). Tighter
+// than absolute breakpoints because baseline (30-50 µg/m³ Jakarta PM2.5) has
+// been removed — most delta values cluster in 0-10 µg/m³ range.
+function getDeltaColorStops(pollutant: PollutantType): { v: number; c: string }[] {
+  switch (pollutant) {
+    case 'pm25':
+      return [
+        { v: 0,    c: '#00E400' },  // 0–0.5    Negligible (gang)
+        { v: 0.5,  c: '#FFFF00' },  // 0.5–2    Low (residential)
+        { v: 2,    c: '#FF7E00' },  // 2–5      Medium (collector)
+        { v: 5,    c: '#FF0000' },  // 5–10     High (primary)
+        { v: 10,   c: '#8F3F97' },  // 10–25    Very High (trunk/motorway)
+        { v: 25,   c: '#7E0023' },  // 25+      Extreme (jam at motorway)
+      ];
+    case 'no2':
+      return [
+        { v: 0,   c: '#00E400' },
+        { v: 2,   c: '#FFFF00' },
+        { v: 10,  c: '#FF7E00' },
+        { v: 25,  c: '#FF0000' },
+        { v: 60,  c: '#8F3F97' },
+        { v: 150, c: '#7E0023' },
+      ];
+    case 'pm10':
+      return [
+        { v: 0,   c: '#00E400' },
+        { v: 1,   c: '#FFFF00' },
+        { v: 4,   c: '#FF7E00' },
+        { v: 10,  c: '#FF0000' },
+        { v: 20,  c: '#8F3F97' },
+        { v: 50,  c: '#7E0023' },
+      ];
+    case 'o3':
+    default:
+      // O3 has no meaningful "delta" (titration only reduces O3 near roads).
+      // For AQI: fall back to absolute breakpoints scaled. Keep simple.
+      return getColorStops(pollutant);
+  }
 }
 
 function getColorStops(pollutant: PollutantType): { v: number; c: string }[] {
@@ -88,7 +140,23 @@ function getColorStops(pollutant: PollutantType): { v: number; c: string }[] {
   }
 }
 
-function getValue(road: RoadAQIFeature, pollutant: PollutantType): number {
+function getValue(
+  road: RoadAQIFeature,
+  pollutant: PollutantType,
+  mode: RoadDisplayMode = 'total',
+): number {
+  if (mode === 'delta') {
+    // O3 has no delta (only titration). AQI delta would require derived calc.
+    // ?? 0 protects against legacy cached responses (pre-D1 API) where
+    // pm25_delta/no2_delta/pm10_delta fields don't exist yet.
+    switch (pollutant) {
+      case 'pm25': return road.pm25_delta ?? 0;
+      case 'no2': return road.no2_delta ?? 0;
+      case 'pm10': return road.pm10_delta ?? 0;
+      case 'o3': return road.o3;       // no delta concept
+      default: return road.aqi;
+    }
+  }
   switch (pollutant) {
     case 'pm25': return road.pm25;
     case 'no2': return road.no2;
@@ -120,6 +188,7 @@ export function useRoadPollutionLayer(
   visible: boolean,
   pollutant: PollutantType = 'aqi',
   forecastHour = 0,
+  displayMode: RoadDisplayMode = 'total',
 ): RoadLayerMeta | null {
   // Two layer groups for atomic swap: old stays visible until new is ready
   const layerRef = useRef<L.LayerGroup>(L.layerGroup());
@@ -132,7 +201,11 @@ export function useRoadPollutionLayer(
 
   // ── Build polylines into a NEW layer group (off-screen) ────
   const buildLayer = useCallback(
-    (data: RoadAQIResponse, currentPollutant: PollutantType): L.LayerGroup => {
+    (
+      data: RoadAQIResponse,
+      currentPollutant: PollutantType,
+      currentMode: RoadDisplayMode,
+    ): L.LayerGroup => {
       const group = L.layerGroup();
       const zoom = map?.getZoom() ?? 14;
 
@@ -142,10 +215,15 @@ export function useRoadPollutionLayer(
         );
         if (coords.length < 2) continue;
 
-        // Colors represent ABSOLUTE pollutant levels against standard breakpoints
-        // (EPA AQI / WHO pollutant guidance). Do not rescale per-viewport — that
-        // would make a clean city look identical to a polluted one.
-        const color = getConcentrationColor(getValue(road, currentPollutant), currentPollutant);
+        // 'total' mode: colors represent ABSOLUTE pollutant levels vs EPA/WHO
+        // breakpoints. A clean city stays green even at street level.
+        // 'delta' mode: colors represent ROAD-ONLY contribution above baseline,
+        // surfacing per-segment variance (gang vs arterial vs motorway).
+        const color = getConcentrationColor(
+          getValue(road, currentPollutant, currentMode),
+          currentPollutant,
+          currentMode,
+        );
 
         const zoomScale = zoom >= 16 ? 1.6 : zoom >= 15 ? 1.3 : zoom >= 13 ? 1.0 : zoom >= 12 ? 0.7 : 0.5;
         const weight = road.weight * zoomScale;
@@ -166,9 +244,9 @@ export function useRoadPollutionLayer(
 
   // ── ATOMIC SWAP: old layer stays until new is added ────────
   const atomicSwap = useCallback(
-    (data: RoadAQIResponse, currentPollutant: PollutantType) => {
+    (data: RoadAQIResponse, currentPollutant: PollutantType, currentMode: RoadDisplayMode) => {
       if (!map) return;
-      const newGroup = buildLayer(data, currentPollutant);
+      const newGroup = buildLayer(data, currentPollutant, currentMode);
       // Add new FIRST, then remove old — never blank
       newGroup.addTo(map);
       layerRef.current.remove();
@@ -224,13 +302,13 @@ export function useRoadPollutionLayer(
     if (cached) {
       dataRef.current = cached;
       fetchedBoundsRef.current = { s, w, n, e, z: zoom };
-      atomicSwap(cached, pollutant);
+      atomicSwap(cached, pollutant, displayMode);
       return true;
     }
 
     // No fallback chain — blank is better than wrong-zoom ghost roads
     return false;
-  }, [map, visible, pollutant, atomicSwap, viewportCovered]);
+  }, [map, visible, pollutant, displayMode, atomicSwap, viewportCovered]);
 
   // ── Fetch data with viewport padding ───────────────────────
   const fetchData = useCallback(async () => {
@@ -260,7 +338,7 @@ export function useRoadPollutionLayer(
     if (cached) {
       dataRef.current = cached;
       fetchedBoundsRef.current = { s, w, n, e, z: zoom };
-      atomicSwap(cached, pollutant);
+      atomicSwap(cached, pollutant, displayMode);
       return;
     }
 
@@ -295,11 +373,11 @@ export function useRoadPollutionLayer(
       roadCache.set(s, w, n, e, zoom, data);
       dataRef.current = data;
       fetchedBoundsRef.current = { s, w, n, e, z: zoom };
-      atomicSwap(data, pollutant);
+      atomicSwap(data, pollutant, displayMode);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
     }
-  }, [map, visible, forecastHour, pollutant, atomicSwap, viewportCovered]);
+  }, [map, visible, forecastHour, pollutant, displayMode, atomicSwap, viewportCovered]);
 
   // ── Prefetch disabled for demo stability ──────────────────
   const prefetchAdjacent = useCallback(() => {
@@ -313,11 +391,11 @@ export function useRoadPollutionLayer(
     return () => { layerRef.current.remove(); };
   }, [map]);
 
-  // Pollutant change → re-render from existing data (ZERO HTTP)
+  // Pollutant or displayMode change → re-render from existing data (ZERO HTTP)
   useEffect(() => {
     if (!visible || !dataRef.current) return;
-    atomicSwap(dataRef.current, pollutant);
-  }, [pollutant, visible, atomicSwap]);
+    atomicSwap(dataRef.current, pollutant, displayMode);
+  }, [pollutant, displayMode, visible, atomicSwap]);
 
   // Visibility / forecastHour toggle → may need fetch
   useEffect(() => {

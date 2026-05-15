@@ -230,6 +230,13 @@ export interface PaginatedResponse<T> {
 // VAYU Road-level pollution types
 export type PollutantType = 'aqi' | 'pm25' | 'no2' | 'o3' | 'pm10';
 
+// Display mode for RoadPollutionLayer:
+//   'total' — absolute pollutant level (baseline + road contribution) vs EPA/WHO breakpoints
+//   'delta' — road-only contribution above baseline (CALINE3 dispersion).
+//             Better surfaces road-level 50-100m resolution because baseline is
+//             removed from each segment.
+export type RoadDisplayMode = 'total' | 'delta';
+
 export interface RoadAQIFeature {
   osm_way_id: number;
   geometry: { type: string; coordinates: number[][] };
@@ -238,8 +245,16 @@ export interface RoadAQIFeature {
   no2: number;
   o3: number;
   pm10: number;
+  // Road-only contribution above baseline (CALINE3 dispersion delta).
+  // pm25_delta + baseline_pm25 ≈ pm25 (within rounding). Used by 'delta' mode.
+  pm25_delta: number;
+  no2_delta: number;
+  pm10_delta: number;
   highway: string;
   weight: number;
+  // True jika ai_pollution_factor populated dari Gemini batch classification.
+  // False jika pakai deterministic hash fallback (C1 stopgap).
+  ai_classified: boolean;
 }
 
 // ── Clean Route (VAYU-scored route) types ────────────────────────

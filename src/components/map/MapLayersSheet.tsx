@@ -3,7 +3,7 @@ import {
   X, Map, Satellite, Mountain, Wind, Store,
   TreePine, Activity, Clock, Radio, ShieldCheck, Radar, Leaf,
 } from 'lucide-react';
-import type { AirQualityData, PollutantType } from '../../types';
+import type { AirQualityData, PollutantType, RoadDisplayMode } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { POLLUTANT_OPTIONS, getColorStops } from './RoadPollutionLayer';
 
@@ -25,6 +25,8 @@ interface MapLayersSheetProps {
   onPollutantChange?: (p: PollutantType) => void;
   forecastHour?: number;
   onForecastHourChange?: (h: number) => void;
+  roadDisplayMode?: RoadDisplayMode;
+  onRoadDisplayModeChange?: (m: RoadDisplayMode) => void;
   roadLayerMeta?: RoadLayerMeta | null;
 }
 
@@ -67,6 +69,8 @@ export default function MapLayersSheet({
   onPollutantChange,
   forecastHour = 0,
   onForecastHourChange,
+  roadDisplayMode = 'total',
+  onRoadDisplayModeChange,
   roadLayerMeta,
 }: MapLayersSheetProps) {
   const activePollutant = POLLUTANT_OPTIONS.find((o) => o.id === pollutant) || POLLUTANT_OPTIONS[0];
@@ -326,6 +330,44 @@ export default function MapLayersSheet({
                         </button>
                       ))}
                     </div>
+
+                    {/* Display mode toggle — Total (absolute) vs Delta (road contribution) */}
+                    {(pollutant === 'pm25' || pollutant === 'no2' || pollutant === 'pm10') && (
+                      <div className="flex items-center gap-2 px-4 pt-3 pb-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mr-1">
+                          View
+                        </span>
+                        <button
+                          onClick={() => onRoadDisplayModeChange?.('total')}
+                          className={`
+                            px-2.5 py-1 text-[10px] font-bold rounded-md transition-all
+                            ${roadDisplayMode === 'total'
+                              ? 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 ring-1 ring-sky-300 dark:ring-sky-700'
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                            }
+                          `}
+                          title="Absolute concentration vs EPA/WHO breakpoints"
+                        >
+                          Total
+                        </button>
+                        <button
+                          onClick={() => onRoadDisplayModeChange?.('delta')}
+                          className={`
+                            px-2.5 py-1 text-[10px] font-bold rounded-md transition-all
+                            ${roadDisplayMode === 'delta'
+                              ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 ring-1 ring-amber-300 dark:ring-amber-700'
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                            }
+                          `}
+                          title="Road-only contribution above baseline (CALINE3 dispersion)"
+                        >
+                          Δ Road
+                        </button>
+                        <span className="ml-auto text-[9px] text-gray-400 dark:text-gray-500">
+                          {roadDisplayMode === 'delta' ? 'Δ vs baseline' : 'Absolute'}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Active pollutant info */}
                     <div className="p-4">
