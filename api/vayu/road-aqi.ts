@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { applyResidualCorrection, logPrediction } from './_ml_inference';
 
 /**
  * VAYU Road-AQI Endpoint — Returns per-road-segment pollution data for a bbox.
@@ -1344,6 +1345,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let { aqi, pm25, no2, o3, pm10, pm25_delta, no2_delta, pm10_delta, ai_classified } =
         computeRoadAQI(road, baseline, diurnal, regionMultiplier, trafficCorrections);
+
+      // ── Phase 2.1: XGBoost residual correction ──
+      // Loaded from ml_model_registry (active row per region OR global). If no
+      // model is registered yet, returns identity (no change). Adds ~1ms per road
+      // when model cached; cold-start <50ms.
+      const rawPm25 = pm25;
+      const mlFeatures = {
+        canyon_ratio: road.canyon_ratio ?? 0,
+        traffic_base_estimate: road.traffic_base_estimate ?? 100,
+        hour_of_day: new Date().getHours(),
+        day_of_week: new Date().getDay(),
+        is_weekend: new Date().getDay() >= 5 ? 1 : 0,
+        congestion_factor: trafficCorrections?.get(road.highway) ?? 1.0,
+        sentinel_pm25_proxy: 0,
+        // Highway one-hot (sparse but inference-friendly)
+        hw_motorway: road.highway === 'motorway' ? 1 : 0,
+        hw_trunk: road.highway === 'trunk' ? 1 : 0,
+        hw_primary: road.highway === 'primary' ? 1 : 0,
+        hw_secondary: road.highway === 'secondary' ? 1 : 0,
+        hw_tertiary: road.highway === 'tertiary' ? 1 : 0,
+        hw_residential: road.highway === 'residential' ? 1 : 0,
+        hw_service: road.highway === 'service' ? 1 : 0,
+      };
+      const { corrected, residual: mlResidual } = await applyResidualCorrection(region, pm25, mlFeatures);
+      if (mlResidual !== 0) {
+        pm25 = Math.round(corrected * 100) / 100;
+        pm25_delta = Math.round((pm25 - baseline.pm25) * 100) / 100;
+        aqi = pm25ToAQI(pm25);
+      }
+
+      // Fire-and-forget log of (raw prediction, features) for retraining corpus.
+      // Sampling rate controlled by PREDICTION_LOG_SAMPLE env (default 10%).
+      void logPrediction({
+        osm_way_id: road.osm_way_id,
+        region,
+        predicted_pm25: rawPm25,
+        corrected_pm25: mlResidual !== 0 ? pm25 : null,
+        features: mlFeatures,
+      });
 
       // ── Apply residual error correction (Module C) ──
       // Note: corrFactor scales the absolute concentration (baseline+delta).

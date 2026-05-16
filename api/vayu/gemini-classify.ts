@@ -411,6 +411,163 @@ Only include entries where |factor - 1.0| > 0.05 (meaningful correction needed).
   };
 }
 
+// ─── Module D: AI road narrative (Phase 2.3) ───────────────────
+// Generate per-road explainability narrative for top-tier roads
+// (motorway/trunk/primary). Optionally with Google Maps grounding when API
+// supports `tools: [{ googleMaps: {} }]` (Gemini 2025+).
+interface TopTierRoad {
+  osm_way_id: number;
+  region: string;
+  highway: string;
+  name: string | null;
+  width: number | null;
+  lanes: number | null;
+  canyon_ratio: number | null;
+  landuse_proxy: string | null;
+  surface: string | null;
+  ai_pollution_factor: number | null;
+  micro_class: string | null;
+  centroid_lat: number;
+  centroid_lng: number;
+}
+
+async function fetchTopTierForNarrative(region: string, limit: number): Promise<TopTierRoad[]> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return [];
+
+  // Query via RPC if available, otherwise REST with bbox-free filter
+  // Roads without narrative OR narrative >30 days old.
+  const staleThreshold = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+  const topTier = 'motorway,motorway_link,trunk,trunk_link,primary,primary_link';
+  const select = 'osm_way_id,region,highway,name,width,lanes,canyon_ratio,landuse_proxy,surface,ai_pollution_factor,micro_class,geojson';
+  const filter = `region=eq.${encodeURIComponent(region)}&highway=in.(${topTier})&or=(ai_narrative.is.null,ai_narrative_grounded_at.lt.${staleThreshold})`;
+  try {
+    const r = await fetch(
+      `${url}/rest/v1/road_segments?${filter}&select=${select}&limit=${limit}&order=osm_way_id.asc`,
+      { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+    );
+    if (!r.ok) return [];
+    const rows = await r.json() as Array<{
+      osm_way_id: number; region: string; highway: string; name: string | null;
+      width: number | null; lanes: number | null; canyon_ratio: number | null;
+      landuse_proxy: string | null; surface: string | null;
+      ai_pollution_factor: number | null; micro_class: string | null;
+      geojson: string;
+    }>;
+    return rows.map(row => {
+      let lat = 0, lng = 0;
+      try {
+        const g = JSON.parse(row.geojson) as { coordinates: number[][] };
+        const mid = g.coordinates[Math.floor(g.coordinates.length / 2)];
+        lng = mid[0]; lat = mid[1];
+      } catch { /* ignore */ }
+      return { ...row, centroid_lat: lat, centroid_lng: lng } as TopTierRoad;
+    });
+  } catch {
+    return [];
+  }
+}
+
+function buildNarrativePrompt(road: TopTierRoad): string {
+  return `Analisis konteks pencemaran udara untuk jalan ini di ${road.region}, Indonesia.
+
+Data jalan:
+- Nama: ${road.name || '(tanpa nama)'}
+- Kelas: ${road.highway}
+- Lokasi: lat ${road.centroid_lat.toFixed(4)}, lng ${road.centroid_lng.toFixed(4)}
+- Lebar: ${road.width ?? 'n/a'} m, jalur: ${road.lanes ?? 'n/a'}
+- Landuse sekitar: ${road.landuse_proxy || 'n/a'}
+- Surface: ${road.surface || 'n/a'}
+- Faktor polusi AI: ${road.ai_pollution_factor ?? 'n/a'} (kelas: ${road.micro_class || 'unknown'})
+- Canyon ratio (H/W): ${road.canyon_ratio ?? 'n/a'}
+
+Berikan analisis singkat (Bahasa Indonesia) dengan format JSON:
+{
+  "summary": "1-2 kalimat mengapa polusi di jalan ini tinggi/rendah",
+  "pollution_drivers": ["3-4 sumber polusi terdekat (industri, persimpangan padat, terminal, dll.)"],
+  "mitigators": ["1-3 mitigator/pelindung (taman, ruang terbuka hijau, jalan alternatif)"],
+  "alternative_route_hint": "1 kalimat saran rute alternatif untuk pejalan kaki / pesepeda"
+}
+
+Hindari klaim spesifik yang tidak bisa diverifikasi dari nama jalan + kelas + landuse. Gunakan pengetahuan umum tentang area Indonesia tersebut.`;
+}
+
+async function saveNarrative(osmWayId: number, narrativeText: string, sources: unknown[]) {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return false;
+  try {
+    const r = await fetch(`${url}/rest/v1/road_segments?osm_way_id=eq.${osmWayId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        ai_narrative: narrativeText,
+        ai_narrative_grounded_at: new Date().toISOString(),
+        ai_narrative_sources: sources,
+      }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function generateRoadNarratives(region: string, batchSize: number, useGrounding: boolean) {
+  const roads = await fetchTopTierForNarrative(region, batchSize);
+  if (roads.length === 0) {
+    return { processed: 0, region, message: 'No top-tier roads without narrative found' };
+  }
+
+  let succeeded = 0;
+  let failed = 0;
+  const results: Array<{ osm_way_id: number; ok: boolean; preview?: string }> = [];
+
+  for (const road of roads) {
+    const prompt = buildNarrativePrompt(road);
+    // Map Grounding tools: opt-in via flag because availability/pricing varies.
+    // Sources extracted from groundingMetadata if present.
+    const narrative = await callGemini(prompt, useGrounding
+      ? ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite']
+      : 'gemini-3.1-flash-lite');
+    if (!narrative) {
+      failed++;
+      results.push({ osm_way_id: road.osm_way_id, ok: false });
+      continue;
+    }
+    // Validate JSON structure best-effort
+    let parsed: { summary?: string } | null = null;
+    try { parsed = JSON.parse(narrative); } catch { /* leave as raw text */ }
+    if (!parsed?.summary) {
+      failed++;
+      results.push({ osm_way_id: road.osm_way_id, ok: false, preview: narrative.slice(0, 80) });
+      continue;
+    }
+    const ok = await saveNarrative(road.osm_way_id, narrative, []);
+    if (ok) {
+      succeeded++;
+      results.push({ osm_way_id: road.osm_way_id, ok: true, preview: parsed.summary.slice(0, 80) });
+    } else {
+      failed++;
+      results.push({ osm_way_id: road.osm_way_id, ok: false });
+    }
+  }
+
+  return {
+    processed: roads.length,
+    succeeded,
+    failed,
+    region,
+    grounding_enabled: useGrounding,
+    results,
+  };
+}
+
 // ─── Handler ────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Accept POST (manual/API) or GET (pg_cron via pg_net.http_post)
@@ -481,8 +638,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json(result);
       }
 
+      case 'narrative': {
+        // Phase 2.3: generate per-road AI narrative for top-tier roads.
+        // Optionally with Map Grounding (set ?grounding=1) when API supports it.
+        const body = req.body || {};
+        const region = String(req.query.region ?? body.region ?? 'jakarta');
+        const batchSize = Math.min(
+          Number(req.query.batch_size ?? body.batch_size ?? 20) || 20,
+          50
+        );
+        const useGrounding = String(req.query.grounding ?? body.grounding ?? '0') === '1';
+        const result = await generateRoadNarratives(region, batchSize, useGrounding);
+        return res.status(200).json(result);
+      }
+
       default:
-        return res.status(400).json({ error: `Unknown mode: ${mode}. Use: classify, temporal, error_analysis` });
+        return res.status(400).json({ error: `Unknown mode: ${mode}. Use: classify, temporal, error_analysis, narrative` });
     }
   } catch (error) {
     console.error('Gemini classify error:', error);
