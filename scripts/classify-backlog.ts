@@ -28,17 +28,34 @@ loadEnv();
 // ─── Config ──────────────────────────────────────────────────
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const KEYS = (process.env.GEMINI_API_KEYS ?? '')
+const GEMINI_KEYS = (process.env.GEMINI_API_KEYS ?? '')
+  .split(',')
+  .map((k) => k.trim())
+  .filter(Boolean);
+const GROQ_KEYS = (process.env.GROQ_API_KEYS ?? '')
   .split(',')
   .map((k) => k.trim())
   .filter(Boolean);
 
+// Local vLLM endpoint (WSL2). Empty when LOCAL_VLLM_URL unset → local disabled.
+// Concurrency = LOCAL_VLLM_WORKERS (fake keys) so multiple in-flight requests
+// can saturate vLLM's continuous batching on a single GPU.
+const LOCAL_VLLM_URL = process.env.LOCAL_VLLM_URL ?? '';
+const LOCAL_VLLM_MODEL = process.env.LOCAL_VLLM_MODEL ?? 'Qwen/Qwen2.5-14B-Instruct-AWQ';
+const LOCAL_VLLM_WORKERS = Math.max(0, Number(process.env.LOCAL_VLLM_WORKERS ?? '6'));
+const LOCAL_KEYS = LOCAL_VLLM_URL
+  ? Array.from({ length: LOCAL_VLLM_WORKERS }, (_, i) => `vllm-slot-${i}`)
+  : [];
+
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
 }
-if (KEYS.length === 0) {
-  throw new Error('Missing GEMINI_API_KEYS (comma-separated)');
+if (GEMINI_KEYS.length === 0 && GROQ_KEYS.length === 0 && LOCAL_KEYS.length === 0) {
+  throw new Error('Missing all of GEMINI_API_KEYS, GROQ_API_KEYS, LOCAL_VLLM_URL');
 }
+
+// Backwards-compat alias (some helpers reference KEYS — kept for stagger calc)
+const KEYS = GEMINI_KEYS;
 
 function arg(name: string, dflt: string): string {
   const a = process.argv.find((x) => x.startsWith(`--${name}=`));
@@ -55,10 +72,17 @@ const REGIONS = arg('regions', 'jakarta,bali,bandung,surabaya')
 const BATCH = Math.max(1, Number(arg('batch', '100')));
 const DRY_RUN = hasFlag('dry-run');
 
+type ProviderName = 'gemini' | 'groq' | 'local';
+
 interface ModelSpec {
   id: string;
   rpd: number; // requests per day (free tier per key)
   rpm: number; // requests per minute (used for self-throttling)
+  provider: ProviderName;
+  // Per-model batch cap. Groq free-tier 70B has ~6K token per-request limit;
+  // ~25 rows × ~200 tok = 5K input + 1K instruction fits comfortably. Gemini
+  // accepts 100+ rows per call. Worker passes this to fetchNext().
+  maxBatchSize?: number;
 }
 
 // Listed in descending RPD so highest-yield model gets spent first per key.
@@ -66,24 +90,84 @@ interface ModelSpec {
 // Defaulting to single model to match worker count that empirically didn't
 // trigger Google anti-burst (~18 in-flight). When KEYS is small (≤6), bump
 // to multi-model for more throughput. Override via env GEMINI_MODELS.
-const MODELS_DEFAULT_FULL: ModelSpec[] = [
-  { id: 'gemini-3.1-flash-lite', rpd: 500, rpm: 15 },
-  { id: 'gemini-2.5-flash', rpd: 20, rpm: 5 },
-  { id: 'gemini-2.5-flash-lite', rpd: 20, rpm: 10 },
+const GEMINI_MODELS_FULL: ModelSpec[] = [
+  { id: 'gemini-3.1-flash-lite', rpd: 500, rpm: 15, provider: 'gemini' },
+  { id: 'gemini-2.5-flash', rpd: 20, rpm: 5, provider: 'gemini' },
+  { id: 'gemini-2.5-flash-lite', rpd: 20, rpm: 10, provider: 'gemini' },
 ];
-const MODELS_DEFAULT_LITE: ModelSpec[] = [
-  { id: 'gemini-3.1-flash-lite', rpd: 500, rpm: 15 },
+const GEMINI_MODELS_LITE: ModelSpec[] = [
+  { id: 'gemini-3.1-flash-lite', rpd: 500, rpm: 15, provider: 'gemini' },
 ];
-// 6 keys × 3 models = 18 workers OK; 18 keys × 3 = 54 hit anti-burst.
-// Auto-select model set based on key count to keep ~18 workers.
-const MODELS: ModelSpec[] =
+
+// Groq Llama 3.3 70B Versatile = 30 RPM / 14.4k RPD / 12K TPM free tier.
+// Llama 3.1 8B Instant has 6K TPM (lower!) — too tight for batch=10 prompts
+// which run ~4K tokens. We drop 8B and use 70B which is fast (<1.5s) anyway.
+// At 12K TPM / 4K per req ≈ 3 effective RPM per key → 6 keys × 3 RPM × 100
+// rows = 1,800 rows/min sustained Groq side.
+const GROQ_MODELS: ModelSpec[] = [
+  // Empirically batch=20 × 2 RPM was still 14-15K TPM (over 12K cap) once
+  // output tokens are factored in. batch=12 × 2 RPM = ~4K input + 1K output
+  // = 5K/req × 2 RPM = 10K TPM — well under the ceiling with margin for
+  // prompt-length variance. Throughput: 24 rows/min/key × 6 keys = 144
+  // rows/min Groq-side.
+  { id: 'llama-3.3-70b-versatile', rpd: 14400, rpm: 2, provider: 'groq', maxBatchSize: 12 },
+];
+
+// Local vLLM (Qwen2.5-14B-Instruct-AWQ on RTX 5060 Ti). No rate limits — the
+// only constraint is GPU throughput. rpm/rpd set astronomically high so the
+// per-key/per-day caps never bind. maxBatchSize=15 keeps prompt under ~2K
+// tokens, leaving ~2K headroom in the 4096 context window for output. vLLM's
+// continuous batching fuses concurrent slot requests into one GPU pass.
+const LOCAL_MODELS: ModelSpec[] = [
+  { id: LOCAL_VLLM_MODEL, rpd: 10_000_000, rpm: 600, provider: 'local', maxBatchSize: 15 },
+];
+
+// Compose final MODELS list. 6 Groq keys × 2 models = 12 Groq workers.
+// 18 Gemini keys × 1 model = 18 Gemini workers (post-burst calibration).
+// Total ~30 workers — manageable with global throttle.
+const GEMINI_MODELS_DEFAULT: ModelSpec[] =
   process.env.GEMINI_MODELS === 'full'
-    ? MODELS_DEFAULT_FULL
+    ? GEMINI_MODELS_FULL
     : process.env.GEMINI_MODELS === 'lite'
-      ? MODELS_DEFAULT_LITE
-      : KEYS.length > 6
-        ? MODELS_DEFAULT_LITE
-        : MODELS_DEFAULT_FULL;
+      ? GEMINI_MODELS_LITE
+      : GEMINI_KEYS.length > 6
+        ? GEMINI_MODELS_LITE
+        : GEMINI_MODELS_FULL;
+
+const MODELS: ModelSpec[] = GEMINI_MODELS_DEFAULT;  // legacy alias
+
+function keysFor(provider: ProviderName): string[] {
+  if (provider === 'gemini') return GEMINI_KEYS;
+  if (provider === 'groq') return GROQ_KEYS;
+  return LOCAL_KEYS;
+}
+
+interface WorkerSpec { provider: ProviderName; keyIdx: number; model: ModelSpec; }
+
+function allWorkerSpecs(): WorkerSpec[] {
+  const specs: WorkerSpec[] = [];
+  // Gemini workers
+  for (let i = 0; i < GEMINI_KEYS.length; i++) {
+    for (const m of GEMINI_MODELS_DEFAULT) {
+      specs.push({ provider: 'gemini', keyIdx: i, model: m });
+    }
+  }
+  // Groq workers
+  for (let i = 0; i < GROQ_KEYS.length; i++) {
+    for (const m of GROQ_MODELS) {
+      specs.push({ provider: 'groq', keyIdx: i, model: m });
+    }
+  }
+  // Local vLLM workers (one spec per LOCAL_KEYS slot — slots are fake "keys"
+  // so the existing per-key throttle / quota state plumbing works as-is. Real
+  // concurrency limit is vLLM's --max-num-seqs.)
+  for (let i = 0; i < LOCAL_KEYS.length; i++) {
+    for (const m of LOCAL_MODELS) {
+      specs.push({ provider: 'local', keyIdx: i, model: m });
+    }
+  }
+  return specs;
+}
 
 // ─── Quota state (persist across runs within same Pacific day) ───
 interface QuotaState {
@@ -129,51 +213,65 @@ function pickModel(keyIdx: number): ModelSpec | null {
   return null;
 }
 
-function markUsed(keyIdx: number, model: string): void {
-  const k = String(keyIdx);
+function markUsed(k: string, model: string): void {
   state.usage[k] ??= {};
   state.usage[k][model] = (state.usage[k][model] ?? 0) + 1;
   saveState();
 }
 
-function markDisabled(keyIdx: number, model: string): void {
-  const k = String(keyIdx);
+function markDisabled(k: string, model: string): void {
   state.disabled[k] ??= [];
   if (!state.disabled[k].includes(model)) state.disabled[k].push(model);
   saveState();
 }
 
-async function rateLimit(keyIdx: number, m: ModelSpec): Promise<void> {
-  const k = `${keyIdx}:${m.id}`;
+async function rateLimit(k: string, m: ModelSpec): Promise<void> {
+  const compound = `${k}:${m.id}`;
   const minIntervalMs = 60_000 / m.rpm + 250;
-  const since = Date.now() - (lastCallAt.get(k) ?? 0);
+  const since = Date.now() - (lastCallAt.get(compound) ?? 0);
   if (since < minIntervalMs) {
     await new Promise((r) => setTimeout(r, minIntervalMs - since));
   }
-  lastCallAt.set(k, Date.now());
+  lastCallAt.set(compound, Date.now());
 }
 
-// Aggregate request rate across ALL workers. Google's IP/account-level
-// anti-burst kicks in around ~30-50 RPM for free tier. Without this throttle,
-// 18 workers each respecting their per-key RPM still produce ~240 RPM total
-// and the IP gets blanket-429'd. Default ~30 RPM (2000ms interval).
-const GLOBAL_MIN_INTERVAL_MS = Number(arg('global-interval-ms', '2000'));
-let lastGlobalCallAt = 0;
-let globalThrottleQueue: Promise<void> = Promise.resolve();
+// Per-provider aggregate throttle. Gemini's IP/account anti-burst kicks in at
+// ~20-30 RPM aggregate; 3000ms = 20 RPM ceiling. (Earlier 2000ms triggered
+// blanket 429 storms even when no individual key was over quota.) Groq's
+// free tier limits are per-org not per-IP, so we throttle Groq's global at
+// 800ms (75 RPM ceiling) — actual rate is bound by per-key rpm=2 below.
+const GEMINI_GLOBAL_INTERVAL_MS = Number(arg('global-interval-ms', '3000'));
+const GROQ_GLOBAL_INTERVAL_MS = Number(arg('groq-interval-ms', '800'));
+// Local vLLM has no rate limit; only GPU throughput. Tiny interval (50ms)
+// just smooths bursts so vLLM's queue doesn't get flooded at startup.
+const LOCAL_GLOBAL_INTERVAL_MS = Number(arg('local-interval-ms', '50'));
 
-function globalThrottle(): Promise<void> {
+const providerLastCallAt: Record<ProviderName, number> = { gemini: 0, groq: 0, local: 0 };
+const providerQueue: Record<ProviderName, Promise<void>> = {
+  gemini: Promise.resolve(),
+  groq: Promise.resolve(),
+  local: Promise.resolve(),
+};
+
+function globalThrottle(provider: ProviderName): Promise<void> {
   // Chain: each caller waits for prior caller's wakeup + their own gap. This
   // serializes the "claim a slot" step so workers can't all see the same
   // lastGlobalCallAt and bypass the throttle.
-  const next = globalThrottleQueue.then(async () => {
+  const interval =
+    provider === 'gemini'
+      ? GEMINI_GLOBAL_INTERVAL_MS
+      : provider === 'groq'
+        ? GROQ_GLOBAL_INTERVAL_MS
+        : LOCAL_GLOBAL_INTERVAL_MS;
+  const next = providerQueue[provider].then(async () => {
     const now = Date.now();
-    const since = now - lastGlobalCallAt;
-    if (since < GLOBAL_MIN_INTERVAL_MS) {
-      await new Promise((r) => setTimeout(r, GLOBAL_MIN_INTERVAL_MS - since));
+    const since = now - providerLastCallAt[provider];
+    if (since < interval) {
+      await new Promise((r) => setTimeout(r, interval - since));
     }
-    lastGlobalCallAt = Date.now();
+    providerLastCallAt[provider] = Date.now();
   });
-  globalThrottleQueue = next.catch(() => undefined);
+  providerQueue[provider] = next.catch(() => undefined);
   return next;
 }
 
@@ -204,7 +302,7 @@ interface UnclassifiedRoad {
   traffic_base_estimate: number | null;
 }
 
-async function fetchNext(): Promise<{ region: string; roads: UnclassifiedRoad[] } | null> {
+async function fetchNext(batchSize: number = BATCH): Promise<{ region: string; roads: UnclassifiedRoad[] } | null> {
   while (cursorLock) await new Promise((r) => setTimeout(r, 20));
   cursorLock = true;
   try {
@@ -218,7 +316,7 @@ async function fetchNext(): Promise<{ region: string; roads: UnclassifiedRoad[] 
         `&ai_classified_at=is.null` +
         `&osm_way_id=gt.${after}` +
         `&select=osm_way_id,highway,name,width,lanes,canyon_ratio,landuse_proxy,surface,traffic_base_estimate` +
-        `&limit=${BATCH}` +
+        `&limit=${batchSize}` +
         `&order=osm_way_id.asc`;
       const r = await fetch(url, {
         headers: {
@@ -304,6 +402,9 @@ interface GeminiResult {
   text?: string;
   status?: number;
   error?: string;
+  // Set on 429 only. true = real per-day quota hit (remaining-requests=0 in
+  // response header). false/undef = transient TPM/RPM/burst — safe to retry.
+  rpdExhausted?: boolean;
 }
 
 async function callGemini(key: string, model: string, prompt: string): Promise<GeminiResult> {
@@ -333,10 +434,116 @@ async function callGemini(key: string, model: string, prompt: string): Promise<G
   }
 }
 
+// Groq OpenAI-compatible chat completions
+async function callGroq(key: string, model: string, prompt: string): Promise<GeminiResult> {
+  const url = 'https://api.groq.com/openai/v1/chat/completions';
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an urban air quality classifier. Respond ONLY with valid JSON array as instructed. No prose, no markdown fences.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.1,
+        max_tokens: 8192,
+        response_format: { type: 'json_object' },
+      }),
+    });
+    if (!r.ok) {
+      const err = await r.text();
+      // Distinguish RPD-exhaustion (real "your account is done for the day")
+      // from TPM/RPM burst (transient — refills within ~60s). Groq returns
+      // `x-ratelimit-remaining-requests` (RPD bucket) and
+      // `x-ratelimit-remaining-tokens` (TPM bucket). Only the former at 0
+      // means the key is dead for today; the latter being low just means
+      // back off briefly.
+      let rpdExhausted = false;
+      if (r.status === 429) {
+        const remReq = r.headers.get('x-ratelimit-remaining-requests');
+        if (remReq !== null && Number(remReq) <= 0) rpdExhausted = true;
+      }
+      return { ok: false, status: r.status, error: err, rpdExhausted };
+    }
+    const j = await r.json();
+    const text = j.choices?.[0]?.message?.content ?? '';
+    return { ok: true, text };
+  } catch (e) {
+    return { ok: false, status: 0, error: String(e) };
+  }
+}
+
+// Local vLLM (OpenAI-compatible). The `key` arg is a fake slot id (we don't
+// auth against vLLM by default). LOCAL_VLLM_URL must be a base url ending
+// with `/v1` (we append `/chat/completions`).
+async function callLocal(_key: string, model: string, prompt: string): Promise<GeminiResult> {
+  const url = `${LOCAL_VLLM_URL.replace(/\/$/, '')}/chat/completions`;
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // vLLM accepts any token by default; harmless if --api-key isn't set.
+        Authorization: 'Bearer EMPTY',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an urban air quality classifier. Respond ONLY with valid JSON array as instructed. No prose, no markdown fences.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.1,
+        // Output budget: 15 rows × ~40 tok/row = ~600 tok worst case. 1024
+        // gives margin; combined with ~2K prompt we stay well under vLLM's
+        // 4096 max-model-len.
+        max_tokens: 1024,
+        // No response_format: vLLM's `json_object` guided decoding forces an
+        // object root, which breaks our array-shaped expected output. The
+        // system prompt is strict enough — safeParseArray handles either form.
+      }),
+    });
+    if (!r.ok) {
+      const err = await r.text();
+      return { ok: false, status: r.status, error: err };
+    }
+    const j = await r.json();
+    const text = j.choices?.[0]?.message?.content ?? '';
+    return { ok: true, text };
+  } catch (e) {
+    return { ok: false, status: 0, error: String(e) };
+  }
+}
+
+async function callProvider(provider: ProviderName, key: string, model: string, prompt: string): Promise<GeminiResult> {
+  if (provider === 'gemini') return callGemini(key, model, prompt);
+  if (provider === 'groq') return callGroq(key, model, prompt);
+  return callLocal(key, model, prompt);
+}
+
 function safeParseArray(raw: string): Array<{ id: number; mc: string; pf: number }> | null {
   try {
     const j = JSON.parse(raw);
     if (Array.isArray(j)) return j;
+    // Groq with response_format=json_object wraps array in `{results:[...]}` or
+    // `{predictions:[...]}` or `{classifications:[...]}`. Try common keys.
+    if (j && typeof j === 'object') {
+      for (const key of ['results', 'predictions', 'classifications', 'data', 'items', 'roads']) {
+        if (Array.isArray(j[key])) return j[key];
+      }
+      // If it's a single object with id/mc/pf, wrap it
+      if (typeof j.id === 'number' && j.mc) return [j];
+    }
   } catch {
     /* try fallbacks */
   }
@@ -420,73 +627,85 @@ let totalCalls = 0;
 const startedAt = Date.now();
 // Track consecutive 429s per (key, model) — a single 429 can be transient
 // (anti-burst from too many concurrent workers), not RPD exhaustion. Only
-// mark a combo as exhausted after several in a row.
+// mark a combo as exhausted after MANY in a row. Higher threshold avoids
+// false-positive exhaustion during IP-level burst storms (Gemini's "Resource
+// has been exhausted" message is generic across burst-429 and RPD-429).
 const consec429 = new Map<string, number>();
-const CONSEC_429_LIMIT = 3;
+const CONSEC_429_LIMIT = 10;
 
-// One worker per (key, model) combination — they run truly in parallel.
-// Each respects its own RPD/RPM quota. When this combo is exhausted (RPD
-// hit, 404 disabled, 429 quota), worker exits. Others keep going on their
-// own quotas. Effective parallelism = KEYS × MODELS = up to 24 in flight.
-async function worker(keyIdx: number, m: ModelSpec, startupDelayMs: number): Promise<void> {
-  const k = String(keyIdx);
-  const tag = `K${keyIdx}/${m.id}`;
+// One worker per (provider, key_idx, model) combination. Quota state keyed
+// by "<provider>:<keyIdx>" to keep Gemini and Groq buckets separate.
+async function worker(spec: WorkerSpec, startupDelayMs: number): Promise<void> {
+  const { provider, keyIdx, model } = spec;
+  const k = `${provider}:${keyIdx}`;
+  const tagPrefix = provider === 'gemini' ? 'Gm' : provider === 'groq' ? 'Gq' : 'Lo';
+  const tag = `${tagPrefix}${keyIdx}/${model.id.split('/').pop()}`;
+  const keys = keysFor(provider);
+  if (keyIdx >= keys.length) return;  // safety
+  const apiKey = keys[keyIdx];
+
   if (startupDelayMs > 0) await new Promise((r) => setTimeout(r, startupDelayMs));
   while (true) {
-    // Per-worker quota check (no shared model picking)
-    if (state.disabled[k]?.includes(m.id)) {
+    if (state.disabled[k]?.includes(model.id)) {
       console.log(`[${tag}] disabled, exiting`);
       return;
     }
-    const used = state.usage[k]?.[m.id] ?? 0;
-    if (used >= m.rpd) {
-      console.log(`[${tag}] RPD limit reached (${used}/${m.rpd}), exiting`);
+    const used = state.usage[k]?.[model.id] ?? 0;
+    if (used >= model.rpd) {
+      console.log(`[${tag}] RPD limit reached (${used}/${model.rpd}), exiting`);
       return;
     }
 
-    const batch = await fetchNext();
+    const batch = await fetchNext(model.maxBatchSize ?? BATCH);
     if (!batch) {
       console.log(`[${tag}] no more unclassified rows`);
       return;
     }
 
-    await rateLimit(keyIdx, m);
-    await globalThrottle();
-    markUsed(keyIdx, m.id);
+    await rateLimit(k, model);  // per-(provider,key,model) RPM throttle
+    await globalThrottle(provider);
+    markUsed(k, model.id);
     totalCalls += 1;
 
     const t0 = Date.now();
-    const result = await callGemini(KEYS[keyIdx], m.id, buildPrompt(batch.region, batch.roads));
+    const result = await callProvider(provider, apiKey, model.id, buildPrompt(batch.region, batch.roads));
     const latency = Date.now() - t0;
 
     if (!result.ok) {
       const errSnip = (result.error ?? '').slice(0, 120).replace(/\s+/g, ' ');
       console.log(`[${tag}] FAIL ${result.status} ${errSnip}`);
-      if (result.status === 404 || result.status === 400) markDisabled(keyIdx, m.id);
-      // 403 = key leaked / disabled by Google anti-abuse — permanent
-      if (result.status === 403) {
-        console.log(`[${tag}] 403 (key flagged) → permanently disabled`);
-        markDisabled(keyIdx, m.id);
+      if (result.status === 404 || result.status === 400) markDisabled(k, model.id);
+      if (result.status === 403 || result.status === 401) {
+        console.log(`[${tag}] ${result.status} (key flagged/invalid) → permanently disabled`);
+        markDisabled(k, model.id);
       }
       if (result.status === 429) {
+        // Authoritative signal first: Groq's response header. If the provider
+        // tells us remaining-requests is 0 → key is genuinely done for the day.
         const n = (consec429.get(tag) ?? 0) + 1;
         consec429.set(tag, n);
-        if (n >= CONSEC_429_LIMIT) {
-          console.log(`[${tag}] ${n}x consecutive 429 → marking RPD exhausted for today`);
+        // Gemini doesn't expose remaining-requests headers, so we fall back
+        // to the consec429 heuristic for it. Set Gemini's limit high (the
+        // earlier 10 was already a survivable threshold). For Groq, the
+        // heuristic is disabled — we trust the header signal alone.
+        const consecExhausted = provider === 'gemini' && n >= CONSEC_429_LIMIT;
+        if (result.rpdExhausted || consecExhausted) {
+          const reason = result.rpdExhausted ? 'header says RPD=0' : `${n}x consec 429`;
+          console.log(`[${tag}] ${reason} → marking exhausted for today`);
           state.usage[k] ??= {};
-          state.usage[k][m.id] = m.rpd;
+          state.usage[k][model.id] = model.rpd;
           saveState();
         } else {
-          // Transient rate limit — random backoff 8-15s, no permanent mark
-          await new Promise((r) => setTimeout(r, 8000 + Math.random() * 7000));
+          // Exponential-ish backoff with jitter — burst storms last 30-60s,
+          // so a single 8s wait followed by another fire often re-collides.
+          const base = Math.min(120_000, 15_000 * n);
+          await new Promise((r) => setTimeout(r, base + Math.random() * 15_000));
         }
       } else if (result.status === 503 || result.status === 500) {
-        // Transient overload — short random backoff
         await new Promise((r) => setTimeout(r, 2000 + Math.random() * 4000));
       }
       continue;
     }
-    // Successful call resets 429 streak
     consec429.delete(tag);
 
     const parsed = safeParseArray(result.text ?? '');
@@ -507,23 +726,23 @@ async function worker(keyIdx: number, m: ModelSpec, startupDelayMs: number): Pro
 }
 
 // ─── Entry ───────────────────────────────────────────────────
-const workerCount = KEYS.length * MODELS.length;
+const specs = allWorkerSpecs();
+const geminiCount = specs.filter(s => s.provider === 'gemini').length;
+const groqCount = specs.filter(s => s.provider === 'groq').length;
+const localCount = specs.filter(s => s.provider === 'local').length;
 console.log(
-  `Starting backlog classifier: ${KEYS.length} keys × ${MODELS.length} models = ${workerCount} workers | regions=[${REGIONS.join(', ')}] | batch=${BATCH}${DRY_RUN ? ' | DRY-RUN' : ''}`,
+  `Starting backlog classifier: ${GEMINI_KEYS.length} Gemini + ${GROQ_KEYS.length} Groq + ${LOCAL_KEYS.length} local slots = ${specs.length} workers (${geminiCount} Gm, ${groqCount} Gq, ${localCount} Lo) | regions=[${REGIONS.join(', ')}] | batch=${BATCH}${LOCAL_VLLM_URL ? ` | vllm=${LOCAL_VLLM_URL}` : ''}${DRY_RUN ? ' | DRY-RUN' : ''}`,
 );
 console.log(`Quota state: ${STATE_PATH} (day=${state.day} PT)`);
 
-// Stagger startup: with 50+ workers all firing at once, Gemini's anti-burst
-// kicks in and returns spurious 429s. ~150ms stagger over the worker pool
-// avoids that without significantly delaying steady-state throughput.
+// Stagger startup: with 30-50 workers all firing at once, anti-burst kicks in.
+// ~150ms stagger spreads the initial wave.
 const allWorkers: Promise<void>[] = [];
 let staggerIdx = 0;
-for (let i = 0; i < KEYS.length; i++) {
-  for (const m of MODELS) {
-    const delay = staggerIdx * 150;
-    allWorkers.push(worker(i, m, delay));
-    staggerIdx++;
-  }
+for (const spec of specs) {
+  const delay = staggerIdx * 150;
+  allWorkers.push(worker(spec, delay));
+  staggerIdx++;
 }
 
 void Promise.all(allWorkers).then(() => {
