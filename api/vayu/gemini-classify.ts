@@ -42,39 +42,99 @@ async function redisSetEx(key: string, ttl: number, value: string): Promise<void
   } catch { /* non-fatal */ }
 }
 
-// ─── Gemini API call ────────────────────────────────────────
-async function callGemini(prompt: string, model = 'gemini-2.5-flash-lite'): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) return null;
+// ─── Gemini API call (multi-key + model fallback) ───────────
+// GEMINI_API_KEYS (plural, comma-separated) = round-robin key pool. Falls
+// back to legacy single GEMINI_API_KEY if plural not set.
+//
+// On 429/quota-exhausted, retries with the next key. On other errors,
+// returns null after first failure so caller can move on (cron will retry
+// next tick). Model fallback order matches local script: highest RPD first.
+function getKeyPool(): string[] {
+  const multi = process.env.GEMINI_API_KEYS;
+  if (multi) {
+    const arr = multi.split(',').map((k) => k.trim()).filter(Boolean);
+    if (arr.length > 0) return arr;
+  }
+  const single = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+  return single ? [single] : [];
+}
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+// Round-robin index by minute so different cron firings hit different keys.
+// Bias by minute-of-hour means cron at 0,12,24,36,48 spreads across keys.
+function pickStartKeyIdx(poolSize: number): number {
+  const minute = Math.floor(Date.now() / 60_000);
+  return ((minute % poolSize) + poolSize) % poolSize;
+}
 
-  try {
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.1,
-          maxOutputTokens: 8192,
-        },
-      }),
-    });
+const DEFAULT_MODELS = ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite'];
 
-    if (!resp.ok) {
-      const err = await resp.text();
-      console.error('Gemini API error:', resp.status, err);
-      return null;
-    }
-
-    const json = await resp.json();
-    return json.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
-  } catch (err) {
-    console.error('Gemini call failed:', err);
+async function callGemini(prompt: string, modelOrFallback?: string | string[]): Promise<string | null> {
+  const pool = getKeyPool();
+  if (pool.length === 0) {
+    console.error('Gemini: no API keys configured');
     return null;
   }
+
+  const models = Array.isArray(modelOrFallback)
+    ? modelOrFallback
+    : modelOrFallback
+      ? [modelOrFallback]
+      : DEFAULT_MODELS;
+
+  const startIdx = pickStartKeyIdx(pool.length);
+
+  for (let attempt = 0; attempt < pool.length; attempt++) {
+    const keyIdx = (startIdx + attempt) % pool.length;
+    const apiKey = pool[keyIdx];
+
+    for (const model of models) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.1,
+              maxOutputTokens: 8192,
+            },
+          }),
+        });
+
+        if (resp.ok) {
+          const json = await resp.json();
+          const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+          if (text) return text;
+          // Empty candidate — try next model
+          console.warn(`Gemini empty candidate via key#${keyIdx}/${model}`);
+          continue;
+        }
+
+        // 429 → quota on this (key, model). Try next model first; if all
+        // models 429 on this key, fall through to next key.
+        if (resp.status === 429) {
+          console.warn(`Gemini 429 key#${keyIdx}/${model} — rotating`);
+          continue;
+        }
+
+        // 503/500 → transient, try next model
+        if (resp.status === 503 || resp.status === 500) {
+          console.warn(`Gemini ${resp.status} key#${keyIdx}/${model} — rotating`);
+          continue;
+        }
+
+        // Other errors (400/404/etc.) — model issue, try next model
+        const err = await resp.text();
+        console.error(`Gemini ${resp.status} key#${keyIdx}/${model}: ${err.slice(0, 200)}`);
+      } catch (err) {
+        console.error(`Gemini call failed key#${keyIdx}/${model}:`, err);
+      }
+    }
+  }
+
+  return null;
 }
 
 // ─── Fetch unclassified roads ───────────────────────────────

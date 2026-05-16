@@ -37,3 +37,6 @@ __pycache__/
 
 .vercel
 .env*.local
+
+# Classify backlog quota tracker (per-day quota state)
+.cache/

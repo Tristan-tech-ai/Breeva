@@ -12,7 +12,8 @@
     "seed:fresh": "tsx supabase/seed/index.ts --fresh",
     "seed:users": "tsx supabase/seed/index.ts --only=users",
     "seed:merchants": "tsx supabase/seed/index.ts --only=merchants",
-    "seed:walks": "tsx supabase/seed/index.ts --only=walks"
+    "seed:walks": "tsx supabase/seed/index.ts --only=walks",
+    "classify:backlog": "tsx scripts/classify-backlog.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
