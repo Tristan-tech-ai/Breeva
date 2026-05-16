@@ -175,21 +175,24 @@ function roadWeight(highway: string): number {
 // LIMITs sized for DB-side highway filtering (migration 004 applied).
 // JS safety-net filter still present as belt-and-suspenders.
 function getQueryParams(zoom: number): { limit: number; highways: string[] | null; simplify: number } {
-  // z16+: ALL roads — gang, lorong, service, footway
-  if (zoom >= 16) return { limit: 15000, highways: null, simplify: 0 };
+  // z16+: ALL roads — gang, lorong, service, footway.
+  // Limit raised to 25k after PostgREST Range header unblocked
+  // db-max-rows=1000 cap. Aggressive simplify (~2m tolerance) at this zoom
+  // is invisible (street level) but trims geometry payload by ~30-40%.
+  if (zoom >= 16) return { limit: 25000, highways: null, simplify: 0.00002 };
   // z15: + residential, living_street, unclassified
-  if (zoom >= 15) return { limit: 10000, highways: [
+  if (zoom >= 15) return { limit: 18000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
     'tertiary', 'tertiary_link',
     'residential', 'living_street', 'unclassified',
-  ], simplify: 0 };
+  ], simplify: 0.00005 };
   // z14: + tertiary (medium roads)
-  if (zoom >= 14) return { limit: 8000, highways: [
+  if (zoom >= 14) return { limit: 12000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
     'tertiary', 'tertiary_link',
-  ], simplify: 0 };
+  ], simplify: 0.0001 };
   // z13: primary + secondary
   if (zoom >= 13) return { limit: 5000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
@@ -775,12 +778,19 @@ async function findRoadsInBbox(
     const params: Record<string, unknown> = { south, west, north, east, road_limit: limit };
     if (_simplifyTolerance > 0) params.simplify_tolerance = _simplifyTolerance;
     if (highwayTypes) params.highway_types = highwayTypes;
+    // PostgREST default db-max-rows = 1000 — caps RPC result regardless of
+    // the function's internal LIMIT. The "Range" header overrides this cap
+    // up to the requested upper bound. Without this header, dense urban
+    // viewports (>1000 roads) get truncated, leaving half the map blank.
+    const upper = Math.max(0, limit - 1);
     const resp = await fetch(`${url}/rest/v1/rpc/find_roads_in_bbox`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         apikey: key,
         Authorization: `Bearer ${key}`,
+        'Range-Unit': 'items',
+        Range: `0-${upper}`,
       },
       body: JSON.stringify(params),
     });
