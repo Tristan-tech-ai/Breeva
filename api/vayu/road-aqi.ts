@@ -233,6 +233,146 @@ function elevationFactor(elevationM: number | null): number {
   return Math.max(0.80, Math.exp(-elevationM / 8500));
 }
 
+// ─── Phase 1.3: per-region CALINE3 static priors ─────────────
+// Loaded from public.caline3_region_params (seeded for 17 regions, see
+// migration `caline3_region_params`). Cached in process memory for 1 hour.
+// Real-time wind from Open-Meteo overrides region wind_speed_dry/wet (they
+// are kept for offline scenarios / fallback only).
+interface RegionCaline3Params {
+  surface_roughness: number;    // 0..1.5 — urban dense ~0.9, suburban ~0.5, rural ~0.4
+  stability_morning: number;    // Pasquill class 1..6 (low = unstable, high = stable)
+  stability_afternoon: number;
+  stability_night: number;
+  inversion_height_dry: number; // metres
+  inversion_height_wet: number;
+  mean_elevation_m: number;
+}
+
+const REGION_PARAMS_DEFAULT: RegionCaline3Params = {
+  surface_roughness: 0.5,
+  stability_morning: 3.0,
+  stability_afternoon: 2.0,
+  stability_night: 5.0,
+  inversion_height_dry: 800,
+  inversion_height_wet: 1200,
+  mean_elevation_m: 50,
+};
+
+const regionParamsCache = new Map<string, { p: RegionCaline3Params; at: number }>();
+const REGION_PARAMS_TTL_MS = 60 * 60 * 1000;
+
+async function getRegionParams(region: string): Promise<RegionCaline3Params> {
+  const cached = regionParamsCache.get(region);
+  if (cached && Date.now() - cached.at < REGION_PARAMS_TTL_MS) return cached.p;
+
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return REGION_PARAMS_DEFAULT;
+  try {
+    const r = await fetch(
+      `${url}/rest/v1/caline3_region_params?region=eq.${encodeURIComponent(region)}&select=surface_roughness,stability_morning,stability_afternoon,stability_night,inversion_height_dry,inversion_height_wet,mean_elevation_m&limit=1`,
+      { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+    );
+    if (!r.ok) return REGION_PARAMS_DEFAULT;
+    const rows = await r.json();
+    if (rows.length === 0) return REGION_PARAMS_DEFAULT;
+    const p = rows[0] as RegionCaline3Params;
+    regionParamsCache.set(region, { p, at: Date.now() });
+    return p;
+  } catch {
+    return REGION_PARAMS_DEFAULT;
+  }
+}
+
+function timeOfDayKey(): 'morning' | 'afternoon' | 'night' {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 12) return 'morning';
+  if (h >= 12 && h < 18) return 'afternoon';
+  return 'night';
+}
+
+function currentSeason(): 'dry' | 'wet' {
+  const m = new Date().getMonth() + 1;
+  return m >= 5 && m <= 10 ? 'dry' : 'wet';
+}
+
+// Derived multiplier on dispersion delta from region calibration.
+// surface_roughness > 0.5: urban → less ventilation → multiplier >1 (more concentration)
+// stability factor: Pasquill A(1)=very unstable, F(6)=very stable; higher = more
+//   concentration (less mixing) → multiplier scales linearly 0.7..1.4
+// inversion_height < road delta + baseline → trap, slight boost
+function regionDispersionMultiplier(p: RegionCaline3Params): number {
+  const roughnessFactor = 1.0 + 0.4 * (p.surface_roughness - 0.5);  // 0.4→0.96, 0.9→1.16
+  const tod = timeOfDayKey();
+  const stab = tod === 'morning' ? p.stability_morning
+    : tod === 'afternoon' ? p.stability_afternoon
+    : p.stability_night;
+  const stabilityFactor = 0.7 + 0.12 * (stab - 1.0);  // class 1→0.7, class 6→1.3
+  const season = currentSeason();
+  const invH = season === 'dry' ? p.inversion_height_dry : p.inversion_height_wet;
+  const inversionFactor = invH < 600 ? 1.15 : invH < 900 ? 1.05 : 1.0;
+  return roughnessFactor * stabilityFactor * inversionFactor;
+}
+
+// ─── Phase 1.4: TomTom traffic_calibration lookup ───────────
+// Aggregated per (region, road_class, hour_of_day, day_of_week).
+// Populated by vayu/calibration/tomtom_sampler.py (Windows Task hourly).
+// Returns Map<highway_class → correction_factor>; missing classes default 1.0.
+// ─── Phase 1.2: aqi_grid_sentinel freshness lookup ───────────
+// Returns age in hours (or null) of most recent Sentinel-5P data within bbox.
+// Used by confidence scoring: fresh satellite data boosts confidence by ~0.3.
+async function getSentinelAgeHours(
+  south: number, west: number, north: number, east: number,
+): Promise<number | null> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  try {
+    const r = await fetch(
+      `${url}/rest/v1/aqi_grid_sentinel?centroid_lat=gte.${south}&centroid_lat=lte.${north}` +
+      `&centroid_lng=gte.${west}&centroid_lng=lte.${east}` +
+      `&select=sentinel_acquired_at&order=sentinel_acquired_at.desc&limit=1`,
+      { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+    );
+    if (!r.ok) return null;
+    const rows = await r.json() as Array<{ sentinel_acquired_at: string }>;
+    if (rows.length === 0 || !rows[0].sentinel_acquired_at) return null;
+    const ageMs = Date.now() - new Date(rows[0].sentinel_acquired_at).getTime();
+    return ageMs / (60 * 60 * 1000);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchTrafficCorrections(
+  _region: string, hourOfDay: number, dayOfWeek: number
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return out;
+  try {
+    // Note: traffic_calibration in seeded form keys on (road_class,hour,dow) without region;
+    // the table also has 'region' if a column was added later. Query is region-agnostic
+    // fallback when region filter returns 0 rows.
+    const baseUrl =
+      `${url}/rest/v1/traffic_calibration?hour_of_day=eq.${hourOfDay}&day_of_week=eq.${dayOfWeek}` +
+      `&select=road_class,correction_factor,sample_count`;
+    const r = await fetch(baseUrl, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+    if (!r.ok) return out;
+    const rows = await r.json() as Array<{ road_class: string; correction_factor: number; sample_count: number }>;
+    for (const row of rows) {
+      // Only trust rows with enough samples; otherwise default-1.0 wins
+      if (row.sample_count >= 1 && row.correction_factor > 0) {
+        out.set(row.road_class, row.correction_factor);
+      }
+    }
+    return out;
+  } catch {
+    return out;
+  }
+}
+
 // ─── Types ──────────────────────────────────────────────────
 interface RoadRow {
   osm_way_id: number;
@@ -273,6 +413,34 @@ interface RoadAQIFeature {
   // hash fallback (C1 stopgap). UI bisa surface badge "AI-classified" untuk
   // jalan dengan ai_classified=true.
   ai_classified: boolean;
+  // Phase 1.1: 0..1 confidence in AQI estimate. Blends station distance,
+  // satellite freshness, model availability, crowdsource count, plus a small
+  // per-road boost when ai_pollution_factor is real (vs hash fallback).
+  confidence_score: number;
+}
+
+// Local mirror of Postgres compute_aqi_confidence() — same formula, no RTT cost.
+function computeAqiConfidenceLocal(args: {
+  has_station: boolean; station_distance_km: number;
+  has_satellite: boolean; satellite_age_hours: number;
+  has_model: boolean; has_crowdsource: boolean; crowdsource_count: number;
+}): number {
+  let s = 0;
+  if (args.has_station) s += Math.max(0.1, 0.5 * Math.exp(-(args.station_distance_km ?? 99) / 8));
+  if (args.has_satellite) s += Math.max(0.05, 0.3 * Math.exp(-(args.satellite_age_hours ?? 99) / 12));
+  if (args.has_model) s += 0.2;
+  if (args.has_crowdsource && args.crowdsource_count > 0) s += Math.min(0.2, 0.05 * args.crowdsource_count);
+  return Math.max(0, Math.min(1, s));
+}
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
 }
 
 // ─── Open-Meteo BATCH fetch (5 points in 2 HTTP calls) ─────
@@ -554,6 +722,9 @@ function evaluatePixel(s) {
 // compares against Open-Meteo baseline, returns additive bias.
 // Cached in Redis for 1 hour to conserve WAQI quota (1000 req/day).
 interface WAQIBias {
+  // Phase 1.1: distance from station to viewport center, when station available.
+  // Null = no station found within reasonable radius. Drives confidence_score.
+  stationDistanceKm: number | null;
   pm25: number;
   pm10: number;
   no2: number;
@@ -562,7 +733,7 @@ interface WAQIBias {
 }
 
 async function fetchWAQIBias(lat: number, lon: number, openMeteoBaseline: BaselineData): Promise<WAQIBias> {
-  const noBias: WAQIBias = { pm25: 0, pm10: 0, no2: 0, o3: 0, stationName: null };
+  const noBias: WAQIBias = { pm25: 0, pm10: 0, no2: 0, o3: 0, stationName: null, stationDistanceKm: null };
 
   const token = process.env.WAQI_TOKEN;
   if (!token) return noBias;
@@ -586,6 +757,11 @@ async function fetchWAQIBias(lat: number, lon: number, openMeteoBaseline: Baseli
 
     const iaqi = json.data.iaqi;
     const stationName: string = json.data.city?.name ?? null;
+    // Phase 1.1: compute distance to viewport center for confidence scoring.
+    const geo = json.data.city?.geo;
+    const stationDistanceKm = Array.isArray(geo) && typeof geo[0] === 'number' && typeof geo[1] === 'number'
+      ? haversineKm(lat, lon, geo[0], geo[1])
+      : null;
 
     // Extract pollutant concentrations from WAQI (values are in AQI sub-index)
     // Convert PM2.5 AQI → µg/m³ using EPA breakpoints
@@ -612,6 +788,7 @@ async function fetchWAQIBias(lat: number, lon: number, openMeteoBaseline: Baseli
       no2: clampBias(waqiNo2, openMeteoBaseline.no2),
       o3: clampBias(waqiO3, openMeteoBaseline.o3),
       stationName,
+      stationDistanceKm,
     };
 
     // Cache for 1 hour
@@ -846,7 +1023,9 @@ function aiFactorFallback(osmWayId: number, highway: string): number {
 function computeRoadAQI(
   road: RoadRow,
   baseline: { pm25: number; pm10: number; no2: number; o3: number; wind_speed: number },
-  diurnal: number
+  diurnal: number,
+  regionMultiplier: number = 1.0,           // Phase 1.3: per-region CALINE3 calibration
+  trafficCorrections?: Map<string, number>, // Phase 1.4: TomTom-derived correction per road class
 ): {
   aqi: number; pm25: number; no2: number; o3: number; pm10: number;
   pm25_delta: number; no2_delta: number; pm10_delta: number;
@@ -882,8 +1061,14 @@ function computeRoadAQI(
   // Elevation correction: higher altitude = faster dispersion
   const elevFactor = elevationFactor(road.elevation_avg);
 
-  let pm25Delta = gaussianConc(qPM25, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * elevFactor;
-  let no2Delta  = gaussianConc(qNOx, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * elevFactor;
+  // Phase 1.4: TomTom-derived correction factor per (road_class, hour, dow).
+  // 1.0 = free flow (no extra emission). >1.0 = congested (idle + low-gear =
+  // higher emission per km). Lookup is per-road's highway class — falls back
+  // to 1.0 if no calibration data for this (region, class, hour, dow).
+  const trafficCorr = trafficCorrections?.get(road.highway) ?? 1.0;
+
+  let pm25Delta = gaussianConc(qPM25, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * elevFactor * regionMultiplier * trafficCorr;
+  let no2Delta  = gaussianConc(qNOx, effectiveWind, dist, 0.5) * veg * canyonTrap * widthFactor * elevFactor * regionMultiplier * trafficCorr;
 
   // ── AI pollution factor: real Gemini classification OR deterministic
   //    hash fallback (C1 stopgap until Gemini batch classifies this region).
@@ -1057,6 +1242,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const region = detectRegion(cLat, cLon);
     const today = new Date().toISOString().slice(0, 10);
 
+    // ── Phase 1.3: per-region CALINE3 static priors (cached 1h) ──
+    const regionParams = await getRegionParams(region);
+    const regionMultiplier = regionDispersionMultiplier(regionParams);
+
+    // ── Phase 1.4: TomTom traffic corrections per highway class ──
+    // Aggregate cached in DB by tomtom_sampler.py. Looked up by current (hour, dow).
+    const nowJkt = new Date();
+    const trafficCorrections = await fetchTrafficCorrections(
+      region,
+      nowJkt.getHours(),
+      nowJkt.getDay(),
+    );
+
     // ── WAQI History Save (feeds Module B temporal learning) ──
     // Fire-and-forget: save hourly WAQI readings so Gemini can learn traffic patterns
     if (fh === 0 && bias.stationName) {
@@ -1108,6 +1306,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }));
     }
 
+    // Phase 1.1+1.2: region-level confidence baseline. WAQI station presence
+    // + distance dominate; Sentinel-5P freshness now wired via aqi_grid_sentinel.
+    const sentAgeHours = await getSentinelAgeHours(s, w, n, e);
+    const regionConfidence = computeAqiConfidenceLocal({
+      has_station: bias.stationName != null,
+      station_distance_km: bias.stationDistanceKm ?? 99,
+      has_satellite: sentAgeHours != null && sentAgeHours < 72,
+      satellite_age_hours: sentAgeHours ?? 99,
+      has_model: true,
+      has_crowdsource: false,
+      crowdsource_count: 0,
+    });
+
     // Compute per-road AQI with spatially interpolated baseline
     const features: RoadAQIFeature[] = [];
     for (const road of filtered) {
@@ -1132,7 +1343,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const baseline = interpCorrected(roadLat, roadLon);
 
       let { aqi, pm25, no2, o3, pm10, pm25_delta, no2_delta, pm10_delta, ai_classified } =
-        computeRoadAQI(road, baseline, diurnal);
+        computeRoadAQI(road, baseline, diurnal, regionMultiplier, trafficCorrections);
 
       // ── Apply residual error correction (Module C) ──
       // Note: corrFactor scales the absolute concentration (baseline+delta).
@@ -1148,6 +1359,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         aqi = pm25ToAQI(pm25);
       }
 
+      // Per-road confidence: region baseline + ai_classified boost (real Gemini
+      // classification = more reliable emission factor estimate).
+      const confidence_score = Math.min(1, regionConfidence + (ai_classified ? 0.1 : 0));
+
       features.push({
         osm_way_id: road.osm_way_id,
         geometry,
@@ -1162,6 +1377,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         highway: road.highway,
         weight: roadWeight(road.highway),
         ai_classified,
+        confidence_score,
       });
     }
 

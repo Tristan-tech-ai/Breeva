@@ -126,6 +126,22 @@ export function AQIOverlayToggle({ currentAQI: _currentAQI, userLocation: _userL
                 </div>
               ))}
             </div>
+            {/* Phase 1.1: confidence indicator legend */}
+            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 space-y-1">
+              <div className="text-[10px] font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider mb-1">Confidence</div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-0.5 bg-gray-700 dark:bg-gray-300" style={{ opacity: 0.9 }} />
+                <span className="text-[9px] text-gray-500 dark:text-gray-400 flex-1">High (station + model)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-0.5 bg-gray-700 dark:bg-gray-300" style={{ opacity: 0.6 }} />
+                <span className="text-[9px] text-gray-500 dark:text-gray-400 flex-1">Medium</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <svg width="16" height="2"><line x1="0" y1="1" x2="16" y2="1" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 2" opacity="0.6" /></svg>
+                <span className="text-[9px] text-gray-500 dark:text-gray-400 flex-1">Low (model only)</span>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

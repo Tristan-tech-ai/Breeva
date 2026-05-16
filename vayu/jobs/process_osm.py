@@ -17,6 +17,15 @@ Requirements:
 """
 
 import argparse
+# Load .env.local from repo root (idempotent — silent if missing)
+try:
+    from dotenv import load_dotenv
+    from pathlib import Path as _Path
+    _root = _Path(__file__).resolve().parents[2]
+    load_dotenv(_root / '.env.local', override=False)
+    load_dotenv(_root / '.env', override=False)
+except Exception:
+    pass
 import json
 import logging
 import math
@@ -63,10 +72,15 @@ REGIONS: dict[str, Region] = {
     "jakarta": Region("jakarta", -6.30, 106.75, -6.10, 106.95),
     "bandung": Region("bandung", -6.95, 107.57, -6.87, 107.67),
     "surabaya": Region("surabaya", -7.33, 112.70, -7.23, 112.80),
-    "semarang": Region("semarang", -7.02, 110.37, -6.94, 110.47),
-    "yogyakarta": Region("yogyakarta", -7.82, 110.34, -7.74, 110.42),
-    "solo": Region("solo", -7.60, 110.79, -7.53, 110.86),
+    "semarang": Region("semarang", -7.10, 110.30, -6.90, 110.55),       # +Demak suburbs
+    "yogyakarta": Region("yogyakarta", -7.90, 110.25, -7.65, 110.50),    # +Sleman+Bantul
+    "solo": Region("solo", -7.68, 110.70, -7.50, 110.92),                # +Sukoharjo+Karanganyar
     "malang": Region("malang", -8.00, 112.60, -7.94, 112.66),
+    # --- Sumatra (urban metro) ---
+    "medan": Region("medan", 3.52, 98.60, 3.70, 98.78),                  # Kota Medan
+    "palembang": Region("palembang", -3.05, 104.70, -2.90, 104.85),      # Kota Palembang
+    # --- Sulawesi (urban metro, distinct from broad sulsel province) ---
+    "makassar": Region("makassar", -5.18, 119.38, -5.08, 119.52),        # Kota Makassar
     # --- Sulawesi (province-level, entire island) ---
     "sulsel": Region("sulsel", -5.60, 119.25, -2.80, 120.65),      # Sulawesi Selatan
     "sulbar": Region("sulbar", -3.60, 118.70, -1.40, 119.45),      # Sulawesi Barat
@@ -196,6 +210,7 @@ def query_overpass(query: str, label: str = "") -> dict:
             resp = requests.post(
                 OVERPASS_API_URL,
                 data={"data": query},
+                headers={"User-Agent": "breeva/1.0 (datathon air quality research; +https://breeva.site)"},
                 timeout=OVERPASS_TIMEOUT + 30,
             )
             resp.raise_for_status()

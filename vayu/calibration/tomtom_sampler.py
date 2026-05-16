@@ -75,6 +75,9 @@ SAMPLE_POINTS: list[tuple[float, float, str, str]] = [
     (1.4700, 124.8400, "primary", "sulut"),          # Jl. Sam Ratulangi, Manado
     # Sulawesi Tenggara — Kendari
     (-3.9700, 122.5100, "primary", "sultra"),        # Jl. MT Haryono, Kendari
+    # Palembang
+    (-2.9760, 104.7560, "primary", "palembang"),     # Jl. Jendral Sudirman
+    (-2.9900, 104.7700, "secondary", "palembang"),   # Jl. Kapten A. Rivai
 ]
 
 

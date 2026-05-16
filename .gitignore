@@ -40,3 +40,5 @@ __pycache__/
 
 # Classify backlog quota tracker (per-day quota state)
 .cache/
+mlruns/
+tmp/

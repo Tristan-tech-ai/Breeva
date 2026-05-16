@@ -112,6 +112,17 @@ const HOURLY_TRAFFIC: Record<number, number> = {
 };
 
 // ─── AQI Response type ──────────────────────────────────────
+type AqiSourceKind = 'station' | 'satellite' | 'model' | 'crowdsource';
+
+interface AqiSource {
+  source: AqiSourceKind;
+  value: number;           // PM2.5 contributed (μg/m³)
+  distance_km?: number;
+  age_hours?: number;
+  count?: number;
+  weight: number;          // blending weight assigned
+}
+
 interface AQIResponse {
   tile_id: string;
   aqi: number;
@@ -121,10 +132,95 @@ interface AQIResponse {
   co: number;
   o3: number;
   confidence: number;
+  source_breakdown: AqiSource[];
   layer_source: number;
   freshness: Freshness;
   computed_at: string;
   region: string;
+}
+
+// ─── Haversine distance (km) ────────────────────────────────
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// ─── WAQI nearest station ──────────────────────────────────
+interface StationData {
+  pm25: number; no2: number; aqi: number; distance_km: number;
+}
+async function getNearestStation(lat: number, lon: number): Promise<StationData | null> {
+  const token = process.env.WAQI_TOKEN || process.env.VITE_WAQI_TOKEN;
+  if (!token) return null;
+  try {
+    const resp = await fetch(`https://api.waqi.info/feed/geo:${lat};${lon}/?token=${token}`);
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    if (json.status !== 'ok' || !json.data) return null;
+    const d = json.data;
+    const sLat = d.city?.geo?.[0];
+    const sLon = d.city?.geo?.[1];
+    const iaqi = d.iaqi ?? {};
+    const pm25 = typeof iaqi.pm25?.v === 'number' ? iaqi.pm25.v : undefined;
+    if (typeof sLat !== 'number' || typeof sLon !== 'number' || pm25 === undefined) return null;
+    return {
+      pm25,
+      no2: typeof iaqi.no2?.v === 'number' ? iaqi.no2.v : 0,
+      aqi: typeof d.aqi === 'number' ? d.aqi : pm25ToAQI(pm25),
+      distance_km: haversineKm(lat, lon, sLat, sLon),
+    };
+  } catch { return null; }
+}
+
+// ─── Nearby crowdsourced reports ────────────────────────────
+interface CrowdReport { pm25: number; aqi: number; }
+async function getNearbyReports(lat: number, lon: number, radiusKm: number, maxAgeHours: number): Promise<CrowdReport[]> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return [];
+  try {
+    // Use PostGIS RPC if exists; otherwise bbox filter via REST.
+    const dLat = radiusKm / 111;
+    const dLon = radiusKm / (111 * Math.cos((lat * Math.PI) / 180));
+    const cutoff = new Date(Date.now() - maxAgeHours * 3600_000).toISOString();
+    const params = new URLSearchParams({
+      select: 'pm25,aqi',
+      created_at: `gte.${cutoff}`,
+    });
+    const resp = await fetch(
+      `${url}/rest/v1/air_quality_reports?${params}&lat=gte.${lat - dLat}&lat=lte.${lat + dLat}&lon=gte.${lon - dLon}&lon=lte.${lon + dLon}&limit=20`,
+      { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+    );
+    if (!resp.ok) return [];
+    const rows = await resp.json();
+    return rows.filter((r: any) => typeof r.pm25 === 'number');
+  } catch { return []; }
+}
+
+// ─── Postgres confidence helper (uses migration 0016 function) ─
+async function computeConfidence(args: {
+  has_station: boolean; station_distance_km: number;
+  has_satellite: boolean; satellite_age_hours: number;
+  has_model: boolean; has_crowdsource: boolean; crowdsource_count: number;
+}): Promise<number> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return args.has_model ? 0.2 : 0.0;
+  try {
+    const r = await fetch(`${url}/rest/v1/rpc/compute_aqi_confidence`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
+      body: JSON.stringify(args),
+    });
+    if (!r.ok) return 0.2;
+    const v = await r.json();
+    return typeof v === 'number' ? v : 0.2;
+  } catch { return 0.2; }
 }
 
 // ─── Open-Meteo baseline fetch (the fallback-safe core) ────
@@ -171,15 +267,54 @@ async function findNearbyRoads(lat: number, lon: number): Promise<Array<{
   } catch { return []; }
 }
 
-// ─── Main compute ───────────────────────────────────────────
+// ─── Main compute (multi-source blended + dispersion delta) ─
 async function compute(lat: number, lon: number): Promise<Omit<AQIResponse, 'tile_id' | 'freshness' | 'computed_at'>> {
-  const baseline = await fetchOpenMeteoAQI(lat, lon);
   const region = detectRegion(lat, lon);
 
-  // Try to get nearby roads for dispersion delta
-  const roads = await findNearbyRoads(lat, lon);
-  const diurnal = HOURLY_TRAFFIC[new Date().getHours()] ?? 1.0;
+  // Fetch all sources in parallel
+  const [baseline, station, reports, roads] = await Promise.all([
+    fetchOpenMeteoAQI(lat, lon),
+    getNearestStation(lat, lon),
+    getNearbyReports(lat, lon, 0.5, 2),
+    findNearbyRoads(lat, lon),
+  ]);
 
+  // Build weighted blend of pm25/no2 from independent sources.
+  const sources: AqiSource[] = [];
+  let pm25Sum = 0, no2Sum = 0, weightSum = 0;
+
+  // Station (highest weight, decay with distance)
+  if (station && station.distance_km < 30) {
+    const w = Math.max(0.05, 0.5 * Math.exp(-station.distance_km / 8));
+    pm25Sum += station.pm25 * w;
+    no2Sum += station.no2 * w;
+    weightSum += w;
+    sources.push({ source: 'station', value: station.pm25, distance_km: station.distance_km, weight: w });
+  }
+
+  // Model (Open-Meteo) — always available
+  {
+    const w = 0.2;
+    pm25Sum += baseline.pm25 * w;
+    no2Sum += baseline.no2 * w;
+    weightSum += w;
+    sources.push({ source: 'model', value: baseline.pm25, weight: w });
+  }
+
+  // Crowdsource — last 2h within 500m
+  if (reports.length > 0) {
+    const avgPm25 = reports.reduce((s, r) => s + r.pm25, 0) / reports.length;
+    const w = Math.min(0.4, 0.1 * reports.length);
+    pm25Sum += avgPm25 * w;
+    weightSum += w;
+    sources.push({ source: 'crowdsource', value: avgPm25, count: reports.length, weight: w });
+  }
+
+  const blendedPm25 = weightSum > 0 ? pm25Sum / weightSum : baseline.pm25;
+  const blendedNo2 = weightSum > 0 ? no2Sum / weightSum : baseline.no2;
+
+  // Dispersion delta from nearby roads (added on top of blended baseline)
+  const diurnal = HOURLY_TRAFFIC[new Date().getHours()] ?? 1.0;
   let pm25Delta = 0, no2Delta = 0, coFraction = 0;
   for (const road of roads) {
     const traffic = (road.traffic_base_estimate || 100) * (road.traffic_calibration_factor || 1.0) * diurnal;
@@ -194,12 +329,21 @@ async function compute(lat: number, lon: number): Promise<Omit<AQIResponse, 'til
     coFraction += gaussianConc(qCO, baseline.wind_speed, dist, 0.5) * veg * canyon;
   }
 
-  const pm25 = Math.max(0, baseline.pm25 + pm25Delta);
+  const pm25 = Math.max(0, blendedPm25 + pm25Delta);
   const pm10 = Math.max(0, baseline.pm10 + pm25Delta * 1.5);
-  const no2 = Math.max(0, baseline.no2 + no2Delta);
+  const no2 = Math.max(0, blendedNo2 + no2Delta);
   const co = Math.max(0, baseline.co + coFraction);
   const o3 = baseline.o3;
-  const confidence = roads.length > 0 ? 0.35 : 0.20;
+
+  const confidence = await computeConfidence({
+    has_station: !!station,
+    station_distance_km: station?.distance_km ?? 99,
+    has_satellite: false,                   // wired by Phase 1.2
+    satellite_age_hours: 99,
+    has_model: true,                        // Open-Meteo always present
+    has_crowdsource: reports.length > 0,
+    crowdsource_count: reports.length,
+  });
 
   return {
     aqi: pm25ToAQI(pm25),
@@ -209,6 +353,7 @@ async function compute(lat: number, lon: number): Promise<Omit<AQIResponse, 'til
     co: Math.round(co * 100) / 100,
     o3: Math.round(o3 * 100) / 100,
     confidence,
+    source_breakdown: sources,
     layer_source: roads.length > 0 ? 1 : 0,
     region,
   };

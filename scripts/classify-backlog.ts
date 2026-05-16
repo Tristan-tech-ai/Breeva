@@ -63,13 +63,27 @@ interface ModelSpec {
 
 // Listed in descending RPD so highest-yield model gets spent first per key.
 // If a model 404s (not yet released for this key), it auto-disables.
-const MODELS: ModelSpec[] = [
+// Defaulting to single model to match worker count that empirically didn't
+// trigger Google anti-burst (~18 in-flight). When KEYS is small (≤6), bump
+// to multi-model for more throughput. Override via env GEMINI_MODELS.
+const MODELS_DEFAULT_FULL: ModelSpec[] = [
   { id: 'gemini-3.1-flash-lite', rpd: 500, rpm: 15 },
   { id: 'gemini-2.5-flash', rpd: 20, rpm: 5 },
   { id: 'gemini-2.5-flash-lite', rpd: 20, rpm: 10 },
-  // gemini-3-flash listed in AI Studio dashboard but not yet exposed via
-  // v1beta API (404). Re-enable when Google releases it.
 ];
+const MODELS_DEFAULT_LITE: ModelSpec[] = [
+  { id: 'gemini-3.1-flash-lite', rpd: 500, rpm: 15 },
+];
+// 6 keys × 3 models = 18 workers OK; 18 keys × 3 = 54 hit anti-burst.
+// Auto-select model set based on key count to keep ~18 workers.
+const MODELS: ModelSpec[] =
+  process.env.GEMINI_MODELS === 'full'
+    ? MODELS_DEFAULT_FULL
+    : process.env.GEMINI_MODELS === 'lite'
+      ? MODELS_DEFAULT_LITE
+      : KEYS.length > 6
+        ? MODELS_DEFAULT_LITE
+        : MODELS_DEFAULT_FULL;
 
 // ─── Quota state (persist across runs within same Pacific day) ───
 interface QuotaState {
@@ -139,6 +153,30 @@ async function rateLimit(keyIdx: number, m: ModelSpec): Promise<void> {
   lastCallAt.set(k, Date.now());
 }
 
+// Aggregate request rate across ALL workers. Google's IP/account-level
+// anti-burst kicks in around ~30-50 RPM for free tier. Without this throttle,
+// 18 workers each respecting their per-key RPM still produce ~240 RPM total
+// and the IP gets blanket-429'd. Default ~30 RPM (2000ms interval).
+const GLOBAL_MIN_INTERVAL_MS = Number(arg('global-interval-ms', '2000'));
+let lastGlobalCallAt = 0;
+let globalThrottleQueue: Promise<void> = Promise.resolve();
+
+function globalThrottle(): Promise<void> {
+  // Chain: each caller waits for prior caller's wakeup + their own gap. This
+  // serializes the "claim a slot" step so workers can't all see the same
+  // lastGlobalCallAt and bypass the throttle.
+  const next = globalThrottleQueue.then(async () => {
+    const now = Date.now();
+    const since = now - lastGlobalCallAt;
+    if (since < GLOBAL_MIN_INTERVAL_MS) {
+      await new Promise((r) => setTimeout(r, GLOBAL_MIN_INTERVAL_MS - since));
+    }
+    lastGlobalCallAt = Date.now();
+  });
+  globalThrottleQueue = next.catch(() => undefined);
+  return next;
+}
+
 // ─── Supabase cursor (in-process shared) ─────────────────────
 // Each region has a cursor advancing by osm_way_id. Workers compete for
 // fetchNext() under a tiny busy-wait lock so two workers never grab the
@@ -147,11 +185,11 @@ async function rateLimit(keyIdx: number, m: ModelSpec): Promise<void> {
 // IDs regardless), there's no double-classification risk.
 const cursor: Record<string, number> = Object.fromEntries(REGIONS.map((r) => [r, -1]));
 const exhausted = new Set<string>();
-// Tracks regions that went through one full pass with cursor.gt advancing —
-// reaching "no more rows" the first time. We then reset the cursor and do a
-// second pass to pick up rows that were skipped due to transient 503/parse
-// errors mid-pass. If the second pass also finds nothing, region is truly done.
 const passedOnce = new Set<string>();
+// Round-robin region pointer so workers spread evenly across regions instead
+// of all hammering REGIONS[0] until exhausted. Advances after each successful
+// fetch.
+let regionRR = 0;
 let cursorLock = false;
 
 interface UnclassifiedRoad {
@@ -170,7 +208,8 @@ async function fetchNext(): Promise<{ region: string; roads: UnclassifiedRoad[] 
   while (cursorLock) await new Promise((r) => setTimeout(r, 20));
   cursorLock = true;
   try {
-    for (const region of REGIONS) {
+    for (let i = 0; i < REGIONS.length; i++) {
+      const region = REGIONS[(regionRR + i) % REGIONS.length];
       if (exhausted.has(region)) continue;
       const after = cursor[region];
       const url =
@@ -206,6 +245,7 @@ async function fetchNext(): Promise<{ region: string; roads: UnclassifiedRoad[] 
         continue;
       }
       cursor[region] = roads[roads.length - 1].osm_way_id;
+      regionRR = (regionRR + 1) % REGIONS.length;
       return { region, roads };
     }
     return null;
@@ -378,14 +418,20 @@ async function applyUpdates(parsed: Array<{ id: number; mc: string; pf: number }
 let totalClassified = 0;
 let totalCalls = 0;
 const startedAt = Date.now();
+// Track consecutive 429s per (key, model) — a single 429 can be transient
+// (anti-burst from too many concurrent workers), not RPD exhaustion. Only
+// mark a combo as exhausted after several in a row.
+const consec429 = new Map<string, number>();
+const CONSEC_429_LIMIT = 3;
 
 // One worker per (key, model) combination — they run truly in parallel.
 // Each respects its own RPD/RPM quota. When this combo is exhausted (RPD
 // hit, 404 disabled, 429 quota), worker exits. Others keep going on their
 // own quotas. Effective parallelism = KEYS × MODELS = up to 24 in flight.
-async function worker(keyIdx: number, m: ModelSpec): Promise<void> {
+async function worker(keyIdx: number, m: ModelSpec, startupDelayMs: number): Promise<void> {
   const k = String(keyIdx);
   const tag = `K${keyIdx}/${m.id}`;
+  if (startupDelayMs > 0) await new Promise((r) => setTimeout(r, startupDelayMs));
   while (true) {
     // Per-worker quota check (no shared model picking)
     if (state.disabled[k]?.includes(m.id)) {
@@ -405,6 +451,7 @@ async function worker(keyIdx: number, m: ModelSpec): Promise<void> {
     }
 
     await rateLimit(keyIdx, m);
+    await globalThrottle();
     markUsed(keyIdx, m.id);
     totalCalls += 1;
 
@@ -416,18 +463,31 @@ async function worker(keyIdx: number, m: ModelSpec): Promise<void> {
       const errSnip = (result.error ?? '').slice(0, 120).replace(/\s+/g, ' ');
       console.log(`[${tag}] FAIL ${result.status} ${errSnip}`);
       if (result.status === 404 || result.status === 400) markDisabled(keyIdx, m.id);
-      if (result.status === 429) {
-        // Force RPD counter to limit so this combo is skipped today
-        state.usage[k] ??= {};
-        state.usage[k][m.id] = m.rpd;
-        saveState();
+      // 403 = key leaked / disabled by Google anti-abuse — permanent
+      if (result.status === 403) {
+        console.log(`[${tag}] 403 (key flagged) → permanently disabled`);
+        markDisabled(keyIdx, m.id);
       }
-      // For 503/500: random backoff so all workers don't retry in lockstep
-      if (result.status === 503 || result.status === 500) {
+      if (result.status === 429) {
+        const n = (consec429.get(tag) ?? 0) + 1;
+        consec429.set(tag, n);
+        if (n >= CONSEC_429_LIMIT) {
+          console.log(`[${tag}] ${n}x consecutive 429 → marking RPD exhausted for today`);
+          state.usage[k] ??= {};
+          state.usage[k][m.id] = m.rpd;
+          saveState();
+        } else {
+          // Transient rate limit — random backoff 8-15s, no permanent mark
+          await new Promise((r) => setTimeout(r, 8000 + Math.random() * 7000));
+        }
+      } else if (result.status === 503 || result.status === 500) {
+        // Transient overload — short random backoff
         await new Promise((r) => setTimeout(r, 2000 + Math.random() * 4000));
       }
       continue;
     }
+    // Successful call resets 429 streak
+    consec429.delete(tag);
 
     const parsed = safeParseArray(result.text ?? '');
     if (!parsed) {
@@ -453,10 +513,16 @@ console.log(
 );
 console.log(`Quota state: ${STATE_PATH} (day=${state.day} PT)`);
 
+// Stagger startup: with 50+ workers all firing at once, Gemini's anti-burst
+// kicks in and returns spurious 429s. ~150ms stagger over the worker pool
+// avoids that without significantly delaying steady-state throughput.
 const allWorkers: Promise<void>[] = [];
+let staggerIdx = 0;
 for (let i = 0; i < KEYS.length; i++) {
   for (const m of MODELS) {
-    allWorkers.push(worker(i, m));
+    const delay = staggerIdx * 150;
+    allWorkers.push(worker(i, m, delay));
+    staggerIdx++;
   }
 }
 

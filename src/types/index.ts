@@ -255,6 +255,9 @@ export interface RoadAQIFeature {
   // True jika ai_pollution_factor populated dari Gemini batch classification.
   // False jika pakai deterministic hash fallback (C1 stopgap).
   ai_classified: boolean;
+  // Phase 1.1: 0..1 confidence in AQI estimate. Drives opacity/dash in
+  // RoadPollutionLayer. High (>0.7) = solid, medium = translucent, low = dashed.
+  confidence_score: number;
 }
 
 // ── Clean Route (VAYU-scored route) types ────────────────────────

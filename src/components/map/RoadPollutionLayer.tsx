@@ -227,10 +227,16 @@ export function useRoadPollutionLayer(
 
         const zoomScale = zoom >= 16 ? 1.6 : zoom >= 15 ? 1.3 : zoom >= 13 ? 1.0 : zoom >= 12 ? 0.7 : 0.5;
         const weight = road.weight * zoomScale;
+        // Phase 1.1: opacity + dashed stroke vary with confidence_score.
+        // High (>0.7) = full saturation, medium = translucent, low = dashed signal.
+        const conf = typeof road.confidence_score === 'number' ? road.confidence_score : 0.5;
+        const opacity = conf > 0.7 ? 0.9 : conf > 0.4 ? 0.6 : 0.4;
+        const dashArray = conf < 0.4 ? '6 4' : undefined;
         L.polyline(coords, {
           color,
           weight,
-          opacity: 0.85,
+          opacity,
+          dashArray,
           interactive: false,
           lineCap: 'round',
           lineJoin: 'round',
