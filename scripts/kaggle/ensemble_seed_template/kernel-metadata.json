@@ -1,0 +1,16 @@
+{
+  "id": "PLACEHOLDER_USERNAME/breeva-gcn-ensemble-seed-N",
+  "title": "Breeva GCN Ensemble Seed N",
+  "code_file": "main.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_tpu": "false",
+  "enable_internet": "true",
+  "dataset_sources": [
+    "PLACEHOLDER_USERNAME/breeva-graph-snapshot"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}
