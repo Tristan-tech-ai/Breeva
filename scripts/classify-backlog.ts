@@ -18,7 +18,7 @@
  */
 
 import { config as loadEnv } from 'dotenv';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 // Load .env.local first (overrides .env), then .env
@@ -32,7 +32,21 @@ const GEMINI_KEYS = (process.env.GEMINI_API_KEYS ?? '')
   .split(',')
   .map((k) => k.trim())
   .filter(Boolean);
-const GROQ_KEYS = (process.env.GROQ_API_KEYS ?? '')
+// Groq raw keys from env; effective slice controlled by --groq-keys CLI flag
+// (default = all available). Empirically 6 simultaneous keys triggered
+// IP-level shared rate limit (Groq's edge throttles by source IP across keys
+// belonging to same org/billing entity), producing ~99% 429 fail rate. Single
+// key bypasses that IP bucket and can saturate per-key TPM cap (~12K TPM →
+// 25 RPM × ~480 tok/call) for ~600 rows/min sustained from one key alone.
+const GROQ_KEYS_RAW = (process.env.GROQ_API_KEYS ?? '')
+  .split(',')
+  .map((k) => k.trim())
+  .filter(Boolean);
+// Cerebras Inference (api.cerebras.ai). Free tier 30 RPM / 60K TPM / 1M TPD
+// PER ACCOUNT (not org-shared like Groq) — multiple keys from same IP are
+// fully independent. With 6 keys × 30 RPM × batch=20 = up to 3600 rows/min
+// theoretical; real cap is TPM (60K) × 6 = 360K tok/min from this provider.
+const CEREBRAS_KEYS = (process.env.CEREBRAS_API_KEYS ?? '')
   .split(',')
   .map((k) => k.trim())
   .filter(Boolean);
@@ -50,8 +64,13 @@ const LOCAL_KEYS = LOCAL_VLLM_URL
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
 }
-if (GEMINI_KEYS.length === 0 && GROQ_KEYS.length === 0 && LOCAL_KEYS.length === 0) {
-  throw new Error('Missing all of GEMINI_API_KEYS, GROQ_API_KEYS, LOCAL_VLLM_URL');
+if (
+  GEMINI_KEYS.length === 0 &&
+  GROQ_KEYS_RAW.length === 0 &&
+  CEREBRAS_KEYS.length === 0 &&
+  LOCAL_KEYS.length === 0
+) {
+  throw new Error('Missing all of GEMINI_API_KEYS, GROQ_API_KEYS, CEREBRAS_API_KEYS, LOCAL_VLLM_URL');
 }
 
 // Backwards-compat alias (some helpers reference KEYS — kept for stagger calc)
@@ -72,7 +91,13 @@ const REGIONS = arg('regions', 'jakarta,bali,bandung,surabaya')
 const BATCH = Math.max(1, Number(arg('batch', '100')));
 const DRY_RUN = hasFlag('dry-run');
 
-type ProviderName = 'gemini' | 'groq' | 'local';
+// Slice Groq keys: avoid IP-level throttle storm from too many simultaneous
+// keys hitting Groq's edge from same source IP. `--groq-keys=1` recommended
+// based on observed 99% 429 rate when running 6 keys parallel.
+const GROQ_KEYS_LIMIT = Math.max(0, Number(arg('groq-keys', String(GROQ_KEYS_RAW.length))));
+const GROQ_KEYS = GROQ_KEYS_RAW.slice(0, GROQ_KEYS_LIMIT);
+
+type ProviderName = 'gemini' | 'groq' | 'cerebras' | 'local';
 
 interface ModelSpec {
   id: string;
@@ -99,18 +124,34 @@ const GEMINI_MODELS_LITE: ModelSpec[] = [
   { id: 'gemini-3.1-flash-lite', rpd: 500, rpm: 15, provider: 'gemini' },
 ];
 
-// Groq Llama 3.3 70B Versatile = 30 RPM / 14.4k RPD / 12K TPM free tier.
-// Llama 3.1 8B Instant has 6K TPM (lower!) — too tight for batch=10 prompts
-// which run ~4K tokens. We drop 8B and use 70B which is fast (<1.5s) anyway.
-// At 12K TPM / 4K per req ≈ 3 effective RPM per key → 6 keys × 3 RPM × 100
-// rows = 1,800 rows/min sustained Groq side.
+// Groq Llama 3.3 70B Versatile per live header probe:
+//   x-ratelimit-limit-requests: 1000 (per ~1min bucket)
+//   x-ratelimit-limit-tokens: 12000  (per ~200ms refill — effectively 12K TPM)
+//   doc free tier: 30 RPM / 14.4k RPD / 100k TPD / 12K TPM
+// With SINGLE key (no IP-bucket contention from parallel keys):
+//   batch=20 × ~25 tok/row + 200 instruction = ~700 input + 300 output = 1K tok/call
+//   25 RPM × 1K tok = 25K TPM → CAP at 12K TPM binding constraint
+//   → effective 12 RPM × 20 rows = 240 rows/min sustained per key
+//   → TPD budget 100K / 1K per call = 100 calls/day = 2000 rows/day from 1 key
+// Real bottleneck is TPM, not RPM. rpm=25 + 12K TPM gives Groq's throttle a
+// chance to refuse rather than us self-throttling too conservatively.
 const GROQ_MODELS: ModelSpec[] = [
-  // Empirically batch=20 × 2 RPM was still 14-15K TPM (over 12K cap) once
-  // output tokens are factored in. batch=12 × 2 RPM = ~4K input + 1K output
-  // = 5K/req × 2 RPM = 10K TPM — well under the ceiling with margin for
-  // prompt-length variance. Throughput: 24 rows/min/key × 6 keys = 144
-  // rows/min Groq-side.
-  { id: 'llama-3.3-70b-versatile', rpd: 14400, rpm: 2, provider: 'groq', maxBatchSize: 12 },
+  { id: 'llama-3.3-70b-versatile', rpd: 14400, rpm: 25, provider: 'groq', maxBatchSize: 20 },
+];
+
+// Cerebras free-tier ACTUAL limits per key (per live header probe):
+//   x-ratelimit-limit-requests-minute: 5     ← was assumed 30, real is 5
+//   x-ratelimit-limit-requests-hour: 150     (2.5 RPM average sustained)
+//   x-ratelimit-limit-requests-day: 2400
+//   x-ratelimit-limit-tokens-minute: 30000
+//   x-ratelimit-limit-tokens-hour/day: 1000000
+// Setting rpm=3 (below per-minute cap but above hourly average) — workers
+// burst up to 5 then briefly hit cap, balance recovers via 12s+ self-gaps.
+// At rpm=3 × 6 keys = 18 RPM aggregate × 20 rows = 360 rows/min sustained.
+// rpd=2000 stays under 2400 daily ceiling.
+// max_tokens=1024 keeps token-budget reasonable (~1.5K tok/call).
+const CEREBRAS_MODELS: ModelSpec[] = [
+  { id: 'qwen-3-235b-a22b-instruct-2507', rpd: 2000, rpm: 3, provider: 'cerebras', maxBatchSize: 20 },
 ];
 
 // Local vLLM (Qwen2.5-14B-Instruct-AWQ on RTX 5060 Ti). No rate limits — the
@@ -139,6 +180,7 @@ const MODELS: ModelSpec[] = GEMINI_MODELS_DEFAULT;  // legacy alias
 function keysFor(provider: ProviderName): string[] {
   if (provider === 'gemini') return GEMINI_KEYS;
   if (provider === 'groq') return GROQ_KEYS;
+  if (provider === 'cerebras') return CEREBRAS_KEYS;
   return LOCAL_KEYS;
 }
 
@@ -156,6 +198,12 @@ function allWorkerSpecs(): WorkerSpec[] {
   for (let i = 0; i < GROQ_KEYS.length; i++) {
     for (const m of GROQ_MODELS) {
       specs.push({ provider: 'groq', keyIdx: i, model: m });
+    }
+  }
+  // Cerebras workers
+  for (let i = 0; i < CEREBRAS_KEYS.length; i++) {
+    for (const m of CEREBRAS_MODELS) {
+      specs.push({ provider: 'cerebras', keyIdx: i, model: m });
     }
   }
   // Local vLLM workers (one spec per LOCAL_KEYS slot — slots are fake "keys"
@@ -194,9 +242,38 @@ function loadState(): QuotaState {
   return { day: todayPT(), usage: {}, disabled: {} };
 }
 
+// Debounced, atomic save. Plain writeFileSync into STATE_PATH crashed on
+// Windows under heavy concurrent markUsed() traffic with EBUSY (Windows
+// Defender / file-system races on rapid re-opens of the same handle). Two
+// defenses:
+//   1. Coalesce: schedule a single setTimeout; further saveState() calls
+//      while one is queued are no-ops. State is in-memory anyway; the file
+//      is just a crash-recovery checkpoint, so 1Hz is plenty.
+//   2. Atomic + retry: write to STATE_PATH.tmp then rename. Rename is atomic
+//      on same-volume Windows. If EBUSY still fires (AV holding handle),
+//      requeue rather than crash.
+let saveQueued = false;
 function saveState(): void {
-  mkdirSync(dirname(STATE_PATH), { recursive: true });
-  writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
+  if (saveQueued) return;
+  saveQueued = true;
+  setTimeout(() => {
+    saveQueued = false;
+    try {
+      mkdirSync(dirname(STATE_PATH), { recursive: true });
+      const tmp = `${STATE_PATH}.tmp`;
+      writeFileSync(tmp, JSON.stringify(state, null, 2));
+      renameSync(tmp, STATE_PATH);
+    } catch (e: unknown) {
+      const code = (e as NodeJS.ErrnoException)?.code;
+      if (code === 'EBUSY' || code === 'EPERM' || code === 'ENOENT') {
+        // Transient (Windows AV / handle races). Re-arm so the next save
+        // attempts again rather than losing state.
+        setTimeout(() => saveState(), 500);
+      } else {
+        throw e;
+      }
+    }
+  }, 1000);
 }
 
 const state = loadState();
@@ -237,19 +314,28 @@ async function rateLimit(k: string, m: ModelSpec): Promise<void> {
 
 // Per-provider aggregate throttle. Gemini's IP/account anti-burst kicks in at
 // ~20-30 RPM aggregate; 3000ms = 20 RPM ceiling. (Earlier 2000ms triggered
-// blanket 429 storms even when no individual key was over quota.) Groq's
-// free tier limits are per-org not per-IP, so we throttle Groq's global at
-// 800ms (75 RPM ceiling) — actual rate is bound by per-key rpm=2 below.
+// blanket 429 storms even when no individual key was over quota.) Groq
+// turned out to *also* throttle by source IP across keys (observed 99% 429
+// rate with 6 keys parallel from same IP). With --groq-keys=1 (default
+// recommendation), per-key rpm=25 + 12K TPM dominates — global 800ms
+// (75 RPM ceiling) is loose enough not to bind.
 const GEMINI_GLOBAL_INTERVAL_MS = Number(arg('global-interval-ms', '3000'));
 const GROQ_GLOBAL_INTERVAL_MS = Number(arg('groq-interval-ms', '800'));
+// Cerebras 6 keys × 30 RPM = 180 RPM theoretical, but 400ms (150 RPM)
+// caused the shared HTTP connection pool to get stuck after ~5min of burst
+// traffic — all 6 workers silently hung mid-fetch with no error. 1000ms
+// (60 RPM aggregate, 1200 rows/min × 20-batch) is conservative; per-call
+// AbortSignal 30s timeout catches any stuck connections that slip through.
+const CEREBRAS_GLOBAL_INTERVAL_MS = Number(arg('cerebras-interval-ms', '1000'));
 // Local vLLM has no rate limit; only GPU throughput. Tiny interval (50ms)
 // just smooths bursts so vLLM's queue doesn't get flooded at startup.
 const LOCAL_GLOBAL_INTERVAL_MS = Number(arg('local-interval-ms', '50'));
 
-const providerLastCallAt: Record<ProviderName, number> = { gemini: 0, groq: 0, local: 0 };
+const providerLastCallAt: Record<ProviderName, number> = { gemini: 0, groq: 0, cerebras: 0, local: 0 };
 const providerQueue: Record<ProviderName, Promise<void>> = {
   gemini: Promise.resolve(),
   groq: Promise.resolve(),
+  cerebras: Promise.resolve(),
   local: Promise.resolve(),
 };
 
@@ -262,7 +348,9 @@ function globalThrottle(provider: ProviderName): Promise<void> {
       ? GEMINI_GLOBAL_INTERVAL_MS
       : provider === 'groq'
         ? GROQ_GLOBAL_INTERVAL_MS
-        : LOCAL_GLOBAL_INTERVAL_MS;
+        : provider === 'cerebras'
+          ? CEREBRAS_GLOBAL_INTERVAL_MS
+          : LOCAL_GLOBAL_INTERVAL_MS;
   const next = providerQueue[provider].then(async () => {
     const now = Date.now();
     const since = now - providerLastCallAt[provider];
@@ -454,7 +542,12 @@ async function callGroq(key: string, model: string, prompt: string): Promise<Gem
           { role: 'user', content: prompt },
         ],
         temperature: 0.1,
-        max_tokens: 8192,
+        // CRITICAL: Groq reserves max_tokens against the 12K TPM bucket up-front.
+        // With max_tokens=8192 a single call drains ~9K of 12K → next call 429s
+        // until 200ms refill. Actual output for batch=20 is ~500-800 tok, so
+        // 1024 is generous + leaves ~10K headroom per minute (10-12 calls/min
+        // sustained, the real cap on Groq throughput — RPM never bound).
+        max_tokens: 1024,
         response_format: { type: 'json_object' },
       }),
     });
@@ -525,9 +618,67 @@ async function callLocal(_key: string, model: string, prompt: string): Promise<G
   }
 }
 
+// Cerebras Inference (OpenAI-compatible). Same lesson as Groq: max_tokens is
+// pre-reserved against the 60K TPM bucket, so set tight (1024 is generous
+// for batch=20 × ~30 tok/row JSON output). Free tier is per-account, not
+// org-shared, so multiple keys multiply throughput linearly.
+async function callCerebras(key: string, model: string, prompt: string): Promise<GeminiResult> {
+  const url = 'https://api.cerebras.ai/v1/chat/completions';
+  // 30s hard timeout via AbortController. Without this, Node's fetch hangs
+  // forever if Cerebras silently drops the connection (observed: 32 OK calls
+  // then all 6 workers stuck indefinitely with no error and no timeout — the
+  // shared connection pool poisoned by a half-broken keep-alive).
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 30_000);
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an urban air quality classifier. Respond ONLY with valid JSON array as instructed. No prose, no markdown fences.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.1,
+        max_tokens: 1024,
+        response_format: { type: 'json_object' },
+      }),
+      signal: ctrl.signal,
+    });
+    if (!r.ok) {
+      const err = await r.text();
+      // Cerebras returns OpenAI-style ratelimit headers. Treat both
+      // remaining-requests=0 and "tokens per day" in error body as
+      // day-exhausted signals.
+      let rpdExhausted = false;
+      if (r.status === 429) {
+        const remReq = r.headers.get('x-ratelimit-remaining-requests');
+        if (remReq !== null && Number(remReq) <= 0) rpdExhausted = true;
+        if (/per day|TPD|daily/i.test(err)) rpdExhausted = true;
+      }
+      return { ok: false, status: r.status, error: err, rpdExhausted };
+    }
+    const j = await r.json();
+    const text = j.choices?.[0]?.message?.content ?? '';
+    return { ok: true, text };
+  } catch (e) {
+    return { ok: false, status: 0, error: String(e) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function callProvider(provider: ProviderName, key: string, model: string, prompt: string): Promise<GeminiResult> {
   if (provider === 'gemini') return callGemini(key, model, prompt);
   if (provider === 'groq') return callGroq(key, model, prompt);
+  if (provider === 'cerebras') return callCerebras(key, model, prompt);
   return callLocal(key, model, prompt);
 }
 
@@ -638,7 +789,11 @@ const CONSEC_429_LIMIT = 10;
 async function worker(spec: WorkerSpec, startupDelayMs: number): Promise<void> {
   const { provider, keyIdx, model } = spec;
   const k = `${provider}:${keyIdx}`;
-  const tagPrefix = provider === 'gemini' ? 'Gm' : provider === 'groq' ? 'Gq' : 'Lo';
+  const tagPrefix =
+    provider === 'gemini' ? 'Gm' :
+    provider === 'groq' ? 'Gq' :
+    provider === 'cerebras' ? 'Cb' :
+    'Lo';
   const tag = `${tagPrefix}${keyIdx}/${model.id.split('/').pop()}`;
   const keys = keysFor(provider);
   if (keyIdx >= keys.length) return;  // safety
@@ -672,7 +827,7 @@ async function worker(spec: WorkerSpec, startupDelayMs: number): Promise<void> {
     const latency = Date.now() - t0;
 
     if (!result.ok) {
-      const errSnip = (result.error ?? '').slice(0, 120).replace(/\s+/g, ' ');
+      const errSnip = (result.error ?? '').slice(0, 400).replace(/\s+/g, ' ');
       console.log(`[${tag}] FAIL ${result.status} ${errSnip}`);
       if (result.status === 404 || result.status === 400) markDisabled(k, model.id);
       if (result.status === 403 || result.status === 401) {
@@ -729,9 +884,10 @@ async function worker(spec: WorkerSpec, startupDelayMs: number): Promise<void> {
 const specs = allWorkerSpecs();
 const geminiCount = specs.filter(s => s.provider === 'gemini').length;
 const groqCount = specs.filter(s => s.provider === 'groq').length;
+const cerebrasCount = specs.filter(s => s.provider === 'cerebras').length;
 const localCount = specs.filter(s => s.provider === 'local').length;
 console.log(
-  `Starting backlog classifier: ${GEMINI_KEYS.length} Gemini + ${GROQ_KEYS.length} Groq + ${LOCAL_KEYS.length} local slots = ${specs.length} workers (${geminiCount} Gm, ${groqCount} Gq, ${localCount} Lo) | regions=[${REGIONS.join(', ')}] | batch=${BATCH}${LOCAL_VLLM_URL ? ` | vllm=${LOCAL_VLLM_URL}` : ''}${DRY_RUN ? ' | DRY-RUN' : ''}`,
+  `Starting backlog classifier: ${GEMINI_KEYS.length} Gemini + ${GROQ_KEYS.length} Groq + ${CEREBRAS_KEYS.length} Cerebras + ${LOCAL_KEYS.length} local slots = ${specs.length} workers (${geminiCount} Gm, ${groqCount} Gq, ${cerebrasCount} Cb, ${localCount} Lo) | regions=[${REGIONS.join(', ')}] | batch=${BATCH}${LOCAL_VLLM_URL ? ` | vllm=${LOCAL_VLLM_URL}` : ''}${DRY_RUN ? ' | DRY-RUN' : ''}`,
 );
 console.log(`Quota state: ${STATE_PATH} (day=${state.day} PT)`);
 

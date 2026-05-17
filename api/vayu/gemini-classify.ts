@@ -436,34 +436,45 @@ async function fetchTopTierForNarrative(region: string, limit: number): Promise<
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return [];
 
-  // Query via RPC if available, otherwise REST with bbox-free filter
-  // Roads without narrative OR narrative >30 days old.
-  const staleThreshold = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-  const topTier = 'motorway,motorway_link,trunk,trunk_link,primary,primary_link';
-  const select = 'osm_way_id,region,highway,name,width,lanes,canyon_ratio,landuse_proxy,surface,ai_pollution_factor,micro_class,geojson';
-  const filter = `region=eq.${encodeURIComponent(region)}&highway=in.(${topTier})&or=(ai_narrative.is.null,ai_narrative_grounded_at.lt.${staleThreshold})`;
+  // Uses RPC `get_top_tier_roads_for_narrative` (migration pro_0022) which computes
+  // centroid via ST_LineInterpolatePoint(geom, 0.5). PostgREST cannot serialize the
+  // PostGIS USER-DEFINED `geom` column directly, so the RPC pre-projects to scalar lat/lng.
   try {
     const r = await fetch(
-      `${url}/rest/v1/road_segments?${filter}&select=${select}&limit=${limit}&order=osm_way_id.asc`,
-      { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+      `${url}/rest/v1/rpc/get_top_tier_roads_for_narrative`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ p_region: region, p_limit: limit }),
+      },
     );
     if (!r.ok) return [];
     const rows = await r.json() as Array<{
       osm_way_id: number; region: string; highway: string; name: string | null;
-      width: number | null; lanes: number | null; canyon_ratio: number | null;
+      width: string | number | null; lanes: number | null; canyon_ratio: string | number | null;
       landuse_proxy: string | null; surface: string | null;
-      ai_pollution_factor: number | null; micro_class: string | null;
-      geojson: string;
+      ai_pollution_factor: string | number | null; micro_class: string | null;
+      centroid_lat: number; centroid_lng: number;
     }>;
-    return rows.map(row => {
-      let lat = 0, lng = 0;
-      try {
-        const g = JSON.parse(row.geojson) as { coordinates: number[][] };
-        const mid = g.coordinates[Math.floor(g.coordinates.length / 2)];
-        lng = mid[0]; lat = mid[1];
-      } catch { /* ignore */ }
-      return { ...row, centroid_lat: lat, centroid_lng: lng } as TopTierRoad;
-    });
+    return rows.map(row => ({
+      osm_way_id: row.osm_way_id,
+      region: row.region,
+      highway: row.highway,
+      name: row.name,
+      width: row.width == null ? null : Number(row.width),
+      lanes: row.lanes,
+      canyon_ratio: row.canyon_ratio == null ? null : Number(row.canyon_ratio),
+      landuse_proxy: row.landuse_proxy,
+      surface: row.surface,
+      ai_pollution_factor: row.ai_pollution_factor == null ? null : Number(row.ai_pollution_factor),
+      micro_class: row.micro_class,
+      centroid_lat: row.centroid_lat,
+      centroid_lng: row.centroid_lng,
+    }));
   } catch {
     return [];
   }
