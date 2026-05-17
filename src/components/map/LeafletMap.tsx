@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -7,6 +7,7 @@ import { useRoadPollutionLayer } from './RoadPollutionLayer';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { useAQIStationLayer } from './AQIStationLayer';
 import POILayer from './POILayer';
+import { GCNConfidenceLegend } from './GCNConfidenceLegend';
 import type { POI } from '../../lib/poi-api';
 import type { Route } from '../../types';
 import type { PollutantType, RoadDisplayMode } from '../../types';
@@ -334,6 +335,7 @@ export default function LeafletMap({
   const { center } = useMapStore();
   const tileConfig = TILE_URLS[mapStyle] || TILE_URLS.voyager;
   const tileUrl = isDarkMode ? tileConfig.dark : tileConfig.light;
+  const [internalMeta, setInternalMeta] = useState<RoadLayerMeta | null>(null);
 
   return (
     <div
@@ -364,10 +366,19 @@ export default function LeafletMap({
           pollutant={pollutant}
           forecastHour={forecastHour}
           roadDisplayMode={roadDisplayMode}
-          onRoadLayerMeta={onRoadLayerMeta}
+          onRoadLayerMeta={(meta) => {
+            setInternalMeta(meta);
+            onRoadLayerMeta?.(meta);
+          }}
           onPlaceSelect={onPlaceSelect}
         />
       </MapContainer>
+      {showAQIOverlay && internalMeta && (internalMeta.gcn_applied_count ?? 0) > 0 && (
+        <GCNConfidenceLegend
+          gcnCount={internalMeta.gcn_applied_count ?? 0}
+          totalCount={internalMeta.count}
+        />
+      )}
     </div>
   );
 }

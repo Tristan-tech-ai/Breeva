@@ -17,6 +17,8 @@ export interface RoadLayerMeta {
   iqair_city: string | null;
   iqair_validation: 'cross-validated' | 'partially-validated' | 'divergent' | null;
   count: number;
+  // Tier 3.5: number of roads in current viewport with GraphSAGE delta applied
+  gcn_applied_count?: number;
 }
 
 // Singleton tile cache: 120 entries, 15-min TTL (larger cache = higher hit rate)
@@ -228,9 +230,11 @@ export function useRoadPollutionLayer(
         const zoomScale = zoom >= 16 ? 1.6 : zoom >= 15 ? 1.3 : zoom >= 13 ? 1.0 : zoom >= 12 ? 0.7 : 0.5;
         const weight = road.weight * zoomScale;
         // Phase 1.1: opacity + dashed stroke vary with confidence_score.
-        // High (>0.7) = full saturation, medium = translucent, low = dashed signal.
+        // Tier 3.5: roads with gcn_applied get a +0.05 opacity boost (visual
+        // "this is smarter" signal) capped at 0.95.
         const conf = typeof road.confidence_score === 'number' ? road.confidence_score : 0.5;
-        const opacity = conf > 0.7 ? 0.9 : conf > 0.4 ? 0.6 : 0.4;
+        let opacity = conf > 0.7 ? 0.9 : conf > 0.4 ? 0.6 : 0.4;
+        if (road.gcn_applied) opacity = Math.min(0.95, opacity + 0.05);
         const dashArray = conf < 0.4 ? '6 4' : undefined;
         L.polyline(coords, {
           color,
@@ -257,6 +261,10 @@ export function useRoadPollutionLayer(
       newGroup.addTo(map);
       layerRef.current.remove();
       layerRef.current = newGroup;
+      const gcnAppliedCount = data.roads.reduce(
+        (acc, r) => acc + (r.gcn_applied ? 1 : 0),
+        0,
+      );
       setMeta({
         wind_speed: data.meta.wind_speed ?? 0,
         waqi_station: data.meta.waqi_station,
@@ -265,6 +273,7 @@ export function useRoadPollutionLayer(
         iqair_city: data.meta.iqair_city ?? null,
         iqair_validation: data.meta.iqair_validation ?? null,
         count: data.meta.count,
+        gcn_applied_count: gcnAppliedCount,
       });
     },
     [map, buildLayer],

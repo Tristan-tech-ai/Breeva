@@ -258,6 +258,15 @@ export interface RoadAQIFeature {
   // Phase 1.1: 0..1 confidence in AQI estimate. Drives opacity/dash in
   // RoadPollutionLayer. High (>0.7) = solid, medium = translucent, low = dashed.
   confidence_score: number;
+  // Tier 3.5 / Tier 4.0: true when GraphSAGE spatial delta was layered on top of
+  // CALINE3 + XGBoost residual. Drives color sharpness + the "Spatial AI" badge.
+  // pm25_delta (above) stays = XGB residual only (existing semantic).
+  // gcn_delta = GCN-only delta over (CALINE3+XGB).
+  // pm25_total_delta = pm25_delta + gcn_delta — combined uplift over CALINE3 raw.
+  gcn_applied?: boolean;
+  gcn_delta?: number;
+  gcn_uncertainty?: number;
+  pm25_total_delta?: number;
 }
 
 // ── Clean Route (VAYU-scored route) types ────────────────────────

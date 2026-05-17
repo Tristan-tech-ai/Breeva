@@ -1,5 +1,226 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { applyResidualCorrection, logPrediction } from './_ml_inference';
+
+// ─── Inlined XGBoost residual inference (was api/vayu/_ml_inference.ts) ───
+// Vercel's underscore-prefix exclusion blocks the file from being bundled even
+// as a utility import (ERR_MODULE_NOT_FOUND at runtime), and the `functions.includeFiles`
+// vercel.json knob does not solve it either. Inline keeps road-aqi self-contained.
+
+interface XGBNode {
+  nodeid?: number;
+  split?: string;
+  split_index?: number;
+  split_condition?: number;
+  yes?: XGBNode;
+  no?: XGBNode;
+  leaf?: number;
+}
+
+interface XGBoostModel {
+  trees: XGBNode[];
+  feature_names: string[];
+  base_score: number;
+}
+
+const modelCache = new Map<string, { m: XGBoostModel | null; at: number }>();
+const MODEL_TTL_MS = 30 * 60 * 1000;
+
+async function fetchActiveModelMeta(region: string): Promise<{ url: string; version: string } | null> {
+  const supaUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supaUrl || !supaKey) return null;
+  const tryUrl = async (regionFilter: string) => {
+    const r = await fetch(
+      `${supaUrl}/rest/v1/ml_model_registry?model_name=eq.caline3_residual&active=eq.true&${regionFilter}&select=artifact_url,version&limit=1`,
+      { headers: { apikey: supaKey, Authorization: `Bearer ${supaKey}` } },
+    );
+    if (!r.ok) return null;
+    const rows = await r.json() as Array<{ artifact_url: string; version: string }>;
+    return rows[0] ?? null;
+  };
+  const regSpecific = await tryUrl(`region=eq.${encodeURIComponent(region)}`);
+  if (regSpecific?.artifact_url) return { url: regSpecific.artifact_url, version: regSpecific.version };
+  const globalModel = await tryUrl('region=is.null');
+  if (globalModel?.artifact_url) return { url: globalModel.artifact_url, version: globalModel.version };
+  return null;
+}
+
+function normalizeXgboostJson(raw: unknown): XGBoostModel | null {
+  const r = raw as Record<string, unknown>;
+  if (Array.isArray(r?.trees) && Array.isArray(r?.feature_names)) {
+    return {
+      trees: r.trees as XGBNode[],
+      feature_names: r.feature_names as string[],
+      base_score: typeof r.base_score === 'number' ? r.base_score : 0.0,
+    };
+  }
+  const learner = r?.learner as Record<string, unknown> | undefined;
+  const gb = learner?.gradient_booster as Record<string, unknown> | undefined;
+  const gbModel = gb?.model as Record<string, unknown> | undefined;
+  const trees = gbModel?.trees;
+  const fnames = (learner?.feature_names as string[]) ?? [];
+  if (Array.isArray(trees) && trees.length > 0) {
+    const lmp = learner?.learner_model_param as Record<string, unknown> | undefined;
+    return {
+      trees: trees as XGBNode[],
+      feature_names: fnames,
+      base_score: Number(lmp?.base_score ?? 0.0),
+    };
+  }
+  return null;
+}
+
+async function loadModel(region: string): Promise<XGBoostModel | null> {
+  const cached = modelCache.get(region);
+  if (cached && Date.now() - cached.at < MODEL_TTL_MS) return cached.m;
+  const meta = await fetchActiveModelMeta(region);
+  if (!meta) {
+    modelCache.set(region, { m: null, at: Date.now() });
+    return null;
+  }
+  try {
+    const r = await fetch(meta.url, { headers: { 'cache-control': 'no-store' } });
+    if (!r.ok) {
+      modelCache.set(region, { m: null, at: Date.now() });
+      return null;
+    }
+    const raw = await r.json();
+    const m = normalizeXgboostJson(raw);
+    modelCache.set(region, { m, at: Date.now() });
+    return m;
+  } catch {
+    modelCache.set(region, { m: null, at: Date.now() });
+    return null;
+  }
+}
+
+function traverseTree(rootNode: XGBNode, features: Record<string, number>, fnames: string[]): number {
+  let node = rootNode;
+  while (true) {
+    if (node.leaf !== undefined) return node.leaf;
+    const fkey = node.split ?? fnames[node.split_index ?? 0];
+    const value = features[fkey] ?? 0;
+    const threshold = node.split_condition ?? 0;
+    if (value < threshold) {
+      if (!node.yes) return 0;
+      node = node.yes;
+    } else {
+      if (!node.no) return 0;
+      node = node.no;
+    }
+  }
+}
+
+async function applyResidualCorrection(
+  region: string,
+  rawPrediction: number,
+  features: Record<string, number>,
+): Promise<{ corrected: number; residual: number; model_version: string | null }> {
+  const model = await loadModel(region);
+  if (!model) return { corrected: rawPrediction, residual: 0, model_version: null };
+  const fullFeatures = { ...features, predicted_pm25: rawPrediction };
+  let residual = model.base_score;
+  for (const tree of model.trees) {
+    residual += traverseTree(tree, fullFeatures, model.feature_names);
+  }
+  const corrected = Math.max(0, rawPrediction + residual);
+  return { corrected, residual, model_version: 'active' };
+}
+
+async function logPrediction(p: {
+  osm_way_id: number;
+  cell_id?: string;
+  region: string;
+  predicted_pm25: number;
+  corrected_pm25: number | null;
+  features: Record<string, number>;
+}): Promise<void> {
+  const sampleRate = Number(process.env.PREDICTION_LOG_SAMPLE ?? '0.1');
+  if (sampleRate <= 0) return;
+  if (Math.random() > sampleRate) return;
+  const supaUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supaUrl || !supaKey) return;
+  try {
+    await fetch(`${supaUrl}/rest/v1/prediction_logs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: supaKey,
+        Authorization: `Bearer ${supaKey}`,
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify(p),
+    });
+  } catch {
+    // non-fatal
+  }
+}
+// ─── end inlined ml_inference ───
+
+// ─── Tier 3.5: GCN spatial delta lookup ─────────────────────
+// Fetches precomputed deltas from public.v_gcn_predictions_current via RPC
+// get_gcn_deltas(BIGINT[]). Falls back to 0 (no delta) when no cache hit.
+// Cache lifetime 10 min — matches nightly precompute cadence.
+
+interface GcnDelta {
+  pm25_delta_gcn: number;
+  uncertainty_sigma: number;
+}
+
+const gcnDeltaCache = new Map<number, { d: GcnDelta | null; at: number }>();
+const GCN_CACHE_TTL_MS = 10 * 60 * 1000;
+
+async function fetchGcnDeltasBatch(osmWayIds: number[]): Promise<Map<number, GcnDelta>> {
+  const result = new Map<number, GcnDelta>();
+  if (osmWayIds.length === 0) return result;
+  const supaUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supaUrl || !supaKey) return result;
+
+  const now = Date.now();
+  const need: number[] = [];
+  for (const wid of osmWayIds) {
+    const cached = gcnDeltaCache.get(wid);
+    if (cached && now - cached.at < GCN_CACHE_TTL_MS) {
+      if (cached.d) result.set(wid, cached.d);
+    } else {
+      need.push(wid);
+    }
+  }
+  if (need.length === 0) return result;
+
+  try {
+    const r = await fetch(`${supaUrl}/rest/v1/rpc/get_gcn_deltas`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: supaKey,
+        Authorization: `Bearer ${supaKey}`,
+      },
+      body: JSON.stringify({ p_osm_way_ids: need }),
+    });
+    if (!r.ok) return result;
+    const rows = (await r.json()) as Array<{
+      osm_way_id: number; pm25_delta_gcn: number; uncertainty_sigma: number;
+    }>;
+    for (const row of rows) {
+      const d: GcnDelta = {
+        pm25_delta_gcn: row.pm25_delta_gcn,
+        uncertainty_sigma: row.uncertainty_sigma,
+      };
+      result.set(row.osm_way_id, d);
+      gcnDeltaCache.set(row.osm_way_id, { d, at: now });
+    }
+    // mark cache-miss osm_ids as null to suppress retry storms
+    for (const wid of need) {
+      if (!result.has(wid)) gcnDeltaCache.set(wid, { d: null, at: now });
+    }
+  } catch {
+    // non-fatal — return whatever we have
+  }
+  return result;
+}
+// ─── end GCN spatial delta ───
 
 /**
  * VAYU Road-AQI Endpoint — Returns per-road-segment pollution data for a bbox.
@@ -418,6 +639,14 @@ interface RoadAQIFeature {
   // satellite freshness, model availability, crowdsource count, plus a small
   // per-road boost when ai_pollution_factor is real (vs hash fallback).
   confidence_score: number;
+  // Tier 3.5 / Tier 4.0: GraphSAGE spatial delta layered after CALINE3+XGBoost.
+  // pm25_delta stays = XGB residual only (existing semantics). gcn_delta is the
+  // GCN-only delta over (CALINE3+XGB). pm25_total_delta = pm25_delta + gcn_delta
+  // — the combined uplift over CALINE3 raw.
+  gcn_applied?: boolean;
+  gcn_delta?: number;
+  gcn_uncertainty?: number;
+  pm25_total_delta?: number;
 }
 
 // Local mirror of Postgres compute_aqi_confidence() — same formula, no RTT cost.
@@ -1134,6 +1363,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Invalid cron secret' });
   }
 
+  // Dispatch: ?osm_way_id=... (without bbox) returns AI narrative for that road.
+  // Merged from former api/vayu/road-narrative.ts to stay under Hobby plan's 12-function cap.
+  if (req.query.osm_way_id && !req.query.south) {
+    return handleNarrativeLookup(req, res);
+  }
+
   const { south, west, north, east, zoom, forecast_hour } = req.query;
   if (!south || !west || !north || !east) {
     return res.status(200).json({ roads: [], meta: { reason: 'missing_params', count: 0 } });
@@ -1421,6 +1656,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // ── Tier 3.5: layer GraphSAGE spatial delta on top of CALINE3 + XGBoost ──
+    // Single batched RPC for all roads in this viewport. If model hasn't been
+    // precomputed for an osm_way_id (cold zone), feature stays unchanged.
+    try {
+      const osmIds = features.map(f => f.osm_way_id);
+      const gcnMap = await fetchGcnDeltasBatch(osmIds);
+      if (gcnMap.size > 0) {
+        for (const f of features) {
+          const gcn = gcnMap.get(f.osm_way_id);
+          if (!gcn) {
+            f.gcn_applied = false;
+            continue;
+          }
+          // Tier 4.0 composition: GCN trained on (truth - corrected_pm25).
+          // CALINE3 + XGB already applied to f.pm25. Layer GCN delta on top.
+          // Keep f.pm25_delta = XGB residual ONLY (existing semantic — no double-count).
+          const xgbResidualDelta = f.pm25_delta;
+          const gcnDelta = gcn.pm25_delta_gcn;
+          const correctedPm25 = f.pm25;
+          const newPm25 = Math.max(0, correctedPm25 + gcnDelta);
+          f.pm25 = Math.round(newPm25 * 100) / 100;
+          f.aqi = pm25ToAQI(f.pm25);
+          // pm25_delta stays untouched; explicit gcn_delta + combined total
+          f.gcn_delta = Math.round(gcnDelta * 100) / 100;
+          f.pm25_total_delta = Math.round((xgbResidualDelta + gcnDelta) * 100) / 100;
+          // confidence modulated by predicted sigma (cap 30% penalty)
+          const penalty = Math.min(0.3, gcn.uncertainty_sigma / 20);
+          f.confidence_score = Math.max(0.1, Math.round(f.confidence_score * (1 - penalty) * 100) / 100);
+          f.gcn_applied = true;
+          f.gcn_uncertainty = Math.round(gcn.uncertainty_sigma * 100) / 100;
+        }
+      }
+    } catch {
+      // non-fatal — Tier 3.5 is additive
+    }
+
     // IQAir cross-validation: compare median road AQI vs IQAir city AQI
     let iqairValidation: IQAirValidation | null = null;
     if (iqairData && features.length > 0) {
@@ -1500,4 +1771,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const message = error instanceof Error ? error.message : String(error);
     return res.status(500).json({ error: 'Internal server error', detail: message });
   }
+}
+
+interface NarrativeRow {
+  osm_way_id: number;
+  name: string | null;
+  highway: string;
+  region: string;
+  ai_narrative: string | null;
+  ai_narrative_grounded_at: string | null;
+  ai_narrative_sources: unknown;
+}
+
+async function handleNarrativeLookup(req: VercelRequest, res: VercelResponse) {
+  const supaUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supaUrl || !supaKey) {
+    return res.status(500).json({ error: 'Supabase env missing' });
+  }
+
+  const id = req.query.osm_way_id?.toString();
+  if (!id) return res.status(400).json({ error: 'osm_way_id required' });
+
+  const r = await fetch(
+    `${supaUrl}/rest/v1/road_segments?osm_way_id=eq.${encodeURIComponent(id)}` +
+    `&select=osm_way_id,name,highway,region,ai_narrative,ai_narrative_grounded_at,ai_narrative_sources` +
+    `&limit=1`,
+    { headers: { apikey: supaKey, Authorization: `Bearer ${supaKey}` } },
+  );
+
+  if (!r.ok) {
+    return res.status(500).json({ error: 'lookup failed', status: r.status });
+  }
+  const rows = (await r.json()) as NarrativeRow[];
+  const row = rows[0];
+  if (!row) {
+    return res.status(404).json({ error: 'Road not found' });
+  }
+
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+
+  let parsed: Record<string, unknown> | null = null;
+  if (row.ai_narrative) {
+    try {
+      parsed = JSON.parse(row.ai_narrative);
+    } catch {
+      parsed = { summary: row.ai_narrative };
+    }
+  }
+
+  return res.json({
+    osm_way_id: row.osm_way_id,
+    name: row.name,
+    highway: row.highway,
+    region: row.region,
+    narrative: parsed,
+    grounded_at: row.ai_narrative_grounded_at,
+    sources: row.ai_narrative_sources ?? [],
+  });
 }

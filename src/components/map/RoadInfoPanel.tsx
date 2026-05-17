@@ -1,7 +1,7 @@
 /**
  * RoadInfoPanel — surfaced on road click to show AI explainability narrative.
  *
- * Calls /api/vayu/road-narrative for the given osm_way_id and renders:
+ * Calls /api/vayu/road-aqi?osm_way_id=... for the given osm_way_id and renders:
  * - 1-2 sentence summary (why this road's AQI is high/low)
  * - Pollution drivers nearby (bullet list)
  * - Mitigators (parks, alternatives)
@@ -37,7 +37,7 @@ export function RoadInfoPanel({ osmWayId, className = '' }: { osmWayId: number; 
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`/api/vayu/road-narrative?osm_way_id=${osmWayId}`)
+    fetch(`/api/vayu/road-aqi?osm_way_id=${osmWayId}`)
       .then(async r => {
         if (r.status === 404) return null;
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
