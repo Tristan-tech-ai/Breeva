@@ -618,15 +618,20 @@ async function findRoadsInBBox(
 }
 
 // ─── Supabase RPC: find_through_gang_roads (topology-verified) ──
+// B1 fix shipped to DB: connection_distance default 3.0m, length>40m, sum_conn>=3.
+// B1 fix to interface: + start_lng/start_lat/end_lng/end_lat so caller can pick
+// endpoint-aligned-to-destination (B2) instead of midpoint.
 interface ThroughGangRoad {
   osm_way_id: number; geojson: string; highway: string;
   name: string | null; road_length_m: number;
   start_connections: number; end_connections: number;
+  start_lng: number; start_lat: number;
+  end_lng: number; end_lat: number;
 }
 
 async function findThroughGangRoads(
   south: number, west: number, north: number, east: number,
-  roadLimit = 20, connectionDistanceM = 5.0,
+  roadLimit = 20, connectionDistanceM = 3.0,  // B1: default tightened 5→3
 ): Promise<ThroughGangRoad[]> {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -684,6 +689,166 @@ async function findGraphOptimalRoute(
         start_lng: startLng,
         end_lat: endLat,
         end_lng: endLng,
+      }),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+// ─── Tier 2 M1: find_aqi_optimal_route_v2 (multi-criteria slider) ──
+interface GraphRouteEdgeV2 {
+  seq: number;
+  edge_id: number;
+  osm_way_id: number;
+  length_m: number;
+  time_s: number;
+  pm25_proxy: number;
+  haber_dose: number;
+  cost: number;
+  agg_cost: number;
+  geojson: string; // ST_AsGeoJSON(geom) stringified GeoJSON LineString
+}
+
+async function findAqiOptimalRouteV2(
+  startLat: number, startLng: number,
+  endLat: number, endLng: number,
+  aqiWeight: number,
+  startHour?: number,
+): Promise<GraphRouteEdgeV2[]> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return [];
+  try {
+    const resp = await fetch(`${url}/rest/v1/rpc/find_aqi_optimal_route_v2`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        start_lat: startLat, start_lng: startLng,
+        end_lat: endLat, end_lng: endLng,
+        aqi_weight: Math.max(0, Math.min(1, aqiWeight)),
+        start_hour: startHour ?? null,
+      }),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+// ─── Tier 2 M3: GNN-PPO sidecar (dark-launch) ─────────────────
+interface PpoSidecarResponse {
+  polyline: number[][]; // [lng, lat] pairs
+  n_vertices: number;
+}
+
+async function callPpoSidecar(
+  startLat: number, startLng: number,
+  endLat: number, endLng: number,
+): Promise<PpoSidecarResponse | null> {
+  const url = process.env.GNN_PPO_SIDECAR_URL;
+  if (!url || process.env.GNN_PPO_ENABLED !== '1') return null;
+  try {
+    const resp = await fetch(`${url.replace(/\/$/, '')}/route`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start_lat: startLat, start_lng: startLng, end_lat: endLat, end_lng: endLng }),
+    });
+    if (!resp.ok) return null;
+    const j = await resp.json();
+    if (!Array.isArray(j.polyline) || j.polyline.length < 2) return null;
+    return j as PpoSidecarResponse;
+  } catch {
+    return null;
+  }
+}
+
+async function logShadowEval(payload: {
+  start_lat: number; start_lng: number; end_lat: number; end_lng: number;
+  region?: string | null;
+  user_aqi_weight: number | null;
+  haversine_m: number;
+  m1?: { distance_m: number; duration_s: number; avg_aqi: number; length_weighted_aqi: number; haber_dose: number; polyline: number[][] } | null;
+  m3?: { distance_m: number; duration_s: number; avg_aqi: number; length_weighted_aqi: number; haber_dose: number; polyline: number[][] } | null;
+  shown_to_user: 'm1' | 'm3' | 'tie';
+  model_version_m3?: string;
+}): Promise<void> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return;
+  try {
+    await fetch(`${url}/rest/v1/shadow_routing_evals`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        start_lat: payload.start_lat, start_lng: payload.start_lng,
+        end_lat: payload.end_lat, end_lng: payload.end_lng,
+        region: payload.region ?? null,
+        user_aqi_weight: payload.user_aqi_weight,
+        haversine_m: payload.haversine_m,
+        m1_distance_m: payload.m1?.distance_m ?? null,
+        m1_duration_s: payload.m1?.duration_s ?? null,
+        m1_avg_aqi: payload.m1?.avg_aqi ?? null,
+        m1_length_weighted_aqi: payload.m1?.length_weighted_aqi ?? null,
+        m1_haber_dose: payload.m1?.haber_dose ?? null,
+        m1_polyline: payload.m1?.polyline ?? null,
+        m3_distance_m: payload.m3?.distance_m ?? null,
+        m3_duration_s: payload.m3?.duration_s ?? null,
+        m3_avg_aqi: payload.m3?.avg_aqi ?? null,
+        m3_length_weighted_aqi: payload.m3?.length_weighted_aqi ?? null,
+        m3_haber_dose: payload.m3?.haber_dose ?? null,
+        m3_polyline: payload.m3?.polyline ?? null,
+        shown_to_user: payload.shown_to_user,
+        model_version_m3: payload.model_version_m3 ?? null,
+      }),
+    });
+  } catch {
+    // Shadow eval logging must never break the user request.
+  }
+}
+
+// ─── Tier 2 M2: forecast_route_exposure ───────────────────────
+interface RouteForecastSegment {
+  segment_index: number;
+  arrival_offset_s: number;
+  arrival_hour: number;
+  segment_pm25: number;
+  segment_aqi: number;
+  segment_length_m: number;
+}
+
+async function forecastRouteExposure(
+  polyline: [number, number][],     // [lng, lat]
+  startAt?: string,
+): Promise<RouteForecastSegment[]> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key || polyline.length < 2) return [];
+  try {
+    const resp = await fetch(`${url}/rest/v1/rpc/forecast_route_exposure`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        polyline: polyline,
+        start_at: startAt ?? new Date().toISOString(),
       }),
     });
     if (!resp.ok) return [];
@@ -937,6 +1102,13 @@ export interface RouteScoreV2Result {
    * includes baseline AQI of the area, not just the marginal traffic delta.
    */
   length_weighted_aqi: number;
+  /**
+   * Haber-rule cumulative inhalation dose proxy: Σ(pm25_i^1.3 · duration_i_s)
+   * at pedestrian speed (1.39 m/s). Use this for "would I rather walk 15min in
+   * AQI 50 or 8min in AQI 90?" trade-offs — flat length-weighted AQI under-counts
+   * shorter-but-much-dirtier routes.
+   */
+  haber_dose_pm25: number;
   segments: Array<{
     osm_way_id: number;
     highway: string;
@@ -1052,6 +1224,12 @@ export async function scorePolyline(
       max_pm25_delta: 0,
       pollution_index: avgAqi, // use absolute AQI as proxy when no traffic data
       length_weighted_aqi: Math.round(avgAqi),
+      // B6 fallback: approximate Haber dose from sampled pm25 values, evenly distributed
+      // along the polyline. Δ = polyLen × 0.72 s/m × mean(pm25^1.3).
+      haber_dose_pm25: Math.round(
+        results.reduce((sum, r) => sum + Math.pow(Math.max(0, r.pm25), 1.3), 0) *
+        (polyLen * 0.72 / Math.max(1, results.length)) * 100
+      ) / 100,
       combined_score: Math.round((weights.aqi * aqiScore + weights.time * timeScore) * 1000) / 1000,
       vehicle_type: vehicleType,
       segment_count: results.length,
@@ -1107,6 +1285,11 @@ export async function scorePolyline(
 
   let sumLength = 0;
   let sumAqiTimesLength = 0;
+  // B6: Haber dose accumulator. Haber's rule: toxicological effect ∝ C^n × t with n>1.
+  // For PM2.5 short-term cardiopulmonary endpoints, n ≈ 1.3. Walking speed 1.39 m/s ⇒ 0.72 s/m.
+  let haberDosePm25 = 0;
+  const PEDESTRIAN_SEC_PER_M = 0.72;
+  const HABER_EXPONENT = 1.3;
 
   for (const road of scoredRoads) {
     // Get road centroid for baseline interpolation + actual segment length
@@ -1137,6 +1320,9 @@ export async function scorePolyline(
     sumPm25Delta += result.pm25_delta;
     sumLength += segLength;
     sumAqiTimesLength += result.aqi * segLength;
+    // B6: Haber-rule dose. Time spent in segment × concentration^n.
+    const segDurationS = segLength * PEDESTRIAN_SEC_PER_M;
+    haberDosePm25 += Math.pow(Math.max(0, result.pm25), HABER_EXPONENT) * segDurationS;
     if (result.aqi > maxAqi) maxAqi = result.aqi;
     if (result.aqi < minAqi) minAqi = result.aqi;
     if (result.pm25_delta > maxPm25Delta) maxPm25Delta = result.pm25_delta;
@@ -1171,6 +1357,7 @@ export async function scorePolyline(
     max_pm25_delta: Math.round(maxPm25Delta * 1000) / 1000,
     pollution_index: pollutionIndex,
     length_weighted_aqi: lengthWeightedAqi,
+    haber_dose_pm25: Math.round(haberDosePm25 * 100) / 100,
     combined_score: Math.round((weights.aqi * aqiScore + weights.time * timeScore) * 1000) / 1000,
     vehicle_type: vehicleType,
     segment_count: segments.length,
@@ -1289,8 +1476,13 @@ function isSimilarGeometry(coords1: number[][], coords2: number[][], thresholdMe
 
 function routeHasBacktracking(coords: number[][]): boolean {
   if (coords.length < 6) return false;
-  const step = Math.max(1, Math.floor(coords.length / 12));
+  // B3: denser sampling (40 windows vs 12) so dead-end alleys with U-turns
+  // shorter than ~30m don't slip through. Also flag a single hard reversal
+  // (>2.5 rad ≈ 143°) — two reversals was a false-negative bar for the
+  // Menteng→Tugu Tani case.
+  const step = Math.max(1, Math.floor(coords.length / 40));
   let reversals = 0;
+  let hardReversals = 0;
   for (let index = step; index < coords.length - step; index += step) {
     const prev = coords[index - step];
     const curr = coords[index];
@@ -1300,8 +1492,20 @@ function routeHasBacktracking(coords: number[][]): boolean {
     let diff = Math.abs(bearingA - bearingB);
     while (diff > Math.PI) diff = Math.abs(diff - 2 * Math.PI);
     if (diff > 2.5) reversals += 1;
+    if (diff > 2.8) hardReversals += 1; // ≥160° = U-turn — single occurrence is enough.
   }
-  return reversals >= 2;
+  if (hardReversals >= 1) return true;
+  if (reversals >= 2) return true;
+  // Geometric backtrack: any point in the second half that's closer to the
+  // start than the 25% mark indicates the route looped back substantially.
+  const startPt = coords[0];
+  const quarterPt = coords[Math.floor(coords.length * 0.25)];
+  const distAtQuarter = Math.hypot(quarterPt[0] - startPt[0], quarterPt[1] - startPt[1]);
+  for (let i = Math.floor(coords.length * 0.5); i < coords.length; i += step) {
+    const d = Math.hypot(coords[i][0] - startPt[0], coords[i][1] - startPt[1]);
+    if (d < distAtQuarter * 0.85) return true;
+  }
+  return false;
 }
 
 function getPerpendicularPoint(
@@ -1355,6 +1559,195 @@ async function doORSRequest(
       segments: (props.segments || []) as ORSRoute['segments'],
     };
   });
+}
+
+// ────────────────────────────────────────────────────────────────────
+// 2026-05-24 PIVOT: Valhalla adapter
+//
+// Replaces ORS public-API calls with self-hosted Valhalla (Docker container
+// on Tristan PC, exposed via Tailscale Funnel). Adapter pattern: Valhalla
+// /route response → ORSRoute shape so downstream scorePolyline + ranking
+// pipeline unchanged.
+//
+// Feature flag: ROUTING_ENGINE env var. 'valhalla' = new path, anything else
+// = ORS (legacy). Default 'ors' until Tristan flips post-staging-test.
+// Single env var flip = rollback.
+//
+// Valhalla server URL: VALHALLA_BASE_URL env var. For local dev:
+// http://localhost:8002. For Vercel production: Tailscale Funnel HTTPS URL.
+// ────────────────────────────────────────────────────────────────────
+
+const ROUTING_ENGINE = (process.env.ROUTING_ENGINE || 'ors').toLowerCase();
+const VALHALLA_BASE_URL = process.env.VALHALLA_BASE_URL || 'http://localhost:8002';
+
+/** Decode Valhalla encoded polyline (precision 6, 1e-6 deg).
+ *  Returns array of [lng, lat] (matches ORS geometry shape). */
+function decodeValhallaPolyline6(encoded: string): number[][] {
+  const points: number[][] = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  const len = encoded.length;
+  while (index < len) {
+    let b: number;
+    let shift = 0;
+    let result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlat = ((result & 1) !== 0) ? ~(result >> 1) : (result >> 1);
+    lat += dlat;
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlng = ((result & 1) !== 0) ? ~(result >> 1) : (result >> 1);
+    lng += dlng;
+    // Valhalla polyline6: precision 1e-6, [lng, lat] for ORS-compatible shape
+    points.push([lng / 1e6, lat / 1e6]);
+  }
+  return points;
+}
+
+interface ValhallaManeuver {
+  instruction?: string;
+  length?: number; // km
+  time?: number;   // seconds
+  type?: number;
+  begin_shape_index?: number;
+}
+
+interface ValhallaLeg {
+  summary?: { length?: number; time?: number };
+  shape?: string;
+  maneuvers?: ValhallaManeuver[];
+}
+
+interface ValhallaTrip {
+  summary?: { length?: number; time?: number };
+  legs?: ValhallaLeg[];
+}
+
+interface ValhallaResponse {
+  trip?: ValhallaTrip;
+  alternates?: Array<{ trip?: ValhallaTrip }>;
+}
+
+/** Convert single Valhalla trip → ORSRoute shape. */
+function valhallaTripToORSRoute(trip: ValhallaTrip | undefined): ORSRoute | null {
+  if (!trip || !trip.legs || trip.legs.length === 0) return null;
+  const summary = trip.summary ?? {};
+  const distanceKm = summary.length ?? 0;
+  const distanceM = Math.round(distanceKm * 1000);
+  const durationS = Math.round(summary.time ?? 0);
+
+  // Concatenate all leg shapes into single geometry
+  const geometry: number[][] = [];
+  const allManeuvers: ValhallaManeuver[] = [];
+  for (const leg of trip.legs) {
+    if (leg.shape) {
+      const points = decodeValhallaPolyline6(leg.shape);
+      if (geometry.length > 0 && points.length > 0) {
+        geometry.pop(); // dedupe shared endpoint between legs
+      }
+      geometry.push(...points);
+    }
+    if (leg.maneuvers) allManeuvers.push(...leg.maneuvers);
+  }
+
+  // Map Valhalla maneuvers → ORS segments[].steps[] shape
+  const steps = allManeuvers.map((m) => ({
+    instruction: m.instruction ?? '',
+    distance: Math.round((m.length ?? 0) * 1000), // km → m
+    duration: Math.round(m.time ?? 0),
+    type: m.type ?? 0,
+    way_points: [m.begin_shape_index ?? 0],
+  }));
+
+  return {
+    summary: { distance: distanceM, duration: durationS },
+    geometry,
+    segments: [{ steps }],
+  };
+}
+
+/** Map legacy ORS profile string → Valhalla costing model. */
+function orsProfileToValhallaCosting(orsProfile: string): string {
+  switch (orsProfile) {
+    case 'foot-walking':
+    case 'foot-hiking':
+      return 'pedestrian';
+    case 'cycling-regular':
+    case 'cycling-road':
+    case 'cycling-electric':
+    case 'cycling-mountain':
+      return 'bicycle';
+    case 'driving-car':
+      return 'auto';
+    case 'driving-hgv':
+      return 'truck';
+    default:
+      return 'auto'; // safe default
+  }
+}
+
+/** Fetch alternatives from self-hosted Valhalla. Returns ORSRoute[] for downstream compat.
+ *  Sends X-Breeva-Auth header when VALHALLA_AUTH_TOKEN env is set (required when
+ *  VALHALLA_BASE_URL points to public Tailscale Funnel via nginx auth proxy). */
+async function fetchValhallaAlternatives(
+  start: [number, number], end: [number, number],
+  costing: string, targetCount: number,
+  costingOptions?: Record<string, unknown>,
+): Promise<ORSRoute[]> {
+  // Valhalla request: alternates count = N - 1 (primary + N-1 alts)
+  const alternatesCount = Math.max(0, targetCount - 1);
+  const body: Record<string, unknown> = {
+    locations: [
+      { lat: start[1], lon: start[0] },  // ORS uses [lng, lat]; Valhalla uses {lat, lon}
+      { lat: end[1], lon: end[0] },
+    ],
+    costing,
+    alternates: alternatesCount,
+    directions_options: { units: 'kilometers' },
+  };
+  if (costingOptions && Object.keys(costingOptions).length > 0) {
+    body.costing_options = { [costing]: costingOptions };
+  }
+
+  // Auth header for nginx sidecar (only when going through Tailscale Funnel).
+  // For local dev (VALHALLA_BASE_URL=http://localhost:8002), token is optional.
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const authToken = process.env.VALHALLA_AUTH_TOKEN;
+  if (authToken) headers['X-Breeva-Auth'] = authToken;
+
+  const resp = await fetch(`${VALHALLA_BASE_URL}/route`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`Valhalla ${resp.status}: ${text.slice(0, 200)}`);
+  }
+
+  const data = (await resp.json()) as ValhallaResponse;
+  const routes: ORSRoute[] = [];
+
+  const primary = valhallaTripToORSRoute(data.trip);
+  if (primary) routes.push(primary);
+
+  for (const alt of (data.alternates ?? [])) {
+    const r = valhallaTripToORSRoute(alt.trip);
+    if (r) routes.push(r);
+  }
+
+  return routes.slice(0, targetCount);
 }
 
 async function fetchORSAlternatives(
@@ -1478,7 +1871,27 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
 
   try {
     const body = req.body || {};
-    const { start, end, profile = 'foot-walking', alternatives = 3 } = body;
+    const {
+      start, end, profile = 'foot-walking', alternatives = 3,
+      // Tier 2 M1: user slider [0..1]; 0 = fastest, 1 = cleanest.
+      aqi_weight: aqiWeightRaw,
+      // Tier 2 M2: forecast start timestamp (ISO 8601). Defaults to now.
+      start_at: startAtRaw,
+      // 2026-05-24 Valhalla pivot: client passes native costing + options.
+      // Backend uses these when ROUTING_ENGINE=valhalla, otherwise falls back to profile mapping.
+      valhalla_costing: valhallaCostingRaw,
+      valhalla_options: valhallaOptionsRaw,
+    } = body;
+    const valhallaCosting = typeof valhallaCostingRaw === 'string' && valhallaCostingRaw
+      ? valhallaCostingRaw
+      : orsProfileToValhallaCosting(profile);
+    const valhallaOptions = (valhallaOptionsRaw && typeof valhallaOptionsRaw === 'object')
+      ? (valhallaOptionsRaw as Record<string, unknown>)
+      : undefined;
+    const userAqiWeight = typeof aqiWeightRaw === 'number'
+      ? Math.max(0, Math.min(1, aqiWeightRaw))
+      : null;
+    const userStartAt = typeof startAtRaw === 'string' ? startAtRaw : undefined;
 
     let startLat: number, startLng: number, endLat: number, endLng: number;
     if (Array.isArray(start)) {
@@ -1517,14 +1930,36 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       'service', 'unclassified', 'footway', 'pedestrian', 'path', 'cycleway',
     ];
 
-    const [orsRoutes, throughRoads, graphEdges, corridorRoadRows] = await Promise.all([
-      fetchORSAlternatives(orsStart, orsEnd, profile, alternatives).catch((e) => {
-        console.error('ORS error:', e);
-        return [] as ORSRoute[];
-      }),
+    // Tier 2 M1: when user supplies aqi_weight, also fetch a Dijkstra v2 candidate.
+    // Three weights are pre-warmed (0/0.5/1.0) so the picker always has the slider-
+    // matched path; if user passes a specific value we add it as a 4th call.
+    const m1Weights = userAqiWeight != null && ![0, 0.5, 1].includes(userAqiWeight)
+      ? [0.0, 0.5, 1.0, userAqiWeight]
+      : [0.0, 0.5, 1.0];
+
+    // 2026-05-24 Valhalla pivot: ROUTING_ENGINE env flag dispatch
+    const useValhalla = ROUTING_ENGINE === 'valhalla';
+    const enginePromise = useValhalla
+      ? fetchValhallaAlternatives(orsStart, orsEnd, valhallaCosting, alternatives, valhallaOptions).catch((e) => {
+          console.error('Valhalla error:', e);
+          return [] as ORSRoute[];
+        })
+      : fetchORSAlternatives(orsStart, orsEnd, profile, alternatives).catch((e) => {
+          console.error('ORS error:', e);
+          return [] as ORSRoute[];
+        });
+
+    const [orsRoutes, throughRoads, graphEdges, corridorRoadRows, ...m1Results] = await Promise.all([
+      enginePromise,
       findThroughGangRoads(corridorSouth, corridorWest, corridorNorth, corridorEast).catch(() => [] as ThroughGangRoad[]),
       findGraphOptimalRoute(startLat, startLng, endLat, endLng).catch(() => [] as GraphRouteEdge[]),
       findRoadsInBBox(corridorSouth, corridorWest, corridorNorth, corridorEast, 700, corridorHighways).catch(() => [] as RoadRow[]),
+      // Tier 2 M1 candidates (pgRouting multi-criteria Dijkstra). Failure is non-fatal —
+      // pre-MV-refresh deployments return empty arrays and route-score falls back to
+      // the legacy graphEdges + ORS pipeline.
+      ...m1Weights.map((w) =>
+        findAqiOptimalRouteV2(startLat, startLng, endLat, endLng, w).catch(() => [] as GraphRouteEdgeV2[])
+      ),
     ]);
 
     if (orsRoutes.length === 0 && graphEdges.length === 0) {
@@ -1621,6 +2056,28 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       const entry = await orsToScoredEntry(candidateRoute, scoredRoutes.length, source);
       const shortestDuration = Math.min(...scoredRoutes.map((route) => route.duration_seconds), entry.duration_seconds);
       if (entry.duration_seconds > shortestDuration * 1.45) return;
+      // B4: reject candidates that funnel the user through a hellscape segment.
+      // 200 AQI = Very Unhealthy threshold — no walking route should ever push through that.
+      if (entry.score?.max_aqi !== undefined && entry.score.max_aqi > 200) {
+        console.log(`[clean-route] reject ${source}: max segment AQI ${entry.score.max_aqi} > 200`);
+        return;
+      }
+      // B10: variance gate — if this candidate's length-weighted AQI is within 5 of any existing
+      // candidate, it doesn't add diversity. Skip unless it's strictly better on duration.
+      // 'ors' candidates bypass this since they're the foundational set.
+      if (source !== 'ors' && entry.score?.length_weighted_aqi !== undefined) {
+        const newAqi = entry.score.length_weighted_aqi;
+        const duplicateAqi = scoredRoutes.some((existing) => {
+          const existingAqi = existing.score?.length_weighted_aqi;
+          if (existingAqi === undefined) return false;
+          if (Math.abs(existingAqi - newAqi) >= 5) return false;
+          return entry.duration_seconds >= existing.duration_seconds * 0.95;
+        });
+        if (duplicateAqi) {
+          console.log(`[clean-route] reject ${source}: AQI ${newAqi} duplicates existing within ±5`);
+          return;
+        }
+      }
       scoredRoutes.push(entry);
     };
 
@@ -1675,13 +2132,52 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
           if (chosenThroughRoads.length >= 2) break;
         }
 
-        for (const candidate of chosenThroughRoads) {
-          const waypoint: [number, number] = [candidate.corridorRoad.midpoint[0], candidate.corridorRoad.midpoint[1]];
+        // B2+B8: for each chosen through-road, compute its entry/exit waypoints
+        // (closer-to-start = entry, closer-to-end = exit) so ORS traverses the
+        // alley fully. Then either emit per-road requests OR chain them into a
+        // single multi-waypoint request when their progress is monotonic.
+        type ChainSegment = {
+          entry: [number, number]; exit: [number, number]; progress: number;
+        };
+        const segs: ChainSegment[] = chosenThroughRoads.map((candidate) => {
+          const a: [number, number] = [candidate.throughRoad.start_lng, candidate.throughRoad.start_lat];
+          const b: [number, number] = [candidate.throughRoad.end_lng, candidate.throughRoad.end_lat];
+          const distAEnd = haversineMeters(a[1], a[0], orsEnd[1], orsEnd[0]);
+          const distBEnd = haversineMeters(b[1], b[0], orsEnd[1], orsEnd[0]);
+          const exit = distAEnd < distBEnd ? a : b;
+          const entry = distAEnd < distBEnd ? b : a;
+          const entryDistFromStart = haversineMeters(entry[1], entry[0], orsStart[1], orsStart[0]);
+          const exitDistFromStart = haversineMeters(exit[1], exit[0], orsStart[1], orsStart[0]);
+          const orderedEntry = entryDistFromStart < exitDistFromStart ? entry : exit;
+          const orderedExit = entryDistFromStart < exitDistFromStart ? exit : entry;
+          return { entry: orderedEntry, exit: orderedExit, progress: candidate.corridorRoad.progress };
+        });
+
+        // Per-road requests (always emitted — preserves single-alley diversity).
+        for (const seg of segs) {
           try {
-            const routeResult = await doORSRequest([orsStart, waypoint, orsEnd], profile, orsApiKey, undefined, undefined, 'recommended');
+            const routeResult = await doORSRequest([orsStart, seg.entry, seg.exit, orsEnd], profile, orsApiKey, undefined, undefined, 'recommended');
             if (routeResult[0]) await addCandidate(routeResult[0], 'through-road');
           } catch (error) {
             console.error('[clean-route] through-road candidate failed:', error);
+          }
+        }
+
+        // B8: chain multiple alleys when they sit along the same corridor (monotonic
+        // progress with separation ≥ 0.2). Single ORS request stitches them together.
+        if (segs.length >= 2) {
+          const ordered = [...segs].sort((a, b) => a.progress - b.progress);
+          const wellSeparated = ordered.every((s, i) => i === 0 || (s.progress - ordered[i - 1].progress) >= 0.2);
+          if (wellSeparated) {
+            const chained: [number, number][] = [orsStart];
+            for (const s of ordered) { chained.push(s.entry); chained.push(s.exit); }
+            chained.push(orsEnd);
+            try {
+              const routeResult = await doORSRequest(chained, profile, orsApiKey, undefined, undefined, 'recommended');
+              if (routeResult[0]) await addCandidate(routeResult[0], 'through-road');
+            } catch (error) {
+              console.error('[clean-route] multi-alley chain failed:', error);
+            }
           }
         }
       } catch (error) {
@@ -1693,6 +2189,11 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       try {
         const graphWaypoints: Array<{ lat: number; lng: number }> = [];
         let totalDistanceM = 0;
+        // B5: stitch-gap validation. If any edge join exceeds this, the graph is broken
+        // (mis-noded segments, orphan edges) and the resulting polyline will teleport.
+        const MAX_STITCH_GAP_M = 30;
+        let stitchBroken = false;
+        let worstGap = 0;
 
         for (const edge of graphEdges) {
           const coords: number[][] = JSON.parse(edge.geojson).coordinates;
@@ -1709,6 +2210,12 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
             const edgeEnd = coords[coords.length - 1];
             const distToStart = haversineMeters(prevEnd.lat, prevEnd.lng, edgeStart[1], edgeStart[0]);
             const distToEnd = haversineMeters(prevEnd.lat, prevEnd.lng, edgeEnd[1], edgeEnd[0]);
+            const gap = Math.min(distToStart, distToEnd);
+            if (gap > worstGap) worstGap = gap;
+            if (gap > MAX_STITCH_GAP_M) {
+              stitchBroken = true;
+              break;
+            }
 
             const orderedCoords = distToEnd < distToStart ? [...coords].reverse() : coords;
             // Skip first point (shared with previous edge's endpoint)
@@ -1718,7 +2225,11 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
           }
         }
 
-        if (graphWaypoints.length >= 2 && totalDistanceM > 0) {
+        if (stitchBroken) {
+          console.warn(`[clean-route] Phase 3 graph route rejected: stitch gap ${worstGap.toFixed(1)}m > ${MAX_STITCH_GAP_M}m. Topology likely broken in road_graph_edges — run vayu/jobs/repair_road_graph.py.`);
+        }
+
+        if (!stitchBroken && graphWaypoints.length >= 2 && totalDistanceM > 0) {
           const durationSeconds = Math.round(totalDistanceM * 0.72);
           const polyline: [number, number][] = graphWaypoints.map(w => [w.lat, w.lng]);
 
@@ -1773,13 +2284,95 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // ─── Phase A4 (Tier 2 M1): Multi-Criteria Dijkstra slider candidates ──
+    // Each of m1Results[i] is the path for m1Weights[i]. Stitch + score + add.
+    // Failure-tolerant: empty arrays simply skip the corresponding weight.
+    for (let mi = 0; mi < m1Results.length; mi++) {
+      const path = m1Results[mi] as GraphRouteEdgeV2[];
+      const alpha = m1Weights[mi];
+      if (!path || path.length === 0) continue;
+
+      try {
+        const waypts: Array<{ lat: number; lng: number }> = [];
+        let totalLen = 0;
+        let totalDose = 0;
+        let stitchBroken = false;
+        let worstGap = 0;
+        const MAX_STITCH_GAP_M = 30;
+
+        for (const edge of path) {
+          const geom = JSON.parse(edge.geojson);
+          const coords: number[][] = geom.coordinates || [];
+          if (coords.length < 2) continue;
+          totalLen += edge.length_m;
+          totalDose += edge.haber_dose;
+
+          if (waypts.length === 0) {
+            for (const c of coords) waypts.push({ lat: c[1], lng: c[0] });
+          } else {
+            const prevEnd = waypts[waypts.length - 1];
+            const eS = coords[0]; const eE = coords[coords.length - 1];
+            const dS = haversineMeters(prevEnd.lat, prevEnd.lng, eS[1], eS[0]);
+            const dE = haversineMeters(prevEnd.lat, prevEnd.lng, eE[1], eE[0]);
+            const gap = Math.min(dS, dE);
+            if (gap > worstGap) worstGap = gap;
+            if (gap > MAX_STITCH_GAP_M) { stitchBroken = true; break; }
+            const ordered = dE < dS ? [...coords].reverse() : coords;
+            for (let i = 1; i < ordered.length; i++) {
+              waypts.push({ lat: ordered[i][1], lng: ordered[i][0] });
+            }
+          }
+        }
+
+        if (stitchBroken) {
+          console.warn(`[clean-route] M1 α=${alpha} rejected: stitch gap ${worstGap.toFixed(1)}m > ${MAX_STITCH_GAP_M}m`);
+          continue;
+        }
+        if (waypts.length < 2 || totalLen <= 0) continue;
+        if (routeHasBacktracking(waypts.map(w => [w.lng, w.lat]))) {
+          console.warn(`[clean-route] M1 α=${alpha} rejected: backtracking detected`);
+          continue;
+        }
+
+        const polyline: [number, number][] = waypts.map(w => [w.lat, w.lng]);
+        let score: RouteScoreV2Result | null = null;
+        try { score = await scorePolyline(polyline, 'pedestrian', 0); } catch { score = null; }
+
+        const durationSeconds = Math.round(totalLen * 0.72);
+        const isDuplicate = scoredRoutes.some((r) =>
+          isSimilarGeometry(
+            waypts.map(w => [w.lng, w.lat]),
+            r.polyline.map(p => [p.lng, p.lat]),
+            60
+          )
+        );
+        if (isDuplicate) continue;
+
+        scoredRoutes.push({
+          index: scoredRoutes.length,
+          source: 'graph',
+          polyline: waypts,
+          distance_meters: Math.round(totalLen),
+          duration_seconds: durationSeconds,
+          instructions: [],
+          score,
+        });
+        console.log(`[clean-route] M1 α=${alpha} added: ${Math.round(totalLen)}m, dose=${totalDose.toFixed(1)}, segments=${path.length}`);
+      } catch (e) {
+        console.error(`[clean-route] M1 α=${alpha} stitch failed:`, e);
+      }
+    }
+
     if (orsApiKey && scoredRoutes.length < 3) {
-      const offsets = [250, -250, 400, -400];
+      // B9: try 'shortest' first on alternating sides — shortest preference forces
+      // ORS to actually deviate (vs 'recommended' which often hugs the same arterial),
+      // giving real geometric diversity for the AQI gate to choose from.
+      const offsets = [200, -200, 350, -350, 550, -550];
       for (const offset of offsets) {
         if (scoredRoutes.length >= 3) break;
         try {
           const wp = getPerpendicularPoint(orsStart, orsEnd, offset);
-          const routeResult = await doORSRequest([orsStart, wp, orsEnd], profile, orsApiKey);
+          const routeResult = await doORSRequest([orsStart, wp, orsEnd], profile, orsApiKey, undefined, undefined, 'shortest');
           if (routeResult[0]) await addCandidate(routeResult[0], 'perpendicular');
         } catch {
           // Ignore perpendicular fallback failures.
@@ -1807,12 +2400,13 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(emptyResponse('no_distinct_routes_found'));
     }
 
-    // Use absolute length-weighted AQI for cleanest comparison. The old
-    // pollution_index was just the traffic-induced PM2.5 delta — it ignored
-    // baseline AQI, so routes through polluted areas could "win" if their
-    // roads happened to have low traffic delta.
+    // B6: cleanest comparison uses Haber-corrected dose when available — captures
+    // the C^1.3 × t toxicology of PM2.5 so a longer-but-cleaner route correctly
+    // beats a shorter-but-dirtier one. Falls back to length-weighted AQI, then
+    // avg AQI, then traffic-only pollution_index.
     const cleanCost = (route: ScoredCandidate) =>
-      route.score?.length_weighted_aqi
+      route.score?.haber_dose_pm25
+        ?? route.score?.length_weighted_aqi
         ?? route.score?.avg_aqi
         ?? route.score?.pollution_index
         ?? 999;
@@ -1921,25 +2515,96 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       if (!isDup) labeled.push(r);
     }
 
-    const routes = labeled.map((r) => ({
-      polyline: r.polyline, distance_meters: r.distance_meters, duration_seconds: r.duration_seconds, instructions: r.instructions,
-      vayu_avg_aqi: r.score?.avg_aqi ?? 50, vayu_max_aqi: r.score?.max_aqi ?? 50,
-      vayu_min_aqi: r.score?.min_aqi ?? 50,
-      vayu_segment_count: r.score?.segment_count ?? 0, vayu_scored: r.score?.vayu_scored ?? false,
-      vayu_pollution_index: r.score?.pollution_index ?? 0,
-      route_label: r.label, gemini_reasoning: r.reasoning,
-      segments: (r.score?.segments || []).map((s) => ({
-        osm_way_id: s.osm_way_id, highway: s.highway, name: s.name,
-        aqi: s.aqi, pm25: s.pm25, no2: s.no2, fraction_along: s.fraction_along, pm25_delta: s.pm25_delta,
-      })),
-      traffic_level: estimateTrafficLevel(r.score?.avg_aqi ?? 50),
-      green_score: estimateGreenScore(r.score?.segments || []),
-    }));
+    // Tier 2 M2: per-route forecast at predicted arrival times. Done in parallel
+    // for each labeled candidate. Failure is non-fatal (returns empty forecast).
+    const forecastInputs = labeled.map((r) =>
+      r.polyline.map((p) => [p.lng, p.lat] as [number, number])
+    );
+    const forecasts = await Promise.all(
+      forecastInputs.map((poly) =>
+        forecastRouteExposure(poly, userStartAt).catch(() => [] as RouteForecastSegment[])
+      )
+    );
+
+    const routes = labeled.map((r, idx) => {
+      const forecast = forecasts[idx];
+      let forecastSummary: {
+        max_aqi: number; max_at_offset_s: number; delta_pct: number;
+      } | null = null;
+      if (forecast.length > 0 && r.score?.avg_aqi) {
+        const maxSeg = forecast.reduce((max, s) => s.segment_aqi > max.segment_aqi ? s : max, forecast[0]);
+        const deltaPct = ((maxSeg.segment_aqi - r.score.avg_aqi) / Math.max(1, r.score.avg_aqi)) * 100;
+        forecastSummary = {
+          max_aqi: maxSeg.segment_aqi,
+          max_at_offset_s: maxSeg.arrival_offset_s,
+          delta_pct: Math.round(deltaPct * 10) / 10,
+        };
+      }
+
+      return {
+        polyline: r.polyline, distance_meters: r.distance_meters, duration_seconds: r.duration_seconds, instructions: r.instructions,
+        vayu_avg_aqi: r.score?.avg_aqi ?? 50, vayu_max_aqi: r.score?.max_aqi ?? 50,
+        vayu_min_aqi: r.score?.min_aqi ?? 50,
+        vayu_segment_count: r.score?.segment_count ?? 0, vayu_scored: r.score?.vayu_scored ?? false,
+        vayu_pollution_index: r.score?.pollution_index ?? 0,
+        vayu_haber_dose: r.score?.haber_dose_pm25 ?? 0,
+        route_label: r.label, gemini_reasoning: r.reasoning,
+        forecast_summary: forecastSummary,
+        segments: (r.score?.segments || []).map((s) => ({
+          osm_way_id: s.osm_way_id, highway: s.highway, name: s.name,
+          aqi: s.aqi, pm25: s.pm25, no2: s.no2, fraction_along: s.fraction_along, pm25_delta: s.pm25_delta,
+        })),
+        traffic_level: estimateTrafficLevel(r.score?.avg_aqi ?? 50),
+        green_score: estimateGreenScore(r.score?.segments || []),
+      };
+    });
 
     routes.forEach((candidate, index) => {
       const ratio = directDistanceM > 0 ? candidate.distance_meters / directDistanceM : 1;
       console.log(`[clean-route] candidate[${index}] label=${candidate.route_label} dist=${candidate.distance_meters}m ratio=${ratio.toFixed(2)}x aqi=${candidate.vayu_avg_aqi}`);
     });
+
+    // Tier 2 M3: dark-launch evaluation. Sample ~10% of requests, compute the
+    // PPO candidate, score it, and log to shadow_routing_evals — but DO NOT show
+    // it to the user yet. Promotion decision happens off-line after ≥1000 evals.
+    if (process.env.GNN_PPO_ENABLED === '1' && Math.random() < 0.10) {
+      try {
+        const ppo = await callPpoSidecar(startLat, startLng, endLat, endLng);
+        if (ppo) {
+          const ppoPolyline: [number, number][] = ppo.polyline.map(p => [p[1], p[0]]);
+          const ppoScore = await scorePolyline(ppoPolyline, 'pedestrian', 0).catch(() => null);
+          const cleanestM1 = routes.find(r => r.route_label === 'cleanest') ?? routes[0];
+          if (cleanestM1 && ppoScore) {
+            await logShadowEval({
+              start_lat: startLat, start_lng: startLng, end_lat: endLat, end_lng: endLng,
+              region: null,
+              user_aqi_weight: userAqiWeight,
+              haversine_m: directDistanceM,
+              m1: {
+                distance_m: cleanestM1.distance_meters,
+                duration_s: cleanestM1.duration_seconds,
+                avg_aqi: cleanestM1.vayu_avg_aqi,
+                length_weighted_aqi: (cleanestM1 as { score?: RouteScoreV2Result }).score?.length_weighted_aqi ?? cleanestM1.vayu_avg_aqi,
+                haber_dose: cleanestM1.vayu_haber_dose,
+                polyline: cleanestM1.polyline.map(p => [p.lng, p.lat]),
+              },
+              m3: {
+                distance_m: Math.round(ppoPolyline.length * 5), // approx — full edge-stitch needed for true distance
+                duration_s: Math.round(ppoPolyline.length * 5 * 0.72),
+                avg_aqi: ppoScore.avg_aqi,
+                length_weighted_aqi: ppoScore.length_weighted_aqi,
+                haber_dose: ppoScore.haber_dose_pm25,
+                polyline: ppo.polyline,
+              },
+              shown_to_user: 'm1',
+              model_version_m3: process.env.GNN_PPO_VERSION ?? 'ppo_v1',
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[clean-route] M3 shadow eval failed:', e);
+      }
+    }
 
     const responseMs = Date.now() - startTime;
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');

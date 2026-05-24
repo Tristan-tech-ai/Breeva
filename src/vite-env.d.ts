@@ -8,7 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_OPENROUTESERVICE_API_KEY: string;
   readonly VITE_GEMINI_API_KEY: string;
   readonly VITE_GEOAPIFY_API_KEY?: string;
-  readonly VITE_WAQI_TOKEN?: string;
+  // VITE_WAQI_TOKEN removed 2026-05-24 (security: token was bundled publicly).
+  // Use /api/vayu/waqi-stations + /api/vayu/waqi-feed proxy endpoints instead.
   readonly VITE_APP_URL?: string;
 }
 

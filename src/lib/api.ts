@@ -11,12 +11,14 @@ const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 const ORS_BASE_URL = 'https://api.openrouteservice.org';
 
 // Transport mode definitions
+// 2026-05-24 PIVOT: added valhallaCosting per mode. orsProfile kept for rollback via ROUTING_ENGINE env var.
+// Motor moved from driving-car (ORS limitation) to motor_scooter (Valhalla native, Indonesia <=125cc fit).
 export const TRANSPORT_MODES: TransportModeInfo[] = [
-  { id: 'walking', label: 'Walk', icon: 'Footprints', orsProfile: 'foot-walking', co2PerKm: 0, ecoPointsMultiplier: 1.5, speedFactor: 1, color: '#10b981' },
-  { id: 'cycling', label: 'Cycle', icon: 'Bike', orsProfile: 'cycling-regular', co2PerKm: 0, ecoPointsMultiplier: 1.2, speedFactor: 3, color: '#0ea5e9' },
-  { id: 'ebike', label: 'E-Bike', icon: 'Zap', orsProfile: 'cycling-electric', co2PerKm: 5, ecoPointsMultiplier: 1.0, speedFactor: 4, color: '#8b5cf6' },
-  { id: 'motorcycle', label: 'Motor', icon: 'Bike', orsProfile: 'driving-car', co2PerKm: 100, ecoPointsMultiplier: 0.3, speedFactor: 8, color: '#f59e0b' },
-  { id: 'car', label: 'Car', icon: 'Car', orsProfile: 'driving-car', co2PerKm: 170, ecoPointsMultiplier: 0, speedFactor: 10, color: '#ef4444' },
+  { id: 'walking',    label: 'Walk',  icon: 'Footprints', orsProfile: 'foot-walking',     valhallaCosting: 'pedestrian',    co2PerKm: 0,   ecoPointsMultiplier: 1.5, speedFactor: 1,  color: '#10b981' },
+  { id: 'cycling',    label: 'Cycle', icon: 'Bike',       orsProfile: 'cycling-regular',  valhallaCosting: 'bicycle',       co2PerKm: 0,   ecoPointsMultiplier: 1.2, speedFactor: 3,  color: '#0ea5e9' },
+  { id: 'ebike',      label: 'E-Bike',icon: 'Zap',        orsProfile: 'cycling-electric', valhallaCosting: 'bicycle',       valhallaOptions: { bicycle_type: 'Hybrid', cycling_speed: 25 }, co2PerKm: 5,   ecoPointsMultiplier: 1.0, speedFactor: 4,  color: '#8b5cf6' },
+  { id: 'motorcycle', label: 'Motor', icon: 'Bike',       orsProfile: 'driving-car',      valhallaCosting: 'motor_scooter', co2PerKm: 100, ecoPointsMultiplier: 0.3, speedFactor: 8,  color: '#f59e0b' },
+  { id: 'car',        label: 'Car',   icon: 'Car',        orsProfile: 'driving-car',      valhallaCosting: 'auto',          co2PerKm: 170, ecoPointsMultiplier: 0,   speedFactor: 10, color: '#ef4444' },
 ];
 
 /**
@@ -1271,13 +1273,26 @@ export async function getCleanRoute(
   start: [number, number],
   end: [number, number],
   profile: string,
-  alternatives: number = 3
+  alternatives: number = 3,
+  options?: {
+    aqi_weight?: number; // Tier 2 M1 — 0=fastest, 1=cleanest, default 0.5
+    start_at?: string;   // Tier 2 M2 — ISO timestamp for forecast
+    // 2026-05-24 Valhalla pivot: pass native costing for backend feature-flag dispatch.
+    // Backend uses these when ROUTING_ENGINE=valhalla, otherwise falls back to profile/ORS.
+    valhalla_costing?: string;
+    valhalla_options?: Record<string, unknown>;
+  }
 ): Promise<CleanRouteResponse> {
   try {
+    const body: Record<string, unknown> = { start, end, profile, alternatives };
+    if (options?.aqi_weight !== undefined) body.aqi_weight = options.aqi_weight;
+    if (options?.start_at) body.start_at = options.start_at;
+    if (options?.valhalla_costing) body.valhalla_costing = options.valhalla_costing;
+    if (options?.valhalla_options) body.valhalla_options = options.valhalla_options;
     const resp = await fetch('/api/vayu/route-score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ start, end, profile, alternatives }),
+      body: JSON.stringify(body),
     });
     if (!resp.ok) return { routes: [], meta: { vayu_scored: false, gemini_used: false, response_ms: 0 } };
     return await resp.json();

@@ -20,7 +20,9 @@ export interface TransportModeInfo {
   id: TransportMode;
   label: string;
   icon: string;
-  orsProfile: string;              // ORS routing profile
+  orsProfile: string;              // ORS routing profile (legacy, kept for rollback)
+  valhallaCosting: string;         // Valhalla costing model (post-pivot 2026-05-24)
+  valhallaOptions?: Record<string, unknown>; // optional per-mode costing_options
   co2PerKm: number;                // grams CO2 per km
   ecoPointsMultiplier: number;     // multiplier for EcoPoints
   speedFactor: number;             // relative speed compared to walking
@@ -73,8 +75,16 @@ export interface Route {
   vayu_min_aqi?: number;
   vayu_pollution_index?: number;
   vayu_segment_count?: number;
+  vayu_haber_dose?: number;
   gemini_reasoning?: string;
   route_label?: 'cleanest' | 'balanced' | 'fastest';
+
+  // Tier 2 M2 — temporal forecast badge: route gets dirtier/cleaner by predicted arrival.
+  forecast_summary?: {
+    max_aqi: number;
+    max_at_offset_s: number;
+    delta_pct: number; // (max_aqi - avg_aqi) / avg_aqi × 100
+  } | null;
 }
 
 // Air Quality Types
@@ -303,11 +313,17 @@ export interface CleanRouteCandidate {
   vayu_pollution_index?: number;
   vayu_segment_count: number;
   vayu_scored: boolean;
+  vayu_haber_dose?: number;
   route_label: 'cleanest' | 'balanced' | 'fastest';
   gemini_reasoning: string | null;
   segments: RouteSegmentAQI[];
   traffic_level: string;
   green_score: number;
+  forecast_summary?: {
+    max_aqi: number;
+    max_at_offset_s: number;
+    delta_pct: number;
+  } | null;
 }
 
 export interface CleanRouteResponse {

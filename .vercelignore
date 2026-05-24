@@ -1,0 +1,58 @@
+# Vercel deploy ignore — keep upload <10MB
+# Vercel only needs: api/, src/, public/, package.json, pnpm-lock.yaml,
+# vite.config.ts, vercel.json, tsconfig*.json, index.html
+#
+# Everything below = local-only artifacts that bloat upload.
+
+# ── ML training artifacts (massive, local-only) ──
+mlruns/
+ckpt/
+ckpt_seed*/
+models/
+logs/
+
+# ── Notebook data + outputs ──
+notebooks/data/
+notebooks/.ipynb_checkpoints/
+
+# ── Python workspace (local training, not Vercel runtime) ──
+vayu/
+.venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+
+# ── Local scripts (run on Tristan PC, not Vercel) ──
+scripts/
+
+# ── Docs (kept in git but not runtime) ──
+eve/
+docs/
+
+# ── Build cache ──
+dist/
+.next/
+.turbo/
+.vite/
+
+# ── Editor / OS ──
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ── Marker files (transient) ──
+.phase*_complete
+.fallback_safe
+.valhalla_*
+.train_*
+.scheduler_*
+.watchdog_*
+
+# ── Archive ──
+_archive/
+
+# ── Misc test data on D: paths (shouldn't be in repo anyway) ──
+breeva-ml-data/
+breeva-valhalla/

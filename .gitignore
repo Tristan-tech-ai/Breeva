@@ -17,6 +17,7 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+.env.vercel
 eve/
 
 # Python
@@ -42,3 +43,7 @@ __pycache__/
 .cache/
 mlruns/
 tmp/
+kaggle/
+
+# Blender MCP tooling
+tools/blender-mcp/

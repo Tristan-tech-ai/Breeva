@@ -66,6 +66,8 @@ interface MapState {
   selectedRoute: Route | null;
   isCalculatingRoutes: boolean;
   transportMode: TransportMode;
+  // Tier 2 M1 — 0=fastest, 1=cleanest. Default balanced.
+  routeAqiWeight: number;
 
   // Air Quality
   currentAQI: AirQualityData | null;
@@ -90,6 +92,7 @@ interface MapState {
   selectRoute: (route: Route) => void;
   clearRoutes: () => void;
   setTransportMode: (mode: TransportMode) => void;
+  setRouteAqiWeight: (weight: number) => void;
   fetchAirQuality: (coord: Coordinate) => Promise<void>;
   setBottomSheetState: (state: BottomSheetState) => void;
   addRecentSearch: (result: SearchResult) => void;
@@ -127,6 +130,7 @@ export const useMapStore = create<MapState>()((set, get) => ({
   selectedRoute: null,
   isCalculatingRoutes: false,
   transportMode: 'walking' as TransportMode,
+  routeAqiWeight: 0.5,
 
   currentAQI: null,
   routeAQIs: new Map(),
@@ -292,7 +296,15 @@ export const useMapStore = create<MapState>()((set, get) => ({
         [userLocation.lat, userLocation.lng],
         [destination.lat, destination.lng],
         modeInfo.orsProfile,
-        3
+        3,
+        {
+          aqi_weight: get().routeAqiWeight,
+          start_at: new Date().toISOString(),
+          // 2026-05-24 Valhalla pivot: send native costing alongside legacy profile.
+          // Backend feature-flag (ROUTING_ENGINE env) decides which to use.
+          valhalla_costing: modeInfo.valhallaCosting,
+          valhalla_options: modeInfo.valhallaOptions,
+        }
       );
 
       if (cleanResult && cleanResult.routes.length > 0) {
@@ -331,8 +343,10 @@ export const useMapStore = create<MapState>()((set, get) => ({
           vayu_min_aqi: cr.vayu_min_aqi,
           vayu_pollution_index: cr.vayu_pollution_index,
           vayu_segment_count: cr.vayu_segment_count,
+          vayu_haber_dose: cr.vayu_haber_dose,
           gemini_reasoning: cr.gemini_reasoning ?? undefined,
           route_label: cr.route_label,
+          forecast_summary: cr.forecast_summary ?? null,
         }));
 
         set({
@@ -601,6 +615,16 @@ export const useMapStore = create<MapState>()((set, get) => ({
     // If destination exists, recalculate immediately
     const { destination } = get();
     if (destination) {
+      get().calculateRoutes();
+    }
+  },
+
+  setRouteAqiWeight: (weight) => {
+    const w = Math.max(0, Math.min(1, weight));
+    set({ routeAqiWeight: w });
+    // Recompute routes with the new weight if destination is set.
+    const { destination, isCalculatingRoutes } = get();
+    if (destination && !isCalculatingRoutes) {
       get().calculateRoutes();
     }
   },

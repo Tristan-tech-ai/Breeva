@@ -22,8 +22,13 @@ interface WAQIFeedData {
 }
 
 // ── Constants ────────────────────────────────────────────────────────
+// 2026-05-24 SECURITY FIX: frontend no longer calls WAQI directly with
+// VITE_WAQI_TOKEN (which was bundled publicly). Now hits server-side
+// proxy endpoints /api/vayu/waqi-stations + /api/vayu/waqi-feed which
+// use server-side WAQI_TOKENS (token rotator).
 
-const WAQI_BASE = 'https://api.waqi.info';
+const PROXY_STATIONS = '/api/vayu/waqi-stations';
+const PROXY_FEED = '/api/vayu/waqi-feed';
 const DEBOUNCE_MS = 300;
 const BOUNDS_TTL = 5 * 60_000;
 const FEED_TTL = 10 * 60_000;
@@ -53,9 +58,9 @@ function aqiLabel(aqi: number): string {
   return 'Hazardous';
 }
 
-// ── Fetch helpers ────────────────────────────────────────────────────
+// ── Fetch helpers (via Vercel proxy, no token in browser) ────────────
 
-async function fetchBounds(bounds: L.LatLngBounds, token: string): Promise<WAQIStation[]> {
+async function fetchBounds(bounds: L.LatLngBounds): Promise<WAQIStation[]> {
   const sw = bounds.getSouthWest();
   const ne = bounds.getNorthEast();
   const key = `${sw.lat.toFixed(2)},${sw.lng.toFixed(2)},${ne.lat.toFixed(2)},${ne.lng.toFixed(2)}`;
@@ -63,9 +68,9 @@ async function fetchBounds(bounds: L.LatLngBounds, token: string): Promise<WAQIS
   const cached = boundsCache.get(key);
   if (cached && Date.now() - cached.ts < BOUNDS_TTL) return cached.data;
 
-  const resp = await fetch(
-    `${WAQI_BASE}/v2/map/bounds?latlng=${sw.lat},${sw.lng},${ne.lat},${ne.lng}&networks=all&token=${encodeURIComponent(token)}`,
-  );
+  const bboxParam = `${sw.lat},${sw.lng},${ne.lat},${ne.lng}`;
+  const resp = await fetch(`${PROXY_STATIONS}?bbox=${encodeURIComponent(bboxParam)}`);
+  if (!resp.ok) return cached?.data ?? [];
   const json = await resp.json();
   if (json.status !== 'ok') return cached?.data ?? [];
 
@@ -73,11 +78,12 @@ async function fetchBounds(bounds: L.LatLngBounds, token: string): Promise<WAQIS
   return json.data;
 }
 
-async function fetchFeed(uid: number, token: string): Promise<WAQIFeedData | null> {
+async function fetchFeed(uid: number): Promise<WAQIFeedData | null> {
   const cached = feedCache.get(uid);
   if (cached && Date.now() - cached.ts < FEED_TTL) return cached.data;
 
-  const resp = await fetch(`${WAQI_BASE}/feed/@${uid}/?token=${encodeURIComponent(token)}`);
+  const resp = await fetch(`${PROXY_FEED}?uid=${uid}`);
+  if (!resp.ok) return null;
   const json = await resp.json();
   if (json.status !== 'ok') return null;
 
@@ -162,10 +168,10 @@ function loadingHtml(name: string): string {
 export function useAQIStationLayer(map: L.Map, visible: boolean): void {
   const groupRef = useRef(L.layerGroup());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const tokenRef = useRef(import.meta.env.VITE_WAQI_TOKEN || 'demo');
+  // 2026-05-24 SECURITY: VITE_WAQI_TOKEN removed. All WAQI calls go through server-side proxy.
 
   const update = useCallback(async () => {
-    const stations = await fetchBounds(map.getBounds(), tokenRef.current);
+    const stations = await fetchBounds(map.getBounds());
     groupRef.current.clearLayers();
 
     for (const s of stations) {
@@ -196,7 +202,7 @@ export function useAQIStationLayer(map: L.Map, visible: boolean): void {
           .bindPopup(loadingHtml(s.station.name), { maxWidth: 300, className: 'aqi-station-popup' })
           .openPopup();
 
-        const feed = await fetchFeed(s.uid, tokenRef.current);
+        const feed = await fetchFeed(s.uid);
         marker.setPopupContent(
           feed
             ? popupHtml(feed)
