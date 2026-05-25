@@ -1,58 +1,73 @@
-# Vercel deploy ignore — keep upload <10MB
+# Vercel deploy ignore — uses .gitignore syntax.
+#
+# IMPORTANT: bare directory patterns (e.g. `vayu/`) match ANY directory with
+# that name at ANY depth, NOT just the root. To exclude a specific root dir
+# without over-matching a nested subdir of the same name, prefix with `/`:
+#
+#   vayu/        → matches /vayu/, /api/vayu/, /src/lib/vayu/  (BUG: too broad)
+#   /vayu/       → matches /vayu/ ONLY                          (correct)
+#
+# (2026-05-25: bare `vayu/` previously excluded /api/vayu/ from Vercel build,
+# nuking 11 serverless endpoints. Convention now: root-anchor anything intended
+# only for the repo root. Bare patterns reserved for truly recursive matches.)
+#
 # Vercel only needs: api/, src/, public/, package.json, pnpm-lock.yaml,
 # vite.config.ts, vercel.json, tsconfig*.json, index.html
-#
-# Everything below = local-only artifacts that bloat upload.
 
-# ── ML training artifacts (massive, local-only) ──
-mlruns/
-ckpt/
-ckpt_seed*/
-models/
-logs/
+# ── ML training artifacts (massive, local-only, ROOT) ──
+/mlruns/
+/ckpt/
+/ckpt_seed*/
+/models/
+/logs/
 
-# ── Notebook data + outputs ──
-notebooks/data/
-notebooks/.ipynb_checkpoints/
+# ── Notebook data + outputs (already path-prefixed) ──
+/notebooks/data/
+/notebooks/.ipynb_checkpoints/
 
-# ── Python workspace (local training, not Vercel runtime) ──
-vayu/
-.venv/
-.pytest_cache/
-__pycache__/
+# ── Python workspace (local training, ROOT) ──
+# FIX: was bare `vayu/` — over-matched /api/vayu/ + /src/lib/vayu/
+/vayu/
+/.venv/
+/.pytest_cache/
+__pycache__/          # bare INTENTIONAL — Python cache appears in any subdir
 *.pyc
 *.pyo
 
-# ── Local scripts (run on Tristan PC, not Vercel) ──
-scripts/
+# ── Local scripts (run on Tristan PC, not Vercel, ROOT) ──
+/scripts/
 
-# ── Docs (kept in git but not runtime) ──
-eve/
-docs/
+# ── Docs (kept in git but not runtime, ROOT) ──
+/eve/
+/docs/
 
-# ── Build cache ──
-dist/
-.next/
-.turbo/
-.vite/
+# ── Build cache (ROOT) ──
+/dist/
+/.next/
+/.turbo/
+/.vite/
 
-# ── Editor / OS ──
-.vscode/
-.idea/
+# ── Editor (ROOT) ──
+/.vscode/
+/.idea/
+
+# ── OS junk (bare INTENTIONAL — appears anywhere) ──
 .DS_Store
 Thumbs.db
 
-# ── Marker files (transient) ──
-.phase*_complete
-.fallback_safe
-.valhalla_*
-.train_*
-.scheduler_*
-.watchdog_*
+# ── Marker files (transient sentinels, ROOT) ──
+/.phase*_complete
+/.fallback_safe
+/.valhalla_*
+/.train_*
+/.scheduler_*
+/.watchdog_*
+/.daemon_pids.json
+/.watchdog_trigger.json
 
-# ── Archive ──
-_archive/
+# ── Archive (ROOT) ──
+/_archive/
 
-# ── Misc test data on D: paths (shouldn't be in repo anyway) ──
-breeva-ml-data/
-breeva-valhalla/
+# ── Misc test data on D: paths (defensive, ROOT) ──
+/breeva-ml-data/
+/breeva-valhalla/
