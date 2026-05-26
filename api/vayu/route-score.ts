@@ -2044,6 +2044,21 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       ? scoredRoutes[0].index
       : null;
 
+    // [F1-DEBUG temporary diagnostic — REMOVE after verification] no secrets, just flags + counts.
+    console.log('[F1-DEBUG]', JSON.stringify({
+      ROUTING_ENGINE,
+      preservePrimary,
+      valhallaCosting,
+      orsRoutesLen: orsRoutes.length,
+      dedupedOrsLen: dedupedOrs.length,
+      primaryScoredIndex,
+      rawPrimaryDist: orsRoutes[0]?.summary?.distance,
+      rawPrimaryHasBacktracking: orsRoutes[0] ? routeHasBacktracking(orsRoutes[0].geometry) : null,
+      scoredRoutes0Dist: scoredRoutes[0]?.distance_meters,
+      scoredRoutes0Index: scoredRoutes[0]?.index,
+      scoredRoutes0Source: scoredRoutes[0]?.source,
+    }));
+
     const directCandidate = scoredRoutes[0] ?? null;
     let skipAvoidPolygons = false;
     if (directCandidate?.score?.avg_aqi && directCandidate.score.avg_aqi <= 50) {
