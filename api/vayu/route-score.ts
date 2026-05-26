@@ -2044,8 +2044,10 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       ? scoredRoutes[0].index
       : null;
 
-    // [F1-DEBUG temporary diagnostic — REMOVE after verification] no secrets, just flags + counts.
-    console.log('[F1-DEBUG]', JSON.stringify({
+    // [F1-DEBUG temporary diagnostic — REMOVE after verification]
+    // Console.log doesn't reliably reach vercel logs (stream batching). Embed in
+    // response body for direct curl inspection. No secrets; just flags + counts + distances.
+    const _f1Debug = {
       ROUTING_ENGINE,
       preservePrimary,
       valhallaCosting,
@@ -2057,7 +2059,9 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       scoredRoutes0Dist: scoredRoutes[0]?.distance_meters,
       scoredRoutes0Index: scoredRoutes[0]?.index,
       scoredRoutes0Source: scoredRoutes[0]?.source,
-    }));
+      orsRouteDistances: orsRoutes.map((r) => r.summary?.distance),
+    };
+    console.log('[F1-DEBUG]', JSON.stringify(_f1Debug));
 
     const directCandidate = scoredRoutes[0] ?? null;
     let skipAvoidPolygons = false;
@@ -2666,6 +2670,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       routes,
       meta: { vayu_scored: routes.some(r => r.vayu_scored), gemini_used: reasoning !== null, response_ms: responseMs },
+      _f1_debug: _f1Debug,
     });
   } catch (error) {
     console.error('Clean-route error:', error);
