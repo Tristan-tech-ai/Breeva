@@ -1577,7 +1577,20 @@ async function doORSRequest(
 // http://localhost:8002. For Vercel production: Tailscale Funnel HTTPS URL.
 // ────────────────────────────────────────────────────────────────────
 
-const ROUTING_ENGINE = (process.env.ROUTING_ENGINE || 'ors').toLowerCase();
+/** Strip BOM (U+FEFF) + zero-width chars + whitespace from env values.
+ *  Defensive: env vars set via clipboard paste (esp. Windows shell propagation)
+ *  can pick up BOM/ZWSP, silently corrupting === string comparisons.
+ *  2026-05-27 incident: ROUTING_ENGINE='﻿valhalla' caused useValhalla=false,
+ *  silently routing Preview to ORS fallback for 3+ days. Scope kept narrow to
+ *  routing-critical env vars (ROUTING_ENGINE + VALHALLA_AUTH_TOKEN) — broader
+ *  refactor would inflate diff in this critical file. */
+function envClean(v: string | undefined): string {
+  // Strip BOM (U+FEFF) + zero-width chars (U+200B..U+200D, U+2060) then trim
+  // ASCII whitespace. Regex uses \u escapes only — source file stays ASCII-clean.
+  return (v ?? '').replace(/[﻿​-‍⁠]/g, '').trim();
+}
+
+const ROUTING_ENGINE = envClean(process.env.ROUTING_ENGINE || 'ors').toLowerCase();
 const VALHALLA_BASE_URL = process.env.VALHALLA_BASE_URL || 'http://localhost:8002';
 
 /** Decode Valhalla encoded polyline (precision 6, 1e-6 deg).
@@ -1722,7 +1735,7 @@ async function fetchValhallaAlternatives(
   // Auth header for nginx sidecar (only when going through Tailscale Funnel).
   // For local dev (VALHALLA_BASE_URL=http://localhost:8002), token is optional.
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const authToken = process.env.VALHALLA_AUTH_TOKEN;
+  const authToken = envClean(process.env.VALHALLA_AUTH_TOKEN);
   if (authToken) headers['X-Breeva-Auth'] = authToken;
 
   const resp = await fetch(`${VALHALLA_BASE_URL}/route`, {
