@@ -1893,6 +1893,17 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       : null;
     const userStartAt = typeof startAtRaw === 'string' ? startAtRaw : undefined;
 
+    // F1 (2026-05-27): preserve Valhalla primary for car-family costings.
+    // Indonesia tile lacks vehicle-class restrictions → all car-family receive shared
+    // residential alternates → dedup collapses to identical shortest path for motor/car.
+    // Pedestrian/bicycle (incl. E-Bike via bicycle costing) use mode-distinct routes natively,
+    // so preserve disabled — their codepath unchanged (preservePrimary=false dead branches).
+    // Set scoped to currently-shipped UI modes only ('auto'=Car, 'motor_scooter'=Motor).
+    // Add new costings here when UI ships new modes + their isolation tests.
+    const PRESERVE_PRIMARY_COSTINGS = new Set(['auto', 'motor_scooter']);
+    const preservePrimary = (ROUTING_ENGINE === 'valhalla')
+      && PRESERVE_PRIMARY_COSTINGS.has(valhallaCosting);
+
     let startLat: number, startLng: number, endLat: number, endLng: number;
     if (Array.isArray(start)) {
       [startLat, startLng] = start;
@@ -2005,7 +2016,17 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     };
 
     const dedupedOrs: ORSRoute[] = [];
-    for (const ors of orsRoutes) {
+    for (let i = 0; i < orsRoutes.length; i++) {
+      const ors = orsRoutes[i];
+      // F1: car-family primary (index 0) preserved unconditionally except for backtracking.
+      // Reason: Indonesia tile shared residential alternates would otherwise dedup primary
+      // via 55m similarity check, collapsing motor/car to same shortest alternate.
+      if (i === 0 && preservePrimary) {
+        if (!routeHasBacktracking(ors.geometry)) {
+          dedupedOrs.push(ors);
+        }
+        continue;
+      }
       if (!routeHasBacktracking(ors.geometry) && !dedupedOrs.some(existing => isSimilarGeometry(existing.geometry, ors.geometry, 55))) {
         dedupedOrs.push(ors);
       }
@@ -2014,6 +2035,14 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     const scoredRoutes: ScoredCandidate[] = await Promise.all(
       dedupedOrs.map((ors, index) => orsToScoredEntry(ors, index, 'ors'))
     );
+
+    // F1: tag Valhalla primary's index for label selection + final dedup exemption.
+    // Always scoredRoutes[0].index when preservePrimary AND dedupedOrs preserved primary
+    // (dedupedOrs[0] = Valhalla primary by Edit 1 construction; scoredRoutes maps in order;
+    // source='ors' confirms it came from Valhalla, not a downstream candidate).
+    const primaryScoredIndex = (preservePrimary && scoredRoutes.length > 0 && scoredRoutes[0].source === 'ors')
+      ? scoredRoutes[0].index
+      : null;
 
     const directCandidate = scoredRoutes[0] ?? null;
     let skipAvoidPolygons = false;
@@ -2419,7 +2448,14 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
 
     const byDuration = [...filteredCandidates].sort((a, b) => a.duration_seconds - b.duration_seconds);
     const byClean = [...filteredCandidates].sort((a, b) => cleanCost(a) - cleanCost(b));
-    const fastestRoute = byDuration[0];
+    // F1: for car-family, force fastest = Valhalla primary (mode-recommended route).
+    // Reason: residential alternates often have lower duration than arterial primary in
+    // Indonesia (light traffic), causing primary to lose byDuration sort.
+    // For non-car-family (primaryScoredIndex===null), this falls back to byDuration[0] (original).
+    const primaryCandidate = primaryScoredIndex !== null
+      ? filteredCandidates.find((c) => c.index === primaryScoredIndex)
+      : null;
+    const fastestRoute = primaryCandidate ?? byDuration[0];
     // Cleanest = lowest length-weighted AQI, full stop. If the cleanest IS
     // also the fastest, that's fine — duplicate labels are deduped by geometry
     // similarity later, and the UI can collapse identical entries.
@@ -2509,7 +2545,11 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     const labeled: typeof allLabeled = [];
     for (const r of allLabeled) {
       const rCoords = r.polyline.map((p) => [p.lng, p.lat]);
-      const isDup = labeled.some((existing) =>
+      // F1: car-family primary exempt from labeled dedup — it must appear in output as
+      // the mode-recommended route, even if geometrically similar to cleanest alternate.
+      // Non-car-family (primaryScoredIndex===null): isPrimary=false → original behavior.
+      const isPrimary = primaryScoredIndex !== null && r.index === primaryScoredIndex;
+      const isDup = !isPrimary && labeled.some((existing) =>
         isSimilarGeometry(rCoords, existing.polyline.map((p) => [p.lng, p.lat]), 60)
       );
       if (!isDup) labeled.push(r);
