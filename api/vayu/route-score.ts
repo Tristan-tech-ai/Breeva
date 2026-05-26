@@ -1963,17 +1963,13 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
 
     // 2026-05-24 Valhalla pivot: ROUTING_ENGINE env flag dispatch
     const useValhalla = ROUTING_ENGINE === 'valhalla';
-    // [F1-DEBUG] capture engine error for response surfacing
-    let _engineError: string | null = null;
     const enginePromise = useValhalla
       ? fetchValhallaAlternatives(orsStart, orsEnd, valhallaCosting, alternatives, valhallaOptions).catch((e) => {
           console.error('Valhalla error:', e);
-          _engineError = `valhalla: ${e instanceof Error ? e.message : String(e)}`;
           return [] as ORSRoute[];
         })
       : fetchORSAlternatives(orsStart, orsEnd, profile, alternatives).catch((e) => {
           console.error('ORS error:', e);
-          _engineError = `ors: ${e instanceof Error ? e.message : String(e)}`;
           return [] as ORSRoute[];
         });
 
@@ -1991,20 +1987,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     ]);
 
     if (orsRoutes.length === 0 && graphEdges.length === 0) {
-      // [F1-DEBUG] surface engine error + env flags even on early bail
-      return res.status(200).json({
-        ...emptyResponse('no_routes_found'),
-        _f1_debug_early_bail: {
-          ROUTING_ENGINE,
-          useValhalla,
-          preservePrimary,
-          valhallaCosting,
-          VALHALLA_BASE_URL_prefix: VALHALLA_BASE_URL.slice(0, 40),
-          engineError: _engineError,
-          orsRoutesLen: orsRoutes.length,
-          graphEdgesLen: graphEdges.length,
-        },
-      });
+      return res.status(200).json(emptyResponse('no_routes_found'));
     }
 
     type ScoredCandidate = {
@@ -2073,25 +2056,6 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     const primaryScoredIndex = (preservePrimary && scoredRoutes.length > 0 && scoredRoutes[0].source === 'ors')
       ? scoredRoutes[0].index
       : null;
-
-    // [F1-DEBUG temporary diagnostic — REMOVE after verification]
-    // Console.log doesn't reliably reach vercel logs (stream batching). Embed in
-    // response body for direct curl inspection. No secrets; just flags + counts + distances.
-    const _f1Debug = {
-      ROUTING_ENGINE,
-      preservePrimary,
-      valhallaCosting,
-      orsRoutesLen: orsRoutes.length,
-      dedupedOrsLen: dedupedOrs.length,
-      primaryScoredIndex,
-      rawPrimaryDist: orsRoutes[0]?.summary?.distance,
-      rawPrimaryHasBacktracking: orsRoutes[0] ? routeHasBacktracking(orsRoutes[0].geometry) : null,
-      scoredRoutes0Dist: scoredRoutes[0]?.distance_meters,
-      scoredRoutes0Index: scoredRoutes[0]?.index,
-      scoredRoutes0Source: scoredRoutes[0]?.source,
-      orsRouteDistances: orsRoutes.map((r) => r.summary?.distance),
-    };
-    console.log('[F1-DEBUG]', JSON.stringify(_f1Debug));
 
     const directCandidate = scoredRoutes[0] ?? null;
     let skipAvoidPolygons = false;
@@ -2700,7 +2664,6 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       routes,
       meta: { vayu_scored: routes.some(r => r.vayu_scored), gemini_used: reasoning !== null, response_ms: responseMs },
-      _f1_debug: _f1Debug,
     });
   } catch (error) {
     console.error('Clean-route error:', error);
