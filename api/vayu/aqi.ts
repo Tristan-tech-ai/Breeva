@@ -1,11 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { latLngToCell } from 'h3-js';
 
 /**
  * VAYU AQI Endpoint — Self-contained serverless function.
  * All logic inlined to avoid cross-directory import failures on Vercel.
  *
- * Flow: lat/lon → tile cache (Redis) → Supabase grid → compute (Open-Meteo + roads) → cache + respond
- * Fallback: if computation fails, proxy Open-Meteo Air Quality directly.
+ * Two modes (dispatched by query param):
+ *   ?lat=&lon=                            → current AQI (Gaussian + station blend)
+ *   ?lat=&lng=&forecast_hours=24          → 24h forecast (from aqi_forecast table)
+ *
+ * Forecast mode merged in from former api/vayu/aqi-forecast.ts on 2026-05-26
+ * (Hobby plan 12-fn quota consolidation, plan 09 Action C).
  */
 
 // ─── Tile ID ────────────────────────────────────────────────
@@ -359,10 +364,98 @@ async function compute(lat: number, lon: number): Promise<Omit<AQIResponse, 'til
   };
 }
 
+// ─── Forecast mode (merged from former aqi-forecast.ts on 2026-05-26) ────
+//
+// Dispatched from handler when ?forecast_hours=N present (current-AQI path
+// untouched). Reads from public.aqi_forecast table (populated hourly by
+// vayu/ml/forecast_hourly.py on PC). Falls back to "no_forecast_available"
+// when no rows for cell_id.
+interface ForecastRow {
+  forecast_hour: number;
+  predicted_pm25: number;
+  predicted_aqi: number;
+  forecast_made_at: string;
+}
+
+const H3_RES_FORECAST = 7;
+
+async function handleForecastMode(req: VercelRequest, res: VercelResponse) {
+  const supaUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supaUrl || !supaKey) {
+    return res.status(500).json({ error: 'Supabase env missing' });
+  }
+
+  let cellId = String(req.query.cell_id ?? '').trim();
+  // Accept either `lng` (forecast convention from old aqi-forecast.ts) OR
+  // `lon` (current-AQI convention) so caller doesn't need to pick.
+  const lngQuery = req.query.lng ?? req.query.lon;
+  if (!cellId && req.query.lat && lngQuery) {
+    const lat = Number(req.query.lat);
+    const lng = Number(lngQuery);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      try {
+        cellId = latLngToCell(lat, lng, H3_RES_FORECAST);
+      } catch {
+        return res.status(400).json({ error: 'Invalid lat/lng' });
+      }
+    }
+  }
+  if (!cellId) {
+    return res.status(400).json({ error: 'cell_id or (lat,lng) required' });
+  }
+
+  // forecast_hours = hours to project forward (1-24). Dispatch trigger AND value.
+  const hours = Math.min(24, Math.max(1, Number(req.query.forecast_hours ?? 24)));
+
+  const r = await fetch(
+    `${supaUrl}/rest/v1/aqi_forecast?cell_id=eq.${encodeURIComponent(cellId)}` +
+    `&select=forecast_hour,predicted_pm25,predicted_aqi,forecast_made_at` +
+    `&order=forecast_made_at.desc,forecast_hour.asc&limit=${hours * 3}`,
+    { headers: { apikey: supaKey, Authorization: `Bearer ${supaKey}` } },
+  );
+  if (!r.ok) {
+    return res.status(500).json({ error: 'forecast query failed', status: r.status });
+  }
+  const allRows: ForecastRow[] = await r.json();
+  if (allRows.length === 0) {
+    res.setHeader('Cache-Control', 'public, max-age=600');
+    return res.json({ cell_id: cellId, predictions: [], fallback: 'no_forecast_available' });
+  }
+
+  const latestBatch = allRows[0].forecast_made_at;
+  const predictions = allRows
+    .filter(r => r.forecast_made_at === latestBatch)
+    .sort((a, b) => a.forecast_hour - b.forecast_hour)
+    .slice(0, hours)
+    .map(r => ({
+      hour: r.forecast_hour,
+      pm25: Math.round(r.predicted_pm25 * 100) / 100,
+      aqi: r.predicted_aqi,
+    }));
+
+  const best = predictions.reduce<{ hour: number; aqi: number } | null>((acc, p) =>
+    acc == null || p.aqi < acc.aqi ? { hour: p.hour, aqi: p.aqi } : acc, null);
+
+  res.setHeader('Cache-Control', 'public, max-age=1800');
+  return res.json({
+    cell_id: cellId,
+    forecast_made_at: latestBatch,
+    predictions,
+    best_hour: best,
+  });
+}
+
 // ─── Handler ────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Dispatch: forecast mode short-circuits BEFORE current-AQI cron/coord checks.
+  // Frontend sends ?forecast_hours=24 (RouteForecast.tsx); presence = forecast mode.
+  if (req.query.forecast_hours !== undefined) {
+    return handleForecastMode(req, res);
   }
 
   // Cron auth guard (Migration 0012 — pg_cron → Vercel webhook).

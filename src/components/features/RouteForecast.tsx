@@ -67,7 +67,10 @@ export function RouteForecast({ lat, lng, cellId, className = '' }: RouteForecas
 
     setLoading(true);
     setError(null);
-    fetch(`/api/vayu/aqi-forecast?${params.toString()}`)
+    // 2026-05-26: forecast endpoint merged into /api/vayu/aqi (Hobby quota
+    // consolidation, plan 09 Action C). Dispatch via ?forecast_hours=24.
+    params.set('forecast_hours', '24');
+    fetch(`/api/vayu/aqi?${params.toString()}`)
       .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
       .then((d: ForecastResponse) => setData(d))
       .catch(e => setError(String(e)))
