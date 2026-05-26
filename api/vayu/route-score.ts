@@ -1591,7 +1591,7 @@ function envClean(v: string | undefined): string {
 }
 
 const ROUTING_ENGINE = envClean(process.env.ROUTING_ENGINE || 'ors').toLowerCase();
-const VALHALLA_BASE_URL = process.env.VALHALLA_BASE_URL || 'http://localhost:8002';
+const VALHALLA_BASE_URL = envClean(process.env.VALHALLA_BASE_URL) || 'http://localhost:8002';
 
 /** Decode Valhalla encoded polyline (precision 6, 1e-6 deg).
  *  Returns array of [lng, lat] (matches ORS geometry shape). */
@@ -1963,13 +1963,17 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
 
     // 2026-05-24 Valhalla pivot: ROUTING_ENGINE env flag dispatch
     const useValhalla = ROUTING_ENGINE === 'valhalla';
+    // [F1-DEBUG] capture engine error for response surfacing
+    let _engineError: string | null = null;
     const enginePromise = useValhalla
       ? fetchValhallaAlternatives(orsStart, orsEnd, valhallaCosting, alternatives, valhallaOptions).catch((e) => {
           console.error('Valhalla error:', e);
+          _engineError = `valhalla: ${e instanceof Error ? e.message : String(e)}`;
           return [] as ORSRoute[];
         })
       : fetchORSAlternatives(orsStart, orsEnd, profile, alternatives).catch((e) => {
           console.error('ORS error:', e);
+          _engineError = `ors: ${e instanceof Error ? e.message : String(e)}`;
           return [] as ORSRoute[];
         });
 
@@ -1987,7 +1991,20 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     ]);
 
     if (orsRoutes.length === 0 && graphEdges.length === 0) {
-      return res.status(200).json(emptyResponse('no_routes_found'));
+      // [F1-DEBUG] surface engine error + env flags even on early bail
+      return res.status(200).json({
+        ...emptyResponse('no_routes_found'),
+        _f1_debug_early_bail: {
+          ROUTING_ENGINE,
+          useValhalla,
+          preservePrimary,
+          valhallaCosting,
+          VALHALLA_BASE_URL_prefix: VALHALLA_BASE_URL.slice(0, 40),
+          engineError: _engineError,
+          orsRoutesLen: orsRoutes.length,
+          graphEdgesLen: graphEdges.length,
+        },
+      });
     }
 
     type ScoredCandidate = {
