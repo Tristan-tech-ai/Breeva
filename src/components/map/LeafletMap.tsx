@@ -379,6 +379,17 @@ export default function LeafletMap({
           totalCount={internalMeta.count}
         />
       )}
+      {/* L-3: loading badge while road-aqi fetch is in flight */}
+      {showAQIOverlay && internalMeta?.isFetching && (
+        <div
+          className="pointer-events-none absolute left-1/2 top-3 z-[1000] -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-xs font-medium text-white backdrop-blur"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400 align-middle mr-2" />
+          Memuat AQI jalan…
+        </div>
+      )}
     </div>
   );
 }

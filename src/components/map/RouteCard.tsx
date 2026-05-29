@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Clock, Route as RouteIcon, Wind, Star, Leaf, Zap, Scale, Check, TreePine, Car } from 'lucide-react';
 import type { Route } from '../../types';
 import { getAQIColor } from './LeafletMap';
+import RouteForecastBadge from './RouteForecastBadge';
 
 interface RouteCardProps {
   route: Route;
@@ -136,6 +137,16 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
               {route.road_summary}
             </span>
           )}
+        </div>
+      )}
+
+      {/* Tier 2 M2 — forecast badge */}
+      {route.forecast_summary && Math.abs(route.forecast_summary.delta_pct) >= 15 && (
+        <div className="mt-2.5 pt-2.5 border-t border-gray-100 dark:border-gray-800/50">
+          <RouteForecastBadge
+            forecastSummary={route.forecast_summary}
+            baseAqi={route.vayu_avg_aqi ?? route.avg_aqi}
+          />
         </div>
       )}
     </motion.button>
