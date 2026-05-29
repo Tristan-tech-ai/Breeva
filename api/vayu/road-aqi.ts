@@ -1,7 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-// v2 engine (Phase 3a): import the parity-tested CALINE4 line-source from route-score.ts.
-// route-score is NOT underscore-prefixed, so Vercel bundles it (unlike _ml_inference.ts which had to be inlined).
-import { caline4PolylineConc, pasquillClass, caline4CanyonFactor, caline4WetDryFactor } from './route-score';
+// v2 engine (Phase 3): import the parity-tested CALINE4 line-source from _caline4.ts.
+// MUST be an underscore-prefixed module — Vercel INLINES non-route (_-prefixed) modules into the
+// importing function bundle, so the import resolves at runtime. Importing the same fns from
+// route-score.ts (a real API route = its OWN function) left an external `./route-score` reference
+// → ERR_MODULE_NOT_FOUND at runtime, which crashed road-aqi (2026-05-29). Same lesson as _ml_inference.
+import { caline4PolylineConc, pasquillClass, caline4CanyonFactor, caline4WetDryFactor } from './_caline4.js';
 
 // ─── v2 engine wiring (Phase 3a) — feature-flagged, DEFAULT OFF (prod stays v1 until verified+flipped) ───
 const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
@@ -1419,8 +1422,12 @@ function computeRoadAQIv2(
   // Line-source emission Q in µg/m/s (= v1 g/m/s ×1e6): traffic[veh/h]×EF[g/km]/3600/1000×1e6.
   const qPM25 = (traffic * FLEET_EMISSION.pm25) / 3600 / 1000 * 1e6;
   const qNOx  = (traffic * FLEET_EMISSION.nox)  / 3600 / 1000 * 1e6;
-  const stab = pasquillClass(baseline.wind_speed, hourLocal, 0.5);
-  const wind = Math.max(baseline.wind_speed, 0.5);
+  // Robustness: a transient non-finite wind/direction (Open-Meteo hiccup or interpolation NaN) must
+  // NOT null out an entire region — that null would be cached for 15 min. Fall back to safe defaults.
+  const ws = Number.isFinite(baseline.wind_speed) ? baseline.wind_speed : 2.0;
+  const windDir = Number.isFinite(baseline.wind_direction) ? baseline.wind_direction : 0;
+  const stab = pasquillClass(ws, hourLocal, 0.5);
+  const wind = Math.max(ws, 0.5);
   const poly: Array<[number, number]> = coords.map((c) => [c[0], c[1]]);   // GeoJSON [lon, lat] pairs
   const aiClassified = road.ai_pollution_factor != null;
   const aiFactor = aiClassified ? road.ai_pollution_factor! : aiFactorFallback(road.osm_way_id, road.highway || 'residential');
@@ -1429,8 +1436,8 @@ function computeRoadAQIv2(
   const calibrated = V2_CALIBRATED_REGIONS.has(region);   // OOD: region-membership support
   const oodRefused = !calibrated;
   // Outside calibration support → refuse: serve the baseline ambient (no confident road increment), wide PI.
-  let pm25Delta = oodRefused ? 0 : caline4PolylineConc(poly, qPM25, recvLat, recvLon, wind, baseline.wind_direction, stab) * mod;
-  let no2Delta  = oodRefused ? 0 : caline4PolylineConc(poly, qNOx,  recvLat, recvLon, wind, baseline.wind_direction, stab) * mod;
+  let pm25Delta = oodRefused ? 0 : caline4PolylineConc(poly, qPM25, recvLat, recvLon, wind, windDir, stab) * mod;
+  let no2Delta  = oodRefused ? 0 : caline4PolylineConc(poly, qNOx,  recvLat, recvLon, wind, windDir, stab) * mod;
   const pm10Delta = pm25Delta * 1.8 * (SURFACE_PM10_FACTOR[road.surface || ''] ?? 1.0);
   const o3Titration = no2Delta * 0.4;
 
@@ -1466,7 +1473,7 @@ function bboxCacheKey(south: number, west: number, north: number, east: number, 
   const q = (v: number) => (Math.floor(v / step) * step).toFixed(4);
   // Engine marker isolates v1/v2 caches so flipping USE_V2_ENGINE takes effect immediately
   // (no stale cross-engine entries served during/after rollout).
-  const base = `vayu:road:${USE_V2_ENGINE ? 'v2' : 'v1'}:${q(south)}:${q(west)}:${q(north)}:${q(east)}`;
+  const base = `vayu:road:${USE_V2_ENGINE ? 'v2a' : 'v1'}:${q(south)}:${q(west)}:${q(north)}:${q(east)}`;
   return forecastHour > 0 ? `${base}:fh${forecastHour}` : base;
 }
 
@@ -1713,6 +1720,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (USE_V2_ENGINE) {
         try {
           const v2 = computeRoadAQIv2(road, coords, roadLat, roadLon, baseline, diurnal, region, targetHour, nowJkt.getMonth() + 1, camsDaily);
+          // Guard: never serve/cache a non-finite v2 estimate — fall through to v1 (which has the
+          // NaN-correction hotfix) so a transient bad input degrades gracefully instead of nulling.
+          if (!Number.isFinite(v2.pm25)) throw new Error('v2 non-finite pm25');
           features.push({
             osm_way_id: road.osm_way_id, geometry, highway: road.highway, weight: roadWeight(road.highway),
             aqi: v2.aqi, pm25: v2.pm25, no2: v2.no2, o3: v2.o3, pm10: v2.pm10,
