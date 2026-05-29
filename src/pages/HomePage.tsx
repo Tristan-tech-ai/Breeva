@@ -33,6 +33,7 @@ import LeafletMap from '../components/map/LeafletMap';
 import SearchBar from '../components/map/SearchBar';
 import BottomSheet from '../components/map/BottomSheet';
 import RouteCard from '../components/map/RouteCard';
+import RouteAqiSlider from '../components/map/RouteAqiSlider';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import Sidebar from '../components/layout/Sidebar';
 import TransportModeSelector from '../components/map/TransportModeSelector';
@@ -68,6 +69,7 @@ export default function HomePage() {
     isCalculatingRoutes,
     currentAQI,
     transportMode,
+    routeAqiWeight,
     startLocating,
     stopLocating,
     calculateRoutes,
@@ -76,6 +78,7 @@ export default function HomePage() {
     setDestination,
     setBottomSheetState,
     setCenter,
+    setRouteAqiWeight,
   } = useMapStore();
 
   const {
@@ -103,13 +106,13 @@ export default function HomePage() {
   const [showMerchants, setShowMerchants] = useState(true);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [forecastHour, setForecastHour] = useState(0);
-  // 'delta' = road-only contribution (CALINE3 dispersion) — surfaces
-  //   road-level 50-100m resolution because baseline is removed. Default
-  //   per recommendation in eve/diagnostics/road-color-uniformity-regression.md:
-  //   honest data display that also reveals per-segment variance.
-  //   For pollutant='aqi' the mode silently falls back to absolute values
-  //   (delta has no meaning for the composite AQI index).
-  const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('delta');
+  // 'blend' = HUE from absolute health level × SATURATION from the real per-road
+  //   delta (CALINE4 dispersion) — busy roads vivid, quiet roads muted, anchored to
+  //   the honest absolute health hue. Default: reveals per-segment variance (per
+  //   eve/diagnostics/road-color-uniformity-regression.md) WITHOUT losing health
+  //   context and WITHOUT exaggeration (fixed real-value scales — no auto-stretch).
+  //   'delta' = pure road contribution; 'total' = pure absolute. aqi/o3 → absolute.
+  const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('blend');
   const [roadLayerMeta, setRoadLayerMeta] = useState<RoadLayerMeta | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'voyager' | 'osm' | 'satellite'>('voyager');
@@ -522,6 +525,11 @@ export default function HomePage() {
               {/* Transport mode selector */}
               <div className="mb-3">
                 <TransportModeSelector />
+              </div>
+
+              {/* Tier 2 M1 — AQI weight slider */}
+              <div className="mb-3">
+                <RouteAqiSlider value={routeAqiWeight} onChange={setRouteAqiWeight} />
               </div>
 
               <div className="flex flex-col gap-2.5 mb-4">

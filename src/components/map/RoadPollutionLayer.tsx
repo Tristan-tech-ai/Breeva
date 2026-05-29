@@ -19,6 +19,10 @@ export interface RoadLayerMeta {
   count: number;
   // Tier 3.5: number of roads in current viewport with GraphSAGE delta applied
   gcn_applied_count?: number;
+  // L-3 fix: true while a fetch is in-flight. Used by LeafletMap to render a
+  // top-bar "Loading roads..." skeleton during the 500-1500ms wait window so
+  // users get immediate feedback after toggling the layer on.
+  isFetching?: boolean;
 }
 
 // Singleton tile cache: 120 entries, 15-min TTL (larger cache = higher hit rate)
@@ -26,25 +30,8 @@ const roadCache = new SpatialTileCache<RoadAQIResponse>(120, 15);
 
 // ── Color scales per pollutant ───────────────────────────────
 
-function getConcentrationColor(
-  value: number,
-  pollutant: PollutantType,
-  mode: RoadDisplayMode = 'total',
-): string {
-  // Step-based categorization at standard breakpoints (EPA for AQI, WHO/EU for
-  // pollutants). Color represents the category the value falls into — NOT a
-  // smooth gradient — so AQI 49 and AQI 51 cross a real category boundary.
-  //
-  // In 'delta' mode, breakpoints are much tighter (µg/m³ scale of road-only
-  // contribution, not absolute), so road-level resolution becomes visible.
-  const stops = mode === 'delta' ? getDeltaColorStops(pollutant) : getColorStops(pollutant);
-  for (let i = 0; i < stops.length - 1; i++) {
-    if (value < stops[i + 1].v) {
-      return stops[i].c;
-    }
-  }
-  return stops[stops.length - 1].c;
-}
+// (Color dispatch lives in getRoadColor below — continuous ramp + 'blend'.
+// The step-based categorizer was replaced by rampRgb for smoother resolution.)
 
 // Delta-mode breakpoints (road contribution above baseline, µg/m³). Tighter
 // than absolute breakpoints because baseline (30-50 µg/m³ Jakarta PM2.5) has
@@ -168,8 +155,82 @@ function getValue(
   }
 }
 
-// ── Minimum zoom for road overlay (14+ = demo-safe, looks great at street level) ──
-const MIN_ZOOM = 14;
+// ── Continuous color ramp ────────────────────────────────────
+// Interpolates between the SAME fixed band anchors used by the step scale — so
+// real small differences (e.g. 30 vs 35 µg/m³) show as a gradient instead of
+// collapsing into one 6-step bin. NOT viewport-relative — scales stay fixed to
+// real values ("no make-up"); identical input → identical color anywhere.
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace('#', '');
+  return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+}
+function rampRgb(value: number, stops: { v: number; c: string }[]): { r: number; g: number; b: number } {
+  if (value <= stops[0].v) return hexToRgb(stops[0].c);
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (value < stops[i + 1].v) {
+      const span = stops[i + 1].v - stops[i].v || 1;
+      const t = (value - stops[i].v) / span;
+      const a = hexToRgb(stops[i].c), b = hexToRgb(stops[i + 1].c);
+      return {
+        r: Math.round(a.r + (b.r - a.r) * t),
+        g: Math.round(a.g + (b.g - a.g) * t),
+        b: Math.round(a.b + (b.b - a.b) * t),
+      };
+    }
+  }
+  return hexToRgb(stops[stops.length - 1].c);
+}
+// Pull an RGB toward its grey luminance by (1-sat). sat=1 → unchanged, sat=0 → grey.
+function applySaturation({ r, g, b }: { r: number; g: number; b: number }, sat: number): string {
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  const c = (x: number) => Math.round(lum + (x - lum) * sat);
+  return `rgb(${c(r)},${c(g)},${c(b)})`;
+}
+// Fractional position of a value across the FIXED delta bands → 0..1.
+// Real per-road caline4 deltas are small (typically 0–3 µg/m³), so a linear value/max
+// would be near-zero everywhere. Positioning across the tight band breakpoints
+// (0/0.5/2/5/10/25) spreads that real spread into a perceptible range — still a FIXED
+// µg/m³ scale (NOT viewport-relative), so a given delta always maps the same ("no make-up").
+function bandIntensity(value: number, stops: { v: number; c: string }[]): number {
+  if (value <= stops[0].v) return 0;
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (value < stops[i + 1].v) {
+      const frac = (value - stops[i].v) / (stops[i + 1].v - stops[i].v || 1);
+      return (i + frac) / (stops.length - 1);
+    }
+  }
+  return 1;
+}
+
+// ── Road color dispatcher ────────────────────────────────────
+// 'total' = absolute health level (continuous WHO ramp).
+// 'delta' = road-only contribution above baseline (continuous, tight µg/m³ ramp).
+// 'blend' = HUE from absolute health (real) × SATURATION from the real per-road
+//           delta → busy roads vivid, quiet roads muted, same honest health hue.
+// All scales fixed to real values (no auto-stretch). OOD-refused → neutral grey.
+function getRoadColor(road: RoadAQIFeature, pollutant: PollutantType, mode: RoadDisplayMode): string {
+  if (road.ood_refused || road.confidence === 'refuse') return 'rgb(156,163,175)'; // grey: outside calibration support
+  if (mode === 'delta') {
+    const { r, g, b } = rampRgb(getValue(road, pollutant, 'delta'), getDeltaColorStops(pollutant));
+    return `rgb(${r},${g},${b})`;
+  }
+  if (mode === 'blend' && (pollutant === 'pm25' || pollutant === 'no2' || pollutant === 'pm10')) {
+    const base = rampRgb(getValue(road, pollutant, 'total'), getColorStops(pollutant)); // health hue (real absolute)
+    // Saturation from the real per-road delta, positioned across the FIXED delta bands
+    // (not value/max, not viewport-relative) so the small-but-real spread (~0–3 µg/m³)
+    // is perceptible: quiet road muted/grey-green, busy road vivid — same honest hue.
+    const intensity = bandIntensity(getValue(road, pollutant, 'delta'), getDeltaColorStops(pollutant));
+    return applySaturation(base, 0.30 + 0.70 * intensity);
+  }
+  // 'total' (and aqi/o3 fallback): continuous absolute ramp
+  const { r, g, b } = rampRgb(getValue(road, pollutant, 'total'), getColorStops(pollutant));
+  return `rgb(${r},${g},${b})`;
+}
+
+// ── Minimum zoom for road overlay. C-2 fix: lowered from 14→12 so
+// city-overview zooms still render colored arterials. Server-side already
+// filters to motorway/trunk/primary at z<14 (small payload at low zoom).
+const MIN_ZOOM = 12;
 
 // ── Shared Canvas renderer for WebGL-like performance ────────
 // Canvas renderer handles 2000+ polylines at 60fps vs SVG's ~500 limit
@@ -221,11 +282,7 @@ export function useRoadPollutionLayer(
         // breakpoints. A clean city stays green even at street level.
         // 'delta' mode: colors represent ROAD-ONLY contribution above baseline,
         // surfacing per-segment variance (gang vs arterial vs motorway).
-        const color = getConcentrationColor(
-          getValue(road, currentPollutant, currentMode),
-          currentPollutant,
-          currentMode,
-        );
+        const color = getRoadColor(road, currentPollutant, currentMode);
 
         const zoomScale = zoom >= 16 ? 1.6 : zoom >= 15 ? 1.3 : zoom >= 13 ? 1.0 : zoom >= 12 ? 0.7 : 0.5;
         const weight = road.weight * zoomScale;
@@ -365,6 +422,21 @@ export function useRoadPollutionLayer(
     const ac = new AbortController();
     controllerRef.current = ac;
 
+    // L-3: signal "loading" immediately via meta so the parent can render a
+    // skeleton/spinner. We preserve existing meta fields (count, station, etc.)
+    // so legend doesn't blink to zero between fetches.
+    setMeta((prev) => ({
+      wind_speed: prev?.wind_speed ?? 0,
+      waqi_station: prev?.waqi_station ?? null,
+      satellite_no2: prev?.satellite_no2 ?? false,
+      iqair_aqi: prev?.iqair_aqi ?? null,
+      iqair_city: prev?.iqair_city ?? null,
+      iqair_validation: prev?.iqair_validation ?? null,
+      count: prev?.count ?? 0,
+      gcn_applied_count: prev?.gcn_applied_count,
+      isFetching: true,
+    }));
+
     try {
       const params = new URLSearchParams({
         south: s.toFixed(6), west: w.toFixed(6),
@@ -380,6 +452,7 @@ export function useRoadPollutionLayer(
         layerRef.current.clearLayers();
         dataRef.current = null;
         fetchedBoundsRef.current = null;
+        setMeta((prev) => prev ? { ...prev, isFetching: false } : null);
         return;
       }
       const data: RoadAQIResponse = await resp.json();
@@ -389,8 +462,11 @@ export function useRoadPollutionLayer(
       dataRef.current = data;
       fetchedBoundsRef.current = { s, w, n, e, z: zoom };
       atomicSwap(data, pollutant, displayMode);
+      // atomicSwap calls setMeta with fresh data; ensure isFetching is cleared
+      setMeta((prev) => prev ? { ...prev, isFetching: false } : null);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
+      setMeta((prev) => prev ? { ...prev, isFetching: false } : null);
     }
   }, [map, visible, forecastHour, pollutant, displayMode, atomicSwap, viewportCovered]);
 

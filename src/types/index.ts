@@ -245,7 +245,9 @@ export type PollutantType = 'aqi' | 'pm25' | 'no2' | 'o3' | 'pm10';
 //   'delta' — road-only contribution above baseline (CALINE3 dispersion).
 //             Better surfaces road-level 50-100m resolution because baseline is
 //             removed from each segment.
-export type RoadDisplayMode = 'total' | 'delta';
+//   'blend' — HUE from absolute health level × SATURATION from the real per-road
+//             delta (vivid = busy road, muted = quiet) — honest 2-channel default.
+export type RoadDisplayMode = 'total' | 'delta' | 'blend';
 
 export interface RoadAQIFeature {
   osm_way_id: number;
@@ -277,6 +279,15 @@ export interface RoadAQIFeature {
   gcn_delta?: number;
   gcn_uncertainty?: number;
   pm25_total_delta?: number;
+  // ── v2 engine (Phase 3) fields — present only when USE_V2_ENGINE served this road. ──
+  // confidence label (drives refuse-grey + future "estimasi/presisi" badge);
+  // pi95_lo/hi = 95% predictive interval bounds (µg/m³); ood_refused = outside
+  // calibration support (no confident point estimate); engine = 'v1' | 'v2'.
+  confidence?: 'high' | 'medium' | 'low' | 'refuse';
+  pi95_lo?: number;
+  pi95_hi?: number;
+  ood_refused?: boolean;
+  engine?: 'v1' | 'v2';
 }
 
 // ── Clean Route (VAYU-scored route) types ────────────────────────
