@@ -43,6 +43,7 @@ const WalkDetailPage = lazy(() => import('./pages/WalkDetailPage'));
 const EcoTipsPage = lazy(() => import('./pages/EcoTipsPage'));
 const ContributionHistoryPage = lazy(() => import('./pages/ContributionHistoryPage'));
 const YearInReviewPage = lazy(() => import('./pages/YearInReviewPage'));
+const PaparanPage = lazy(() => import('./pages/PaparanPage'));
 
 // Page loading fallback — minimal skeleton
 function PageLoader() {
@@ -253,6 +254,9 @@ function App() {
 
             {/* Eco Tips */}
             <Route path="/eco-tips" element={<EcoTipsPage />} />
+
+            {/* Layer 3 — Exposure Risk Calculator (public; saved-walk source needs login) */}
+            <Route path="/paparan" element={<PaparanPage />} />
 
             {/* Info Pages (public) */}
             <Route path="/about" element={<AboutPage />} />

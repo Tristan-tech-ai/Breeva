@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Wind, ShieldCheck, ShieldAlert, ChevronUp, ChevronDown } from 'lucide-react';
+import { CIG_UG, riskBand } from '../../lib/exposure';
 
 interface LiveExposureTrackerProps {
   /** Current AQI value (updates in real-time) */
@@ -31,13 +32,6 @@ function aqiToPM25(aqi: number): number {
     }
   }
   return aqi > 300 ? 350 : 5; // fallback
-}
-
-function getRiskLevel(cigarettes: number): 'low' | 'moderate' | 'high' | 'very_high' {
-  if (cigarettes < 0.5) return 'low';
-  if (cigarettes < 1.5) return 'moderate';
-  if (cigarettes < 3) return 'high';
-  return 'very_high';
 }
 
 const RISK_CONFIG = {
@@ -73,10 +67,9 @@ export default function LiveExposureTracker({ currentAQI, isPaused }: LiveExposu
       cumulativeDoseRef.current += doseDelta;
 
       setDisplayDose(cumulativeDoseRef.current);
-      // 1 cigarette ≈ 22µg PM2.5 inhaled over 5 minutes at heavy exposure
-      // Standard: 1 cig = ~22,000 µg total PM2.5 but we use WHO breathing-adjusted:
-      // 22 µg/m³ × 24h × 1.2 m³/h = 633.6 µg/day ≈ 1 cig/day equivalent
-      setDisplayCig(cumulativeDoseRef.current / 633.6);
+      // Unified cigarette benchmark = CIG_UG (660 µg PM2.5 ≈ 1 cig, Pope 2009) — shared with the
+      // /paparan calculator + RouteCard + WalkComplete so the whole app reports ONE number.
+      setDisplayCig(cumulativeDoseRef.current / CIG_UG);
     }, 2000);
 
     return () => clearInterval(interval);
@@ -102,7 +95,7 @@ export default function LiveExposureTracker({ currentAQI, isPaused }: LiveExposu
     );
   }
 
-  const risk = getRiskLevel(displayCig);
+  const risk = riskBand(displayDose);   // unified dose-µg bands (shared lib)
   const cfg = RISK_CONFIG[risk];
   const pm25Now = aqiToPM25(currentAQI);
 

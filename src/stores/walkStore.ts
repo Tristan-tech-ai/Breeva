@@ -4,9 +4,21 @@ import toast from 'react-hot-toast';
 import type { Coordinate, RoutePoint, WalkSession, ExposureResult } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from './authStore';
-import { completeWalkViaApi, getVayuExposure, getVayuVehicleType, submitVayuContribution } from '../lib/api';
+import { completeWalkViaApi, getVayuVehicleType, submitVayuContribution, getRouteScoreSegments } from '../lib/api';
 import { showNotification, isNotificationEnabled } from '../lib/notifications';
 import { formatLocalDateYYYYMMDD } from '../lib/utils';
+import { computeDose, type ExposureMode, type ExposureDoseResult, type UserExposureProfile } from '../lib/exposure';
+import { saveExposureLedger } from '../lib/exposure-ledger';
+
+// Map the walk's transport mode to the exposure dose model's mode.
+function transportToExposureMode(t: string): ExposureMode {
+  switch (t) {
+    case 'cycling': case 'ebike': return 'cycle';
+    case 'motorcycle': return 'motorcycle_open';
+    case 'car': return 'car_ac_fresh';
+    default: return 'walk_slow';
+  }
+}
 
 interface WalkTrackingState {
   // Walk session
@@ -251,18 +263,36 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
     // Compute VAYU exposure. Await with a 3s timeout so the WalkComplete modal
     // can render the "Air Exposure" card with real data. Without the await,
     // the modal opens with exposureResult=null and the user never sees this.
+    // Unified inhaled-dose (shared src/lib/exposure) from the walk's v2-scored polyline — replaces
+    // the old vehicle-model exposure.ts call so the modal + ledger use ONE methodology. Captured for
+    // best-effort persistence after the walk row is saved.
+    let walkDose: ExposureDoseResult | null = null;
+    let walkProfile: UserExposureProfile | null = null;
+    let walkSegCount = 0;
     const polyline: [number, number][] = routePoints.map(p => [p.lat, p.lng]);
     if (polyline.length >= 2) {
       const vehicleType = getVayuVehicleType(get().activeTransportMode);
-      const durationMin = Math.max(1, Math.round(durationSeconds / 60));
+      walkProfile = { age_bucket: 'adult', mode: transportToExposureMode(get().activeTransportMode), health_sensitive: false };
 
-      const exposurePromise = getVayuExposure(polyline, vehicleType, durationMin);
-      const timeoutPromise = new Promise<null>((resolve) =>
-        setTimeout(() => resolve(null), 3000),
-      );
+      const scorePromise = getRouteScoreSegments(polyline, durationSeconds);
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000));
       try {
-        const result = await Promise.race([exposurePromise, timeoutPromise]);
-        if (result) set({ exposureResult: result });
+        const score = await Promise.race([scorePromise, timeoutPromise]);
+        if (score?.segments?.length) {
+          const dose = computeDose(score.segments, durationSeconds, walkProfile);
+          walkDose = dose;
+          walkSegCount = score.segments.length;
+          set({ exposureResult: {
+            total_dose_ug: dose.dose_ug,
+            cigarette_equivalent: dose.cigarette_equiv,
+            health_risk_level: dose.risk_level,
+            avg_pm25: dose.mean_pm25,
+            vehicle_type: get().activeTransportMode,
+            vehicle_label: '',
+            duration_minutes: dose.duration_minutes,
+            sample_count: score.segments.length,
+          } });
+        }
       } catch { /* ignore */ }
 
       // Auto-contribute walk trace. Geohash from route midpoint (precision 7
@@ -318,6 +348,14 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
         // Await profile refresh so ProfilePage / header chips show the new
         // balance immediately, not on next session.
         await useAuthStore.getState().fetchProfile();
+
+        // Best-effort: persist the unified exposure dose to exposure_ledger (RLS own-rows; non-blocking).
+        if (walkDose && walkProfile) {
+          saveExposureLedger(walkDose, walkProfile, {
+            source: 'walk', walk_id: completedSession.id, durationSeconds, segmentCount: walkSegCount,
+          }).catch(() => {});
+        }
+
         localStorage.setItem('breeva_last_walk_date', formatLocalDateYYYYMMDD());
 
         if (isNotificationEnabled()) {

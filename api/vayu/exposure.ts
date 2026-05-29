@@ -33,8 +33,9 @@ const VEHICLE_PARAMS: Record<string, { vr: number; intakeFraction: number; label
   public_transport:   { vr: 8.0,  intakeFraction: 0.70, label: 'Angkutan Umum' },
 };
 
-// Cigarette dose benchmark: 253 μg PM2.5 per cigarette (ERD 7.4, Berkeley Earth 2015)
-const CIGARETTE_DOSE_UG = 253;
+// Cigarette dose benchmark: 660 μg PM2.5 per cigarette (Pope 2009) — UNIFIED across the app
+// (src/lib/exposure.ts CIG_UG, LiveExposureTracker, /paparan) so every surface reports one number.
+const CIGARETTE_DOSE_UG = 660;
 
 type HealthRiskLevel = 'low' | 'moderate' | 'high' | 'very_high';
 

@@ -301,6 +301,7 @@ export interface RouteSegmentAQI {
   no2: number;
   fraction_along: number;  // 0.0–1.0 position along route
   pm25_delta?: number;
+  length_m?: number;       // optional: segment length, refines per-segment dose time-split
 }
 
 export interface VayuRouteScore {

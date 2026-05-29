@@ -3,6 +3,10 @@ import { Clock, Route as RouteIcon, Wind, Star, Leaf, Zap, Scale, Check, TreePin
 import type { Route } from '../../types';
 import { getAQIColor } from './LeafletMap';
 import RouteForecastBadge from './RouteForecastBadge';
+import { computeDose, type UserExposureProfile } from '../../lib/exposure';
+
+// At-a-glance teaser uses a default adult-walker; the /paparan page lets users customize age/mode/health.
+const TEASER_PROFILE: UserExposureProfile = { age_bucket: 'adult', mode: 'walk_slow', health_sensitive: false };
 
 interface RouteCardProps {
   route: Route;
@@ -50,6 +54,10 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
   const info = routeLabels[route.route_type] || routeLabels.balanced;
   const { Icon } = info;
   const traffic = route.traffic_level ? trafficConfig[route.traffic_level] : null;
+  // Layer 3 teaser: inhaled-dose estimate from the route's v2 per-segment PM2.5 (default adult walker).
+  const exposure = route.vayu_score?.segments?.length
+    ? computeDose(route.vayu_score.segments, route.duration_seconds, TEASER_PROFILE)
+    : null;
 
   return (
     <motion.button
@@ -134,6 +142,16 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
               · keyakinan {route.aqi_confidence >= 70 ? 'tinggi' : route.aqi_confidence >= 40 ? 'sedang' : 'rendah'}
             </span>
           )}
+        </div>
+      )}
+
+      {/* Layer 3 — inhaled-dose teaser (tap a route's "Lensa Paparan" for full calculator) */}
+      {exposure && (
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400 flex-wrap">
+          <Wind className="w-3 h-3 text-sky-500" />
+          <span>Paparan ≈ <b className="text-gray-700 dark:text-gray-300">{Math.round(exposure.dose_ug)} µg</b></span>
+          <span>· {exposure.cigarette_equiv.toFixed(2)} 🚬</span>
+          <span>· {exposure.who_24h_ratio.toFixed(1)}× WHO</span>
         </div>
       )}
 

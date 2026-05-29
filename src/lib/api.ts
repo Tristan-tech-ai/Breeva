@@ -1,4 +1,4 @@
-import type { Coordinate, AirQualityData, Route, RouteInstruction, TransportModeInfo, AQIFreshness, RouteScoreResult, ExposureResult, RoadAQIResponse, CleanRouteResponse } from '../types';
+import type { Coordinate, AirQualityData, Route, RouteInstruction, TransportModeInfo, AQIFreshness, RouteScoreResult, ExposureResult, RoadAQIResponse, CleanRouteResponse, VayuRouteScore } from '../types';
 import { supabase } from './supabase';
 import { getAqiCache, putAqiCache } from './offline-db';
 import { sendOrQueueMutation } from './offline-queue';
@@ -1150,6 +1150,29 @@ export async function getVayuRouteScore(
     if (!resp.ok) return null;
     const json = await resp.json();
     return json.data as RouteScoreResult;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Score an arbitrary polyline with the v2 engine and return the FULL per-segment result
+ * (segments[].pm25 + fraction_along) — used by the Exposure Calculator to dose a saved walk.
+ * (getVayuRouteScore casts away segments; this keeps them.)
+ */
+export async function getRouteScoreSegments(
+  polyline: [number, number][],
+  durationSeconds?: number,
+): Promise<VayuRouteScore | null> {
+  try {
+    const resp = await fetch('/api/vayu/route-score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ polyline, vehicle_type: 'pedestrian', duration_seconds: durationSeconds }),
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    return (json.data ?? null) as VayuRouteScore | null;
   } catch {
     return null;
   }
