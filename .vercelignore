@@ -34,6 +34,17 @@ __pycache__/          # bare INTENTIONAL — Python cache appears in any subdir
 *.pyc
 *.pyo
 
+# ── Safety net for vayu/.venv (5.6 GB local Python virtualenv) ──
+# If Vercel CLI doesn't honor the `/vayu/` root-anchor above (CLI 50.x observed
+# uploading 5.4 GB despite the rule), this bare pattern catches the venv
+# directly. SAFE because:
+#   - Matches ONLY a `.venv` subdirectory of any `vayu` dir
+#   - There is NO `api/vayu/.venv/` (verified 2026-05-27 audit/A06)
+#   - There is NO `src/lib/vayu/.venv/`
+#   - Cannot recreate the 2026-05-25 incident (which was bare `vayu/`, matching
+#     the parent dir itself, not a specific subdir)
+vayu/.venv/
+
 # ── Local scripts (run on Tristan PC, not Vercel, ROOT) ──
 /scripts/
 
@@ -46,6 +57,9 @@ __pycache__/          # bare INTENTIONAL — Python cache appears in any subdir
 /.next/
 /.turbo/
 /.vite/
+
+# ── Untracked dev cache (regeneratable, 516 MB at audit/A06) ──
+/cache/
 
 # ── Editor (ROOT) ──
 /.vscode/
@@ -71,3 +85,11 @@ Thumbs.db
 # ── Misc test data on D: paths (defensive, ROOT) ──
 /breeva-ml-data/
 /breeva-valhalla/
+
+# ── Stray dev artifacts at root (per audit/A06 §D2) ──
+# These are accidental output dumps from earlier scripts (curl with cwd in
+# filename, log capture, etc.). Small individually but should not deploy.
+# Pattern format: bare so they match wherever they appear (none in api/ or src/).
+.tmp_logs*.txt
+STATUS.md
+UsersTristanDownloadsbreeva.*.json

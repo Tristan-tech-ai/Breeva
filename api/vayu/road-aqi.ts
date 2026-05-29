@@ -1,4 +1,28 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+// v2 engine (Phase 3a): import the parity-tested CALINE4 line-source from route-score.ts.
+// route-score is NOT underscore-prefixed, so Vercel bundles it (unlike _ml_inference.ts which had to be inlined).
+import { caline4PolylineConc, pasquillClass, caline4CanyonFactor, caline4WetDryFactor } from './route-score';
+
+// ─── v2 engine wiring (Phase 3a) — feature-flagged, DEFAULT OFF (prod stays v1 until verified+flipped) ───
+const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
+// Per-region hourly predictive sigma (µg/m³) from the validated GATE-1 fusion (per-region empirical hourly
+// residual sd). Drives the served 95% PI. Regions NOT in this set = outside calibration support → OOD refuse.
+const V2_SIGMA: Record<string, number> = {
+  jakarta: 19.22, bali: 11.73, bandung: 22.27, surabaya: 11.67, semarang: 14.41, yogyakarta: 15.66,
+  solo: 15.18, medan: 12.07, palembang: 15.28, makassar: 9.35, malang: 12.86, denpasar: 15.49,
+};
+const V2_CALIBRATED_REGIONS = new Set(Object.keys(V2_SIGMA));
+const V2_GP_REGIONS = new Set(['jakarta', 'bali']);  // high-confidence (GP-deployed) priority regions
+// Layer A Background (Berrocal daily downscaler, GATE D1 PASS 45%): Background = b0 + b1·CAMS_daily_mean.
+// From vayu/calibration/layer_a_background_params.json (2026-05-28). One formula unifies all 4 model types
+// (slope / identity b0=0,b1=1 / offset b1=1 / climatology b1=0). Applied to RAW CAMS daily-mean (the truth-
+// calibrated ambient) — replaces the v1 WAQI-bias path for v2 PM2.5 (no double calibration).
+const V2_BACKGROUND: Record<string, { b0: number; b1: number }> = {
+  jakarta: { b0: 16.7298, b1: 0.2761 }, bali: { b0: 0, b1: 1 }, yogyakarta: { b0: 10.3966, b1: 0.4322 },
+  semarang: { b0: 0, b1: 1 }, palembang: { b0: 7.837, b1: 1 }, solo: { b0: 30.8865, b1: 0 },
+  surabaya: { b0: 15.1303, b1: 0.1536 }, bandung: { b0: 23.2303, b1: 0.4172 }, denpasar: { b0: 13.2775, b1: 1 },
+  makassar: { b0: 14.0227, b1: -0.1177 }, medan: { b0: 15.2735, b1: 0 }, malang: { b0: 8.8923, b1: 0 },
+};
 
 // ─── Inlined XGBoost residual inference (was api/vayu/_ml_inference.ts) ───
 // Vercel's underscore-prefix exclusion blocks the file from being bundled even
@@ -50,7 +74,7 @@ function normalizeXgboostJson(raw: unknown): XGBoostModel | null {
     return {
       trees: r.trees as XGBNode[],
       feature_names: r.feature_names as string[],
-      base_score: typeof r.base_score === 'number' ? r.base_score : 0.0,
+      base_score: Number.isFinite(r.base_score) ? (r.base_score as number) : 0.0,
     };
   }
   const learner = r?.learner as Record<string, unknown> | undefined;
@@ -63,7 +87,7 @@ function normalizeXgboostJson(raw: unknown): XGBoostModel | null {
     return {
       trees: trees as XGBNode[],
       feature_names: fnames,
-      base_score: Number(lmp?.base_score ?? 0.0),
+      base_score: Number.isFinite(Number(lmp?.base_score ?? 0.0)) ? Number(lmp?.base_score ?? 0.0) : 0.0,
     };
   }
   return null;
@@ -96,7 +120,7 @@ async function loadModel(region: string): Promise<XGBoostModel | null> {
 function traverseTree(rootNode: XGBNode, features: Record<string, number>, fnames: string[]): number {
   let node = rootNode;
   while (true) {
-    if (node.leaf !== undefined) return node.leaf;
+    if (node.leaf !== undefined) return Number.isFinite(node.leaf) ? node.leaf : 0;
     const fkey = node.split ?? fnames[node.split_index ?? 0];
     const value = features[fkey] ?? 0;
     const threshold = node.split_condition ?? 0;
@@ -110,19 +134,28 @@ function traverseTree(rootNode: XGBNode, features: Record<string, number>, fname
   }
 }
 
-async function applyResidualCorrection(
-  region: string,
+// L-1 fix: sync inference helper. Pre-load the model ONCE before the per-road
+// loop, then call this synchronously per road. Eliminates the await-per-road
+// overhead that turned 6,000 roads into a 6-18s serial wait.
+function applyResidualSync(
+  model: XGBoostModel | null,
   rawPrediction: number,
   features: Record<string, number>,
-): Promise<{ corrected: number; residual: number; model_version: string | null }> {
-  const model = await loadModel(region);
+): { corrected: number; residual: number; model_version: string | null } {
   if (!model) return { corrected: rawPrediction, residual: 0, model_version: null };
   const fullFeatures = { ...features, predicted_pm25: rawPrediction };
   let residual = model.base_score;
   for (const tree of model.trees) {
     residual += traverseTree(tree, fullFeatures, model.feature_names);
   }
+  // Hotfix (2026-05-29): a corrupt model artifact (NaN base_score/leaf) yields a
+  // non-finite residual. Without this guard it passes the caller's `mlResidual !== 0`
+  // test (NaN !== 0 is true) and overwrites pm25 with NaN → JSON `null` on every road
+  // (the live prod PM2.5 outage). Treat any non-finite model output as "no correction
+  // applied" — keep the valid physical baseline+dispersion value, never destroy it.
+  if (!Number.isFinite(residual)) return { corrected: rawPrediction, residual: 0, model_version: null };
   const corrected = Math.max(0, rawPrediction + residual);
+  if (!Number.isFinite(corrected)) return { corrected: rawPrediction, residual: 0, model_version: null };
   return { corrected, residual, model_version: 'active' };
 }
 
@@ -409,11 +442,13 @@ function getQueryParams(zoom: number): { limit: number; highways: string[] | nul
     'tertiary', 'tertiary_link',
     'residential', 'living_street', 'unclassified',
   ], simplify: 0.00005 };
-  // z14: + tertiary (medium roads)
-  if (zoom >= 14) return { limit: 12000, highways: [
+  // z14: + tertiary + residential + unclassified (gangs visible at city-block zoom).
+  // C-4 fix: was excluding residential, leaving gangs blank at z14.
+  if (zoom >= 14) return { limit: 15000, highways: [
     'motorway', 'motorway_link', 'trunk', 'trunk_link',
     'primary', 'primary_link', 'secondary', 'secondary_link',
     'tertiary', 'tertiary_link',
+    'residential', 'unclassified',
   ], simplify: 0.0001 };
   // z13: primary + secondary
   if (zoom >= 13) return { limit: 5000, highways: [
@@ -647,6 +682,12 @@ interface RoadAQIFeature {
   gcn_delta?: number;
   gcn_uncertainty?: number;
   pm25_total_delta?: number;
+  // v2 engine (Phase 3a): calibrated PI + refuse-to-predict. Absent on v1 responses (frontend ignores).
+  pi95_lo?: number;
+  pi95_hi?: number;
+  confidence?: 'high' | 'medium' | 'low' | 'refuse';
+  ood_refused?: boolean;
+  engine?: 'v1' | 'v2';
 }
 
 // Local mirror of Postgres compute_aqi_confidence() — same formula, no RTT cost.
@@ -680,6 +721,7 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 interface BaselineData {
   pm25: number; pm10: number; no2: number;
   co: number; o3: number; wind_speed: number;
+  wind_direction: number;   // v2: CALINE4 needs wind FROM direction (deg); v1 ignored it
 }
 
 async function fetchBaselineBatch(
@@ -692,7 +734,7 @@ async function fetchBaselineBatch(
   if (forecastHour <= 0) {
     const [aqResp, wxResp] = await Promise.all([
       fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latStr}&longitude=${lonStr}&current=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&timezone=auto`),
-      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latStr}&longitude=${lonStr}&current=wind_speed_10m&timezone=auto`),
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latStr}&longitude=${lonStr}&current=wind_speed_10m,wind_direction_10m&timezone=auto`),
     ]);
     const aqJson = aqResp.ok ? await aqResp.json() : null;
     const wxJson = wxResp.ok ? await wxResp.json() : null;
@@ -706,13 +748,14 @@ async function fetchBaselineBatch(
       co: (aqArr[i] as Record<string, number>)?.carbon_monoxide ?? 200,
       o3: (aqArr[i] as Record<string, number>)?.ozone ?? 30,
       wind_speed: (wxArr[i] as Record<string, number>)?.wind_speed_10m ?? 2.0,
+      wind_direction: (wxArr[i] as Record<string, number>)?.wind_direction_10m ?? 0,
     }));
   }
 
   // Forecast mode
   const [aqResp, wxResp] = await Promise.all([
     fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latStr}&longitude=${lonStr}&hourly=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&forecast_hours=${forecastHour + 1}&timezone=auto`),
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latStr}&longitude=${lonStr}&hourly=wind_speed_10m&forecast_hours=${forecastHour + 1}&timezone=auto`),
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latStr}&longitude=${lonStr}&hourly=wind_speed_10m,wind_direction_10m&forecast_hours=${forecastHour + 1}&timezone=auto`),
   ]);
   const aqJson = aqResp.ok ? await aqResp.json() : null;
   const wxJson = wxResp.ok ? await wxResp.json() : null;
@@ -726,7 +769,31 @@ async function fetchBaselineBatch(
     co: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.carbon_monoxide?.[idx] ?? 200,
     o3: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.ozone?.[idx] ?? 30,
     wind_speed: (wxArr[i] as Record<string, Record<string, number[]>>)?.hourly?.wind_speed_10m?.[idx] ?? 2.0,
+    wind_direction: (wxArr[i] as Record<string, Record<string, number[]>>)?.hourly?.wind_direction_10m?.[idx] ?? 0,
   }));
+}
+
+// v2 Background (Layer A): RAW CAMS daily-mean for the region center, cached per region/day.
+// Berrocal was fit on daily-mean CAMS → the slope/offset regions (e.g. jakarta β1=0.276) need the
+// daily mean, NOT the current hour, else CAMS's anti-phase diurnal leaks into the ambient. Identity
+// (bali) / climatology regions are insensitive to this. Returns NaN on failure → caller falls back.
+async function fetchCamsDailyMean(lat: number, lon: number, region: string, today: string): Promise<number> {
+  const key = `vayu:camsdaily:${region}:${today}`;
+  const cached = await redisGet(key);
+  if (cached != null) { const v = parseFloat(cached); if (Number.isFinite(v)) return v; }
+  try {
+    const r = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=pm2_5&past_days=1&forecast_days=1&timezone=auto`);
+    if (r.ok) {
+      const j = await r.json() as { hourly?: { pm2_5?: (number | null)[] } };
+      const arr = (j?.hourly?.pm2_5 ?? []).filter((x): x is number => typeof x === 'number' && Number.isFinite(x));
+      if (arr.length > 0) {
+        const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+        await redisSetEx(key, 21600, String(mean)); // 6h TTL
+        return mean;
+      }
+    }
+  } catch { /* fall through → NaN */ }
+  return NaN;
 }
 
 // ─── Multi-point baseline grid with Redis cache ─────────────
@@ -785,7 +852,7 @@ function buildInterpolator(
     const ty = Math.max(0, Math.min(1, (lat - south) / latSpan));
     const tx = Math.max(0, Math.min(1, (lon - west) / lonSpan));
 
-    const keys = ['pm25', 'pm10', 'no2', 'co', 'o3', 'wind_speed'] as const;
+    const keys = ['pm25', 'pm10', 'no2', 'co', 'o3', 'wind_speed', 'wind_direction'] as const;
     const result = {} as Record<string, number>;
     for (const k of keys) {
       const topVal = nw[k] * (1 - tx) + ne[k] * tx;
@@ -1338,12 +1405,68 @@ function computeRoadAQI(
   };
 }
 
-// ─── Cache key from bbox (zoom-dependent coarse grid) ───────
-function bboxCacheKey(south: number, west: number, north: number, east: number, zoom: number, forecastHour = 0): string {
-  // Coarser quantization: ~2km grid (zoom-dependent) → many small pans = same key
-  const step = Math.max(0.005, 0.5 / Math.pow(2, Math.max(0, zoom - 10)));
+// ─── v2 engine (Phase 3a): CALINE4 dispersion on CAMS baseline + region-membership OOD + calibrated PI ───
+// Swaps the v1 gaussianConc point-source delta for the parity-tested CALINE4 line-source (GATE-D2 validated),
+// keeps the Open-Meteo CAMS baseline as ambient, refuses outside the 12 calibrated regions, and emits a
+// calibrated 95% PI + confidence. Background-β (Layer A, daily CAMS) wired below; GP layer is step 2 (precompute).
+function computeRoadAQIv2(
+  road: RoadRow, coords: number[][], recvLat: number, recvLon: number,
+  baseline: BaselineData, diurnal: number, region: string, hourLocal: number, monthLocal: number,
+  camsDaily: number,
+) {
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  const traffic = estimateTraffic(road, diurnal);
+  // Line-source emission Q in µg/m/s (= v1 g/m/s ×1e6): traffic[veh/h]×EF[g/km]/3600/1000×1e6.
+  const qPM25 = (traffic * FLEET_EMISSION.pm25) / 3600 / 1000 * 1e6;
+  const qNOx  = (traffic * FLEET_EMISSION.nox)  / 3600 / 1000 * 1e6;
+  const stab = pasquillClass(baseline.wind_speed, hourLocal, 0.5);
+  const wind = Math.max(baseline.wind_speed, 0.5);
+  const poly: Array<[number, number]> = coords.map((c) => [c[0], c[1]]);   // GeoJSON [lon, lat] pairs
+  const aiClassified = road.ai_pollution_factor != null;
+  const aiFactor = aiClassified ? road.ai_pollution_factor! : aiFactorFallback(road.osm_way_id, road.highway || 'residential');
+  const mod = caline4CanyonFactor(road.canyon_ratio, road.micro_class) * caline4WetDryFactor(monthLocal) * aiFactor;
+
+  const calibrated = V2_CALIBRATED_REGIONS.has(region);   // OOD: region-membership support
+  const oodRefused = !calibrated;
+  // Outside calibration support → refuse: serve the baseline ambient (no confident road increment), wide PI.
+  let pm25Delta = oodRefused ? 0 : caline4PolylineConc(poly, qPM25, recvLat, recvLon, wind, baseline.wind_direction, stab) * mod;
+  let no2Delta  = oodRefused ? 0 : caline4PolylineConc(poly, qNOx,  recvLat, recvLon, wind, baseline.wind_direction, stab) * mod;
+  const pm10Delta = pm25Delta * 1.8 * (SURFACE_PM10_FACTOR[road.surface || ''] ?? 1.0);
+  const o3Titration = no2Delta * 0.4;
+
+  // Layer A Background: calibrated ambient = b0 + b1·CAMS_daily (raw CAMS daily-mean). Falls back to the
+  // current-hour CAMS if the daily fetch failed, or to baseline.pm25 if region has no Background params.
+  const bg = V2_BACKGROUND[region];
+  const camsForBg = Number.isFinite(camsDaily) ? camsDaily : baseline.pm25;
+  const background = bg ? Math.max(0, bg.b0 + bg.b1 * camsForBg) : baseline.pm25;
+  const pm25 = Math.max(0, background + pm25Delta);
+  const no2  = Math.max(0, baseline.no2 + no2Delta);
+  const pm10 = Math.max(0, baseline.pm10 + pm10Delta);
+  const o3   = Math.max(0, baseline.o3 - o3Titration);
+
+  const sigma = V2_SIGMA[region] ?? 18;
+  const confidence: 'high' | 'medium' | 'low' | 'refuse' = oodRefused ? 'refuse' : (V2_GP_REGIONS.has(region) ? 'high' : 'medium');
+  const confidence_score = oodRefused ? 0.2 : (V2_GP_REGIONS.has(region) ? 0.85 : 0.6);
+  return {
+    aqi: pm25ToAQI(pm25), pm25: r2(pm25), no2: r2(no2), o3: r2(o3), pm10: r2(pm10),
+    pm25_delta: r2(pm25Delta), no2_delta: r2(no2Delta), pm10_delta: r2(pm10Delta),
+    ai_classified: aiClassified, confidence_score,
+    pi95_lo: r2(Math.max(0, pm25 - 1.96 * sigma)), pi95_hi: r2(Math.min(500, pm25 + 1.96 * sigma)),
+    confidence, ood_refused: oodRefused, engine: 'v2' as const,
+  };
+}
+
+// ─── Cache key from bbox (zoom-independent grid) ────────────
+// C-3 fix: dropped `z${zoom}` from key. Adjacent zooms now reuse the same cache
+// entry; client filters by zoom-appropriate highway class. Hit rate climbs
+// from ~30% (pans only) → ~70% (pans + adjacent zooms).
+function bboxCacheKey(south: number, west: number, north: number, east: number, _zoom: number, forecastHour = 0): string {
+  // Fixed 0.02° grid (~2km). Same key for z13..z16 covering same area.
+  const step = 0.02;
   const q = (v: number) => (Math.floor(v / step) * step).toFixed(4);
-  const base = `vayu:road:${q(south)}:${q(west)}:${q(north)}:${q(east)}:z${zoom}`;
+  // Engine marker isolates v1/v2 caches so flipping USE_V2_ENGINE takes effect immediately
+  // (no stale cross-engine entries served during/after rollout).
+  const base = `vayu:road:${USE_V2_ENGINE ? 'v2' : 'v1'}:${q(south)}:${q(west)}:${q(north)}:${q(east)}`;
   return forecastHour > 0 ? `${base}:fh${forecastHour}` : base;
 }
 
@@ -1435,23 +1558,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log(`[vayu] z${z} filter: ${roads.length} from DB → ${filtered.length} after JS filter (${Math.round(100 - filtered.length / roads.length * 100)}% discarded — run SQL migration to fix)`);
     }
 
-    // Fetch baseline AQI grid (5-point spatial interpolation)
-    const { center: baselineCenter, interpolate: interpBaseline } = await fetchBaselineGrid(s, w, n, e, fh);
-
-    // WAQI station bias correction (only for current conditions, not forecast)
+    // L-2 fix: fire all 4 external APIs in parallel. Previously baselineGrid
+    // awaited first, blocking sat+iqair (which don't depend on baseline). Only
+    // WAQI bias needs baselineCenter, so it's the sole follow-up await.
     const cLat = (s + n) / 2;
     const cLon = (w + e) / 2;
-    const [bias, satNO2Interp, iqairData] = await Promise.all([
-      fh === 0
-        ? fetchWAQIBias(cLat, cLon, baselineCenter)
-        : Promise.resolve({ pm25: 0, pm10: 0, no2: 0, o3: 0, stationName: null } as WAQIBias),
-      fh === 0
-        ? fetchSatelliteNO2(s, w, n, e)
-        : Promise.resolve(null),
-      fh === 0
-        ? fetchIQAirCity(cLat, cLon)
-        : Promise.resolve(null),
+    const [baselineRes, satNO2Interp, iqairData] = await Promise.all([
+      fetchBaselineGrid(s, w, n, e, fh),
+      fh === 0 ? fetchSatelliteNO2(s, w, n, e) : Promise.resolve(null),
+      fh === 0 ? fetchIQAirCity(cLat, cLon) : Promise.resolve(null),
     ]);
+    const { center: baselineCenter, interpolate: interpBaseline } = baselineRes;
+    const bias = fh === 0
+      ? await fetchWAQIBias(cLat, cLon, baselineCenter)
+      : { pm25: 0, pm10: 0, no2: 0, o3: 0, stationName: null } as WAQIBias;
 
     // Wrap interpolation with bias + satellite correction
     const interpCorrected = (lat: number, lon: number): BaselineData => {
@@ -1544,13 +1664,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Phase 1.1+1.2: region-level confidence baseline. WAQI station presence
     // + distance dominate; Sentinel-5P freshness now wired via aqi_grid_sentinel.
-    const sentAgeHours = await getSentinelAgeHours(s, w, n, e);
+    // L-1 fix: pre-load XGB model in parallel with sentinel age check (single
+    // await instead of N awaits inside the road loop).
+    const [sentAgeHours, xgbModel, camsDaily] = await Promise.all([
+      getSentinelAgeHours(s, w, n, e),
+      loadModel(region),
+      USE_V2_ENGINE ? fetchCamsDailyMean(cLat, cLon, region, today) : Promise.resolve(NaN),
+    ]);
+    // Tracks whether ANY ML layer (XGB or GCN) actually applied — set true once
+    // per request only if mlResidual !== 0 or gcn delta lookup succeeds. Falsified
+    // by default so confidence_score doesn't lie when both layers degrade silently.
+    let anyMlApplied = false;
     const regionConfidence = computeAqiConfidenceLocal({
       has_station: bias.stationName != null,
       station_distance_km: bias.stationDistanceKm ?? 99,
       has_satellite: sentAgeHours != null && sentAgeHours < 72,
       satellite_age_hours: sentAgeHours ?? 99,
-      has_model: true,
+      has_model: false,  // re-computed below after first XGB pass
       has_crowdsource: false,
       crowdsource_count: 0,
     });
@@ -1578,6 +1708,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const roadLat = mid[1];
       const baseline = interpCorrected(roadLat, roadLon);
 
+      // v2 engine (flag-gated, default OFF): CALINE4 dispersion + region-OOD-refuse + calibrated PI.
+      // Short-circuits the v1 XGBoost/GCN/error-correction stack. Any error → falls through to v1.
+      if (USE_V2_ENGINE) {
+        try {
+          const v2 = computeRoadAQIv2(road, coords, roadLat, roadLon, baseline, diurnal, region, targetHour, nowJkt.getMonth() + 1, camsDaily);
+          features.push({
+            osm_way_id: road.osm_way_id, geometry, highway: road.highway, weight: roadWeight(road.highway),
+            aqi: v2.aqi, pm25: v2.pm25, no2: v2.no2, o3: v2.o3, pm10: v2.pm10,
+            pm25_delta: v2.pm25_delta, no2_delta: v2.no2_delta, pm10_delta: v2.pm10_delta,
+            ai_classified: v2.ai_classified, confidence_score: v2.confidence_score,
+            pi95_lo: v2.pi95_lo, pi95_hi: v2.pi95_hi, confidence: v2.confidence,
+            ood_refused: v2.ood_refused, engine: v2.engine,
+          });
+          continue;
+        } catch { /* fall through to v1 on any v2 error */ }
+      }
+
       let { aqi, pm25, no2, o3, pm10, pm25_delta, no2_delta, pm10_delta, ai_classified } =
         computeRoadAQI(road, baseline, diurnal, regionMultiplier, trafficCorrections);
 
@@ -1586,12 +1733,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // model is registered yet, returns identity (no change). Adds ~1ms per road
       // when model cached; cold-start <50ms.
       const rawPm25 = pm25;
+      // P1-1 fix: features must use the forecast-shifted hour/dow so
+      // forecast_hour>0 requests don't apply current-hour residual correction
+      // to a future-hour prediction.
+      const _targetMs = nowJkt.getTime() + fh * 3600 * 1000;
+      const _targetDate = new Date(_targetMs);
+      const _targetDow = _targetDate.getDay();
       const mlFeatures = {
         canyon_ratio: road.canyon_ratio ?? 0,
         traffic_base_estimate: road.traffic_base_estimate ?? 100,
-        hour_of_day: new Date().getHours(),
-        day_of_week: new Date().getDay(),
-        is_weekend: new Date().getDay() >= 5 ? 1 : 0,
+        hour_of_day: targetHour,
+        day_of_week: _targetDow,
+        is_weekend: _targetDow === 0 || _targetDow === 6 ? 1 : 0,
         congestion_factor: trafficCorrections?.get(road.highway) ?? 1.0,
         sentinel_pm25_proxy: 0,
         // Highway one-hot (sparse but inference-friendly)
@@ -1603,11 +1756,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         hw_residential: road.highway === 'residential' ? 1 : 0,
         hw_service: road.highway === 'service' ? 1 : 0,
       };
-      const { corrected, residual: mlResidual } = await applyResidualCorrection(region, pm25, mlFeatures);
-      if (mlResidual !== 0) {
+      // L-1: sync inference using pre-loaded model — no await, no extra round-trips.
+      const { corrected, residual: mlResidual } = applyResidualSync(xgbModel, pm25, mlFeatures);
+      if (mlResidual !== 0 && Number.isFinite(corrected)) {
         pm25 = Math.round(corrected * 100) / 100;
         pm25_delta = Math.round((pm25 - baseline.pm25) * 100) / 100;
         aqi = pm25ToAQI(pm25);
+        anyMlApplied = true;  // P2-7: honest signal for confidence_score
       }
 
       // Fire-and-forget log of (raw prediction, features) for retraining corpus.
@@ -1686,10 +1841,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           f.confidence_score = Math.max(0.1, Math.round(f.confidence_score * (1 - penalty) * 100) / 100);
           f.gcn_applied = true;
           f.gcn_uncertainty = Math.round(gcn.uncertainty_sigma * 100) / 100;
+          anyMlApplied = true;  // P2-7
         }
       }
     } catch {
       // non-fatal — Tier 3.5 is additive
+    }
+
+    // P2-7: honest confidence_score. If neither XGB nor GCN actually applied to
+    // any road in this viewport, mark all roads with a 0.85x confidence multiplier
+    // so the UI doesn't claim model-grade certainty over a raw CALINE3 response.
+    if (!anyMlApplied) {
+      for (const f of features) {
+        f.confidence_score = Math.round(f.confidence_score * 0.85 * 100) / 100;
+      }
     }
 
     // IQAir cross-validation: compare median road AQI vs IQAir city AQI

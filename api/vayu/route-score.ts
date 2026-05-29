@@ -231,6 +231,597 @@ function pm25ToAQI(pm25: number): number {
   return 500;
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// CALINE4 v2 Dispersion Stack — Phase 1a Foundation (B1: data tables + Pasquill)
+// ─────────────────────────────────────────────────────────────────────────────
+// Ported from vayu/core/caline3.py + extended per research R1 §9 + R5 σ upgrades.
+//
+// Phase 1a sequence:
+//   B1 (THIS BLOCK): port data tables + pasquillClass classifier
+//   B2 (next):       wind rotation in local ENU frame (fix caline3.py atan2 bug)
+//   B3 (next):       CALINE4 line-source erf integral (replace point-source)
+//   B4 (R6 Tier 1):  ICCT TRUE Jakarta 2022 EFs update
+//   B5:              OSPM canyon + sea-breeze + wet/dry modifiers
+//   B6:              EPA CALINE4 numerical validation (±20% reference)
+//
+// IMPORTANT: B1 ADDS new structures alongside old v1 path (sigmaY/sigmaZ/
+// FLEET_EMISSION lines 168-172 above). Old v1 path remains active for
+// production scoring until B3 wires the v2 stack into scorePolyline.
+//
+// References:
+//   Benson 1989 "CALINE4 — A Dispersion Model for Predicting Pollution
+//     Concentrations Near Roadways" (FHWA-RD-83-007).
+//   Pasquill 1961 "The estimation of the dispersion of windborne material."
+//   Briggs 1973 urban dispersion coefficients (R3 upgrade target for B3).
+//   Research R1_dispersion_research.md §9.2 formula stack.
+//   Research R5_aermod_feasibility.md §11.3 σ-coefficient upgrade note.
+// ═════════════════════════════════════════════════════════════════════════════
+
+// --- Per-vehicle-class emission factors (g/km) ---
+// B4 update applied: motor_4tak calibrated to ICCT TRUE Jakarta 2022 real-world
+// remote sensing of 93,000+ vehicles in Greater Jakarta (Jan-Apr 2021).
+// Reference: ICCT/TRUE Initiative + ITB Bandung. "Measurement of real-world motor
+// vehicle emissions in Jakarta." Nov 2022. theicct.org/publication/true-jakarta-remote-sensing-nov22/
+// Converted to g/km per e3s-conferences 2024 follow-up: CO 1.95, NOx 0.46, HC 0.22, soot ≈ 0.
+//
+// Other classes retain EMEP/EEA Tier 1 + KLHK-derived baseline (caline3.py:32-41).
+// Tier 3 v2.1 enhancement: per-region overrides via Supabase vehicle_emission_factors
+// table — deferred per R6 §7.2.
+type CalineEmissionFactor = { nox: number; pm25: number; co: number };
+
+const CALINE4_EMISSION_FACTORS: Record<string, CalineEmissionFactor> = {
+  motor_2tak:   { nox:  0.35, pm25: 0.09, co: 14.2 },  // legacy 2-stroke; rare in 2021+ Jakarta fleet
+  motor_4tak:   { nox:  0.46, pm25: 0.01, co:  1.95 }, // ICCT TRUE Jakarta 2022 (modern Euro4 catalytic; soot ≈ 0)
+  mobil_bensin: { nox:  0.62, pm25: 0.03, co:  8.1 },
+  mobil_diesel: { nox:  1.15, pm25: 0.12, co:  1.2 },
+  angkot:       { nox:  2.40, pm25: 0.45, co:  4.5 },
+  bus:          { nox:  8.20, pm25: 1.10, co:  3.8 },  // Lestari 2022 confirms HDV dominates urban PM2.5 (43%)
+  truk:         { nox: 11.50, pm25: 1.40, co:  4.2 },
+  sepeda:       { nox:  0.00, pm25: 0.00, co:  0.0 },
+};
+
+// --- Indonesia fleet composition weights (caline3.py:45-53) ---
+// ~60% motor (15% 2-tak legacy + 45% 4-tak modern), ~30% mobil, ~10% komersil.
+// Per BPS national registration; per-region override capability deferred to B4+.
+const CALINE4_FLEET_WEIGHTS: Record<string, number> = {
+  motor_2tak:   0.15,
+  motor_4tak:   0.45,
+  mobil_bensin: 0.25,
+  mobil_diesel: 0.05,
+  angkot:       0.05,
+  bus:          0.02,
+  truk:         0.03,
+};
+
+// --- Computed fleet-average emission factor ---
+export const CALINE4_FLEET_AVG: CalineEmissionFactor = (() => {
+  let nox = 0, pm25 = 0, co = 0;
+  for (const [k, w] of Object.entries(CALINE4_FLEET_WEIGHTS)) {
+    const ef = CALINE4_EMISSION_FACTORS[k];
+    nox  += ef.nox  * w;
+    pm25 += ef.pm25 * w;
+    co   += ef.co   * w;
+  }
+  return { nox, pm25, co };
+})();
+
+// --- Pasquill-Gifford stability classes A-F (Martin 1976 simplified power-law form) ---
+// Ported from caline3.py:72-79.
+//
+// FORM: σ = a · x^0.894  (note: identical exponent across all classes — Martin 1976,
+// not standard Briggs urban or PG rural; see R5 §11.3 §P1).
+//
+// B3 PLANNED UPGRADE: switch per micro_class →
+//   - Briggs urban for Jakarta/Surabaya/Semarang/Bandung urban canyon segments
+//   - Pasquill-Gifford rural for Bali rural, Sulsel, Sulut, Sulteng rural segments
+//   For B1, this Martin 1976 baseline mirrors caline3.py for cross-validation
+//   consistency. B6 validation will test BOTH Martin 1976 baseline AND
+//   B3 Briggs-upgraded forms against EPA reference (when available).
+type CalinePGCoeffs = { ay: number; by: number; az: number; bz: number };
+
+const CALINE4_PG_CLASSES: Record<string, CalinePGCoeffs> = {
+  A: { ay: 0.22, by: 0.894, az: 0.20,  bz: 0.894 },
+  B: { ay: 0.16, by: 0.894, az: 0.12,  bz: 0.894 },
+  C: { ay: 0.11, by: 0.894, az: 0.08,  bz: 0.894 },
+  D: { ay: 0.08, by: 0.894, az: 0.06,  bz: 0.894 },
+  E: { ay: 0.06, by: 0.894, az: 0.03,  bz: 0.894 },
+  F: { ay: 0.04, by: 0.894, az: 0.016, bz: 0.894 },
+};
+
+type PasquillClass = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+
+// --- Pasquill stability classifier ---
+// Ported from caline3.py:82-106. Pasquill 1961 simplified for tropical
+// (Indonesia: high insolation daytime → frequent A-B, calm nocturnal → frequent F).
+// Input cloud_cover is fraction 0-1 (Open-Meteo gives 0-100, divide before calling).
+export function pasquillClass(windSpeedMs: number, hourLocal: number, cloudCoverFrac: number = 0.5): PasquillClass {
+  const isDay = hourLocal >= 6 && hourLocal <= 18;
+  if (isDay) {
+    if (windSpeedMs < 2.0) return cloudCoverFrac < 0.5 ? 'A' : 'B';
+    if (windSpeedMs < 5.0) return cloudCoverFrac < 0.5 ? 'B' : 'C';
+    return cloudCoverFrac < 0.5 ? 'C' : 'D';
+  }
+  // night
+  if (windSpeedMs < 2.0) return 'F';
+  if (windSpeedMs < 3.0) return 'E';
+  return 'D';
+}
+
+// --- Multi-class σy/σz (Martin 1976 baseline; B3 upgrades per region) ---
+export function caline4SigmaY(downwindM: number, stab: PasquillClass): number {
+  const pg = CALINE4_PG_CLASSES[stab];
+  return pg.ay * Math.pow(Math.max(downwindM, 1.0), pg.by);
+}
+
+export function caline4SigmaZ(downwindM: number, stab: PasquillClass): number {
+  const pg = CALINE4_PG_CLASSES[stab];
+  return pg.az * Math.pow(Math.max(downwindM, 1.0), pg.bz);
+}
+
+// (LANDUSE_MODIFIERS at line 173-176 above — reused by v2 stack.)
+// (pm25ToAQI at line 222-232 above — reused by v2 stack.)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// B2 — Wind rotation in local ENU (East-North-Up) tangent frame
+// ─────────────────────────────────────────────────────────────────────────────
+// FIXES caline3.py bug (vayu/core/caline3.py:237-251) that produced 60× error
+// in audit smoke test (4,758 µg/m³ when ambient ~50). Root cause:
+// `atan2(dlon·cos(lat), dlat)` planar projection mis-aligned with meteorological
+// "FROM" wind angle convention, then "upwind salvage clamp"
+// (`if downwind < 1.0: downwind = max(dist*0.1, 5.0)`) injected synthetic
+// downwind distance → tiny σy/σz → enormous concentration.
+//
+// Correct approach (Stull 1988 §3, Garratt 1992 §3.4):
+//   1. Project geographic offset (lat/lon delta) → meters in local ENU plane
+//      using haversine-equivalent (cos(lat0)·111,320 m/deg for E-W,
+//      110,540 m/deg for N-S).
+//   2. Meteorological wind "FROM θ" → unit vector pointing in direction of FLOW:
+//      wx = -sin(θ_rad) (E component of flow when wind FROM north → flows south)
+//      wy = -cos(θ_rad) (N component of flow)
+//   3. Downwind = projection of receptor offset onto wind flow vector.
+//      Crosswind = perpendicular projection.
+//   4. If downwind ≤ 0 → receptor UPWIND of source → contribution = 0.
+//      NO SALVAGE CLAMP. Upwind contributions are negligible by physics.
+//
+// References:
+//   - Stull 1988 "An Introduction to Boundary Layer Meteorology" §3.
+//   - Garratt 1992 "The Atmospheric Boundary Layer" §3.4.
+//   - Research R1_dispersion_research.md §9.2 master equation.
+//   - phase0_pre1a_caline3_audit.md §3 bug analysis.
+
+// Earth-radius constants for local ENU projection.
+// At equator: 1° lat ≈ 110,574 m; 1° lon at equator ≈ 111,320 m.
+// At latitude φ: 1° lon ≈ 111,320 m × cos(φ). 1° lat ≈ 110,574 m (slight variance ignored).
+// For Indonesia (φ ≈ -8° to 6°), error from rigid 110,574 m/deg is < 0.3% — acceptable.
+const ENU_METERS_PER_DEG_LAT = 110574;
+const ENU_METERS_PER_DEG_LON_EQUATORIAL = 111320;
+
+// Output of wind rotation: downwind + crosswind in meters in local ENU frame.
+type CalineRelativeCoords = {
+  downwindM: number;   // positive = receptor downwind of source; ≤0 → contribution zero
+  crosswindM: number;  // signed lateral offset
+  distM: number;       // total ENU distance source→receptor (always ≥ 0)
+};
+
+/**
+ * Compute receptor coordinates in source-centered, wind-aligned ENU frame.
+ *
+ * @param srcLat        Source latitude (degrees)
+ * @param srcLon        Source longitude (degrees)
+ * @param recvLat       Receptor latitude (degrees)
+ * @param recvLon       Receptor longitude (degrees)
+ * @param windFromDeg   Wind direction "FROM" (meteorological convention):
+ *                      0 = from N (flow southward), 90 = from E (flow westward),
+ *                      180 = from S (flow northward), 270 = from W (flow eastward).
+ *
+ * @returns downwindM (positive = downwind, ≤0 = upwind / zero contribution),
+ *          crosswindM (signed lateral offset perpendicular to wind),
+ *          distM (total ENU distance).
+ */
+export function caline4WindRotation(
+  srcLat: number,
+  srcLon: number,
+  recvLat: number,
+  recvLon: number,
+  windFromDeg: number,
+): CalineRelativeCoords {
+  // ENU projection at source latitude (preserves angular fidelity locally).
+  const cosLat = Math.cos((srcLat * Math.PI) / 180);
+  const dxM = (recvLon - srcLon) * cosLat * ENU_METERS_PER_DEG_LON_EQUATORIAL;
+  const dyM = (recvLat - srcLat) * ENU_METERS_PER_DEG_LAT;
+  const distM = Math.hypot(dxM, dyM);
+
+  // Meteorological "wind FROM θ" → wind FLOWS in direction (θ + 180°).
+  // Flow unit vector: w = (sin(flow_rad), cos(flow_rad)) in ENU (E=x, N=y).
+  // flow_rad = (windFromDeg + 180) * π/180 simplifies to:
+  //   wx_flow = sin((θ+180)·π/180) = -sin(θ·π/180)
+  //   wy_flow = cos((θ+180)·π/180) = -cos(θ·π/180)
+  const windRad = (windFromDeg * Math.PI) / 180;
+  const wx = -Math.sin(windRad);
+  const wy = -Math.cos(windRad);
+
+  // Downwind: projection of receptor offset onto wind flow direction.
+  // Positive ↔ receptor in front of source (downwind). Negative ↔ behind (upwind).
+  const downwindM = dxM * wx + dyM * wy;
+
+  // Crosswind: perpendicular projection (90° clockwise rotation of wind flow).
+  // Right-hand convention: positive crosswind = receptor to the right when
+  // facing downwind. (Sign immaterial — σy is symmetric.)
+  const crosswindM = -dxM * wy + dyM * wx;
+
+  return { downwindM, crosswindM, distM };
+}
+
+// ═══ End B2 — wind rotation ENU frame (no salvage clamp) ═══
+
+// ─────────────────────────────────────────────────────────────────────────────
+// B3 — CALINE4 line-source erf integral (Benson 1989 FHWA-RD-83-007)
+// ─────────────────────────────────────────────────────────────────────────────
+// Replaces caline3.py's broken point-source-times-length formula (audit found
+// dimensional analysis wrong: q [g/m/s] × seg_len [m] / (√(2π)·σz [m]·u [m/s])
+// = planar density [g/m²], NOT volumetric concentration [g/m³]; missing lateral
+// integration factor).
+//
+// PROPER CALINE4 finite line-source formula (closed-form lateral integral over
+// segment length L using erf identity):
+//
+//   C(receptor) = ─────q_line─────   ×   ½[erf(α+) − erf(α−)]   ×   R_ground
+//                 √(2π) · σz · u
+//
+//   where:
+//     q_line   = emission rate per metre of road (µg/m/s)
+//     u        = wind speed at source height (m/s; floored to 0.5 to avoid 1/u blow-up)
+//     σz       = vertical dispersion parameter at downwind distance (m)
+//     σy       = horizontal dispersion parameter at downwind distance (m)
+//     α+       = (y_c + L/2) / (√2 · σy)   (forward edge of finite line source)
+//     α−       = (y_c − L/2) / (√2 · σy)   (rear edge)
+//     y_c      = crosswind offset of receptor (m, signed)
+//     L        = source segment length projected on line (m)
+//     R_ground = exp(−(z−H)²/2σz²) + exp(−(z+H)²/2σz²)
+//                where z = receptor height (m), H = effective exhaust height (m).
+//                Second term = ground-reflection image source (deposition assumed zero).
+//
+// Math.erf NOT in JS stdlib. Polyfill via Abramowitz & Stegun §7.1.26
+// (max absolute error 1.5e-7 — sufficient for dispersion modelling).
+//
+// References:
+//   - Benson 1989 §3.2 finite line-source derivation.
+//   - Abramowitz & Stegun "Handbook of Mathematical Functions" §7.1.26.
+//   - Research R1_dispersion_research.md §9.2 master equation.
+
+/**
+ * erf(x) — Gauss error function polyfill (Abramowitz & Stegun §7.1.26).
+ * Max absolute error: 1.5e-7. Sufficient for dispersion modelling.
+ */
+export function mathErf(x: number): number {
+  // Constants from A&S §7.1.26
+  const a1 =  0.254829592;
+  const a2 = -0.284496736;
+  const a3 =  1.421413741;
+  const a4 = -1.453152027;
+  const a5 =  1.061405429;
+  const p  =  0.3275911;
+
+  const sign = x < 0 ? -1 : 1;
+  const ax = Math.abs(x);
+  const t = 1.0 / (1.0 + p * ax);
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const t4 = t3 * t;
+  const t5 = t4 * t;
+  // 1 - (a1·t + a2·t² + a3·t³ + a4·t⁴ + a5·t⁵) · exp(-x²)
+  const series = a1 * t + a2 * t2 + a3 * t3 + a4 * t4 + a5 * t5;
+  const y = 1.0 - series * Math.exp(-ax * ax);
+  return sign * y;
+}
+
+// Receptor height (pedestrian, m). Reasonable for breath-zone PM2.5.
+const CALINE4_RECEPTOR_HEIGHT_M = 1.5;
+// Effective exhaust height for road traffic (m). Per caline3.py:162 RoadSegment.source_height.
+const CALINE4_SOURCE_HEIGHT_M = 0.5;
+// Minimum wind speed to avoid 1/u blow-up (m/s). Below this, atmospheric coupling assumed
+// stagnant — concentration still computed but with floor wind. (CALINE3 user manual §4.1.)
+const CALINE4_MIN_WIND_MS = 0.5;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// B6.5 — CALINE3/4 mixing-zone parameters (Benson 1989 §3.3; backfit verified)
+// ─────────────────────────────────────────────────────────────────────────────
+// PROBLEM (per audit/A01): Pure Pasquill σz at short downwind distance is too
+// small (12× too small at 10m; 4× at 30m) → vertical Gaussian collapses → near-zero
+// concentration at typical pedestrian distances 5-30m. Without mixing zone:
+//   v2 vs EPA SCRAM Case 1 receptor 30m: 0.021 ppm (v2) vs 4.6 ppm (CALINE3)
+//   → 220× too low. Distance scan 10-500m showed 1e22× ratio spread.
+//
+// FIX: Add vehicle-induced mixing zone with initial vertical dispersion σz0.
+//   σz_eff(x) = √(σz0² + σz_pasquill(max(0, x - WL/2))²)
+//   x_residual = downwind distance past the mixing-zone edge
+//   σy unchanged (CALINE3 spec: only vertical mixing affected by vehicle wakes)
+//
+// PARAMETER ORIGIN:
+//   σz0 = 5.5 m: BACKFIT against EPA SCRAM CALINE3 §8.5 Case 1 (Pasquill F,
+//     U=1 m/s, AG, receptor 30m → 4.6 ppm CO dispersion contribution above ambient).
+//     Binary search converged at σz0=5.549m. See scripts/audit_a01_sigma_z0_backfit.mjs.
+//     Falls in mixing-zone literature range 1.5m (Heist 2013 effective) to 8.7m
+//     (Benson WL/(2√3) parameterization). Anchored to EPA reference output, not
+//     literature claim — defensible.
+//   WL = 30 m: EPA SCRAM Case 1 input spec (3-lane road + 3m wake each side).
+//     Sensitivity check (audit/A01 backfit sweep): essentially flat 10-60m at
+//     fixed σz0=3m → 161.6-162.1% target. WL is not the critical dial; σz0 is.
+//     30m default acceptable; per-segment override could derive from
+//     `lanes × 3.5 + 6m` for refined precision (defer to v2.1 if needed).
+//
+// HONESTY:
+//   σz0 derived empirically, not from primary Benson 1989 §3.3 derivation
+//   (PDF not accessible without NTIS purchase, ~$15). Backfit value is anchored
+//   to EPA SCRAM published case output — a reference Tristan endorses over
+//   unanchored literature claims. If σz0=5.5m doesn't generalize across the
+//   other 3 EPA cases (BR/DP/FL), audit/A02 will record the gap and propose
+//   stability-dependent or per-case tuning.
+const CALINE4_MIXING_ZONE_SIGMA_Z0_M = 5.5;
+const CALINE4_MIXING_ZONE_WIDTH_M = 30;
+
+// ─── B6.5b: depressed-section DSTR (residence time enhancement) ───
+// Per EPA SCRAM CALINE3 §3.4: depressed roadways (H < 0, below grade) trap
+// pollutants longer in the mixing zone, enhancing vertical mixing. The
+// residence time factor is:
+//   DSTR = 0.72 × |H|^0.83
+// Per Lagrangian variance growth (σz² ∝ residence time), the σz at mixing-zone
+// edge for depressed sections scales as:
+//   σz0_depressed = σz0_AG × √DSTR
+//
+// Validation: with σz0_AG=5.5m, depressed H=5m → DSTR=2.74 → σz0_dp=9.10m.
+// EPA SCRAM Case 3 (Pasquill F, U=1, depressed 5m, recv 30m) target 2.8 ppm;
+// v2 predicts 2.59 ppm = ratio 0.924 (within ±20%). Small 7.6% under-prediction
+// is consistent with NOT modelling the additional CALINE3 wind-speed reduction
+// inside depressed section (defer to v2.1; see audit/A03 §2).
+//
+// For production: Breeva road_segments has no section_type column, so callers
+// pass linkHeightM=0 (AG default). When section_type data is ingested (post-
+// datathon), depressed segments can use linkHeightM<0 to activate this branch.
+export function caline4DepressedDSTRFactor(absLinkHeightM: number): number {
+  if (absLinkHeightM <= 0) return 1.0;  // not depressed
+  return 0.72 * Math.pow(absLinkHeightM, 0.83);
+}
+
+/** Compute effective σz0 (mixing-zone initial vertical dispersion) for a road
+ *  section, accounting for section type (at-grade vs depressed). */
+export function caline4SigmaZ0ForSection(linkHeightM: number): number {
+  if (linkHeightM >= 0) return CALINE4_MIXING_ZONE_SIGMA_Z0_M;  // AG or elevated
+  // Depressed: σz0_dp = σz0_AG × √DSTR (Lagrangian variance growth)
+  const dstr = caline4DepressedDSTRFactor(Math.abs(linkHeightM));
+  return CALINE4_MIXING_ZONE_SIGMA_Z0_M * Math.sqrt(dstr);
+}
+
+/**
+ * Compute CALINE4 line-source dispersion contribution from ONE polyline sub-segment.
+ *
+ * @param qLineUgPerMS   Emission rate per metre of road (µg/m/s). Caller computes:
+ *                       q = traffic_veh_per_hr × EF_g_per_km / 3600 / 1000 × 1e6
+ *                         = traffic × EF × (1e6 / 3.6e6)
+ * @param subSegLengthM  Length of this polyline sub-segment in metres.
+ * @param subSegMidLat   Midpoint latitude of sub-segment (degrees).
+ * @param subSegMidLon   Midpoint longitude of sub-segment (degrees).
+ * @param recvLat        Receptor latitude (degrees).
+ * @param recvLon        Receptor longitude (degrees).
+ * @param windSpeedMs    Wind speed at source height (m/s).
+ * @param windFromDeg    Meteorological "FROM" direction (degrees, 0-360).
+ * @param stab           Pasquill stability class.
+ *
+ * @returns Concentration contribution at receptor (µg/m³). Always ≥ 0.
+ *          Returns 0 if receptor is upwind (no salvage clamp).
+ */
+export function caline4LineSourceConc(
+  qLineUgPerMS: number,
+  subSegLengthM: number,
+  subSegMidLat: number,
+  subSegMidLon: number,
+  recvLat: number,
+  recvLon: number,
+  windSpeedMs: number,
+  windFromDeg: number,
+  stab: PasquillClass,
+): number {
+  if (qLineUgPerMS <= 0 || subSegLengthM <= 0) return 0;
+
+  // 1. Wind-rotated receptor coordinates in local ENU frame.
+  const { downwindM, crosswindM } = caline4WindRotation(
+    subSegMidLat, subSegMidLon, recvLat, recvLon, windFromDeg,
+  );
+
+  // 2. Upwind → no contribution (physics: plume blows away from receptor).
+  if (downwindM <= 0) return 0;
+
+  // 3. Dispersion parameters at downwind distance.
+  //    B6.5 mixing-zone correction (Benson 1989 §3.3):
+  //    - x_residual = max(0, downwind - WL/2) is the distance past the
+  //      mixing-zone edge (the zone has horizontal extent WL centred on the line).
+  //    - σz_eff = √(σz0² + σz_pasquill(x_residual)²) — adds vehicle-wake initial
+  //      vertical dispersion in quadrature with the atmospheric Pasquill growth.
+  //    - σy uses x_residual but is NOT augmented (CALINE3 spec: horizontal
+  //      dispersion driven by atmospheric turbulence only).
+  const xResidual = Math.max(0, downwindM - CALINE4_MIXING_ZONE_WIDTH_M / 2);
+  const sigmaY = caline4SigmaY(xResidual, stab);
+  const sigmaZPasquill = caline4SigmaZ(xResidual, stab);
+  const sigmaZ = Math.sqrt(
+    CALINE4_MIXING_ZONE_SIGMA_Z0_M * CALINE4_MIXING_ZONE_SIGMA_Z0_M
+    + sigmaZPasquill * sigmaZPasquill,
+  );
+  if (sigmaY <= 0 || sigmaZ <= 0) return 0;
+
+  const u = Math.max(windSpeedMs, CALINE4_MIN_WIND_MS);
+
+  // 4. Lateral integration over finite segment length [yc-L/2, yc+L/2] via erf.
+  //    ½[erf(α+) − erf(α−)] where α = (y ± L/2) / (√2 · σy).
+  const sqrt2sy = Math.SQRT2 * sigmaY;
+  const alphaPlus  = (crosswindM + subSegLengthM / 2) / sqrt2sy;
+  const alphaMinus = (crosswindM - subSegLengthM / 2) / sqrt2sy;
+  const lateralIntegral = 0.5 * (mathErf(alphaPlus) - mathErf(alphaMinus));
+  if (lateralIntegral <= 0) return 0;
+
+  // 5. Ground reflection (vertical Gaussian + mirror image at z=0).
+  //    R = exp(-(z-H)²/2σz²) + exp(-(z+H)²/2σz²).
+  const z = CALINE4_RECEPTOR_HEIGHT_M;
+  const H = CALINE4_SOURCE_HEIGHT_M;
+  const twoSz2 = 2 * sigmaZ * sigmaZ;
+  const verticalDirect  = Math.exp(-((z - H) * (z - H)) / twoSz2);
+  const verticalMirror  = Math.exp(-((z + H) * (z + H)) / twoSz2);
+  const Rground = verticalDirect + verticalMirror;
+
+  // 6. CALINE4 finite line-source concentration (µg/m³).
+  const concentration = (qLineUgPerMS / (Math.sqrt(2 * Math.PI) * sigmaZ * u))
+                      * lateralIntegral
+                      * Rground;
+
+  return Math.max(0, concentration);
+}
+
+/**
+ * Convenience: integrate CALINE4 contributions across a multi-vertex polyline.
+ * Iterates polyline.coords pairs as sub-segments, sums contributions.
+ *
+ * @param polylineCoords     [[lon, lat], ...] in WGS84 (GeoJSON convention).
+ * @param qLineUgPerMS       Emission rate per metre (µg/m/s; uniform along polyline).
+ * @param recvLat / recvLon  Receptor coords.
+ * @param windSpeedMs        Wind speed.
+ * @param windFromDeg        Wind FROM direction.
+ * @param stab               Pasquill class.
+ */
+export function caline4PolylineConc(
+  polylineCoords: ReadonlyArray<readonly [number, number]>,
+  qLineUgPerMS: number,
+  recvLat: number,
+  recvLon: number,
+  windSpeedMs: number,
+  windFromDeg: number,
+  stab: PasquillClass,
+): number {
+  if (polylineCoords.length < 2) return 0;
+  let total = 0;
+  for (let i = 0; i < polylineCoords.length - 1; i++) {
+    const [lon1, lat1] = polylineCoords[i];
+    const [lon2, lat2] = polylineCoords[i + 1];
+    // Sub-segment length via haversine-equivalent (consistent with ENU projection above).
+    const cosLat = Math.cos(((lat1 + lat2) / 2 * Math.PI) / 180);
+    const dxM = (lon2 - lon1) * cosLat * ENU_METERS_PER_DEG_LON_EQUATORIAL;
+    const dyM = (lat2 - lat1) * ENU_METERS_PER_DEG_LAT;
+    const subSegLengthM = Math.hypot(dxM, dyM);
+    if (subSegLengthM < 1.0) continue;
+    const midLat = (lat1 + lat2) / 2;
+    const midLon = (lon1 + lon2) / 2;
+    total += caline4LineSourceConc(
+      qLineUgPerMS, subSegLengthM, midLat, midLon, recvLat, recvLon,
+      windSpeedMs, windFromDeg, stab,
+    );
+  }
+  return total;
+}
+
+// ═══ End B3 — CALINE4 line-source erf integral ═══
+
+// ─────────────────────────────────────────────────────────────────────────────
+// B5 — Post-Gaussian modifiers: OSPM canyon + sea-breeze diurnal + wet/dry
+// ─────────────────────────────────────────────────────────────────────────────
+// Three multiplicative corrections applied AFTER caline4LineSourceConc.
+//
+// Final per-segment contribution:
+//   C_final = C_caline4 × f_canyon × f_seabreeze × f_wet
+//
+// Reference: Research R1_dispersion_research.md §9.2 master equation.
+//   - OSPM canyon multiplier: Berkowicz 2000 (Operational Street Pollution Model).
+//   - Sea-breeze diurnal: Junnaedhi et al. 2023 Jakarta sea breeze observations
+//     (doi:10.1002/joc.8139), R3 §1.2 boundary problem framing.
+//   - Wet/dry season: BMKG climatology, Jakarta PM2.5 dry > wet ~30% (Lestari 2022).
+
+// --- f_canyon: OSPM-inspired urban canyon multiplier ---
+// Reasoning: canyon segments (canyon_ratio = height/width > 1) trap pollutants —
+// reduced vertical mixing + wake recirculation. R1 §9.2 § f_canyon.
+//
+// Apply only to canyon-relevant micro_class. Open-terrain / rural roads skip
+// (f_canyon = 1.0). Cap at 3.0 to avoid blow-up on extreme canyon_ratio outliers
+// (R1 noted: literature observed leeward enhancement up to ~4×; conservative
+// ceiling 3× until we have OSPM-calibration data per Indonesia).
+const CALINE4_CANYON_ALPHA = 0.8;       // OSPM literature mid-range slope
+const CALINE4_CANYON_NEUTRAL = 1.0;     // canyon_ratio = 1.0 ≈ neutral aspect
+const CALINE4_CANYON_CAP = 3.0;         // hard ceiling
+const CALINE4_CANYON_MICRO_CLASSES = new Set(['canyon', 'arterial', 'collector', 'highway']);
+
+export function caline4CanyonFactor(canyonRatio: number | null, microClass: string | null): number {
+  if (canyonRatio == null || canyonRatio <= 0) return 1.0;
+  if (!microClass || !CALINE4_CANYON_MICRO_CLASSES.has(microClass)) return 1.0;
+  const factor = 1.0 + CALINE4_CANYON_ALPHA * (canyonRatio - CALINE4_CANYON_NEUTRAL);
+  // Clamp to [0.5, CAP] — below 0.5 implies open canyon dispersion enhanced
+  // (e.g., wide boulevard), modest reduction only.
+  return Math.max(0.5, Math.min(factor, CALINE4_CANYON_CAP));
+}
+
+// --- f_seabreeze: diurnal coastal sea-breeze modifier ---
+// Reasoning: along Indonesian coastlines (Jakarta N coast, Bali S coast, Surabaya N),
+// daytime sea-breeze (~09:00-18:00 WIB) blows ONSHORE → traps coastal pollution INLAND.
+// Nocturnal land-breeze (~22:00-06:00 WIB) blows OFFSHORE → flushes pollution to sea.
+// Transition hours (06:00-09:00, 18:00-22:00) ≈ neutral.
+//
+// Implementation: simple lookup table per hour. Per-region wind-rose calibration
+// (caline3_region_params.wind_rose_*) is a Tier 3 v2.1 enhancement.
+//
+// Coastal flag: distanceFromCoastM < 10 km. Inland → f = 1.0 (no modifier).
+// Source: Junnaedhi et al. 2023 multi-year Jakarta observations.
+
+const SEABREEZE_DIURNAL_LOOKUP: Record<number, number> = {
+  // Hour-of-day (WIB, 0-23) → multiplier
+  0: 0.85, 1: 0.80, 2: 0.80, 3: 0.80, 4: 0.85, 5: 0.90,         // land breeze offshore (cleaner inland)
+  6: 1.00, 7: 1.00, 8: 1.05,                                     // transition AM
+  9: 1.15, 10: 1.20, 11: 1.20, 12: 1.20, 13: 1.20, 14: 1.20,    // sea breeze onshore (traps coastal pollution)
+  15: 1.15, 16: 1.10, 17: 1.05, 18: 1.00,                       // transition PM
+  19: 0.95, 20: 0.90, 21: 0.85, 22: 0.80, 23: 0.80,             // land breeze building
+};
+
+const SEABREEZE_COASTAL_THRESHOLD_M = 10_000;
+
+export function caline4SeabreezeFactor(
+  distanceFromCoastM: number | null,
+  hourLocal: number,
+): number {
+  // Inland or unknown coast distance → no modifier.
+  if (distanceFromCoastM == null || distanceFromCoastM > SEABREEZE_COASTAL_THRESHOLD_M) return 1.0;
+  const hour = ((hourLocal % 24) + 24) % 24;  // wrap to [0, 23]
+  const lookup = SEABREEZE_DIURNAL_LOOKUP[Math.floor(hour)];
+  return lookup ?? 1.0;
+}
+
+// --- f_wet: wet/dry season modifier ---
+// BMKG monsoon climatology: Indonesia divided into Wet (Nov-Apr) and Dry (May-Oct).
+// Wet: enhanced washout (rain scavenges aerosols) + better vertical mixing.
+// Dry: stable atmosphere, less precipitation → pollutants accumulate.
+// Magnitude: Lestari 2022 Jakarta annual PM2.5 cycle ~30% dry > wet.
+// Modifier centered ~1.0 (annual mean): f_wet = 0.75 wet, f_dry = 1.10 dry.
+
+const WET_SEASON_MONTHS = new Set([11, 12, 1, 2, 3, 4]);
+
+export function caline4WetDryFactor(monthLocal: number): number {
+  const m = ((monthLocal - 1) % 12) + 1;  // 1-12
+  return WET_SEASON_MONTHS.has(m) ? 0.75 : 1.10;
+}
+
+// --- Convenience: apply all three modifiers ---
+export function caline4ApplyModifiers(
+  baseConc: number,
+  opts: {
+    canyonRatio: number | null;
+    microClass: string | null;
+    distanceFromCoastM: number | null;
+    hourLocal: number;
+    monthLocal: number;
+  },
+): number {
+  if (baseConc <= 0) return 0;
+  const fCanyon = caline4CanyonFactor(opts.canyonRatio, opts.microClass);
+  const fSeabreeze = caline4SeabreezeFactor(opts.distanceFromCoastM, opts.hourLocal);
+  const fWet = caline4WetDryFactor(opts.monthLocal);
+  return baseConc * fCanyon * fSeabreeze * fWet;
+}
+
+// ═══ End B5 — modifiers (canyon + sea-breeze + wet/dry) ═══
+
 // ─── Vehicle routing weights ────────────────────────────────
 const VEHICLE_WEIGHTS: Record<string, { aqi: number; time: number }> = {
   pedestrian:  { aqi: 0.70, time: 0.30 },
