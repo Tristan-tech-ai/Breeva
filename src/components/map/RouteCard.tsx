@@ -117,6 +117,26 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
         </div>
       </div>
 
+      {/* v2 — calibrated estimate + uncertainty range + confidence ("estimasi vs presisi") */}
+      {typeof route.vayu_avg_aqi === 'number' && (
+        <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 font-medium">
+            estimasi AQI {Math.round(route.vayu_avg_aqi)}
+          </span>
+          {typeof route.vayu_min_aqi === 'number' && typeof route.vayu_score?.max_aqi === 'number'
+            && route.vayu_score.max_aqi > route.vayu_min_aqi && (
+            <span className="text-[10px] text-gray-400 dark:text-gray-500">
+              rentang {Math.round(route.vayu_min_aqi)}–{Math.round(route.vayu_score.max_aqi)}
+            </span>
+          )}
+          {typeof route.aqi_confidence === 'number' && (
+            <span className="text-[10px] text-gray-400 dark:text-gray-500">
+              · keyakinan {route.aqi_confidence >= 70 ? 'tinggi' : route.aqi_confidence >= 40 ? 'sedang' : 'rendah'}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Environment info row (traffic + green score + summary) */}
       {(traffic || route.road_summary) && (
         <div className="mt-2.5 pt-2.5 border-t border-gray-100 dark:border-gray-800/50 flex items-center gap-3 flex-wrap">
