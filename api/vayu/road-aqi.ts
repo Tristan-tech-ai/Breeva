@@ -27,6 +27,33 @@ const V2_BACKGROUND: Record<string, { b0: number; b1: number }> = {
   makassar: { b0: 14.0227, b1: -0.1177 }, medan: { b0: 15.2735, b1: 0 }, malang: { b0: 8.8923, b1: 0 },
 };
 
+// Layer D GP — static spatial residual surface (kriged per-sensor-mean residual_abc).
+// LOSO-validated: bali +18.6% (RMSE 6.86→5.58, PI95 0.90); jakarta OPTED OUT (static surface hurt it
+// −15% → GP=0, its accuracy is from Background-β). From vayu/calibration/gp_serving_params.json;
+// TS formula μ_GP(x)=yMean+yStd·Σ exp(-d²/2ℓ²)·alpha_i (d = local-km from lat0/lon0) parity vs sklearn 3.6e-15.
+const V2_GP_SURFACE: Record<string, { lat0: number; lon0: number; ls: number; yMean: number; yStd: number; X: [number, number][]; alpha: number[] }> = {
+  bali: {
+    lat0: -8.52403447, lon0: 115.32696174, ls: 7.4229, yMean: 0.620663, yStd: 6.827518,
+    X: [[30.20199,15.19668],[10.61912,3.21378],[25.67728,9.25886],[-9.69475,-13.4641],[0.02623,-2.15238],[-11.91857,-19.86634],[26.38186,30.03571],[-17.02236,-22.0358],[-27.24645,28.23778],[-10.29914,-30.56658],[-20.29645,9.74538],[25.50113,-16.53806],[-18.38308,-18.2221],[30.77446,8.15312],[2.3051,11.39293],[-22.20982,-1.90912],[-5.25811,9.66798],[-9.1847,2.00465],[0.02623,-2.15238]],
+    alpha: [-0.08476381,-0.41118448,-0.12913173,-0.42554574,2.20885934,-0.01725288,-0.13024847,-0.20294122,-0.31646832,-0.00527193,-0.41072721,-0.24049481,0.02436091,-0.08591366,-0.27931973,-0.58215131,-1.11623076,1.74576009,-0.67419344],
+  },
+};
+// μ_GP at (lat,lon): RBF kriging from the exported surface. Returns 0 for regions without a surface.
+function gpResidual(region: string, lat: number, lon: number): number {
+  const s = V2_GP_SURFACE[region];
+  if (!s) return 0;
+  const x = (lon - s.lon0) * 111.320 * Math.cos((s.lat0 * Math.PI) / 180);
+  const y = (lat - s.lat0) * 110.574;
+  const inv2ls2 = 1 / (2 * s.ls * s.ls);
+  let acc = 0;
+  for (let i = 0; i < s.X.length; i++) {
+    const dx = x - s.X[i][0], dy = y - s.X[i][1];
+    acc += Math.exp(-(dx * dx + dy * dy) * inv2ls2) * s.alpha[i];
+  }
+  const gp = s.yMean + s.yStd * acc;
+  return Number.isFinite(gp) ? gp : 0;
+}
+
 // ─── Inlined XGBoost residual inference (was api/vayu/_ml_inference.ts) ───
 // Vercel's underscore-prefix exclusion blocks the file from being bundled even
 // as a utility import (ERR_MODULE_NOT_FOUND at runtime), and the `functions.includeFiles`
@@ -1446,7 +1473,10 @@ function computeRoadAQIv2(
   const bg = V2_BACKGROUND[region];
   const camsForBg = Number.isFinite(camsDaily) ? camsDaily : baseline.pm25;
   const background = bg ? Math.max(0, bg.b0 + bg.b1 * camsForBg) : baseline.pm25;
-  const pm25 = Math.max(0, background + pm25Delta);
+  // Layer D GP spatial residual correction (bali only — LOSO +18.6%; 0 elsewhere). Corrects the
+  // ambient, not the road increment, so pm25_delta (dispersion) stays the per-road contribution.
+  const gp = oodRefused ? 0 : gpResidual(region, recvLat, recvLon);
+  const pm25 = Math.max(0, background + gp + pm25Delta);
   const no2  = Math.max(0, baseline.no2 + no2Delta);
   const pm10 = Math.max(0, baseline.pm10 + pm10Delta);
   const o3   = Math.max(0, baseline.o3 - o3Titration);
