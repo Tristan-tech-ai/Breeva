@@ -33,7 +33,6 @@ import LeafletMap from '../components/map/LeafletMap';
 import SearchBar from '../components/map/SearchBar';
 import BottomSheet from '../components/map/BottomSheet';
 import RouteCard from '../components/map/RouteCard';
-import RouteAqiSlider from '../components/map/RouteAqiSlider';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import Sidebar from '../components/layout/Sidebar';
 import TransportModeSelector from '../components/map/TransportModeSelector';
@@ -69,7 +68,6 @@ export default function HomePage() {
     isCalculatingRoutes,
     currentAQI,
     transportMode,
-    routeAqiWeight,
     startLocating,
     stopLocating,
     calculateRoutes,
@@ -78,7 +76,6 @@ export default function HomePage() {
     setDestination,
     setBottomSheetState,
     setCenter,
-    setRouteAqiWeight,
   } = useMapStore();
 
   const {
@@ -525,11 +522,6 @@ export default function HomePage() {
               {/* Transport mode selector */}
               <div className="mb-3">
                 <TransportModeSelector />
-              </div>
-
-              {/* Tier 2 M1 — AQI weight slider */}
-              <div className="mb-3">
-                <RouteAqiSlider value={routeAqiWeight} onChange={setRouteAqiWeight} />
               </div>
 
               <div className="flex flex-col gap-2.5 mb-4">

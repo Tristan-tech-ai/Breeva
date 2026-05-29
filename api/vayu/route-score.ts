@@ -1,4 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+// v2 prior (Layer A Background-β + Layer D GP) — shared underscore module (inlines into the bundle;
+// .js extension required by Node ESM under type:module). Lets route scoring use the SAME calibrated
+// ambient as the map (road-aqi), instead of raw CAMS — the validated 45%-LODO accuracy lever.
+import { backgroundPm25, gpResidual } from './_v2prior.js';
+const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
 
 /**
  * VAYU Route Score V2 — Full Gaussian dispersion per-road scoring.
@@ -911,11 +916,28 @@ function estimateTraffic(road: RoadRow, diurnal: number): number {
   return base * laneFactor * diurnal;
 }
 
+// v2 Background needs raw CAMS daily-mean per region (cached). Mirrors road-aqi.ts.
+async function fetchCamsDailyMean(lat: number, lon: number, region: string, today: string): Promise<number> {
+  const key = `vayu:camsdaily:${region}:${today}`;
+  const cached = await redisGet(key);
+  if (cached != null) { const v = parseFloat(cached); if (Number.isFinite(v)) return v; }
+  try {
+    const r = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=pm2_5&past_days=1&forecast_days=1&timezone=auto`);
+    if (r.ok) {
+      const j = await r.json() as { hourly?: { pm2_5?: (number | null)[] } };
+      const arr = (j?.hourly?.pm2_5 ?? []).filter((x): x is number => typeof x === 'number' && Number.isFinite(x));
+      if (arr.length > 0) { const mean = arr.reduce((a, b) => a + b, 0) / arr.length; await redisSetEx(key, 21600, String(mean)); return mean; }
+    }
+  } catch { /* fall through → NaN */ }
+  return NaN;
+}
+
 // ─── Compute per-road AQI (from road-aqi.ts) ───────────────
 function computeRoadAQI(
   road: RoadRow,
   baseline: { pm25: number; pm10: number; no2: number; o3: number; wind_speed: number },
-  diurnal: number
+  diurnal: number,
+  v2ctx?: { region: string; camsDaily: number; lat: number; lon: number },
 ): RoadAQIComputation {
   const traffic = estimateTraffic(road, diurnal);
   const jitter = roadJitter(road.osm_way_id);
@@ -947,7 +969,12 @@ function computeRoadAQI(
   const pm10Delta = pm25Delta * 1.8 * surfacePM10;
   const o3Titration = no2Delta * 0.4;
 
-  const pm25 = Math.max(0, baseline.pm25 + pm25Delta);
+  // v2: calibrated ambient (Background-β + GP, bali) replaces raw CAMS for PM2.5 when flagged + region
+  // known (validated 45%-LODO term). v1 fallback otherwise. no2/o3/pm10 keep baseline (β is PM2.5-only).
+  const ambient = (USE_V2_ENGINE && v2ctx)
+    ? Math.max(0, backgroundPm25(v2ctx.region, v2ctx.camsDaily, baseline.pm25) + gpResidual(v2ctx.region, v2ctx.lat, v2ctx.lon))
+    : baseline.pm25;
+  const pm25 = Math.max(0, ambient + pm25Delta);
   const no2  = Math.max(0, baseline.no2 + no2Delta);
   const pm10 = Math.max(0, baseline.pm10 + pm10Delta);
   const o3   = Math.max(0, baseline.o3 - o3Titration);
@@ -1882,6 +1909,9 @@ export async function scorePolyline(
   const PEDESTRIAN_SEC_PER_M = 0.72;
   const HABER_EXPONENT = 1.3;
 
+  const region = detectRegion(cLat, cLon);
+  const today = new Date().toISOString().slice(0, 10);
+  const camsDaily = USE_V2_ENGINE ? await fetchCamsDailyMean(cLat, cLon, region, today) : NaN;
   for (const road of scoredRoads) {
     // Get road centroid for baseline interpolation + actual segment length
     let roadLat = cLat, roadLon = cLon;
@@ -1894,7 +1924,7 @@ export async function scorePolyline(
     } catch { /* use center */ }
 
     const baseline = interpCorrected(roadLat, roadLon);
-    let result = computeRoadAQI(road, baseline, diurnal);
+    let result = computeRoadAQI(road, baseline, diurnal, USE_V2_ENGINE ? { region, camsDaily, lat: roadLat, lon: roadLon } : undefined);
 
     // Apply Module C residual error correction
     const corrFactor = errorCorrections.get(road.highway);
