@@ -1,5 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { latLngToCell } from 'h3-js';
+// 24h ML forecast (Jakarta GRUHead) folded in here (?ml_forecast) to stay within the Hobby 12-fn
+// quota. Underscore module + .js extension so Node ESM resolves it in the bundle.
+import { forecast24 as gruForecast24 } from './_forecast24.js';
 
 /**
  * VAYU AQI Endpoint — Self-contained serverless function.
@@ -446,6 +449,46 @@ async function handleForecastMode(req: VercelRequest, res: VercelResponse) {
   });
 }
 
+// ─── ML 24h forecast (Jakarta GRUHead) — dispatched by ?ml_forecast ───
+async function handleMlForecast(req: VercelRequest, res: VercelResponse) {
+  const lat = parseFloat(String(req.query.lat ?? ''));
+  const lon = parseFloat(String(req.query.lon ?? req.query.lng ?? ''));
+  const hoursAhead = Math.max(1, Math.min(48, parseInt(String(req.query.ml_forecast), 10) || 24));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return res.status(200).json({ error: 'missing lat/lon', meta: { model: 'jakarta_forecast24' } });
+  }
+  const JKT = { s: -6.5, w: 106.5, n: -6.0, e: 107.1 };
+  const inJakarta = lat >= JKT.s && lat <= JKT.n && lon >= JKT.w && lon <= JKT.e;
+  let current: number | null = null;
+  try {
+    const r = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=pm2_5&timezone=auto`);
+    if (r.ok) { const j = await r.json() as { current?: { pm2_5?: number } }; const v = j?.current?.pm2_5; if (typeof v === 'number' && Number.isFinite(v)) current = v; }
+  } catch { /* fall through */ }
+  if (current == null) return res.status(200).json({ error: 'no current pm2.5 available', meta: { model: 'jakarta_forecast24' } });
+  const target = new Date(Date.now() + hoursAhead * 3600 * 1000);
+  const { pm25, sigma } = gruForecast24(current, target, lat, lon);
+  const r1 = (x: number) => Math.round(x * 10) / 10;
+  const RMSE = 23.12;  // held-out 2025 forecast-24h RMSE (met-free)
+  const toAqi = (p: number) => {
+    const bp = [[0, 12, 0, 50], [12.1, 35.4, 51, 100], [35.5, 55.4, 101, 150], [55.5, 150.4, 151, 200], [150.5, 250.4, 201, 300], [250.5, 500.4, 301, 500]];
+    for (const [cl, ch, al, ah] of bp) if (p <= ch) return Math.round((ah - al) / (ch - cl) * (p - cl) + al);
+    return 500;
+  };
+  res.setHeader('Cache-Control', 's-maxage=1800');
+  return res.status(200).json({
+    forecast_pm25: r1(pm25), forecast_aqi: toAqi(pm25),
+    typical_lo: r1(Math.max(0, pm25 - RMSE)), typical_hi: r1(Math.min(500, pm25 + RMSE)),
+    pi95_lo: r1(Math.max(0, pm25 - 1.96 * sigma)), pi95_hi: r1(Math.min(500, pm25 + 1.96 * sigma)),
+    current_pm25: r1(current), valid_at: target.toISOString(), hours_ahead: hoursAhead,
+    confidence: inJakarta ? 'high' : 'low', region: inJakarta ? 'jakarta' : 'out_of_scope',
+    meta: {
+      model: 'jakarta_forecast24 (GRUHead met-free)', held_out_2025_rmse: RMSE,
+      note: inJakarta ? 'pi95=calibrated σ (wide, haze tails); typical=±held-out RMSE'
+                      : 'model trained on Jakarta; out-of-region forecast is indicative only',
+    },
+  });
+}
+
 // ─── Handler ────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
@@ -456,6 +499,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Frontend sends ?forecast_hours=24 (RouteForecast.tsx); presence = forecast mode.
   if (req.query.forecast_hours !== undefined) {
     return handleForecastMode(req, res);
+  }
+  // ?ml_forecast[=hours] → Jakarta 24h-AQI deep-model forecast (GRUHead met-free).
+  if (req.query.ml_forecast !== undefined) {
+    return handleMlForecast(req, res);
   }
 
   // Cron auth guard (Migration 0012 — pg_cron → Vercel webhook).
