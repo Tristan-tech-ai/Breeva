@@ -5,54 +5,15 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 // route-score.ts (a real API route = its OWN function) left an external `./route-score` reference
 // → ERR_MODULE_NOT_FOUND at runtime, which crashed road-aqi (2026-05-29). Same lesson as _ml_inference.
 import { caline4PolylineConc, pasquillClass, caline4CanyonFactor, caline4WetDryFactor } from './_caline4.js';
+// v2 physical-prior pieces (Layer A Background-β + Layer D GP + per-region σ/OOD sets) — SINGLE SOURCE in
+// _v2prior.ts (underscore → Vercel inlines into this bundle, like _caline4.js). route-score.ts imports the
+// SAME module so map (road-aqi) and route scoring never drift. Was inlined here; deduped 2026-05-29.
+import {
+  V2_SIGMA, V2_CALIBRATED_REGIONS, V2_GP_REGIONS, gpResidual, backgroundPm25,
+} from './_v2prior.js';
 
 // ─── v2 engine wiring (Phase 3a) — feature-flagged, DEFAULT OFF (prod stays v1 until verified+flipped) ───
 const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
-// Per-region hourly predictive sigma (µg/m³) from the validated GATE-1 fusion (per-region empirical hourly
-// residual sd). Drives the served 95% PI. Regions NOT in this set = outside calibration support → OOD refuse.
-const V2_SIGMA: Record<string, number> = {
-  jakarta: 19.22, bali: 11.73, bandung: 22.27, surabaya: 11.67, semarang: 14.41, yogyakarta: 15.66,
-  solo: 15.18, medan: 12.07, palembang: 15.28, makassar: 9.35, malang: 12.86, denpasar: 15.49,
-};
-const V2_CALIBRATED_REGIONS = new Set(Object.keys(V2_SIGMA));
-const V2_GP_REGIONS = new Set(['jakarta', 'bali']);  // high-confidence (GP-deployed) priority regions
-// Layer A Background (Berrocal daily downscaler, GATE D1 PASS 45%): Background = b0 + b1·CAMS_daily_mean.
-// From vayu/calibration/layer_a_background_params.json (2026-05-28). One formula unifies all 4 model types
-// (slope / identity b0=0,b1=1 / offset b1=1 / climatology b1=0). Applied to RAW CAMS daily-mean (the truth-
-// calibrated ambient) — replaces the v1 WAQI-bias path for v2 PM2.5 (no double calibration).
-const V2_BACKGROUND: Record<string, { b0: number; b1: number }> = {
-  jakarta: { b0: 16.7298, b1: 0.2761 }, bali: { b0: 0, b1: 1 }, yogyakarta: { b0: 10.3966, b1: 0.4322 },
-  semarang: { b0: 0, b1: 1 }, palembang: { b0: 7.837, b1: 1 }, solo: { b0: 30.8865, b1: 0 },
-  surabaya: { b0: 15.1303, b1: 0.1536 }, bandung: { b0: 23.2303, b1: 0.4172 }, denpasar: { b0: 13.2775, b1: 1 },
-  makassar: { b0: 14.0227, b1: -0.1177 }, medan: { b0: 15.2735, b1: 0 }, malang: { b0: 8.8923, b1: 0 },
-};
-
-// Layer D GP — static spatial residual surface (kriged per-sensor-mean residual_abc).
-// LOSO-validated: bali +18.6% (RMSE 6.86→5.58, PI95 0.90); jakarta OPTED OUT (static surface hurt it
-// −15% → GP=0, its accuracy is from Background-β). From vayu/calibration/gp_serving_params.json;
-// TS formula μ_GP(x)=yMean+yStd·Σ exp(-d²/2ℓ²)·alpha_i (d = local-km from lat0/lon0) parity vs sklearn 3.6e-15.
-const V2_GP_SURFACE: Record<string, { lat0: number; lon0: number; ls: number; yMean: number; yStd: number; X: [number, number][]; alpha: number[] }> = {
-  bali: {
-    lat0: -8.52403447, lon0: 115.32696174, ls: 7.4229, yMean: 0.620663, yStd: 6.827518,
-    X: [[30.20199,15.19668],[10.61912,3.21378],[25.67728,9.25886],[-9.69475,-13.4641],[0.02623,-2.15238],[-11.91857,-19.86634],[26.38186,30.03571],[-17.02236,-22.0358],[-27.24645,28.23778],[-10.29914,-30.56658],[-20.29645,9.74538],[25.50113,-16.53806],[-18.38308,-18.2221],[30.77446,8.15312],[2.3051,11.39293],[-22.20982,-1.90912],[-5.25811,9.66798],[-9.1847,2.00465],[0.02623,-2.15238]],
-    alpha: [-0.08476381,-0.41118448,-0.12913173,-0.42554574,2.20885934,-0.01725288,-0.13024847,-0.20294122,-0.31646832,-0.00527193,-0.41072721,-0.24049481,0.02436091,-0.08591366,-0.27931973,-0.58215131,-1.11623076,1.74576009,-0.67419344],
-  },
-};
-// μ_GP at (lat,lon): RBF kriging from the exported surface. Returns 0 for regions without a surface.
-function gpResidual(region: string, lat: number, lon: number): number {
-  const s = V2_GP_SURFACE[region];
-  if (!s) return 0;
-  const x = (lon - s.lon0) * 111.320 * Math.cos((s.lat0 * Math.PI) / 180);
-  const y = (lat - s.lat0) * 110.574;
-  const inv2ls2 = 1 / (2 * s.ls * s.ls);
-  let acc = 0;
-  for (let i = 0; i < s.X.length; i++) {
-    const dx = x - s.X[i][0], dy = y - s.X[i][1];
-    acc += Math.exp(-(dx * dx + dy * dy) * inv2ls2) * s.alpha[i];
-  }
-  const gp = s.yMean + s.yStd * acc;
-  return Number.isFinite(gp) ? gp : 0;
-}
 
 // ─── Inlined XGBoost residual inference (was api/vayu/_ml_inference.ts) ───
 // Vercel's underscore-prefix exclusion blocks the file from being bundled even
@@ -1468,11 +1429,9 @@ function computeRoadAQIv2(
   const pm10Delta = pm25Delta * 1.8 * (SURFACE_PM10_FACTOR[road.surface || ''] ?? 1.0);
   const o3Titration = no2Delta * 0.4;
 
-  // Layer A Background: calibrated ambient = b0 + b1·CAMS_daily (raw CAMS daily-mean). Falls back to the
-  // current-hour CAMS if the daily fetch failed, or to baseline.pm25 if region has no Background params.
-  const bg = V2_BACKGROUND[region];
-  const camsForBg = Number.isFinite(camsDaily) ? camsDaily : baseline.pm25;
-  const background = bg ? Math.max(0, bg.b0 + bg.b1 * camsForBg) : baseline.pm25;
+  // Layer A Background: calibrated ambient = b0 + b1·CAMS_daily (raw CAMS daily-mean), via the shared
+  // backgroundPm25 helper. Falls back to baseline.pm25 if camsDaily is non-finite or region has no params.
+  const background = backgroundPm25(region, camsDaily, baseline.pm25);
   // Layer D GP spatial residual correction (bali only — LOSO +18.6%; 0 elsewhere). Corrects the
   // ambient, not the road increment, so pm25_delta (dispersion) stays the per-road contribution.
   const gp = oodRefused ? 0 : gpResidual(region, recvLat, recvLon);

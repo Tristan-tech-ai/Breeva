@@ -227,6 +227,86 @@ function getRoadColor(road: RoadAQIFeature, pollutant: PollutantType, mode: Road
   return `rgb(${r},${g},${b})`;
 }
 
+// ── Road-tap inspect (long-press / right-click) ──────────────
+// Roads render on a NON-interactive canvas (perf: 2000+ polylines), so individual
+// polylines can't fire click. Instead we hit-test the tapped pixel against the
+// road geometry held in dataRef. Bound to `contextmenu` (long-press on mobile /
+// right-click on desktop) so it NEVER conflicts with the map `click → setDestination`
+// core flow. Surfaces the v2 per-road calibrated uncertainty (PM2.5 + 95% PI +
+// confidence) — the honest "estimasi vs presisi" story, per road.
+function pointSegDistPx(p: L.Point, a: L.Point, b: L.Point): number {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return p.distanceTo(a);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return p.distanceTo(L.point(a.x + t * dx, a.y + t * dy));
+}
+function nearestRoadAt(map: L.Map, roads: RoadAQIFeature[], latlng: L.LatLng): RoadAQIFeature | null {
+  const p = map.latLngToContainerPoint(latlng);
+  let best: RoadAQIFeature | null = null;
+  let bestD = 16; // px hit radius
+  for (const road of roads) {
+    const c = road.geometry.coordinates;
+    if (c.length < 2) continue;
+    // Cheap lat/lng prebox: skip roads with no vertex within ~1km of the tap before
+    // doing pixel-precise distance (avoids converting every vertex of every road).
+    let near = false;
+    for (let i = 0; i < c.length; i++) {
+      if (Math.abs(c[i][1] - latlng.lat) < 0.01 && Math.abs(c[i][0] - latlng.lng) < 0.01) { near = true; break; }
+    }
+    if (!near) continue;
+    let prev = map.latLngToContainerPoint([c[0][1], c[0][0]]);
+    for (let i = 1; i < c.length; i++) {
+      const cur = map.latLngToContainerPoint([c[i][1], c[i][0]]);
+      const d = pointSegDistPx(p, prev, cur);
+      if (d < bestD) { bestD = d; best = road; }
+      prev = cur;
+    }
+  }
+  return best;
+}
+function aqiBand(aqi: number): { label: string; color: string } {
+  if (aqi <= 50) return { label: 'Baik', color: '#00E400' };
+  if (aqi <= 100) return { label: 'Sedang', color: '#d9b500' };
+  if (aqi <= 150) return { label: 'Tidak sehat (sensitif)', color: '#FF7E00' };
+  if (aqi <= 200) return { label: 'Tidak sehat', color: '#FF0000' };
+  if (aqi <= 300) return { label: 'Sangat tidak sehat', color: '#8F3F97' };
+  return { label: 'Berbahaya', color: '#7E0023' };
+}
+const HIGHWAY_LABEL: Record<string, string> = {
+  motorway: 'Jalan tol', trunk: 'Jalan arteri', primary: 'Jalan utama',
+  secondary: 'Jalan sekunder', tertiary: 'Jalan tersier', residential: 'Jalan perumahan',
+  service: 'Jalan layanan', living_street: 'Jalan lingkungan', unclassified: 'Jalan',
+};
+function roadPopupHtml(road: RoadAQIFeature): string {
+  const band = aqiBand(road.aqi);
+  const hw = HIGHWAY_LABEL[road.highway] ?? road.highway ?? 'Jalan';
+  const refused = road.ood_refused || road.confidence === 'refuse';
+  const confLabel = road.confidence === 'high' ? 'tinggi'
+    : road.confidence === 'medium' ? 'sedang'
+    : road.confidence === 'low' ? 'rendah' : null;
+  const rows: string[] = [];
+  rows.push(
+    `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">` +
+    `<span style="width:9px;height:9px;border-radius:50%;background:${band.color};display:inline-block;box-shadow:0 0 0 1px rgba(0,0,0,.15)"></span>` +
+    `<span style="font-weight:700;font-size:13px;color:#111">AQI ${Math.round(road.aqi)}</span>` +
+    `<span style="font-size:11px;color:#666">${band.label}</span></div>`,
+  );
+  const deltaTxt = road.pm25_delta ? ` · kontribusi jalan +${road.pm25_delta.toFixed(1)}` : '';
+  rows.push(`<div style="font-size:11px;color:#444">PM2.5 <b>${road.pm25.toFixed(1)}</b> µg/m³${deltaTxt}</div>`);
+  if (road.engine === 'v2' && !refused && typeof road.pi95_lo === 'number' && typeof road.pi95_hi === 'number') {
+    rows.push(
+      `<div style="font-size:11px;color:#666;margin-top:2px">rentang 95% ` +
+      `${road.pi95_lo.toFixed(0)}–${road.pi95_hi.toFixed(0)} µg/m³` +
+      `${confLabel ? ` · keyakinan ${confLabel}` : ''}</div>`,
+    );
+  } else if (refused) {
+    rows.push(`<div style="font-size:11px;color:#999;margin-top:2px">Di luar jangkauan kalibrasi — estimasi tidak pasti</div>`);
+  }
+  return `<div style="min-width:150px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#888;margin-bottom:3px">${hw}</div>${rows.join('')}</div>`;
+}
+
 // ── Minimum zoom for road overlay. C-2 fix: lowered from 14→12 so
 // city-overview zooms still render colored arterials. Server-side already
 // filters to motorway/trunk/primary at z<14 (small payload at low zoom).
@@ -539,6 +619,27 @@ export function useRoadPollutionLayer(
       if (trailingRef.current) clearTimeout(trailingRef.current);
     };
   }, [map, visible, renderCached, fetchData]);
+
+  // Road-tap inspect: long-press (mobile) / right-click (desktop) → popup with the
+  // tapped road's v2 PM2.5 + 95% PI + confidence. Hit-tests dataRef geometry (canvas
+  // roads are non-interactive). `contextmenu` never fires alongside `click`, so the
+  // map's click→setDestination flow is untouched.
+  useEffect(() => {
+    if (!map) return;
+    const onCtx = (e: L.LeafletMouseEvent) => {
+      if (!visible) return;
+      const data = dataRef.current;
+      if (!data || !data.roads.length) return;
+      const road = nearestRoadAt(map, data.roads, e.latlng);
+      if (!road) return;
+      L.popup({ closeButton: true, className: 'glass-popup', offset: [0, -2], autoPan: true })
+        .setLatLng(e.latlng)
+        .setContent(roadPopupHtml(road))
+        .openOn(map);
+    };
+    map.on('contextmenu', onCtx);
+    return () => { map.off('contextmenu', onCtx); };
+  }, [map, visible]);
 
   // Prefetch adjacent tiles after data loaded (idle callback)
   useEffect(() => {
