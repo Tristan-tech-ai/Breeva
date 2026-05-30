@@ -20,6 +20,10 @@ const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
 // (overall −0.91→+0.17; Jakarta −1.71→−1.07), magnitude 1.32 µg/m³ (≤ offline ~1.97, no over-predict),
 // Jakarta+Bali RMSE improve, ~35ms/600 roads. Default ON; set USE_V2_MULTISOURCE=false to disable.
 const USE_V2_MULTISOURCE = process.env.USE_V2_MULTISOURCE !== 'false';
+// USE_PRECOMPUTE: serve stored v2 values from road_aqi_precomputed via one RPC (find_roads_precomputed_in_bbox),
+// skipping CALINE4/Background/GP compute + the Open-Meteo/WAQI/satellite fetches. Default OFF → live compute
+// path unchanged. Populated by the scheduled refresh job (vayu/precompute/refresh_road_aqi.mts).
+const USE_PRECOMPUTE = process.env.USE_PRECOMPUTE === 'true';
 
 // ─── Inlined XGBoost residual inference (was api/vayu/_ml_inference.ts) ───
 // Vercel's underscore-prefix exclusion blocks the file from being bundled even
@@ -396,7 +400,7 @@ function pm25ToAQI(pm25: number): number {
 }
 
 // ─── Diurnal traffic modifier ───────────────────────────────
-const HOURLY_TRAFFIC: Record<number, number> = {
+export const HOURLY_TRAFFIC: Record<number, number> = {
   0: 0.15, 1: 0.10, 2: 0.08, 3: 0.08, 4: 0.12,
   5: 0.35, 6: 0.85, 7: 1.20, 8: 1.40, 9: 1.10,
   10: 0.90, 11: 0.95, 12: 1.15, 13: 1.10, 14: 0.85,
@@ -628,7 +632,7 @@ async function fetchTrafficCorrections(
 }
 
 // ─── Types ──────────────────────────────────────────────────
-interface RoadRow {
+export interface RoadRow {
   osm_way_id: number;
   geojson: string;
   highway: string;
@@ -715,7 +719,7 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 // Uses Open-Meteo's multi-coordinate support: latitude=l1,l2,...&longitude=ln1,ln2,...
 // Reduces 10 HTTP requests → 2, saving ~300-400ms per viewport.
 
-interface BaselineData {
+export interface BaselineData {
   pm25: number; pm10: number; no2: number;
   co: number; o3: number; wind_speed: number;
   wind_direction: number;   // v2: CALINE4 needs wind FROM direction (deg); v1 ignored it
@@ -1276,6 +1280,53 @@ async function findRoadsInBbox(
   } catch { return []; }
 }
 
+// ─── Precompute serve (USE_PRECOMPUTE): read stored v2 values + geometry via one RPC ──
+interface PrecomputedRow {
+  osm_way_id: number; geojson: string; highway: string;
+  pm25: number | null; no2: number | null; o3: number | null; pm10: number | null; aqi: number | null;
+  pm25_delta: number | null; no2_delta: number | null; pm10_delta: number | null;
+  pi95_lo: number | null; pi95_hi: number | null; confidence: string | null; confidence_score: number | null;
+  ood_refused: boolean | null; ai_classified: boolean | null; engine: string | null;
+}
+async function fetchPrecomputedRoadsInBbox(
+  south: number, west: number, north: number, east: number,
+  limit: number, simplifyTolerance = 0, highwayTypes: string[] | null = null,
+): Promise<PrecomputedRow[]> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return [];
+  try {
+    const params: Record<string, unknown> = { south, west, north, east, road_limit: limit };
+    if (simplifyTolerance > 0) params.simplify_tolerance = simplifyTolerance;
+    if (highwayTypes) params.highway_types = highwayTypes;
+    const resp = await fetch(`${url}/rest/v1/rpc/find_roads_precomputed_in_bbox`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}`,
+        'Range-Unit': 'items', Range: `0-${Math.max(0, limit - 1)}`,
+      },
+      body: JSON.stringify(params),
+    });
+    if (!resp.ok) return [];
+    return await resp.json() as PrecomputedRow[];
+  } catch { return []; }
+}
+function buildFeatureFromPrecompute(r: PrecomputedRow): RoadAQIFeature | null {
+  if (r.pm25 == null || !r.geojson) return null;  // not precomputed → caller falls back to compute
+  let geometry: { type: string; coordinates: number[][] };
+  try { geometry = JSON.parse(r.geojson); } catch { return null; }
+  return {
+    osm_way_id: r.osm_way_id, geometry, highway: r.highway, weight: roadWeight(r.highway),
+    aqi: r.aqi ?? 0, pm25: r.pm25, no2: r.no2 ?? 0, o3: r.o3 ?? 0, pm10: r.pm10 ?? 0,
+    pm25_delta: r.pm25_delta ?? 0, no2_delta: r.no2_delta ?? 0, pm10_delta: r.pm10_delta ?? 0,
+    ai_classified: r.ai_classified ?? false, confidence_score: r.confidence_score ?? 0.6,
+    pi95_lo: r.pi95_lo ?? undefined, pi95_hi: r.pi95_hi ?? undefined,
+    confidence: (r.confidence as RoadAQIFeature['confidence']) ?? undefined,
+    ood_refused: r.ood_refused ?? undefined,
+    engine: (r.engine as RoadAQIFeature['engine']) ?? 'v2',
+  };
+}
+
 // ─── C1 stopgap: deterministic hash-based ai_pollution_factor fallback ───
 // 98% of road_segments rows have ai_pollution_factor=null (Gemini batch not
 // yet run for most regions). Falling back to 1.0 makes all roads in same
@@ -1406,7 +1457,7 @@ function computeRoadAQI(
 // Swaps the v1 gaussianConc point-source delta for the parity-tested CALINE4 line-source (GATE-D2 validated),
 // keeps the Open-Meteo CAMS baseline as ambient, refuses outside the 12 calibrated regions, and emits a
 // calibrated 95% PI + confidence. Background-β (Layer A, daily CAMS) wired below; GP layer is step 2 (precompute).
-function computeRoadAQIv2(
+export function computeRoadAQIv2(
   road: RoadRow, coords: number[][], recvLat: number, recvLon: number,
   baseline: BaselineData, diurnal: number, region: string, hourLocal: number, monthLocal: number,
   camsDaily: number,
@@ -1464,7 +1515,7 @@ function computeRoadAQIv2(
 // ─── #64: Multi-source dispersion — per receptor, Σ CALINE4 of every road within 500m ──────────
 // Matches the offline GATE-1 `d2_residual` 500m calibration (the live path previously summed only a
 // road's own line). Grid-bucketed (~275m cells), nearest 40 within 500m. ~35ms/600 roads (validated).
-function buildMultiSourceDeltas(
+export function buildMultiSourceDeltas(
   roads: RoadRow[],
   interp: (lat: number, lon: number) => BaselineData,
   diurnal: number, hourLocal: number, monthLocal: number,
@@ -1621,6 +1672,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Query road segments in viewport — pass highway filter to DB
     const { limit, highways, simplify } = getQueryParams(z);
+
+    // ── Precompute fast-path (USE_PRECOMPUTE, default OFF): serve stored v2 values via ONE RPC —
+    // no CALINE4/Background/GP compute, no Open-Meteo/WAQI/satellite fetch. Any miss/empty/error
+    // falls through to the live compute path below (safe, fully backward-compatible).
+    if (USE_PRECOMPUTE) {
+      try {
+        const preRows = await fetchPrecomputedRoadsInBbox(s, w, n, e, limit, simplify, highways);
+        const preFeatures = preRows.map(buildFeatureFromPrecompute).filter((f): f is RoadAQIFeature => f != null);
+        if (preFeatures.length > 0 && preFeatures.length >= preRows.length * 0.8) {
+          const result = {
+            roads: preFeatures,
+            meta: {
+              count: preFeatures.length, zoom: z, forecast_hour: fh,
+              baseline_pm25: 0, baseline_no2: 0, baseline_o3: 0, baseline_pm10: 0, wind_speed: 0,
+              waqi_station: null, waqi_bias_pm25: 0, waqi_bias_no2: 0, satellite_no2: false,
+              iqair_aqi: null, iqair_city: null, iqair_validation: null, iqair_confidence_adj: null,
+              ai_enhanced: true, computed_at: new Date().toISOString(), served: 'precompute',
+            },
+          };
+          await redisSetEx(cacheKey, fh > 0 ? 3600 : 1800, JSON.stringify(result));
+          res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
+          res.setHeader('X-Engine', 'precompute');
+          return res.status(200).json(result);
+        }
+      } catch (e) { console.error('precompute fast-path failed → compute fallback:', e); }
+    }
+
     const roads = await findRoadsInBbox(s, w, n, e, limit, simplify, highways);
     _mark('db_roads');
 
