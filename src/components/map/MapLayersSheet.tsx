@@ -363,8 +363,21 @@ export default function MapLayersSheet({
                         >
                           Δ Road
                         </button>
+                        <button
+                          onClick={() => onRoadDisplayModeChange?.('contrast')}
+                          className={`
+                            px-2.5 py-1 text-[10px] font-bold rounded-md transition-all
+                            ${roadDisplayMode === 'contrast'
+                              ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-300 dark:ring-rose-700'
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                            }
+                          `}
+                          title="Kontras relatif: kontribusi lalu lintas NYATA per-jalan, diskalakan ke area tampilan (hijau = terendah, merah = tertinggi)"
+                        >
+                          Kontras
+                        </button>
                         <span className="ml-auto text-[9px] text-gray-400 dark:text-gray-500">
-                          {roadDisplayMode === 'delta' ? 'Δ vs baseline' : 'Absolute'}
+                          {roadDisplayMode === 'delta' ? 'Δ vs baseline' : roadDisplayMode === 'contrast' ? 'Kontras relatif' : 'Absolute'}
                         </span>
                       </div>
                     )}
