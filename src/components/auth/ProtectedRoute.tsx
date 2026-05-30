@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
+import { NoIndex } from '../Seo';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -37,5 +38,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  return <>{children}</>;
+  // Auth-gated pages must not be indexed (React 19 hoists this <meta> to <head>).
+  return <><NoIndex />{children}</>;
 }

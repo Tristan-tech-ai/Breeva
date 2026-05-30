@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronLeft, Leaf, Globe, Shield, Heart, Github, Mail, ExternalLink } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import { Seo } from '../components/Seo';
 import logoBreeva from '../assets/logo-breeva.svg';
 
 const stats = [
@@ -15,6 +16,7 @@ export default function AboutPage() {
 
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24">
+      <Seo title="Tentang Breeva — Platform Intelijen Udara" description="Breeva memetakan kualitas udara per-jalan, menemukan rute jalan kaki paling bersih, dan menghitung paparan PM2.5 — platform navigasi udara untuk kota Indonesia." path="/about" />
       {/* Header */}
       <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between safe-area-top">
         <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { ChevronLeft, Leaf, Wind, Footprints, Droplets, TreePine, AlertTriangle } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import { Seo } from '../components/Seo';
 
 const tips = [
   {
@@ -149,6 +150,8 @@ export default function EcoTipsPage() {
 
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24">
+      <Seo title="Tips Udara Bersih & Jalan Sehat — Breeva" description="Tips praktis mengurangi paparan polusi: pilih rute hijau, waktu terbaik berjalan, dan cara kurangi jejak karbon harian Anda." path="/eco-tips" />
+
       <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between">
         <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
           <ChevronLeft className="w-6 h-6" />

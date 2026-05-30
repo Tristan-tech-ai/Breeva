@@ -8,6 +8,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
+import { Seo } from '../components/Seo';
+
 // Lazy three.js particle canvas — kept off the landing critical path (vendor-three chunk; skipped under reduced-motion).
 const ParticleHero = lazy(() => import('./landing/ParticleHero'));
 
@@ -48,6 +50,11 @@ export default function LandingPage() {
 
   return (
     <div className="bg-white min-h-screen text-slate-900">
+      <Seo
+        title="Breeva — Navigasi Udara Bersih & Rute Sehat"
+        description="Temukan rute jalan kaki paling bersih dengan AQI per-jalan real-time, prakiraan 24 jam, dan kalkulator paparan PM2.5. Kumpulkan EcoPoints di setiap langkah."
+        path="/"
+      />
       {/* Decorative particle canvas — lazy three.js (off critical path); skipped under reduced-motion */}
       {!reducedMotion && (
         <Suspense fallback={null}>

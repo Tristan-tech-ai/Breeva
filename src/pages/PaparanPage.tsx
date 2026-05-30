@@ -6,6 +6,7 @@ import BottomNavigation from '../components/layout/BottomNavigation';
 import ProfileForm from '../components/exposure/ProfileForm';
 import RouteSelector, { type SelectedRouteData } from '../components/exposure/RouteSelector';
 import { useAuthStore } from '../stores/authStore';
+import { Seo } from '../components/Seo';
 import { saveExposureLedger } from '../lib/exposure-ledger';
 import {
   computeDose, doseBreakdown, riskColor, CIGARETTE_CAVEAT, WHO_24H_PM25,
@@ -93,6 +94,11 @@ export default function PaparanPage() {
 
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24">
+      <Seo
+        title="Kalkulator Paparan Udara — Breeva"
+        description="Hitung dosis PM2.5 yang Anda hirup di sebuah rute: laju napas per usia & aktivitas, perbandingan ambang WHO, dan setara rokok. Berbasis engine AQI per-jalan Breeva."
+        path="/paparan"
+      />
       {/* Header */}
       <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center gap-2 safe-area-top">
         <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">

@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /api/
+
+Sitemap: https://breeva.site/sitemap.xml
