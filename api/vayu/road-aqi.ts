@@ -1613,9 +1613,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(JSON.parse(cached));
     }
 
+    // ── Perf instrumentation (only emitted in meta.dbg_ms when ?dbg=1) ──
+    const _tStart = Date.now();
+    const _t: Record<string, number> = {};
+    let _tp = _tStart;
+    const _mark = (k: string) => { const now = Date.now(); _t[k] = now - _tp; _tp = now; };
+
     // Query road segments in viewport — pass highway filter to DB
     const { limit, highways, simplify } = getQueryParams(z);
     const roads = await findRoadsInBbox(s, w, n, e, limit, simplify, highways);
+    _mark('db_roads');
 
     if (roads.length === 0) {
       const empty = { roads: [], meta: { count: 0, zoom: z, wind_speed: 0 } };
@@ -1648,6 +1655,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const bias = fh === 0
       ? await fetchWAQIBias(cLat, cLon, baselineCenter)
       : { pm25: 0, pm10: 0, no2: 0, o3: 0, stationName: null } as WAQIBias;
+    _mark('ext_apis');
 
     // Wrap interpolation with bias + satellite correction
     const interpCorrected = (lat: number, lon: number): BaselineData => {
@@ -1743,6 +1751,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       USE_V2_ENGINE ? Promise.resolve(null) : loadModel(region),   // v2 doesn't use XGB → skip the model-JSON download
       USE_V2_ENGINE ? fetchCamsDailyMean(cLat, cLon, region, today) : Promise.resolve(NaN),
     ]);
+    _mark('setup');
     // Tracks whether ANY ML layer (XGB or GCN) actually applied — set true once
     // per request only if mlResidual !== 0 or gcn delta lookup succeeds. Falsified
     // by default so confidence_score doesn't lie when both layers degrade silently.
@@ -1893,6 +1902,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    _mark('loop');
+
     // ── Tier 3.5: layer GraphSAGE spatial delta on top of CALINE3 + XGBoost ──
     // Single batched RPC for all roads in this viewport. If model hasn't been
     // precomputed for an osm_way_id (cold zone), feature stays unchanged.
@@ -1978,6 +1989,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })();
     }
 
+    _mark('post');
+    _t.total = Date.now() - _tStart;
+
     const result = {
       roads: features,
       meta: {
@@ -1999,6 +2013,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         iqair_confidence_adj: iqairValidation?.confidenceAdj ?? null,
         ai_enhanced: filtered.some(r => r.ai_pollution_factor != null || r.micro_class != null),
         computed_at: new Date().toISOString(),
+        ...(req.query.dbg ? { dbg_ms: _t } : {}),
       },
     };
 
