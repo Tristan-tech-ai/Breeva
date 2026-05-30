@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './components/auth/AuthProvider';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import { ContentPageSkeleton } from './components/ui/Skeleton';
 import OfflineBanner from './components/ui/OfflineBanner';
 import PWAStatusToast from './components/ui/PWAStatusToast';
 import PWAInstallBanner from './components/features/PWAInstallBanner';
@@ -45,16 +46,9 @@ const ContributionHistoryPage = lazy(() => import('./pages/ContributionHistoryPa
 const YearInReviewPage = lazy(() => import('./pages/YearInReviewPage'));
 const PaparanPage = lazy(() => import('./pages/PaparanPage'));
 
-// Page loading fallback — minimal skeleton
+// Page loading fallback — content-shaped skeleton (avoids the blank flash of a bare spinner).
 function PageLoader() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-10 h-10 border-[3px] border-primary-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">Loading...</p>
-      </div>
-    </div>
-  );
+  return <ContentPageSkeleton />;
 }
 
 function KeyboardShortcutsProvider({ children }: { children: React.ReactNode }) {

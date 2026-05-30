@@ -86,6 +86,9 @@ importers:
       three:
         specifier: ^0.183.2
         version: 0.183.2
+      web-vitals:
+        specifier: ^5.3.0
+        version: 5.3.0
       workbox-window:
         specifier: ^7.4.0
         version: 7.4.0
@@ -3514,6 +3517,9 @@ packages:
     peerDependenciesMeta:
       '@vite-pwa/assets-generator':
         optional: true
+
+  web-vitals@5.3.0:
+    resolution: {integrity: sha512-q6LWsLatGYZp5VGBIOvbTj6JBV2nOmC8KvWztXBmwJcfFAzhwKwbOxhUH306XY3CcaZDUlSmSuNPBsCn0bFu+g==}
 
   webidl-conversions@3.0.1:
     resolution: {integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==}
@@ -7129,6 +7135,8 @@ snapshots:
       workbox-window: 7.4.0
     transitivePeerDependencies:
       - supports-color
+
+  web-vitals@5.3.0: {}
 
   webidl-conversions@3.0.1: {}
 

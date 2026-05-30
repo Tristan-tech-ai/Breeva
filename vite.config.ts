@@ -37,7 +37,10 @@ export default defineConfig({
         ],
       },
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2}'],
+        // NOTE: 'svg' intentionally dropped — the brand logo (logo-breeva.svg, ~386 KB) is emitted to
+        // dist/assets and was bloating the precache. SVGs load on demand + are browser-cached; no need
+        // to precache them offline. Keeps the SW install payload lean.
+        globPatterns: ['**/*.{js,css,html,png,webp,woff2}'],
       },
       devOptions: {
         enabled: true,
@@ -50,6 +53,8 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules/leaflet') || id.includes('node_modules/react-leaflet'))
             return 'vendor-leaflet';
+          if (id.includes('node_modules/three') || id.includes('node_modules/@react-three'))
+            return 'vendor-three';   // ~320KB+ — kept out of the main entry; lazy-loaded by ParticleHero
           if (id.includes('node_modules/framer-motion'))
             return 'vendor-motion';
           if (id.includes('node_modules/lucide-react'))

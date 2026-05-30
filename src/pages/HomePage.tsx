@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Crosshair,
@@ -29,7 +29,8 @@ import { useMapStore } from '../stores/mapStore';
 import { useWalkStore } from '../stores/walkStore';
 import { useAuthStore } from '../stores/authStore';
 import { useSavedPlacesStore } from '../stores/savedPlacesStore';
-import LeafletMap from '../components/map/LeafletMap';
+// Lazy: defers leaflet (~122KB) + map layers out of the eager main-entry bundle.
+const LeafletMap = lazy(() => import('../components/map/LeafletMap'));
 import SearchBar from '../components/map/SearchBar';
 import BottomSheet from '../components/map/BottomSheet';
 import RouteCard from '../components/map/RouteCard';
@@ -145,22 +146,24 @@ export default function HomePage() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-950">
-      {/* Map */}
-      <LeafletMap
-        className="absolute inset-0"
-        isDarkMode={isDark}
-        showAQIOverlay={showAQIOverlay}
-        showAQIStations={showAQIStations}
-        showPOIs={showPOIs}
-        showMerchants={showMerchants}
-        mapStyle={mapStyle}
-        activeFilter={activeFilter}
-        pollutant={pollutant}
-        forecastHour={forecastHour}
-        roadDisplayMode={roadDisplayMode}
-        onRoadLayerMeta={setRoadLayerMeta}
-        onPlaceSelect={(poi) => setSelectedPOI(poi)}
-      />
+      {/* Map (lazy — defers leaflet out of the main entry; base layer paints under the skeleton) */}
+      <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
+        <LeafletMap
+          className="absolute inset-0"
+          isDarkMode={isDark}
+          showAQIOverlay={showAQIOverlay}
+          showAQIStations={showAQIStations}
+          showPOIs={showPOIs}
+          showMerchants={showMerchants}
+          mapStyle={mapStyle}
+          activeFilter={activeFilter}
+          pollutant={pollutant}
+          forecastHour={forecastHour}
+          roadDisplayMode={roadDisplayMode}
+          onRoadLayerMeta={setRoadLayerMeta}
+          onPlaceSelect={(poi) => setSelectedPOI(poi)}
+        />
+      </Suspense>
 
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -213,6 +216,11 @@ export default function HomePage() {
                   <AQIBadge aqi={currentAQI.aqi} size="sm" confidence={currentAQI.confidence} />
                 </div>
               )}
+
+              {/* Screen-reader live region: announces air-quality changes to assistive tech */}
+              <div className="sr-only" role="status" aria-live="polite">
+                {currentAQI ? `Kualitas udara saat ini: AQI ${Math.round(currentAQI.aqi)}, ${currentAQI.level.replace(/-/g, ' ')}` : ''}
+              </div>
 
               {/* Active filter pill */}
               {activeFilter && (() => {
@@ -513,7 +521,7 @@ export default function HomePage() {
                 </h3>
                 <button
                   onClick={clearDestination}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400 transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>

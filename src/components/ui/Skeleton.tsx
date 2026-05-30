@@ -59,6 +59,23 @@ export function SkeletonGrid({ cols = 2, count = 6 }: { cols?: number; count?: n
   );
 }
 
+/** Full page-shell skeleton for route-level Suspense fallbacks (sticky header + content cards).
+ *  Replaces the bare spinner so lazy pages don't flash blank before hydration. */
+export function ContentPageSkeleton() {
+  return (
+    <div className="gradient-mesh-bg min-h-screen pb-24" aria-busy="true" aria-label="Memuat halaman">
+      <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center gap-2 safe-area-top">
+        <SkeletonPulse className="w-6 h-6 rounded-full" />
+        <SkeletonPulse className="h-4 w-32" />
+      </div>
+      <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
+        <SkeletonCard />
+        <SkeletonCard />
+      </div>
+    </div>
+  );
+}
+
 /** Profile header skeleton */
 export function SkeletonProfile() {
   return (

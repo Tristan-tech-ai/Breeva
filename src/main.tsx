@@ -5,6 +5,7 @@ import App from './App.tsx'
 import { initNotifications } from './lib/notifications'
 import { initOfflineQueueSync } from './lib/offline-queue'
 import { initPwaLifecycle } from './lib/pwa'
+import { initWebVitals } from './lib/web-vitals'
 
 // Force light mode as default. Only enable dark if user explicitly toggled it.
 // This overrides device-level dark mode (prefers-color-scheme: dark).
@@ -81,3 +82,6 @@ initPwaLifecycle();
 // Initialize notification system + offline mutation replay
 initNotifications().catch(() => {})
 initOfflineQueueSync();
+
+// Core Web Vitals measurement (LCP/INP/CLS/FCP/TTFB) — non-blocking, for perf verification.
+initWebVitals();

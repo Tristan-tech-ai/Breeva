@@ -340,6 +340,8 @@ export default function LeafletMap({
   return (
     <div
       className={className}
+      role="region"
+      aria-label="Peta kualitas udara interaktif. Ketuk lokasi untuk set tujuan; tahan (long-press) jalan untuk detail paparan."
       style={{
         position: 'absolute',
         inset: 0,
