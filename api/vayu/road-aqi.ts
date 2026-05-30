@@ -14,11 +14,12 @@ import {
 
 // ─── v2 engine wiring (Phase 3a) — feature-flagged, DEFAULT OFF (prod stays v1 until verified+flipped) ───
 const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
-// Engine #64 (flag-gated, default OFF): multi-source dispersion — each receptor sums CALINE4 from
-// ALL roads within 500m (matching the offline GATE-1 `d2_residual` 500m calibration), not just its
-// own line source. Adds real per-road spatial variation (validated ~8.7× wider delta, ~35ms/600
-// roads). OFF until the served-total magnitude is validated against sensor truth.
-const USE_V2_MULTISOURCE = process.env.USE_V2_MULTISOURCE === 'true';
+// Engine #64: multi-source dispersion — each receptor sums CALINE4 from the nearest 40 roads within
+// 500m (matching the offline GATE-1 `d2_residual` 500m calibration), not just its own line source.
+// VALIDATED at the 69 sensors (validate_multisource_64.py): fixes self-only under-prediction bias
+// (overall −0.91→+0.17; Jakarta −1.71→−1.07), magnitude 1.32 µg/m³ (≤ offline ~1.97, no over-predict),
+// Jakarta+Bali RMSE improve, ~35ms/600 roads. Default ON; set USE_V2_MULTISOURCE=false to disable.
+const USE_V2_MULTISOURCE = process.env.USE_V2_MULTISOURCE !== 'false';
 
 // ─── Inlined XGBoost residual inference (was api/vayu/_ml_inference.ts) ───
 // Vercel's underscore-prefix exclusion blocks the file from being bundled even
@@ -1759,10 +1760,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Compute per-road AQI with spatially interpolated baseline
     const features: RoadAQIFeature[] = [];
-    // #64: precompute multi-source dispersion (flag-gated) once for the whole viewport.
-    const multiDeltas = (USE_V2_ENGINE && USE_V2_MULTISOURCE)
-      ? buildMultiSourceDeltas(filtered, interpCorrected, diurnal, targetHour, nowJkt.getMonth() + 1)
-      : null;
+    // #64: precompute multi-source dispersion once for the whole viewport. Guarded — any failure
+    // falls back to self-only (multiDeltas=null) so it can NEVER break the live map endpoint.
+    let multiDeltas: Map<number, { pm25: number; nox: number }> | null = null;
+    if (USE_V2_ENGINE && USE_V2_MULTISOURCE) {
+      try { multiDeltas = buildMultiSourceDeltas(filtered, interpCorrected, diurnal, targetHour, nowJkt.getMonth() + 1); }
+      catch (e) { console.error('multi-source dispersion failed → self-only fallback:', e); multiDeltas = null; }
+    }
     for (const road of filtered) {
       let geometry: { type: string; coordinates: number[][] };
       try {
