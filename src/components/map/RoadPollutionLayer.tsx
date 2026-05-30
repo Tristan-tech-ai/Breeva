@@ -28,6 +28,23 @@ export interface RoadLayerMeta {
 // Singleton tile cache: 120 entries, 15-min TTL (larger cache = higher hit rate)
 const roadCache = new SpatialTileCache<RoadAQIResponse>(120, 15);
 
+// Snap a viewport bbox OUTWARD to a ~1/10-viewport grid. Panning then produces REPEATABLE
+// bboxes, so the server cache (CDN s-maxage + Redis) and the client SpatialTileCache reuse
+// tiles on pan/revisit instead of a unique continuous bbox every move (which always missed →
+// full recompute). Grid kept fine (~1/10 vp) so the snapped tile stays ~viewport-sized — in
+// dense Jakarta a viewport is already ~980 roads ≈ the 1000 cap, so a bigger tile would thin
+// the map; the snap also gives a small over-fetch margin (replaces the old 15% pad).
+function snapBboxToGrid(s: number, w: number, n: number, e: number) {
+  const gLat = Math.max(1e-5, (n - s) / 10);
+  const gLng = Math.max(1e-5, (e - w) / 10);
+  return {
+    s: Math.floor(s / gLat) * gLat,
+    w: Math.floor(w / gLng) * gLng,
+    n: Math.ceil(n / gLat) * gLat,
+    e: Math.ceil(e / gLng) * gLng,
+  };
+}
+
 // ── Color scales per pollutant ───────────────────────────────
 
 // (Color dispatch lives in getRoadColor below — continuous ramp.
@@ -435,10 +452,12 @@ export function useRoadPollutionLayer(
     // 15% padding: cache can absorb small pans without re-fetch.
     // Canvas renderer still clips at padding:0 so no off-screen rendering.
     const bounds = map.getBounds();
-    const latPad = (bounds.getNorth() - bounds.getSouth()) * 0.15;
-    const lngPad = (bounds.getEast() - bounds.getWest()) * 0.15;
-    const s = bounds.getSouth() - latPad, w = bounds.getWest() - lngPad;
-    const n = bounds.getNorth() + latPad, e = bounds.getEast() + lngPad;
+    // Snap to a stable grid → repeatable bbox so panning/revisits reuse the server (CDN/Redis)
+    // + client cache instead of a unique continuous bbox per move. Snap also over-fetches a
+    // small margin (replaces the old 15% pad) so micro-pans stay covered without a refetch.
+    const { s, w, n, e } = snapBboxToGrid(
+      bounds.getSouth(), bounds.getWest(), bounds.getNorth(), bounds.getEast(),
+    );
 
     const cached = roadCache.get(s, w, n, e, zoom);
     if (cached) {
@@ -470,10 +489,12 @@ export function useRoadPollutionLayer(
     // 15% padding: fetched area slightly larger than viewport so cache
     // absorbs small pans. Canvas renderer clips at padding:0.
     const bounds = map.getBounds();
-    const latPad = (bounds.getNorth() - bounds.getSouth()) * 0.15;
-    const lngPad = (bounds.getEast() - bounds.getWest()) * 0.15;
-    const s = bounds.getSouth() - latPad, w = bounds.getWest() - lngPad;
-    const n = bounds.getNorth() + latPad, e = bounds.getEast() + lngPad;
+    // Snap to a stable grid → repeatable bbox so panning/revisits reuse the server (CDN/Redis)
+    // + client cache instead of a unique continuous bbox per move. Snap also over-fetches a
+    // small margin (replaces the old 15% pad) so micro-pans stay covered without a refetch.
+    const { s, w, n, e } = snapBboxToGrid(
+      bounds.getSouth(), bounds.getWest(), bounds.getNorth(), bounds.getEast(),
+    );
 
     // 1. Fresh cache hit → atomic swap, skip HTTP
     const cached = roadCache.get(s, w, n, e, zoom);
