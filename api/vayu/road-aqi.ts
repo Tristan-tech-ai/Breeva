@@ -14,6 +14,11 @@ import {
 
 // ─── v2 engine wiring (Phase 3a) — feature-flagged, DEFAULT OFF (prod stays v1 until verified+flipped) ───
 const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
+// Engine #64 (flag-gated, default OFF): multi-source dispersion — each receptor sums CALINE4 from
+// ALL roads within 500m (matching the offline GATE-1 `d2_residual` 500m calibration), not just its
+// own line source. Adds real per-road spatial variation (validated ~8.7× wider delta, ~35ms/600
+// roads). OFF until the served-total magnitude is validated against sensor truth.
+const USE_V2_MULTISOURCE = process.env.USE_V2_MULTISOURCE === 'true';
 
 // ─── Inlined XGBoost residual inference (was api/vayu/_ml_inference.ts) ───
 // Vercel's underscore-prefix exclusion blocks the file from being bundled even
@@ -1404,6 +1409,7 @@ function computeRoadAQIv2(
   road: RoadRow, coords: number[][], recvLat: number, recvLon: number,
   baseline: BaselineData, diurnal: number, region: string, hourLocal: number, monthLocal: number,
   camsDaily: number,
+  multiDelta?: { pm25: number; nox: number },
 ) {
   const r2 = (x: number) => Math.round(x * 100) / 100;
   const traffic = estimateTraffic(road, diurnal);
@@ -1424,8 +1430,10 @@ function computeRoadAQIv2(
   const calibrated = V2_CALIBRATED_REGIONS.has(region);   // OOD: region-membership support
   const oodRefused = !calibrated;
   // Outside calibration support → refuse: serve the baseline ambient (no confident road increment), wide PI.
-  let pm25Delta = oodRefused ? 0 : caline4PolylineConc(poly, qPM25, recvLat, recvLon, wind, windDir, stab) * mod;
-  let no2Delta  = oodRefused ? 0 : caline4PolylineConc(poly, qNOx,  recvLat, recvLon, wind, windDir, stab) * mod;
+  // #64: when multiDelta is supplied (flag on), use the summed nearby-roads dispersion (matches the
+  // offline 500m calibration); else this road's own line source only.
+  let pm25Delta = oodRefused ? 0 : (multiDelta ? multiDelta.pm25 : caline4PolylineConc(poly, qPM25, recvLat, recvLon, wind, windDir, stab) * mod);
+  let no2Delta  = oodRefused ? 0 : (multiDelta ? multiDelta.nox  : caline4PolylineConc(poly, qNOx,  recvLat, recvLon, wind, windDir, stab) * mod);
   const pm10Delta = pm25Delta * 1.8 * (SURFACE_PM10_FACTOR[road.surface || ''] ?? 1.0);
   const o3Titration = no2Delta * 0.4;
 
@@ -1450,6 +1458,74 @@ function computeRoadAQIv2(
     pi95_lo: r2(Math.max(0, pm25 - 1.96 * sigma)), pi95_hi: r2(Math.min(500, pm25 + 1.96 * sigma)),
     confidence, ood_refused: oodRefused, engine: 'v2' as const,
   };
+}
+
+// ─── #64: Multi-source dispersion — per receptor, Σ CALINE4 of every road within 500m ──────────
+// Matches the offline GATE-1 `d2_residual` 500m calibration (the live path previously summed only a
+// road's own line). Grid-bucketed (~275m cells), nearest 40 within 500m. ~35ms/600 roads (validated).
+function buildMultiSourceDeltas(
+  roads: RoadRow[],
+  interp: (lat: number, lon: number) => BaselineData,
+  diurnal: number, hourLocal: number, monthLocal: number,
+): Map<number, { pm25: number; nox: number }> {
+  interface Src { wayId: number; poly: Array<[number, number]>; midLat: number; midLon: number; qPM25: number; qNOx: number; mod: number; }
+  const sources: Src[] = [];
+  for (const road of roads) {
+    let coords: number[][];
+    try { coords = (JSON.parse(road.geojson) as { coordinates: number[][] }).coordinates; }
+    catch { continue; }
+    if (!coords || coords.length < 2) continue;
+    const mid = coords[Math.floor(coords.length / 2)];
+    const traffic = estimateTraffic(road, diurnal);
+    const aiFactor = road.ai_pollution_factor != null
+      ? road.ai_pollution_factor
+      : aiFactorFallback(road.osm_way_id, road.highway || 'residential');
+    const mod = caline4CanyonFactor(road.canyon_ratio, road.micro_class) * caline4WetDryFactor(monthLocal) * aiFactor;
+    sources.push({
+      wayId: road.osm_way_id,
+      poly: coords.map((c) => [c[0], c[1]] as [number, number]),
+      midLat: mid[1], midLon: mid[0],
+      qPM25: (traffic * FLEET_EMISSION.pm25) / 3600 / 1000 * 1e6,
+      qNOx: (traffic * FLEET_EMISSION.nox) / 3600 / 1000 * 1e6,
+      mod,
+    });
+  }
+  const CELL = 0.0025; // ~275m grid cell
+  const buckets = new Map<string, Src[]>();
+  for (const s of sources) {
+    const k = `${Math.floor(s.midLat / CELL)}:${Math.floor(s.midLon / CELL)}`;
+    const a = buckets.get(k); if (a) a.push(s); else buckets.set(k, [s]);
+  }
+  const out = new Map<number, { pm25: number; nox: number }>();
+  const CUTOFF = 500, CAP = 40;
+  for (const R of sources) {
+    const b = interp(R.midLat, R.midLon);
+    const ws = Number.isFinite(b.wind_speed) ? b.wind_speed : 2.0;
+    const wd = Number.isFinite(b.wind_direction) ? b.wind_direction : 0;
+    const stab = pasquillClass(ws, hourLocal, 0.5);
+    const wind = Math.max(ws, 0.5);
+    const mLon = 111320 * Math.cos((R.midLat * Math.PI) / 180);
+    const ci = Math.floor(R.midLat / CELL), cj = Math.floor(R.midLon / CELL);
+    const cand: Array<{ s: Src; dd: number }> = [];
+    for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+      const cell = buckets.get(`${ci + di}:${cj + dj}`);
+      if (!cell) continue;
+      for (const s of cell) {
+        const dx = (s.midLon - R.midLon) * mLon, dy = (s.midLat - R.midLat) * 110574;
+        const dd = Math.hypot(dx, dy);
+        if (dd <= CUTOFF) cand.push({ s, dd });
+      }
+    }
+    cand.sort((a, b2) => a.dd - b2.dd);
+    let pm = 0, nx = 0;
+    for (let i = 0; i < cand.length && i < CAP; i++) {
+      const s = cand[i].s;
+      pm += caline4PolylineConc(s.poly, s.qPM25, R.midLat, R.midLon, wind, wd, stab) * s.mod;
+      nx += caline4PolylineConc(s.poly, s.qNOx, R.midLat, R.midLon, wind, wd, stab) * s.mod;
+    }
+    out.set(R.wayId, { pm25: pm, nox: nx });
+  }
+  return out;
 }
 
 // ─── Cache key from bbox (zoom-independent grid) ────────────
@@ -1683,6 +1759,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Compute per-road AQI with spatially interpolated baseline
     const features: RoadAQIFeature[] = [];
+    // #64: precompute multi-source dispersion (flag-gated) once for the whole viewport.
+    const multiDeltas = (USE_V2_ENGINE && USE_V2_MULTISOURCE)
+      ? buildMultiSourceDeltas(filtered, interpCorrected, diurnal, targetHour, nowJkt.getMonth() + 1)
+      : null;
     for (const road of filtered) {
       let geometry: { type: string; coordinates: number[][] };
       try {
@@ -1708,7 +1788,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Short-circuits the v1 XGBoost/GCN/error-correction stack. Any error → falls through to v1.
       if (USE_V2_ENGINE) {
         try {
-          const v2 = computeRoadAQIv2(road, coords, roadLat, roadLon, baseline, diurnal, region, targetHour, nowJkt.getMonth() + 1, camsDaily);
+          const v2 = computeRoadAQIv2(road, coords, roadLat, roadLon, baseline, diurnal, region, targetHour, nowJkt.getMonth() + 1, camsDaily, multiDeltas?.get(road.osm_way_id));
           // Guard: never serve/cache a non-finite v2 estimate — fall through to v1 (which has the
           // NaN-correction hotfix) so a transient bad input degrades gracefully instead of nulling.
           if (!Number.isFinite(v2.pm25)) throw new Error('v2 non-finite pm25');
