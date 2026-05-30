@@ -338,19 +338,6 @@ export default function MapLayersSheet({
                           View
                         </span>
                         <button
-                          onClick={() => onRoadDisplayModeChange?.('blend')}
-                          className={`
-                            px-2.5 py-1 text-[10px] font-bold rounded-md transition-all
-                            ${roadDisplayMode === 'blend'
-                              ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-300 dark:ring-emerald-700'
-                              : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                            }
-                          `}
-                          title="Health level (hue) × per-road traffic contribution (saturation) — honest blend"
-                        >
-                          Blend
-                        </button>
-                        <button
                           onClick={() => onRoadDisplayModeChange?.('total')}
                           className={`
                             px-2.5 py-1 text-[10px] font-bold rounded-md transition-all
@@ -377,7 +364,7 @@ export default function MapLayersSheet({
                           Δ Road
                         </button>
                         <span className="ml-auto text-[9px] text-gray-400 dark:text-gray-500">
-                          {roadDisplayMode === 'delta' ? 'Δ vs baseline' : roadDisplayMode === 'blend' ? 'Health × road Δ' : 'Absolute'}
+                          {roadDisplayMode === 'delta' ? 'Δ vs baseline' : 'Absolute'}
                         </span>
                       </div>
                     )}

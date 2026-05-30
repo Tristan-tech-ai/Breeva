@@ -30,7 +30,7 @@ const roadCache = new SpatialTileCache<RoadAQIResponse>(120, 15);
 
 // ── Color scales per pollutant ───────────────────────────────
 
-// (Color dispatch lives in getRoadColor below — continuous ramp + 'blend'.
+// (Color dispatch lives in getRoadColor below — continuous ramp.
 // The step-based categorizer was replaced by rampRgb for smoother resolution.)
 
 // Delta-mode breakpoints (road contribution above baseline, µg/m³). Tighter
@@ -180,47 +180,15 @@ function rampRgb(value: number, stops: { v: number; c: string }[]): { r: number;
   }
   return hexToRgb(stops[stops.length - 1].c);
 }
-// Pull an RGB toward its grey luminance by (1-sat). sat=1 → unchanged, sat=0 → grey.
-function applySaturation({ r, g, b }: { r: number; g: number; b: number }, sat: number): string {
-  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-  const c = (x: number) => Math.round(lum + (x - lum) * sat);
-  return `rgb(${c(r)},${c(g)},${c(b)})`;
-}
-// Fractional position of a value across the FIXED delta bands → 0..1.
-// Real per-road caline4 deltas are small (typically 0–3 µg/m³), so a linear value/max
-// would be near-zero everywhere. Positioning across the tight band breakpoints
-// (0/0.5/2/5/10/25) spreads that real spread into a perceptible range — still a FIXED
-// µg/m³ scale (NOT viewport-relative), so a given delta always maps the same ("no make-up").
-function bandIntensity(value: number, stops: { v: number; c: string }[]): number {
-  if (value <= stops[0].v) return 0;
-  for (let i = 0; i < stops.length - 1; i++) {
-    if (value < stops[i + 1].v) {
-      const frac = (value - stops[i].v) / (stops[i + 1].v - stops[i].v || 1);
-      return (i + frac) / (stops.length - 1);
-    }
-  }
-  return 1;
-}
-
 // ── Road color dispatcher ────────────────────────────────────
 // 'total' = absolute health level (continuous WHO ramp).
 // 'delta' = road-only contribution above baseline (continuous, tight µg/m³ ramp).
-// 'blend' = HUE from absolute health (real) × SATURATION from the real per-road
-//           delta → busy roads vivid, quiet roads muted, same honest health hue.
 // All scales fixed to real values (no auto-stretch). OOD-refused → neutral grey.
 function getRoadColor(road: RoadAQIFeature, pollutant: PollutantType, mode: RoadDisplayMode): string {
   if (road.ood_refused || road.confidence === 'refuse') return 'rgb(156,163,175)'; // grey: outside calibration support
   if (mode === 'delta') {
     const { r, g, b } = rampRgb(getValue(road, pollutant, 'delta'), getDeltaColorStops(pollutant));
     return `rgb(${r},${g},${b})`;
-  }
-  if (mode === 'blend' && (pollutant === 'pm25' || pollutant === 'no2' || pollutant === 'pm10')) {
-    const base = rampRgb(getValue(road, pollutant, 'total'), getColorStops(pollutant)); // health hue (real absolute)
-    // Saturation from the real per-road delta, positioned across the FIXED delta bands
-    // (not value/max, not viewport-relative) so the small-but-real spread (~0–3 µg/m³)
-    // is perceptible: quiet road muted/grey-green, busy road vivid — same honest hue.
-    const intensity = bandIntensity(getValue(road, pollutant, 'delta'), getDeltaColorStops(pollutant));
-    return applySaturation(base, 0.30 + 0.70 * intensity);
   }
   // 'total' (and aqi/o3 fallback): continuous absolute ramp
   const { r, g, b } = rampRgb(getValue(road, pollutant, 'total'), getColorStops(pollutant));

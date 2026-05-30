@@ -104,13 +104,9 @@ export default function HomePage() {
   const [showMerchants, setShowMerchants] = useState(true);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [forecastHour, setForecastHour] = useState(0);
-  // 'blend' = HUE from absolute health level × SATURATION from the real per-road
-  //   delta (CALINE4 dispersion) — busy roads vivid, quiet roads muted, anchored to
-  //   the honest absolute health hue. Default: reveals per-segment variance (per
-  //   eve/diagnostics/road-color-uniformity-regression.md) WITHOUT losing health
-  //   context and WITHOUT exaggeration (fixed real-value scales — no auto-stretch).
-  //   'delta' = pure road contribution; 'total' = pure absolute. aqi/o3 → absolute.
-  const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('blend');
+  // 'total' = absolute pollutant level vs WHO/EPA bands (default); 'delta' = pure
+  //   per-road contribution above baseline (CALINE4 dispersion) — surfaces per-segment variance.
+  const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('total');
   const [roadLayerMeta, setRoadLayerMeta] = useState<RoadLayerMeta | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'voyager' | 'osm' | 'satellite'>('voyager');

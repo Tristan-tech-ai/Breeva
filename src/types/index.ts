@@ -245,9 +245,7 @@ export type PollutantType = 'aqi' | 'pm25' | 'no2' | 'o3' | 'pm10';
 //   'delta' — road-only contribution above baseline (CALINE3 dispersion).
 //             Better surfaces road-level 50-100m resolution because baseline is
 //             removed from each segment.
-//   'blend' — HUE from absolute health level × SATURATION from the real per-road
-//             delta (vivid = busy road, muted = quiet) — honest 2-channel default.
-export type RoadDisplayMode = 'total' | 'delta' | 'blend';
+export type RoadDisplayMode = 'total' | 'delta';
 
 export interface RoadAQIFeature {
   osm_way_id: number;
