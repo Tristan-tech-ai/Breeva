@@ -1539,7 +1539,10 @@ function bboxCacheKey(south: number, west: number, north: number, east: number, 
   const q = (v: number) => (Math.floor(v / step) * step).toFixed(4);
   // Engine marker isolates v1/v2 caches so flipping USE_V2_ENGINE takes effect immediately
   // (no stale cross-engine entries served during/after rollout).
-  const base = `vayu:road:${USE_V2_ENGINE ? 'v2a' : 'v1'}:${q(south)}:${q(west)}:${q(north)}:${q(east)}`;
+  // Engine marker isolates v1 / v2-self-only / v2-multisource caches so flipping the engine or the
+  // #64 multi-source flag takes effect immediately (no stale cross-config tiles served during rollout).
+  const engineMark = USE_V2_ENGINE ? (USE_V2_MULTISOURCE ? 'v2ms' : 'v2a') : 'v1';
+  const base = `vayu:road:${engineMark}:${q(south)}:${q(west)}:${q(north)}:${q(east)}`;
   return forecastHour > 0 ? `${base}:fh${forecastHour}` : base;
 }
 
