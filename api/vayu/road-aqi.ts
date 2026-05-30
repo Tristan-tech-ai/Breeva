@@ -1674,18 +1674,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const region = detectRegion(cLat, cLon);
     const today = new Date().toISOString().slice(0, 10);
 
-    // ── Phase 1.3: per-region CALINE3 static priors (cached 1h) ──
-    const regionParams = await getRegionParams(region);
-    const regionMultiplier = regionDispersionMultiplier(regionParams);
-
-    // ── Phase 1.4: TomTom traffic corrections per highway class ──
-    // Aggregate cached in DB by tomtom_sampler.py. Looked up by current (hour, dow).
+    // ── Phase 1.3/1.4: per-region CALINE3 priors + TomTom corrections (v1-only) ──
+    // Both feed computeRoadAQI / XGB features; the v2 engine ignores them. Under v2 we
+    // skip these two serial Supabase round-trips on the hot path (cold-load perf).
     const nowJkt = new Date();
-    const trafficCorrections = await fetchTrafficCorrections(
-      region,
-      nowJkt.getHours(),
-      nowJkt.getDay(),
-    );
+    const regionMultiplier = USE_V2_ENGINE ? 1.0 : regionDispersionMultiplier(await getRegionParams(region));
+    const trafficCorrections: Map<string, number> = USE_V2_ENGINE
+      ? new Map<string, number>()
+      : await fetchTrafficCorrections(region, nowJkt.getHours(), nowJkt.getDay());
 
     // ── WAQI History Save (feeds Module B temporal learning) ──
     // Fire-and-forget: save hourly WAQI readings so Gemini can learn traffic patterns
@@ -1727,7 +1723,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ── Pre-fetch residual error corrections (Module C) ──
     // Cached correction factors from Gemini weekly analysis
     const errorCorrections = new Map<string, number>();
-    if (fh === 0) {
+    if (fh === 0 && !USE_V2_ENGINE) {
       const hwClasses = [...new Set(filtered.map(r => r.highway))];
       await Promise.all(hwClasses.map(async (hw) => {
         const raw = await redisGet(`vayu:correction:${region}:${hw}:${targetHour}`);
@@ -1744,7 +1740,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // await instead of N awaits inside the road loop).
     const [sentAgeHours, xgbModel, camsDaily] = await Promise.all([
       getSentinelAgeHours(s, w, n, e),
-      loadModel(region),
+      USE_V2_ENGINE ? Promise.resolve(null) : loadModel(region),   // v2 doesn't use XGB → skip the model-JSON download
       USE_V2_ENGINE ? fetchCamsDailyMean(cLat, cLon, region, today) : Promise.resolve(NaN),
     ]);
     // Tracks whether ANY ML layer (XGB or GCN) actually applied — set true once
@@ -1900,7 +1896,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ── Tier 3.5: layer GraphSAGE spatial delta on top of CALINE3 + XGBoost ──
     // Single batched RPC for all roads in this viewport. If model hasn't been
     // precomputed for an osm_way_id (cold zone), feature stays unchanged.
-    try {
+    // v1-only: GCN was trained on the v1 (CALINE3+XGB) residual — layering it on the v2
+    // calibrated prior is wrong AND a wasted Supabase RPC → skip entirely under the v2 engine.
+    if (!USE_V2_ENGINE) try {
       const osmIds = features.map(f => f.osm_way_id);
       const gcnMap = await fetchGcnDeltasBatch(osmIds);
       if (gcnMap.size > 0) {
@@ -1937,7 +1935,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // P2-7: honest confidence_score. If neither XGB nor GCN actually applied to
     // any road in this viewport, mark all roads with a 0.85x confidence multiplier
     // so the UI doesn't claim model-grade certainty over a raw CALINE3 response.
-    if (!anyMlApplied) {
+    // v1-only: this penalises "raw CALINE3, no ML" responses. v2 sets its own calibrated
+    // confidence per road (computeRoadAQIv2) → don't double-penalise it (would dim v2 roads).
+    if (!anyMlApplied && !USE_V2_ENGINE) {
       for (const f of features) {
         f.confidence_score = Math.round(f.confidence_score * 0.85 * 100) / 100;
       }
