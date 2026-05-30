@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
     <meta name="color-scheme" content="light" />
@@ -8,13 +8,13 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#10b981" />
-    <meta name="description" content="Breeva — Jalan kaki, kumpulkan EcoPoints, dan pantau kualitas udara real-time." />
+    <meta name="description" content="Pantau kualitas udara (AQI) per-jalan real-time, temukan rute jalan kaki paling bersih, dan hitung paparan PM2.5 di Jakarta, Bali & kota Indonesia — gratis." />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Breeva" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Breeva — Eco Walking Rewards" />
-    <meta property="og:description" content="Jalan kaki, kumpulkan EcoPoints, dan pantau kualitas udara real-time." />
+    <meta property="og:title" content="Breeva — Kualitas Udara & Rute Bersih Indonesia" />
+    <meta property="og:description" content="Pantau AQI per-jalan real-time, temukan rute jalan kaki paling bersih, dan hitung paparan PM2.5 di Jakarta, Bali & kota Indonesia." />
     <meta property="og:image" content="https://breeva.site/hero.webp" />
     <meta property="og:url" content="https://breeva.site" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -27,13 +27,25 @@
     <!-- Async, non-render-blocking; trimmed to the weights actually used (roman 400-800, no italic axis). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'" />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" /></noscript>
-    <title>Breeva - Eco Walking Rewards</title>
+    <title>Breeva — Kualitas Udara & Rute Jalan Kaki Bersih Indonesia</title>
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@graph":[{"@type":"Organization","name":"Breeva","url":"https://breeva.site","logo":"https://breeva.site/icons/icon-512.png"},{"@type":"WebApplication","name":"Breeva","url":"https://breeva.site","applicationCategory":"HealthApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"description":"Navigasi udara bersih: rute paling sehat, AQI per-jalan real-time, dan kalkulator paparan PM2.5."}]}
+      {"@context":"https://schema.org","@graph":[{"@type":"Organization","name":"Breeva","url":"https://breeva.site","logo":"https://breeva.site/icons/icon-512.png","description":"Platform navigasi & intelijen kualitas udara untuk Indonesia."},{"@type":"WebApplication","name":"Breeva","url":"https://breeva.site","applicationCategory":"HealthApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"IDR"},"description":"Pantau kualitas udara (AQI) per-jalan real-time, temukan rute jalan kaki paling bersih, dan hitung paparan PM2.5."},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Apa itu Breeva?","acceptedAnswer":{"@type":"Answer","text":"Breeva adalah platform navigasi udara bersih: peta kualitas udara (AQI) per-jalan real-time, pencari rute jalan kaki paling bersih, prakiraan 24 jam, dan kalkulator paparan PM2.5 untuk kota-kota Indonesia."}},{"@type":"Question","name":"Apakah Breeva gratis?","acceptedAnswer":{"@type":"Answer","text":"Ya, Breeva gratis digunakan langsung dari browser sebagai PWA, tanpa perlu instal aplikasi."}},{"@type":"Question","name":"Kota mana saja yang didukung Breeva?","acceptedAnswer":{"@type":"Answer","text":"Breeva mencakup Jakarta (Jabodetabek), Bali, Bandung, Surabaya, dan beberapa kota lain di Indonesia, dengan estimasi AQI per-jalan beserta tingkat keyakinan."}},{"@type":"Question","name":"Bagaimana cara menghitung paparan udara?","acceptedAnswer":{"@type":"Answer","text":"Buka Kalkulator Paparan di /paparan, pilih profil (usia, aktivitas) dan rute; Breeva menghitung dosis PM2.5 yang terhirup, perbandingan ambang WHO, dan setara batang rokok."}}]}]}
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Crawler + first-paint fallback. React (createRoot) replaces this on mount; gives
+           non-JS crawlers real H1 + content + internal links instead of an empty page. -->
+      <main style="max-width:640px;margin:0 auto;padding:64px 20px;font-family:system-ui,-apple-system,sans-serif;color:#0f172a;text-align:center">
+        <h1 style="font-size:28px;font-weight:800;color:#059669;margin:0">Breeva — Navigasi Udara Bersih Indonesia</h1>
+        <p style="margin-top:14px;line-height:1.6;color:#475569">Temukan rute jalan kaki paling bersih dengan kualitas udara (AQI) per-jalan real-time, prakiraan 24 jam, dan kalkulator paparan PM2.5. Pantau polusi udara di Jakarta, Bali, dan kota lain di Indonesia — kumpulkan EcoPoints di setiap langkah.</p>
+        <nav style="margin-top:20px;display:flex;gap:18px;justify-content:center;flex-wrap:wrap;font-weight:600">
+          <a href="/paparan" style="color:#059669">Kalkulator Paparan Udara</a>
+          <a href="/about" style="color:#059669">Tentang Breeva</a>
+          <a href="/eco-tips" style="color:#059669">Tips Udara Bersih</a>
+        </nav>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
