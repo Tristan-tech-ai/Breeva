@@ -100,7 +100,8 @@ async function main() {
     out.push({ osm_way_id: road.osm_way_id, region: REGION, aqi: v.aqi, pm25: v.pm25, no2: v.no2, o3: v.o3, pm10: v.pm10,
       pm25_delta: v.pm25_delta, no2_delta: v.no2_delta, pm10_delta: v.pm10_delta,
       pi95_lo: v.pi95_lo, pi95_hi: v.pi95_hi, confidence: v.confidence, confidence_score: v.confidence_score,
-      ood_refused: v.ood_refused, ai_classified: v.ai_classified, engine: v.engine });
+      ood_refused: v.ood_refused, ai_classified: v.ai_classified, engine: v.engine,
+      geojson: road.geojson, highway: road.highway });  // Stage 5: store geometry so serve reads only this table
   }
   const computeMs = Date.now() - tCompute;
   const mem = process.memoryUsage().rss / 1024 / 1024;
@@ -112,7 +113,7 @@ async function main() {
 
   if (WRITE) {
     const tW = Date.now();
-    const COLS = ['osm_way_id', 'region', 'aqi', 'pm25', 'no2', 'o3', 'pm10', 'pm25_delta', 'no2_delta', 'pm10_delta', 'pi95_lo', 'pi95_hi', 'confidence', 'confidence_score', 'ood_refused', 'ai_classified', 'engine'];
+    const COLS = ['osm_way_id', 'region', 'aqi', 'pm25', 'no2', 'o3', 'pm10', 'pm25_delta', 'no2_delta', 'pm10_delta', 'pi95_lo', 'pi95_hi', 'confidence', 'confidence_score', 'ood_refused', 'ai_classified', 'engine', 'geojson', 'highway'];
     const CHUNK = 1000;
     for (let i = 0; i < out.length; i += CHUNK) {
       const slice = out.slice(i, i + CHUNK);
