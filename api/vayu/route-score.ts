@@ -1083,7 +1083,8 @@ async function fetchBaselineGrid(south: number, west: number, north: number, eas
   const lons = [qLon, gW, gE, gW, gE];
   const results = await fetchBaselineBatch(lats, lons, forecastHour);
   const [center, nw, ne, sw, se] = results;
-  await redisSetEx(baselineCacheKey, 900, JSON.stringify({ center, nw, ne, sw, se }));
+  // Baseline (Open-Meteo) changes slowly; 1h TTL turns most route requests into warm hits.
+  await redisSetEx(baselineCacheKey, 3600, JSON.stringify({ center, nw, ne, sw, se }));
   const interpolate = buildInterpolator(gS, gW, gN, gE, center, nw, ne, sw, se);
   return { center, interpolate };
 }
@@ -2113,10 +2114,12 @@ function routeHasBacktracking(coords: number[][]): boolean {
     let diff = Math.abs(bearingA - bearingB);
     while (diff > Math.PI) diff = Math.abs(diff - 2 * Math.PI);
     if (diff > 2.5) reversals += 1;
-    if (diff > 2.8) hardReversals += 1; // ≥160° = U-turn — single occurrence is enough.
+    if (diff > 2.8) hardReversals += 1; // ≥160° = U-turn
   }
-  if (hardReversals >= 1) return true;
-  if (reversals >= 2) return true;
+  // Relaxed (was hardReversals>=1 / reversals>=2): a single sharp legal turn no longer nukes
+  // a valid alternate. The geometric loop-back test below still catches true backtracking.
+  if (hardReversals >= 2) return true;
+  if (reversals >= 3) return true;
   // Geometric backtrack: any point in the second half that's closer to the
   // start than the 25% mark indicates the route looped back substantially.
   const startPt = coords[0];
@@ -2391,26 +2394,28 @@ async function fetchORSAlternatives(
   const apiKey = process.env.VITE_OPENROUTESERVICE_API_KEY || process.env.ORS_API_KEY;
   if (!apiKey) throw new Error('ORS API key not configured');
 
-  // First attempt — strict params (diverse routes)
-  let routes = await doORSRequest([start, end], profile, apiKey, {
-    share_factor: 0.4, target_count: targetCount, weight_factor: 1.8,
-  });
+  // Latency: fire strict + relaxed IN PARALLEL (was a serial ladder costing ~2 round-trips).
+  // share_factor relaxed (0.4→0.6, 0.8→0.95) so ORS stops discarding obvious parallel-street
+  // alternates as "too similar" (the missing-route complaint).
+  const [strictRes, relaxedRes] = await Promise.allSettled([
+    doORSRequest([start, end], profile, apiKey, {
+      share_factor: 0.6, target_count: targetCount, weight_factor: 1.8,
+    }),
+    doORSRequest([start, end], profile, apiKey, {
+      share_factor: 0.95, target_count: targetCount, weight_factor: 3.0,
+    }),
+  ]);
 
-  // If not enough, retry with relaxed params
-  if (routes.length < targetCount) {
-    try {
-      const relaxed = await doORSRequest([start, end], profile, apiKey, {
-        share_factor: 0.8, target_count: targetCount, weight_factor: 3.0,
-      });
-      for (const r of relaxed) {
-        if (!routes.some(existing => isSimilarGeometry(existing.geometry, r.geometry, 40))) {
-          routes.push(r);
-        }
+  const routes: ORSRoute[] = strictRes.status === 'fulfilled' ? [...strictRes.value] : [];
+  if (relaxedRes.status === 'fulfilled') {
+    for (const r of relaxedRes.value) {
+      if (!routes.some(existing => isSimilarGeometry(existing.geometry, r.geometry, 40))) {
+        routes.push(r);
       }
-    } catch { /* skip relaxed retry */ }
+    }
   }
 
-  // If still < 2, generate alternatives via perpendicular waypoints
+  // If still < 2, generate alternatives via perpendicular waypoints (rare; kept serial)
   if (routes.length < 2) {
     const dist = haversineMeters(start[1], start[0], end[1], end[0]);
     const offsets = [Math.min(300, dist * 0.3), -Math.min(300, dist * 0.3)];
@@ -2661,7 +2666,10 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
         }
         continue;
       }
-      if (!routeHasBacktracking(ors.geometry) && !dedupedOrs.some(existing => isSimilarGeometry(existing.geometry, ors.geometry, 55))) {
+      // 38m (was 55m): keep genuinely-distinct parallel gang roads (can sit ~30-50m apart in
+      // dense Jakarta) instead of culling them as the "missing alternate". Final labeled-output
+      // dedup (60m, below) is the visual backstop against true duplicate lines.
+      if (!routeHasBacktracking(ors.geometry) && !dedupedOrs.some(existing => isSimilarGeometry(existing.geometry, ors.geometry, 38))) {
         dedupedOrs.push(ors);
       }
     }
@@ -2683,6 +2691,12 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     if (directCandidate?.score?.avg_aqi && directCandidate.score.avg_aqi <= 50) {
       skipAvoidPolygons = true;
       console.log('[clean-route] Direct route is already clean (AQI <= 50). Skipping avoid_polygons.');
+    }
+    // Latency: skip the extra avoid_polygons ORS round-trip when we ALREADY have a
+    // clean-enough candidate among the parallel alternatives (the common case).
+    if (!skipAvoidPolygons && scoredRoutes.some((r) => (r.score?.avg_aqi ?? 999) <= 55)) {
+      skipAvoidPolygons = true;
+      console.log('[clean-route] A clean candidate (AQI <= 55) already exists. Skipping avoid_polygons.');
     }
 
     const corridorScores = await scoreCorridorRoads(
