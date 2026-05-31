@@ -4,6 +4,10 @@ import { latLngToCell } from 'h3-js';
 // quota. Underscore module + .js extension so Node ESM resolves it in the bundle.
 import { forecast24 as gruForecast24 } from './_forecast24.js';
 
+// v2 engine: serve the point/headline AQI from the nearest precomputed road (the same
+// calibrated v2 values as the road map) with a v1 Gaussian fallback. Same flag as road-aqi.
+const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
+
 /**
  * VAYU AQI Endpoint — Self-contained serverless function.
  * All logic inlined to avoid cross-directory import failures on Vercel.
@@ -275,6 +279,42 @@ async function findNearbyRoads(lat: number, lon: number): Promise<Array<{
   } catch { return []; }
 }
 
+// ─── v2 point AQI: nearest precomputed road (calibrated, consistent with the map) ───
+async function computeV2(lat: number, lon: number): Promise<Omit<AQIResponse, 'tile_id'> | null> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  try {
+    const resp = await fetch(`${url}/rest/v1/rpc/nearest_precomputed_aqi`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ p_lat: lat, p_lon: lon, p_max_m: 1500 }),
+    });
+    if (!resp.ok) return null;
+    const rows = await resp.json();
+    const r = Array.isArray(rows) ? rows[0] : rows;
+    if (!r || r.pm25 == null) return null;
+    if (typeof r.dist_m === 'number' && r.dist_m > 1500) return null; // no nearby coverage → v1
+    const computedAt = r.computed_at ? new Date(r.computed_at) : new Date();
+    return {
+      aqi: r.aqi ?? 0,
+      pm25: r.pm25,
+      pm10: r.pm10 ?? 0,
+      no2: r.no2 ?? 0,
+      co: 0,
+      o3: r.o3 ?? 0,
+      confidence: typeof r.confidence_score === 'number' ? r.confidence_score : 0.6,
+      source_breakdown: [],
+      layer_source: 1,
+      region: r.region ?? 'v2',
+      freshness: getFreshness(computedAt),
+      computed_at: computedAt.toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ─── Main compute (multi-source blended + dispersion delta) ─
 async function compute(lat: number, lon: number): Promise<Omit<AQIResponse, 'tile_id' | 'freshness' | 'computed_at'>> {
   const region = detectRegion(lat, lon);
@@ -528,7 +568,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const tileId = latLonToTileId(latitude, longitude);
-    const redisKey = `vayu:tile:${tileId}`;
+    const redisKey = `vayu:tile:v2:${tileId}`;
 
     // Layer 1: Redis cache
     const cached = await redisGet(redisKey);
@@ -542,7 +582,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch { /* corrupted cache, continue */ }
     }
 
-    // Layer 2: Compute
+    // Layer 2 (v2): point AQI from the nearest precomputed road — calibrated v2 engine,
+    // consistent with the road map. Falls back to the v1 Gaussian compute below on miss/OOD.
+    if (USE_V2_ENGINE) {
+      const v2 = await computeV2(latitude, longitude);
+      if (v2) {
+        const data: AQIResponse = { tile_id: tileId, ...v2 };
+        await redisSetEx(redisKey, 900, JSON.stringify(data));
+        res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+        res.setHeader('X-Cache', 'MISS');
+        res.setHeader('X-Engine', 'v2');
+        return res.status(200).json({ data });
+      }
+    }
+
+    // Layer 2 (v1 fallback): Compute
     const result = await compute(latitude, longitude);
     const now = new Date().toISOString();
     const data: AQIResponse = { tile_id: tileId, ...result, freshness: 'live', computed_at: now };
@@ -552,6 +606,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     res.setHeader('X-Cache', 'MISS');
+    res.setHeader('X-Engine', 'v1');
     return res.status(200).json({ data });
   } catch (error) {
     console.error('VAYU AQI error:', error);
