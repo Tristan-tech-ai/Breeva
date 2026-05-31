@@ -337,6 +337,11 @@ export function useRoadPollutionLayer(
   const [meta, setMeta] = useState<RoadLayerMeta | null>(null);
   // Track the fetched padded bounds to know if viewport still covered
   const fetchedBoundsRef = useRef<{ s: number; w: number; n: number; e: number; z: number } | null>(null);
+  // Resilience (close-zoom blank fix): bounded retry on transient fetch failure +
+  // a ref to the latest fetchData so the retry timer never captures a stale closure.
+  const retryRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const fetchDataRef = useRef<() => void>(() => {});
 
   // ── Build polylines into a NEW layer group (off-screen) ────
   const buildLayer = useCallback(
@@ -467,9 +472,50 @@ export function useRoadPollutionLayer(
       return true;
     }
 
-    // No fallback chain — blank is better than wrong-zoom ghost roads
+    // Caller (fetchData) keeps the current layer + fetches fresh — no blank.
     return false;
   }, [map, visible, pollutant, displayMode, atomicSwap, viewportCovered]);
+
+  // ── Bounded retry on transient fetch failure ───────────────
+  // Close-zoom blank was partly: a !ok / network hiccup cleared roads and gave up.
+  // Now we keep what's shown and retry up to 2× (backoff). Reset on any success.
+  const scheduleRetry = useCallback(() => {
+    if (retryRef.current >= 2) return;
+    retryRef.current += 1;
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = setTimeout(() => fetchDataRef.current?.(), 800 * retryRef.current);
+  }, []);
+
+  // ── Zoom transition fallback: NEVER blank while the new LOD loads ──
+  // Roads don't move, so a same-/nearby-zoom or stale cached snapshot is
+  // geographically correct (just a different density) — far better than a blank
+  // map. Wires in the cache's getNearestZoom/getAnyOverlapping/getStale fallbacks
+  // (previously dead code). The fresh same-zoom fetch atomic-swaps over this.
+  const renderZoomFallback = useCallback((): void => {
+    if (!map || !visible) return;
+    const zoom = Math.round(map.getZoom());
+    if (zoom < MIN_ZOOM) return; // below min: fetchData() clears intentionally
+    const b = map.getBounds();
+    const { s, w, n, e } = snapBboxToGrid(
+      b.getSouth(), b.getWest(), b.getNorth(), b.getEast(),
+    );
+    // All three fallbacks return data that OVERLAPS the viewport (fresh-exact →
+    // nearby-zoom mip-map → any same-zoom overlap). We deliberately skip getStale()
+    // here: it ignores overlap, so it could swap in an off-screen tile — worse than
+    // keeping the rescaled old layer.
+    const snapshot =
+      roadCache.get(s, w, n, e, zoom) ??
+      roadCache.getNearestZoom(s, w, n, e, zoom) ??
+      roadCache.getAnyOverlapping(s, w, n, e, zoom);
+    if (snapshot) {
+      dataRef.current = snapshot;
+      // NOTE: do NOT set fetchedBoundsRef to this zoom — it's a placeholder, so
+      // viewportCovered() stays false and fetchData() still loads the fresh LOD.
+      atomicSwap(snapshot, pollutant, displayMode);
+    }
+    // No snapshot → keep the existing (old-zoom) layer visible (Leaflet rescales
+    // it) rather than clearing to blank.
+  }, [map, visible, pollutant, displayMode, atomicSwap]);
 
   // ── Fetch data with viewport padding ───────────────────────
   const fetchData = useCallback(async () => {
@@ -505,8 +551,8 @@ export function useRoadPollutionLayer(
       return;
     }
 
-    // No fallback chain — prevents ghost roads from wrong zoom levels.
-    // Existing layer stays visible until fresh data arrives (atomic swap).
+    // Existing layer stays visible until fresh data arrives (atomic swap) — and on
+    // a transient failure we keep it + retry instead of blanking (SWR resilience).
 
     // 3. Abort in-flight, start new fetch
     controllerRef.current?.abort();
@@ -539,11 +585,10 @@ export function useRoadPollutionLayer(
       const resp = await fetch(`/api/vayu/road-aqi?${params}`, { signal: ac.signal });
       if (ac.signal.aborted) return;
       if (!resp.ok) {
-        // Failed fetch: clear stale roads so user doesn't see wrong-area data
-        layerRef.current.clearLayers();
-        dataRef.current = null;
-        fetchedBoundsRef.current = null;
+        // Do NOT blank (roads don't move) — keep what's shown and retry. Blanking +
+        // giving up here was a cause of the persistent close-zoom empty map.
         setMeta((prev) => prev ? { ...prev, isFetching: false } : null);
+        scheduleRetry();
         return;
       }
       const data: RoadAQIResponse = await resp.json();
@@ -552,14 +597,20 @@ export function useRoadPollutionLayer(
       roadCache.set(s, w, n, e, zoom, data);
       dataRef.current = data;
       fetchedBoundsRef.current = { s, w, n, e, z: zoom };
+      retryRef.current = 0; // success → reset retry budget
       atomicSwap(data, pollutant, displayMode);
       // atomicSwap calls setMeta with fresh data; ensure isFetching is cleared
       setMeta((prev) => prev ? { ...prev, isFetching: false } : null);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
+      // Network/parse error: keep existing roads + retry (no blank).
       setMeta((prev) => prev ? { ...prev, isFetching: false } : null);
+      scheduleRetry();
     }
-  }, [map, visible, forecastHour, pollutant, displayMode, atomicSwap, viewportCovered]);
+  }, [map, visible, forecastHour, pollutant, displayMode, atomicSwap, viewportCovered, scheduleRetry]);
+  // Keep the retry timer pointed at the freshest fetchData closure (updated in an
+  // effect, never during render).
+  useEffect(() => { fetchDataRef.current = fetchData; }, [fetchData]);
 
   // ── Prefetch disabled for demo stability ──────────────────
   const prefetchAdjacent = useCallback(() => {
@@ -584,6 +635,7 @@ export function useRoadPollutionLayer(
     if (!visible) {
       layerRef.current.clearLayers();
       controllerRef.current?.abort();
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       return;
     }
     fetchData();
@@ -600,12 +652,14 @@ export function useRoadPollutionLayer(
     const onZoomEnd = () => {
       const newZoom = Math.round(map.getZoom());
       if (newZoom === lastZoom) return;
-      // ZOOM CHANGED: clear everything, fetch fresh for new LOD
+      // ZOOM CHANGED. SWR: do NOT hard-clear (that blanked the map on every zoom and
+      // got stuck blank on any hiccup — the close-zoom bug). Keep roads visible via a
+      // cached/stale snapshot for the new zoom (or the rescaled old layer), then fetch
+      // the fresh LOD which atomic-swaps in when ready.
       lastZoom = newZoom;
-      layerRef.current.clearLayers();
-      dataRef.current = null;
-      fetchedBoundsRef.current = null;
       if (trailingRef.current) clearTimeout(trailingRef.current);
+      retryRef.current = 0; // fresh user intent → reset retry budget
+      renderZoomFallback();
       fetchData(); // immediate, no debounce
     };
 
@@ -628,8 +682,9 @@ export function useRoadPollutionLayer(
       map.off('zoomend', onZoomEnd);
       map.off('moveend', onMoveEnd);
       if (trailingRef.current) clearTimeout(trailingRef.current);
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
     };
-  }, [map, visible, renderCached, fetchData]);
+  }, [map, visible, renderCached, fetchData, renderZoomFallback]);
 
   // Road-tap inspect: long-press (mobile) / right-click (desktop) → popup with the
   // tapped road's v2 PM2.5 + 95% PI + confidence. Hit-tests dataRef geometry (canvas
