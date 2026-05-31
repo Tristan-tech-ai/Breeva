@@ -2624,8 +2624,15 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
 
     // 2026-05-24 Valhalla pivot: ROUTING_ENGINE env flag dispatch
     const useValhalla = ROUTING_ENGINE === 'valhalla';
+    // Valhalla-C: when the AQI-cost fork is serving (VALHALLA_AQI_COST=1), pass the user's
+    // clean<->fast slider + current Jakarta hour into costing_options so AQI becomes a NATIVE
+    // per-edge routing cost. Stock Valhalla-B leaves this unset (no unknown-option risk).
+    const valhallaAqiCost = useValhalla && process.env.VALHALLA_AQI_COST === '1';
+    const valhallaOptionsFinal = valhallaAqiCost
+      ? { ...(valhallaOptions || {}), aqi_weight: userAqiWeight ?? 0.5, current_hour: (new Date().getUTCHours() + 7) % 24 }
+      : valhallaOptions;
     const enginePromise = useValhalla
-      ? fetchValhallaAlternatives(orsStart, orsEnd, valhallaCosting, alternatives, valhallaOptions).catch((e) => {
+      ? fetchValhallaAlternatives(orsStart, orsEnd, valhallaCosting, alternatives, valhallaOptionsFinal).catch((e) => {
           console.error('Valhalla error:', e);
           return [] as ORSRoute[];
         })
@@ -3293,7 +3300,13 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     return res.status(200).json({
       routes,
-      meta: { vayu_scored: routes.some(r => r.vayu_scored), gemini_used: false, response_ms: responseMs, reasoning_key: reasoningKey, timings },
+      meta: {
+        vayu_scored: routes.some(r => r.vayu_scored), gemini_used: false, response_ms: responseMs, reasoning_key: reasoningKey,
+        // WS2 observability: prove which engine actually served + how many routes it returned
+        // (distinguishes "Valhalla serving" from "silent fallback to empty"). aqi_cost = Valhalla-C active.
+        engine: useValhalla ? 'valhalla' : 'ors', engine_route_count: orsRoutes.length, aqi_cost: valhallaAqiCost,
+        timings,
+      },
     });
   } catch (error) {
     console.error('Clean-route error:', error);
