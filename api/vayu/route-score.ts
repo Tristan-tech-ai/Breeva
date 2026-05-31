@@ -2680,6 +2680,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     const scoredRoutes: ScoredCandidate[] = await Promise.all(
       dedupedOrs.map((ors, index) => orsToScoredEntry(ors, index, 'ors'))
     );
+    stamp(`scored (n=${scoredRoutes.length})`);
 
     // F1: tag Valhalla primary's index for label selection + final dedup exemption.
     // Always scoredRoutes[0].index when preservePrimary AND dedupedOrs preserved primary
@@ -2714,6 +2715,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       corridorEast,
       0,
     ).catch(() => [] as CorridorRoadScore[]);
+    stamp(`corridor (n=${corridorScores.length})`);
 
     if (!skipAvoidPolygons && corridorScores.length > 0) {
       const corridorAqiValues = corridorScores.map((road) => road.score.aqi);
