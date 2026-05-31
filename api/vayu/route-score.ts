@@ -2507,6 +2507,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
   });
 
   const startTime = Date.now();
+  const stamp = (label: string) => console.log(`[clean-route][t] +${Date.now() - startTime}ms ${label}`);
 
   try {
     const body = req.body || {};
@@ -2611,6 +2612,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
         findAqiOptimalRouteV2(startLat, startLng, endLat, endLng, w).catch(() => [] as GraphRouteEdgeV2[])
       ),
     ]);
+    stamp(`engine+graphRPCs (ors=${orsRoutes.length} graph=${graphEdges.length} m1=${m1Results.reduce((a,b)=>a+b.length,0)})`);
 
     if (orsRoutes.length === 0 && graphEdges.length === 0) {
       return res.status(200).json(emptyResponse('no_routes_found'));
@@ -3129,12 +3131,14 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       };
     });
 
+    stamp(`scored+corridor+candidates (scored=${scoredRoutes.length})`);
     let reasoning: string | null = null;
     let geminiRanking: GeminiRanking | null = null;
     try {
       geminiRanking = await rankWithGemini(geminiInput);
       reasoning = geminiRanking?.reasoning ?? null;
     } catch { /* skip */ }
+    stamp('gemini');
 
     // Wire up Gemini's ranking. If Gemini returned a usable ranking +
     // labels[], reassign labels based on Gemini's judgement. Otherwise fall
@@ -3213,6 +3217,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
         forecastRouteExposure(poly, userStartAt).catch(() => [] as RouteForecastSegment[])
       )
     );
+    stamp(`forecast (labeled=${labeled.length})`);
 
     const routes = labeled.map((r, idx) => {
       const forecast = forecasts[idx];
