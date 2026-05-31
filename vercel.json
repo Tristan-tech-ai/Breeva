@@ -6,6 +6,7 @@
   "outputDirectory": "dist",
   "regions": ["bom1"],
   "rewrites": [
+    { "source": "/api/tiles/road/:z/:x/:y", "destination": "/api/vayu/road-aqi?tile=1&z=:z&x=:x&y=:y" },
     { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
   ],
   "headers": [
@@ -25,6 +26,12 @@
       "source": "/api/vayu/road-aqi",
       "headers": [
         { "key": "Cache-Control", "value": "public, s-maxage=900, stale-while-revalidate=86400" }
+      ]
+    },
+    {
+      "source": "/api/tiles/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, s-maxage=900, stale-while-revalidate=604800" }
       ]
     }
   ]

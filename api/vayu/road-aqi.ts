@@ -11,6 +11,10 @@ import { caline4PolylineConc, pasquillClass, caline4CanyonFactor, caline4WetDryF
 import {
   V2_SIGMA, V2_CALIBRATED_REGIONS, V2_GP_REGIONS, gpResidual, backgroundPm25,
 } from './_v2prior.js';
+// Raster road-color tiles: render precomputed colors to a 256px PNG so the client
+// uses a static Leaflet TileLayer (no per-request coordinate math / vector render).
+// Underscore module → inlined into this bundle (no new serverless function).
+import { renderRoadTile, tileBBox, type TileRoad } from './_tilepng.js';
 
 // ─── v2 engine wiring (Phase 3a) — feature-flagged, DEFAULT OFF (prod stays v1 until verified+flipped) ───
 const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
@@ -1327,6 +1331,49 @@ function buildFeatureFromPrecompute(r: PrecomputedRow): RoadAQIFeature | null {
   };
 }
 
+// ─── Raster road-color tile (256px PNG) ─────────────────────
+// One small precompute RPC per tile → render → PNG. Each tile is CDN-cached
+// (immutable until the 6h refresh), so after the first render the whole layer is
+// edge-served with no client coordinate math. Default Total/AQI mode only;
+// advanced modes (delta/contrast/other pollutants) stay on the vector layer.
+async function handleRoadTile(req: VercelRequest, res: VercelResponse) {
+  const z = parseInt(req.query.z as string, 10);
+  const x = parseInt(req.query.x as string, 10);
+  const y = parseInt(req.query.y as string, 10);
+  if ([z, x, y].some((v) => Number.isNaN(v)) || z < 0 || z > 22) {
+    return res.status(400).end();
+  }
+
+  const bb = tileBBox(z, x, y);
+  const { limit, highways, simplify } = getQueryParams(z);
+
+  const roads: TileRoad[] = [];
+  try {
+    const rows = await fetchPrecomputedRoadsInBbox(
+      bb.south, bb.west, bb.north, bb.east, limit, simplify, highways,
+    );
+    for (const r of rows) {
+      if (r.aqi == null || !r.geojson) continue;
+      let geometry: { coordinates: [number, number][] };
+      try { geometry = JSON.parse(r.geojson); } catch { continue; }
+      if (!geometry?.coordinates || geometry.coordinates.length < 2) continue;
+      roads.push({
+        aqi: r.aqi ?? 0,
+        confidence_score: r.confidence_score ?? 0.6,
+        ood_refused: r.ood_refused ?? false,
+        weight: roadWeight(r.highway),
+        geometry,
+      });
+    }
+  } catch { /* render an empty (transparent) tile on error — never 500 the map */ }
+
+  const png = renderRoadTile(roads, z, x, y);
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=604800');
+  res.setHeader('X-Road-Count', String(roads.length));
+  return res.status(200).send(png);
+}
+
 // ─── C1 stopgap: deterministic hash-based ai_pollution_factor fallback ───
 // 98% of road_segments rows have ai_pollution_factor=null (Gemini batch not
 // yet run for most regions). Falling back to 1.0 makes all roads in same
@@ -1617,6 +1664,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Merged from former api/vayu/road-narrative.ts to stay under Hobby plan's 12-function cap.
   if (req.query.osm_way_id && !req.query.south) {
     return handleNarrativeLookup(req, res);
+  }
+
+  // Raster tile request (?tile=1&z=&x=&y=, routed from /api/tiles/road/{z}/{x}/{y}).
+  // Renders precomputed road colors to a 256px PNG → client uses a Leaflet TileLayer
+  // (zero client-side coordinate math / vector render). Default Total-AQI mode.
+  if (req.query.tile) {
+    return handleRoadTile(req, res);
   }
 
   const { south, west, north, east, zoom, forecast_hour } = req.query;
