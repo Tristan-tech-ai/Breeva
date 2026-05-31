@@ -35,6 +35,7 @@ const index = new Supercluster<PointProps, Record<string, never>>({
 
 let loadedSerial = -1;
 let loadedZoom = -1;
+let loadedShowMerchants = true;
 let poiLookup = new Map<string, POI>();
 
 /**
@@ -42,11 +43,15 @@ let poiLookup = new Map<string, POI>();
  * Only priority-eligible POIs enter the index — the rest are simply hidden
  * (no cluster bubbles for off-screen-tier POIs).
  */
-export function reindex(pois: POI[], serial: number, zoom: number, showAll: boolean): void {
+export function reindex(pois: POI[], serial: number, zoom: number, showAll: boolean, showMerchants = true): void {
   const effectiveZoom = Math.floor(zoom);
-  if (serial === loadedSerial && effectiveZoom === loadedZoom) return;
+  // showMerchants is part of the cache key: POILayer pre-filters merchants out of
+  // `pois`, but serial/zoom don't change when the toggle flips — without this the
+  // memoized index would keep the stale merchants and the toggle would do nothing.
+  if (serial === loadedSerial && effectiveZoom === loadedZoom && showMerchants === loadedShowMerchants) return;
   loadedSerial = serial;
   loadedZoom = effectiveZoom;
+  loadedShowMerchants = showMerchants;
 
   poiLookup = new Map<string, POI>();
   const features: GeoJSON.Feature<GeoJSON.Point, PointProps>[] = [];

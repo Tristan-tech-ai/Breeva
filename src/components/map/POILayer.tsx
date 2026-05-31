@@ -168,7 +168,7 @@ export default function POILayer({
     if (!showMerchants) {
       allPOIs = allPOIs.filter(p => !(p as any)._isMerchant);
     }
-    reindex(allPOIs, serial, zoomLevel, showAll);
+    reindex(allPOIs, serial, zoomLevel, showAll, showMerchants);
     diagEnd('reindex', { pois: allPOIs.length });
 
     // Query with buffer (1.3× viewport) so panning shows markers immediately

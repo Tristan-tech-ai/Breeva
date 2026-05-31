@@ -225,7 +225,11 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
       for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
       return Math.abs(h);
     };
-    const convertCommercialToEco = (pois: POI[]): POI[] => {
+    const convertCommercialToEco = (pois: POI[], tileKey: string): POI[] => {
+      // Demo merchants are illustrative only — keep them SPARSE so the map isn't cluttered.
+      // Convert in only ~1 of every 6 tiles, chosen deterministically by tile key so the
+      // set is stable across pans (no flicker) and ~6× fewer than the old 1-per-tile.
+      if (nameHash(tileKey) % 6 !== 0) return pois;
       // Pick any POI with a name to act as our demo merchant for this tile (avoid administrative boundaries)
       const commercials = pois.filter(p => p.name && p.category !== 'administrative');
       if (commercials.length === 0) return pois;
@@ -260,7 +264,7 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
         diagLog(`tile ${t.key}`, { ms: Math.round(elapsed), pois: pois.length });
 
         if (get()._fetchGen !== gen) return;
-        pendingResults.push({ key: t.key, pois: convertCommercialToEco(pois) });
+        pendingResults.push({ key: t.key, pois: convertCommercialToEco(pois, t.key) });
         scheduleFlush();
       } catch {
         diagLog(`tile ${t.key} FAILED`, { ms: Math.round(performance.now() - t0) });
