@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Footprints, Bike, Zap, Car } from 'lucide-react';
 import { useMapStore } from '../../stores/mapStore';
 import { TRANSPORT_MODES } from '../../lib/api';
 import type { TransportMode } from '../../types';
+import VehicleNudgeModal, { isVehicleNudgeDismissed } from '../features/VehicleNudgeModal';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
   Footprints,
@@ -13,6 +15,16 @@ const iconMap: Record<string, React.ComponentType<{ className?: string; strokeWi
 
 export default function TransportModeSelector() {
   const { transportMode, setTransportMode, routes, selectedRoute } = useMapStore();
+  const [nudgeMode, setNudgeMode] = useState<'motorcycle' | 'car' | null>(null);
+
+  // Selecting a motorized mode nudges toward no-carbon transport (earns EcoPoints),
+  // unless the user chose "jangan tampilkan lagi".
+  const handleSelect = (id: TransportMode) => {
+    setTransportMode(id);
+    if ((id === 'motorcycle' || id === 'car') && !isVehicleNudgeDismissed()) {
+      setNudgeMode(id);
+    }
+  };
 
   const selectedModeInfo = TRANSPORT_MODES.find(m => m.id === transportMode);
   const co2Saved = selectedModeInfo && selectedRoute
@@ -30,7 +42,7 @@ export default function TransportModeSelector() {
           return (
             <button
               key={mode.id}
-              onClick={() => setTransportMode(mode.id as TransportMode)}
+              onClick={() => handleSelect(mode.id as TransportMode)}
               className={`
                 relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium
                 transition-all duration-200 flex-shrink-0 whitespace-nowrap
@@ -82,6 +94,12 @@ export default function TransportModeSelector() {
           </div>
         </motion.div>
       )}
+
+      <VehicleNudgeModal
+        mode={nudgeMode}
+        onSwitchToWalking={() => { setTransportMode('walking'); setNudgeMode(null); }}
+        onContinue={() => setNudgeMode(null)}
+      />
     </div>
   );
 }

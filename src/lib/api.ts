@@ -235,7 +235,7 @@ function getAQILevel(aqi: number): AirQualityData['level'] {
 }
 
 /** Simple PM2.5 → US EPA AQI conversion for fallback path */
-function pm25ToAQISimple(pm25: number): number {
+export function pm25ToAQISimple(pm25: number): number {
   const bp = [
     [0, 12.0, 0, 50], [12.1, 35.4, 51, 100], [35.5, 55.4, 101, 150],
     [55.5, 150.4, 151, 200], [150.5, 250.4, 201, 300], [250.5, 500.4, 301, 500],
@@ -354,6 +354,7 @@ export interface CompleteWalkPayload {
   distance_meters: number;
   duration_seconds: number;
   avg_aqi?: number;
+  transport_mode?: string;
   route_points?: Array<{ lat: number; lng: number; timestamp?: string }>;
   started_at?: string;
 }

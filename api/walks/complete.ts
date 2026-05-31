@@ -18,6 +18,7 @@ interface CompleteWalkRequest {
   distance_meters: number;
   duration_seconds: number;
   avg_aqi?: number;
+  transport_mode?: string;
   route_points?: Array<{ lat: number; lng: number; timestamp: string }>;
   started_at?: string;
 }
@@ -54,6 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       distance_meters,
       duration_seconds,
       avg_aqi,
+      transport_mode,
       route_points,
       started_at,
     }: CompleteWalkRequest = req.body;
@@ -90,6 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       distance_meters,
       duration_seconds,
       route_type: 'eco',
+      transport_mode: transport_mode || 'walking',
       status: 'active',
       started_at: started_at || new Date().toISOString(),
     }, { onConflict: 'id' });
@@ -121,11 +124,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Check for new achievements
     const achievements = await checkAchievements(user_id);
 
+    // Advance today's quests from this walk's activity (mirrors checkAchievements)
+    const quest_updates = await updateQuestProgress(user_id, {
+      distance_meters,
+      avg_aqi,
+      started_at,
+      transport_mode,
+    });
+
     return res.status(200).json({
       success: true,
       ecopoints_earned: data[0]?.ecopoints_earned || 0,
       co2_saved: data[0]?.co2_saved || 0,
       new_achievements: achievements,
+      quest_updates,
     });
   } catch (error) {
     console.error('Complete walk error:', error);
@@ -273,4 +285,49 @@ async function checkAchievements(userId: string): Promise<string[]> {
   }
 
   return newAchievements;
+}
+
+// Translate a completed walk into quest-progress events. Server-authoritative:
+// record_quest_progress is service_role-only, so progress can't be minted from
+// the browser. Non-fatal — quest failures never block walk completion.
+async function updateQuestProgress(
+  userId: string,
+  opts: { distance_meters: number; avg_aqi?: number; started_at?: string; transport_mode?: string }
+): Promise<Array<{ title: string; reward: number }>> {
+  try {
+    await supabase.rpc('ensure_daily_quests', { p_user_id: userId });
+  } catch { /* non-fatal */ }
+
+  const events: Array<[string, number]> = [
+    ['walk_distance_m', Math.round(opts.distance_meters)],
+    ['walk_completed', 1],
+  ];
+  if (typeof opts.avg_aqi === 'number' && opts.avg_aqi <= 50) {
+    events.push(['clean_air_walk', 1]);
+  }
+  if (opts.started_at) {
+    // WIB (UTC+7): "morning" = started before 09:00 local
+    const wibHour = (new Date(opts.started_at).getUTCHours() + 7) % 24;
+    if (wibHour < 9) events.push(['morning_walk', 1]);
+  }
+  if (['walking', 'cycling', 'ebike'].includes(opts.transport_mode || 'walking')) {
+    events.push(['eco_mode_walk', 1]);
+  }
+
+  const completed: Array<{ title: string; reward: number }> = [];
+  for (const [eventType, value] of events) {
+    try {
+      const { data } = await supabase.rpc('record_quest_progress', {
+        p_user_id: userId,
+        p_event_type: eventType,
+        p_value: value,
+      });
+      if (Array.isArray(data)) {
+        for (const r of data as Array<{ completed?: boolean; title?: string; reward?: number }>) {
+          if (r?.completed && r.title) completed.push({ title: r.title, reward: r.reward || 0 });
+        }
+      }
+    } catch { /* non-fatal */ }
+  }
+  return completed;
 }

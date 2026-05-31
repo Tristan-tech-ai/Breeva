@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import type { Coordinate, RoutePoint, WalkSession, ExposureResult } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from './authStore';
-import { completeWalkViaApi, getVayuVehicleType, submitVayuContribution, getRouteScoreSegments } from '../lib/api';
+import { completeWalkViaApi, getVayuVehicleType, submitVayuContribution, getRouteScoreSegments, pm25ToAQISimple } from '../lib/api';
 import { showNotification, isNotificationEnabled } from '../lib/notifications';
 import { formatLocalDateYYYYMMDD } from '../lib/utils';
 import { computeDose, type ExposureMode, type ExposureDoseResult, type UserExposureProfile } from '../lib/exposure';
@@ -321,12 +321,18 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
     try {
       const user = useAuthStore.getState().user;
       if (user) {
+        // Real route-mean AQI from the v2-scored polyline (drives the server AQI
+        // bonus + the "clean air" quest). Omit when exposure couldn't be scored.
+        const avgAqi = walkDose && Number.isFinite(walkDose.mean_pm25)
+          ? pm25ToAQISimple(walkDose.mean_pm25)
+          : undefined;
         const completionResult = await completeWalkViaApi({
           walk_id: completedSession.id,
           user_id: user.id,
           distance_meters: Math.round(distanceMeters),
           duration_seconds: durationSeconds,
-          avg_aqi: 50,
+          avg_aqi: avgAqi,
+          transport_mode: get().activeTransportMode,
           started_at: completedSession.start_time,
           route_points: routePoints,
         });

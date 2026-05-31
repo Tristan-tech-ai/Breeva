@@ -205,12 +205,7 @@ export default function HomePage() {
                 </a>
               </div>
 
-              {/* AQI badge */}
-              {currentAQI && (
-                <div className="mt-2 max-w-2xl mx-auto flex items-center gap-2">
-                  <AQIBadge aqi={currentAQI.aqi} size="sm" confidence={currentAQI.confidence} />
-                </div>
-              )}
+              {/* Headline AQI lives in the bottom AQICard now — headbar badge removed to avoid duplication. */}
 
               {/* Screen-reader live region: announces air-quality changes to assistive tech */}
               <div className="sr-only" role="status" aria-live="polite">
