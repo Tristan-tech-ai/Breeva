@@ -1374,6 +1374,38 @@ async function handleRoadTile(req: VercelRequest, res: VercelResponse) {
   return res.status(200).send(png);
 }
 
+// ─── Mapbox Vector Tile (MVT) for the road-color layer ──────
+// PostGIS ST_AsMVT (base64 via the road_mvt RPC, decoded here) → crisp GPU-rendered
+// vectors in MapLibre GL. One tile carries every property (aqi + pollutants + deltas
+// + confidence + highway) so the client switches color modes without refetching.
+// CDN-cached. Empty/error → empty tile (200) so the map never breaks.
+async function handleRoadMvt(req: VercelRequest, res: VercelResponse) {
+  const z = parseInt(req.query.z as string, 10);
+  const x = parseInt(req.query.x as string, 10);
+  const y = parseInt(req.query.y as string, 10);
+  res.setHeader('Content-Type', 'application/x-protobuf');
+  res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=604800');
+  if ([z, x, y].some((v) => Number.isNaN(v)) || z < 0 || z > 22) {
+    return res.status(200).send(Buffer.alloc(0));
+  }
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return res.status(200).send(Buffer.alloc(0));
+  try {
+    const resp = await fetch(`${url}/rest/v1/rpc/road_mvt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ z, x, y }),
+    });
+    if (!resp.ok) return res.status(200).send(Buffer.alloc(0));
+    const b64 = (await resp.json()) as string | null;
+    if (!b64) return res.status(200).send(Buffer.alloc(0));
+    return res.status(200).send(Buffer.from(b64, 'base64'));
+  } catch {
+    return res.status(200).send(Buffer.alloc(0));
+  }
+}
+
 // ─── C1 stopgap: deterministic hash-based ai_pollution_factor fallback ───
 // 98% of road_segments rows have ai_pollution_factor=null (Gemini batch not
 // yet run for most regions). Falling back to 1.0 makes all roads in same
@@ -1671,6 +1703,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // (zero client-side coordinate math / vector render). Default Total-AQI mode.
   if (req.query.tile) {
     return handleRoadTile(req, res);
+  }
+
+  // Mapbox Vector Tile request (?mvt=1&z=&x=&y=, routed from /api/tiles/road-mvt/...).
+  // Crisp GPU-rendered vectors in MapLibre GL — the gold-standard road overlay.
+  if (req.query.mvt) {
+    return handleRoadMvt(req, res);
   }
 
   const { south, west, north, east, zoom, forecast_hour } = req.query;
