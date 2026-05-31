@@ -278,6 +278,31 @@ export default function ProfilePage() {
             </div>
             <h1 className="mt-3 text-xl font-bold text-white">{profile?.full_name || 'Eco Walker'}</h1>
             <p className="text-white/70 text-sm">@{profile?.email?.split('@')[0] || 'user'}</p>
+            {/* Level + tier + XP progress (derived from xp/level; thresholds match _level_for_xp) */}
+            {(() => {
+              const xp = profile?.xp ?? 0;
+              const level = profile?.level ?? 1;
+              const tier = profile?.tier ?? 'seed';
+              const into = Math.max(0, xp - 50 * (level - 1) * (level - 1));
+              const span = 50 * (2 * level - 1);
+              const pct = Math.min(100, Math.round((into / span) * 100));
+              const tierLabel: Record<string, string> = {
+                seed: 'Benih', sprout: 'Tunas', sapling: 'Semai', tree: 'Pohon', forest: 'Hutan',
+              };
+              return (
+                <div className="mt-3 w-full max-w-[220px] mx-auto">
+                  <div className="flex items-center justify-center mb-1.5">
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/20 text-white">
+                      Lv {level} · {tierLabel[tier] || tier}
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
+                    <div className="h-full bg-white/80 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="text-[10px] text-white/60 text-center mt-1">{into}/{span} XP ke Lv {level + 1}</div>
+                </div>
+              );
+            })()}
             <Link
               to="/profile/edit"
               className="mt-2 flex items-center gap-1 text-xs text-white/60 hover:text-white/90 transition"

@@ -53,24 +53,14 @@ export async function checkAndUnlockAchievements(userId: string): Promise<string
     }
 
     if (met) {
-      // Insert into user_achievements
-      const { error } = await supabase
-        .from('user_achievements')
-        .insert({ user_id: userId, achievement_id: a.id });
-
-      if (!error) {
+      // Server re-validates the requirement, inserts the unlock + grants the
+      // achievement's defined points (can't be faked or over-granted client-side).
+      const { data: granted } = await supabase.rpc('claim_achievement', {
+        p_user_id: userId,
+        p_achievement_id: a.id,
+      });
+      if (typeof granted === 'number' && granted > 0) {
         newUnlocks.push(a.name);
-
-        // Award points reward
-        if (a.points_reward > 0) {
-          await supabase.rpc('add_ecopoints', {
-            p_user_id: userId,
-            p_amount: a.points_reward,
-            p_type: 'achievement',
-            p_description: `Achievement unlocked: ${a.name}`,
-            p_reference_id: a.id,
-          });
-        }
       }
     }
   }

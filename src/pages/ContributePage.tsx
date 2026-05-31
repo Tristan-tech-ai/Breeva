@@ -127,11 +127,10 @@ export default function ContributePage() {
 
       // Award EcoPoints for contribution
       if (user) {
-        await supabase.rpc('add_ecopoints', {
+        // Server-authoritative + daily-capped (idempotent in claim_reward).
+        await supabase.rpc('claim_reward', {
           p_user_id: user.id,
-          p_amount: 25,
           p_type: 'contribution',
-          p_description: `Contributed: ${selectedType} — ${placeName.trim()}`,
         });
         useAuthStore.getState().fetchProfile();
       }

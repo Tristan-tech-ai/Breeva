@@ -221,11 +221,10 @@ export default function WalkDetailPage() {
     await submitAQCalibration(walk.id, user.id, rating, walk.origin_lat, walk.origin_lng);
     // Bonus points for calibration
     try {
-      await supabase.rpc('add_ecopoints', {
+      await supabase.rpc('claim_reward', {
         p_user_id: user.id,
-        p_amount: 5,
-        p_type: 'aq_calibration',
-        p_description: 'Air quality calibration feedback',
+        p_type: 'calibration',
+        p_reference_id: walk.id,
       });
     } catch { /* ignore */ }
     useAuthStore.getState().fetchProfile();

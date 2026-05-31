@@ -47,12 +47,9 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
     }
 
     try {
-      await supabase.rpc('add_ecopoints', {
+      await supabase.rpc('claim_reward', {
         p_user_id: user.id,
-        p_amount: 5,
         p_type: 'aqi_rating',
-        p_description: 'AQI rating bonus',
-        p_reference_type: 'walk',
         p_reference_id: session.id,
       });
       await useAuthStore.getState().fetchProfile();

@@ -37,22 +37,12 @@ export default function OnboardingPage() {
     const user = useAuthStore.getState().user;
     if (user) {
       try {
-        const { data: existing } = await supabase
-          .from('points_transactions')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('transaction_type', 'onboarding_bonus')
-          .maybeSingle();
-
-        if (!existing) {
-          await supabase.rpc('add_ecopoints', {
-            p_user_id: user.id,
-            p_amount: 100,
-            p_type: 'onboarding_bonus',
-            p_description: 'Welcome bonus for completing onboarding',
-          });
-          useAuthStore.getState().fetchProfile();
-        }
+        // Server-authoritative, once-ever (idempotent in claim_reward).
+        const { data } = await supabase.rpc('claim_reward', {
+          p_user_id: user.id,
+          p_type: 'onboarding_bonus',
+        });
+        if (data && data > 0) useAuthStore.getState().fetchProfile();
       } catch (err) {
         console.error('Onboarding bonus error:', err);
       }

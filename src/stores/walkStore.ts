@@ -305,11 +305,10 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
           const user = useAuthStore.getState().user;
           if (user) {
             try {
-              await supabase.rpc('add_ecopoints', {
+              await supabase.rpc('claim_reward', {
                 p_user_id: user.id,
-                p_amount: 5,
                 p_type: 'vayu_contribution',
-                p_description: 'VAYU data contribution bonus',
+                p_reference_id: session.id,
               });
             } catch { /* ignore */ }
           }

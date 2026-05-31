@@ -3,6 +3,9 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
+// Claim the daily login/streak bonus at most once per app session.
+let dailyBonusClaimed = false;
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -16,6 +19,9 @@ export interface UserProfile {
   longest_streak: number;
   last_walk_date: string | null;
   subscription_tier: string;
+  xp?: number;
+  level?: number;
+  tier?: string;
   created_at: string;
   updated_at: string;
   onboarding_completed?: boolean;
@@ -352,6 +358,16 @@ export const useAuthStore = create<AuthState>()(
             throw error;
           } else {
             set({ profile: data as UserProfile });
+          }
+
+          // Once per session: claim the daily login + streak bonus (idempotent
+          // server-side). Refetch to reflect the new balance/level if granted.
+          if (!dailyBonusClaimed) {
+            dailyBonusClaimed = true;
+            supabase.rpc('claim_daily_bonus', { p_user_id: user.id }).then(
+              ({ data: bonus }) => { if (bonus && bonus > 0) get().fetchProfile(); },
+              () => {},
+            );
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to load profile';
