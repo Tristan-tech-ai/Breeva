@@ -101,7 +101,7 @@ export default function BottomNavigation({ badges }: BottomNavigationProps) {
       aria-label="Navigasi utama"
     >
       <div
-        className="pointer-events-auto relative mx-auto flex h-[60px] max-w-md items-center justify-around rounded-[26px] glass-nav border border-white/30 px-1.5 shadow-[0_10px_34px_-8px_rgba(0,0,0,0.3)] dark:border-white/10"
+        className="pointer-events-auto relative mx-auto flex h-[60px] max-w-md items-center justify-around rounded-[26px] border border-white/50 bg-white/60 px-1.5 shadow-[0_10px_34px_-8px_rgba(0,0,0,0.28)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-gray-900/65"
         role="tablist"
       >
         {renderTab(TABS[0])}
@@ -136,14 +136,6 @@ export default function BottomNavigation({ badges }: BottomNavigationProps) {
               style={{ boxShadow: `0 6px 18px -4px ${aqiColor}80, 0 0 0 3px ${aqiColor}` }}
             >
               <img src={logoBreeva} alt="" className="h-9 w-9 object-contain" />
-              {aqi != null && (
-                <span
-                  className="text-shadow-glass absolute -bottom-0.5 rounded-full px-1 text-[8.5px] font-extrabold leading-none text-white"
-                  style={{ background: aqiColor }}
-                >
-                  {Math.round(aqi)}
-                </span>
-              )}
             </div>
           </div>
           <span
