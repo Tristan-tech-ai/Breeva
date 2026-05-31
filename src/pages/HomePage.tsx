@@ -399,7 +399,12 @@ export default function HomePage() {
               {/* AQI summary card */}
               {currentAQI && (
                 <div className="mb-4">
-                  <AQICard data={currentAQI} />
+                  <AQICard
+                    data={currentAQI}
+                    onExpandChange={(exp) => {
+                      if (exp) setBottomSheetState('half');
+                    }}
+                  />
                 </div>
               )}
 
