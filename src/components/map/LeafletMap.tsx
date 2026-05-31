@@ -4,7 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMapStore } from '../../stores/mapStore';
 import { useRoadPollutionLayer } from './RoadPollutionLayer';
-import { useRoadTileLayer } from './RoadTileLayer';
+import { useRoadMvtLayer } from './RoadMvtLayer';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { useAQIStationLayer } from './AQIStationLayer';
 import POILayer from './POILayer';
@@ -296,22 +296,24 @@ function MapController({
     map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true });
   }, [routes, map]);
 
-  // Road pollution overlay. The default Total/AQI view uses fast raster tiles
-  // (static PNG, zero client vector render); advanced modes (Δ / contrast / other
-  // pollutants / forecast) keep the vector layer. Only one is active at a time.
-  const isDefaultRoadMode =
-    (pollutant || 'aqi') === 'aqi' &&
-    (roadDisplayMode || 'total') === 'total' &&
-    (forecastHour || 0) === 0;
+  // Road pollution overlay. MapLibre GL vector tiles (crisp GPU render, modes switch
+  // client-side) handle the current-data Total/Δ views for EVERY pollutant. The
+  // viewport-relative Kontras mode and forecast hours stay on the vector layer.
+  const useMvt = (forecastHour || 0) === 0 && (roadDisplayMode || 'total') !== 'contrast';
+  const mvtMeta = useRoadMvtLayer(
+    map,
+    !!showAQIOverlay && useMvt,
+    pollutant || 'aqi',
+    roadDisplayMode || 'total',
+  );
   const vectorMeta = useRoadPollutionLayer(
     map,
-    !!showAQIOverlay && !isDefaultRoadMode,
+    !!showAQIOverlay && !useMvt,
     pollutant || 'aqi',
     forecastHour || 0,
     roadDisplayMode || 'total',
   );
-  const tileMeta = useRoadTileLayer(map, !!showAQIOverlay && isDefaultRoadMode);
-  const roadMeta = isDefaultRoadMode ? tileMeta : vectorMeta;
+  const roadMeta = useMvt ? mvtMeta : vectorMeta;
 
   // Forward road layer meta to parent
   useEffect(() => {
