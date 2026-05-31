@@ -16,6 +16,7 @@ import {
   getVayuRouteScore,
   getVayuVehicleType,
   getCleanRoute,
+  fetchRouteReasoning,
 } from '../lib/api';
 import { searchGoogleMaps } from '../lib/searchapi';
 
@@ -355,6 +356,21 @@ export const useMapStore = create<MapState>()((set, get) => ({
           isCalculatingRoutes: false,
           bottomSheetState: 'half',
         });
+
+        // Async: fetch the Gemini "why this route" copy without blocking the route response.
+        // Patch it onto the routes once it arrives (no-op if Gemini returns nothing).
+        const reasoningKey = (cleanResult.meta as { reasoning_key?: string } | undefined)?.reasoning_key;
+        if (reasoningKey) {
+          void fetchRouteReasoning(reasoningKey).then((reasoning) => {
+            if (!reasoning) return;
+            set((s) => ({
+              routes: s.routes.map((r) => ({ ...r, gemini_reasoning: r.gemini_reasoning ?? reasoning })),
+              selectedRoute: s.selectedRoute
+                ? { ...s.selectedRoute, gemini_reasoning: s.selectedRoute.gemini_reasoning ?? reasoning }
+                : s.selectedRoute,
+            }));
+          });
+        }
         return; // Clean-route succeeded — skip legacy flow
       }
     } catch (e) {

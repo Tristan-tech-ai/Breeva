@@ -1324,3 +1324,20 @@ export async function getCleanRoute(
     return { routes: [], meta: { vayu_scored: false, gemini_used: false, response_ms: 0 } };
   }
 }
+
+// Async "why this route" copy. getCleanRoute returns instantly + a meta.reasoning_key;
+// the UI calls this afterward so the ~0.5-2s Gemini step never blocks the route response.
+export async function fetchRouteReasoning(reasoningKey: string): Promise<string | null> {
+  try {
+    const resp = await fetch('/api/vayu/route-score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reasoning_key: reasoningKey }),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return (data && typeof data.reasoning === 'string') ? data.reasoning : null;
+  } catch {
+    return null;
+  }
+}

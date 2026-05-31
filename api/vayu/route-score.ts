@@ -2001,6 +2001,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = req.body || {};
 
+  // ── Mode: async route reasoning (client follow-up; keeps Gemini off the route hot path) ──
+  if (body.reasoning_key) {
+    return handleRouteReasoning(req, res);
+  }
+
   // ── Mode: Clean-route orchestrator (when start+end provided) ──
   if (body.start && body.end) {
     return handleCleanRoute(req, res);
@@ -2498,6 +2503,34 @@ function estimateGreenScore(segments: Array<{ highway: string; aqi: number }>): 
   const greenTypes = new Set(['footway', 'cycleway', 'path', 'pedestrian', 'living_street']);
   const greenCount = segments.filter(s => greenTypes.has(s.highway) || s.aqi <= 35).length;
   return Math.round((greenCount / segments.length) * 100);
+}
+
+// Short stable hash for cache keys (djb2/xor).
+function hashStr(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+// Async route reasoning: handleCleanRoute returns instantly and caches the Gemini input
+// under meta.reasoning_key. The client then POSTs { reasoning_key } here to fetch the
+// "why this route" copy — keeping the ~0.5-2s Gemini call off the route hot path.
+async function handleRouteReasoning(req: VercelRequest, res: VercelResponse) {
+  try {
+    const key = String((req.body || {}).reasoning_key || '').slice(0, 32);
+    if (!key) return res.status(200).json({ reasoning: null });
+    const cachedOut = await redisGet(`vayu:rzout:${key}`).catch(() => null);
+    if (cachedOut) return res.status(200).json({ reasoning: cachedOut });
+    const rawIn = await redisGet(`vayu:rzin:${key}`).catch(() => null);
+    if (!rawIn) return res.status(200).json({ reasoning: null });
+    const geminiInput = JSON.parse(rawIn);
+    const ranking = await rankWithGemini(geminiInput).catch(() => null);
+    const reasoning = ranking?.reasoning ?? null;
+    if (reasoning) await redisSetEx(`vayu:rzout:${key}`, 600, reasoning).catch(() => {});
+    return res.status(200).json({ reasoning });
+  } catch {
+    return res.status(200).json({ reasoning: null });
+  }
 }
 
 async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
@@ -3138,67 +3171,18 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     });
 
     stamp(`scored+corridor+candidates (scored=${scoredRoutes.length})`);
-    let reasoning: string | null = null;
-    let geminiRanking: GeminiRanking | null = null;
-    try {
-      geminiRanking = await rankWithGemini(geminiInput);
-      reasoning = geminiRanking?.reasoning ?? null;
-    } catch { /* skip */ }
-    stamp('gemini');
-
-    // Wire up Gemini's ranking. If Gemini returned a usable ranking +
-    // labels[], reassign labels based on Gemini's judgement. Otherwise fall
-    // back to the metric-based labels above. Gemini's `ranking` is the
-    // 1-indexed route order (best-to-worst); `labels[i]` corresponds to
-    // ranking[i] (i.e., labels[0] is for the best-ranked route).
-    let allLabeled: Array<ScoredCandidate & { label: 'cleanest' | 'balanced' | 'fastest'; reasoning: string | null }>;
-    const validLabels: Array<'cleanest' | 'balanced' | 'fastest'> = ['cleanest', 'balanced', 'fastest'];
-    if (
-      geminiRanking
-      && Array.isArray(geminiRanking.ranking)
-      && Array.isArray(geminiRanking.labels)
-      && geminiRanking.ranking.length === selectedRoutes.length
-      && geminiRanking.labels.length === selectedRoutes.length
-      && geminiRanking.labels.every((l) => validLabels.includes(l as typeof validLabels[number]))
-    ) {
-      // Map Gemini's 1-indexed route numbers back to candidates via .index.
-      // Use index === gemini's (route_number - 1) when possible.
-      const reordered: typeof allLabeled = [];
-      const seen = new Set<number>();
-      for (let i = 0; i < geminiRanking.ranking.length; i++) {
-        const routeNum = geminiRanking.ranking[i];
-        const candidate = selectedRoutes.find((c) => c.index === routeNum - 1)
-          ?? selectedRoutes[Math.min(i, selectedRoutes.length - 1)];
-        if (!candidate || seen.has(candidate.index)) continue;
-        seen.add(candidate.index);
-        reordered.push({
-          ...candidate,
-          label: geminiRanking.labels[i] as 'cleanest' | 'balanced' | 'fastest',
-          reasoning,
-        });
-      }
-      // Make sure all 3 labels are represented; fill from metric-based fallback.
-      const labelsPresent = new Set(reordered.map((r) => r.label));
-      const metricFallback: Array<[ScoredCandidate, 'cleanest' | 'balanced' | 'fastest']> = [
-        [cleanestRoute, 'cleanest'],
-        [balancedRoute, 'balanced'],
-        [fastestRoute, 'fastest'],
-      ];
-      for (const [cand, lbl] of metricFallback) {
-        if (!labelsPresent.has(lbl) && !seen.has(cand.index)) {
-          reordered.push({ ...cand, label: lbl, reasoning });
-          labelsPresent.add(lbl);
-          seen.add(cand.index);
-        }
-      }
-      allLabeled = reordered;
-    } else {
-      allLabeled = [
-        { ...cleanestRoute, label: 'cleanest' as const, reasoning },
-        { ...balancedRoute, label: 'balanced' as const, reasoning },
-        { ...fastestRoute, label: 'fastest' as const, reasoning },
-      ];
-    }
+    // Async reasoning (latency): do NOT block on Gemini. Cache the Gemini input under a
+    // key + return it in meta; the client fetches the "why this route" copy separately via
+    // POST { reasoning_key } -> handleRouteReasoning. Labels stay metric-based (deterministic,
+    // already what the UI renders), so dropping the blocking Gemini re-rank changes nothing visible.
+    const reasoningKey = hashStr(`${startLat},${startLng},${endLat},${endLng}|${JSON.stringify(geminiInput)}`);
+    await redisSetEx(`vayu:rzin:${reasoningKey}`, 600, JSON.stringify(geminiInput)).catch(() => {});
+    const reasoning: string | null = null;
+    const allLabeled: Array<ScoredCandidate & { label: 'cleanest' | 'balanced' | 'fastest'; reasoning: string | null }> = [
+      { ...cleanestRoute, label: 'cleanest' as const, reasoning },
+      { ...balancedRoute, label: 'balanced' as const, reasoning },
+      { ...fastestRoute, label: 'fastest' as const, reasoning },
+    ];
 
     const labeled: typeof allLabeled = [];
     for (const r of allLabeled) {
@@ -3309,7 +3293,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     return res.status(200).json({
       routes,
-      meta: { vayu_scored: routes.some(r => r.vayu_scored), gemini_used: reasoning !== null, response_ms: responseMs, timings },
+      meta: { vayu_scored: routes.some(r => r.vayu_scored), gemini_used: false, response_ms: responseMs, reasoning_key: reasoningKey, timings },
     });
   } catch (error) {
     console.error('Clean-route error:', error);
