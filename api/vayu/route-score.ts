@@ -2811,7 +2811,10 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
             continue;
           }
           chosenThroughRoads.push(candidate);
-          if (chosenThroughRoads.length >= 2) break;
+          // Latency: cap to 1 (was 2). Each through-road = a serial ORS round-trip +
+          // a scorePolyline DB call; the 2nd alley rarely added a surviving alternate
+          // but cost ~1.5-2.5s. (Valhalla path will replace this candidate machinery.)
+          if (chosenThroughRoads.length >= 1) break;
         }
 
         // B2+B8: for each chosen through-road, compute its entry/exit waypoints
