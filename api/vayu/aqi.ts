@@ -61,6 +61,21 @@ async function redisSetEx(key: string, ttl: number, value: string): Promise<void
   } catch { /* non-fatal */ }
 }
 
+// ─── Bounded fetch ──────────────────────────────────────────
+// Aborts after `ms` so a slow/degraded PostgREST (e.g. during the hourly
+// precompute upsert or an autovacuum) yields a FAST graceful fallback instead
+// of hanging the whole function up to the platform timeout. On abort, fetch
+// throws → the caller's try/catch returns its safe default (null / [] / 0.2).
+async function fetchWithTimeout(url: string, opts: RequestInit, ms: number): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ─── PM2.5 → US EPA AQI ────────────────────────────────────
 function pm25ToAQI(pm25: number): number {
   const bp = [
@@ -204,9 +219,10 @@ async function getNearbyReports(lat: number, lon: number, radiusKm: number, maxA
       select: 'pm25,aqi',
       created_at: `gte.${cutoff}`,
     });
-    const resp = await fetch(
+    const resp = await fetchWithTimeout(
       `${url}/rest/v1/air_quality_reports?${params}&lat=gte.${lat - dLat}&lat=lte.${lat + dLat}&lon=gte.${lon - dLon}&lon=lte.${lon + dLon}&limit=20`,
       { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+      3000,
     );
     if (!resp.ok) return [];
     const rows = await resp.json();
@@ -224,11 +240,11 @@ async function computeConfidence(args: {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return args.has_model ? 0.2 : 0.0;
   try {
-    const r = await fetch(`${url}/rest/v1/rpc/compute_aqi_confidence`, {
+    const r = await fetchWithTimeout(`${url}/rest/v1/rpc/compute_aqi_confidence`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
       body: JSON.stringify(args),
-    });
+    }, 3000);
     if (!r.ok) return 0.2;
     const v = await r.json();
     return typeof v === 'number' ? v : 0.2;
@@ -265,7 +281,7 @@ async function findNearbyRoads(lat: number, lon: number): Promise<Array<{
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return [];
   try {
-    const resp = await fetch(`${url}/rest/v1/rpc/find_nearby_roads`, {
+    const resp = await fetchWithTimeout(`${url}/rest/v1/rpc/find_nearby_roads`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -273,7 +289,7 @@ async function findNearbyRoads(lat: number, lon: number): Promise<Array<{
         Authorization: `Bearer ${key}`,
       },
       body: JSON.stringify({ lat, lon, radius_m: 500, max_results: 10 }),
-    });
+    }, 4000);
     if (!resp.ok) return [];
     return await resp.json();
   } catch { return []; }
@@ -285,11 +301,11 @@ async function computeV2(lat: number, lon: number): Promise<Omit<AQIResponse, 't
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
   try {
-    const resp = await fetch(`${url}/rest/v1/rpc/nearest_precomputed_aqi`, {
+    const resp = await fetchWithTimeout(`${url}/rest/v1/rpc/nearest_precomputed_aqi`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
       body: JSON.stringify({ p_lat: lat, p_lon: lon, p_max_m: 1500 }),
-    });
+    }, 4000);
     if (!resp.ok) return null;
     const rows = await resp.json();
     const r = Array.isArray(rows) ? rows[0] : rows;
