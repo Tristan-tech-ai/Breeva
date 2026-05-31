@@ -299,7 +299,9 @@ function MapController({
   // Road pollution overlay. MapLibre GL vector tiles (crisp GPU render, modes switch
   // client-side) handle the current-data Total/Δ views for EVERY pollutant. The
   // viewport-relative Kontras mode and forecast hours stay on the vector layer.
-  const useMvt = (forecastHour || 0) === 0 && (roadDisplayMode || 'total') !== 'contrast';
+  // VectorGrid (MVT) now renders total / delta / contrast for current data; the dynamic
+  // vector layer is only needed for forecast hours (tiles are current-data only).
+  const useMvt = (forecastHour || 0) === 0;
   const mvtMeta = useRoadMvtLayer(
     map,
     !!showAQIOverlay && useMvt,
