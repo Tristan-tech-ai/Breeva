@@ -16,7 +16,7 @@ export default defineConfig({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
-      includeAssets: ['favicon.svg', 'hero.webp'],
+      includeAssets: ['favicon.svg', 'favicon.ico', 'favicon-32.png', 'hero.webp'],
       manifest: {
         id: '/',
         name: 'Breeva — Eco Walking Rewards',
@@ -32,7 +32,7 @@ export default defineConfig({
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icons/maskable-icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable any' },
+          { src: '/icons/maskable-icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
         shortcuts: [
           { name: 'Mulai Jalan', short_name: 'Jalan', url: '/walk', icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }] },
