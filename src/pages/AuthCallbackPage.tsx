@@ -15,16 +15,17 @@ export default function AuthCallbackPage() {
     if (user && !navigatedRef.current) {
       navigatedRef.current = true;
 
-      // Ensure profile is loaded, then navigate
-      fetchProfile()
-        .catch(console.error)
-        .finally(() => {
-          const onboardingCompleted = localStorage.getItem('breeva_onboarding_completed');
-          navigate(
-            onboardingCompleted === 'true' ? '/home' : '/onboarding/welcome',
-            { replace: true }
-          );
-        });
+      // Navigate as soon as the session exists. The onboarding decision uses
+      // localStorage (not the DB profile), so we must NOT block on fetchProfile —
+      // it can hang on supabase-js's auth lock, leaving "Signing you in..." stuck
+      // forever (the no-user safety below doesn't cover a set-user + hung-profile).
+      // Profile loads in the background; destination pages are null-safe.
+      void fetchProfile().catch(console.error);
+      const onboardingCompleted = localStorage.getItem('breeva_onboarding_completed');
+      navigate(
+        onboardingCompleted === 'true' ? '/home' : '/onboarding/welcome',
+        { replace: true }
+      );
     }
   }, [user, fetchProfile, navigate]);
 

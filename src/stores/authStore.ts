@@ -129,9 +129,11 @@ export const useAuthStore = create<AuthState>()(
           const { data, error } = await supabase.auth.signInWithPassword({ email, password });
           if (error) throw error;
           if (data.user) {
-            set({ user: data.user, session: data.session });
-            await get().fetchProfile();
-            set({ isLoading: false });
+            // Don't block login on the profile fetch (can hang on supabase-js's
+            // auth lock). Set session + clear loading immediately; the profile
+            // loads in the background (pages are null-safe).
+            set({ user: data.user, session: data.session, isLoading: false });
+            void get().fetchProfile();
             return true;
           }
           return false;
@@ -312,11 +314,20 @@ export const useAuthStore = create<AuthState>()(
         if (!user) return;
 
         try {
-          const { data, error } = await supabase
+          // Bound the query: supabase-js can hang on its navigator-locks auth lock
+          // (slow/contended) with no timeout, which would freeze the post-login
+          // transition since callers await this. On timeout we proceed without a
+          // profile (pages are null-safe); it loads on the next fetch.
+          const queryPromise = supabase
             .from('users')
             .select('*')
             .eq('id', user.id)
             .single();
+          const { data, error } = await Promise.race([
+            queryPromise,
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('PROFILE_FETCH_TIMEOUT')), 6000)),
+          ]);
 
           if (error && error.code === 'PGRST116') {
             // User row not found yet (auth trigger may still be running).

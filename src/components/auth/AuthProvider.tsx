@@ -22,7 +22,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           if (!currentUser) {
             setUser(session.user);
             setSession(session);
-            await fetchProfile();
+            void fetchProfile(); // background — never block the auth listener on it
           }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
