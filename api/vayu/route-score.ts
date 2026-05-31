@@ -2367,11 +2367,12 @@ async function fetchValhallaAlternatives(
   const authToken = envClean(process.env.VALHALLA_AUTH_TOKEN);
   if (authToken) headers['X-Breeva-Auth'] = authToken;
 
+  // 6s timeout so a slow/unreachable Valhalla can't hang the route response (ORS fallback handles it).
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
   const resp = await fetch(`${VALHALLA_BASE_URL}/route`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
+    method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal,
+  }).finally(() => clearTimeout(timer));
 
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
@@ -2618,9 +2619,14 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     // Tier 2 M1: when user supplies aqi_weight, also fetch a Dijkstra v2 candidate.
     // Three weights are pre-warmed (0/0.5/1.0) so the picker always has the slider-
     // matched path; if user passes a specific value we add it as a 4th call.
-    const m1Weights = userAqiWeight != null && ![0, 0.5, 1].includes(userAqiWeight)
-      ? [0.0, 0.5, 1.0, userAqiWeight]
-      : [0.0, 0.5, 1.0];
+    // pgRouting v2 graph candidates are gated OFF by default: the graph is ~10% coverage (usually
+    // returns nothing) yet each call is a heavy 15M-row MV Dijkstra — pure latency + DB-IO load.
+    // Set ENABLE_GRAPH_ROUTING=1 to re-enable once road_graph_edges_v2 lands.
+    const graphRoutingEnabled = process.env.ENABLE_GRAPH_ROUTING === '1';
+    const m1Weights = !graphRoutingEnabled ? ([] as number[])
+      : (userAqiWeight != null && ![0, 0.5, 1].includes(userAqiWeight)
+        ? [0.0, 0.5, 1.0, userAqiWeight]
+        : [0.0, 0.5, 1.0]);
 
     // 2026-05-24 Valhalla pivot: ROUTING_ENGINE env flag dispatch
     const useValhalla = ROUTING_ENGINE === 'valhalla';
@@ -2631,20 +2637,23 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     const valhallaOptionsFinal = valhallaAqiCost
       ? { ...(valhallaOptions || {}), aqi_weight: userAqiWeight ?? 0.5, current_hour: (new Date().getUTCHours() + 7) % 24 }
       : valhallaOptions;
-    const enginePromise = useValhalla
-      ? fetchValhallaAlternatives(orsStart, orsEnd, valhallaCosting, alternatives, valhallaOptionsFinal).catch((e) => {
-          console.error('Valhalla error:', e);
-          return [] as ORSRoute[];
-        })
-      : fetchORSAlternatives(orsStart, orsEnd, profile, alternatives).catch((e) => {
-          console.error('ORS error:', e);
-          return [] as ORSRoute[];
-        });
+    // Valhalla first (with its own fetch timeout); if it errors or returns nothing, gracefully
+    // fall back to ORS — so a Valhalla/Funnel hiccup degrades to ORS instead of failing the request.
+    const enginePromise = (async (): Promise<ORSRoute[]> => {
+      if (useValhalla) {
+        const v = await fetchValhallaAlternatives(orsStart, orsEnd, valhallaCosting, alternatives, valhallaOptionsFinal)
+          .catch((e) => { console.error('Valhalla error:', e); return [] as ORSRoute[]; });
+        if (v.length > 0) return v;
+        console.warn('[clean-route] Valhalla empty/failed -> ORS fallback');
+      }
+      return fetchORSAlternatives(orsStart, orsEnd, profile, alternatives)
+        .catch((e) => { console.error('ORS error:', e); return [] as ORSRoute[]; });
+    })();
 
     const [orsRoutes, throughRoads, graphEdges, corridorRoadRows, ...m1Results] = await Promise.all([
       enginePromise,
       findThroughGangRoads(corridorSouth, corridorWest, corridorNorth, corridorEast).catch(() => [] as ThroughGangRoad[]),
-      findGraphOptimalRoute(startLat, startLng, endLat, endLng).catch(() => [] as GraphRouteEdge[]),
+      graphRoutingEnabled ? findGraphOptimalRoute(startLat, startLng, endLat, endLng).catch(() => [] as GraphRouteEdge[]) : Promise.resolve([] as GraphRouteEdge[]),
       findRoadsInBBox(corridorSouth, corridorWest, corridorNorth, corridorEast, 700, corridorHighways).catch(() => [] as RoadRow[]),
       // Tier 2 M1 candidates (pgRouting multi-criteria Dijkstra). Failure is non-fatal —
       // pre-MV-refresh deployments return empty arrays and route-score falls back to
