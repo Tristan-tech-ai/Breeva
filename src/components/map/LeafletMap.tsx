@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMapStore } from '../../stores/mapStore';
 import { useRoadPollutionLayer } from './RoadPollutionLayer';
+import { useRoadTileLayer } from './RoadTileLayer';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { useAQIStationLayer } from './AQIStationLayer';
 import POILayer from './POILayer';
@@ -295,14 +296,22 @@ function MapController({
     map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true });
   }, [routes, map]);
 
-  // Road pollution overlay (eLichens-style colored polylines)
-  const roadMeta = useRoadPollutionLayer(
+  // Road pollution overlay. The default Total/AQI view uses fast raster tiles
+  // (static PNG, zero client vector render); advanced modes (Δ / contrast / other
+  // pollutants / forecast) keep the vector layer. Only one is active at a time.
+  const isDefaultRoadMode =
+    (pollutant || 'aqi') === 'aqi' &&
+    (roadDisplayMode || 'total') === 'total' &&
+    (forecastHour || 0) === 0;
+  const vectorMeta = useRoadPollutionLayer(
     map,
-    !!showAQIOverlay,
+    !!showAQIOverlay && !isDefaultRoadMode,
     pollutant || 'aqi',
     forecastHour || 0,
     roadDisplayMode || 'total',
   );
+  const tileMeta = useRoadTileLayer(map, !!showAQIOverlay && isDefaultRoadMode);
+  const roadMeta = isDefaultRoadMode ? tileMeta : vectorMeta;
 
   // Forward road layer meta to parent
   useEffect(() => {
