@@ -9,7 +9,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' (not 'autoUpdate'): a new SW does NOT auto-reload the open app.
+      // It waits; onNeedRefresh fires a gentle toast; it applies silently on the
+      // next full close+reopen (or immediately if the user taps "Refresh sekarang").
+      registerType: 'prompt',
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',

@@ -18,11 +18,14 @@ export function initPwaLifecycle() {
       })
     },
     onNeedRefresh() {
+      // PROMPT model: the new version is staged but NOT forced. It applies silently
+      // the next time Breeva is fully closed + reopened. This toast just informs the
+      // user, with an optional "Refresh sekarang" to apply it immediately.
       dispatchPwaStatus({
         kind: 'update-available',
-        title: 'Update Breeva tersedia',
-        message: 'Refresh sekarang untuk memuat service worker dan aset terbaru.',
-        actionLabel: 'Refresh',
+        title: 'Versi baru Breeva siap',
+        message: 'Akan aktif otomatis saat kamu membuka ulang aplikasi — atau refresh sekarang.',
+        actionLabel: 'Refresh sekarang',
         action: () => (updateSW as UpdateSwFn)(true),
       })
     },
