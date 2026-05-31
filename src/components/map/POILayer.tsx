@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import type { POI } from '../../lib/poi-api';
 import { usePoiStore } from '../../stores/poiStore';
 import { reindex, getVisibleFeatures, type ClusterFeature } from '../../lib/poi-cluster';
-import { resolveIcon, resolvePriority, getCategoryDivIcon, getClusterDivIcon, getMerchantDivIcon, merchantPriority } from '../../lib/poi-icons';
+import { resolveIcon, resolvePriority, getCategoryDivIcon, getClusterDivIcon, getMerchantDivIcon, merchantPriority, isGreenSpace, getGreenHighlightDivIcon } from '../../lib/poi-icons';
 import { resolveLabels, type LabelCandidate } from '../../lib/label-collision';
 import { diagStart, diagEnd } from '../../lib/poi-diagnostics';
 
@@ -68,6 +68,7 @@ interface POILayerProps {
   activeFilter?: string | null;
   onPlaceSelect?: (poi: POI) => void;
   showMerchants?: boolean;
+  highlightGreen?: boolean;
 }
 
 export default function POILayer({
@@ -75,6 +76,7 @@ export default function POILayer({
   activeFilter = null,
   onPlaceSelect,
   showMerchants = true,
+  highlightGreen = false,
 }: POILayerProps) {
   const map = useMap();
   const navigate = useNavigate();
@@ -89,6 +91,9 @@ export default function POILayer({
   const poolRef = useRef(new Map<string, L.Marker>());
   // Previous filter to detect changes
   const prevFilterRef = useRef<string | null>(null);
+  // Previous highlight-green state — toggling it must rebuild markers (the diff path
+  // only updates labels, not icons, on already-placed markers).
+  const prevHighlightRef = useRef(highlightGreen);
   // Track zoom level as state (only changes on zoomend, not moveend)
   const [zoomLevel, setZoomLevel] = useState(() => map.getZoom());
   // Track viewport bbox string — only used to trigger re-render for off-screen culling
@@ -110,6 +115,15 @@ export default function POILayer({
       setFilter(activeFilter, cats);
     }
   }, [activeFilter, setFilter]);
+
+  // ── Highlight-green toggle → rebuild markers (re-icon green spaces) ──
+  useEffect(() => {
+    if (prevHighlightRef.current !== highlightGreen) {
+      prevHighlightRef.current = highlightGreen;
+      for (const layer of poolRef.current.values()) layer.remove();
+      poolRef.current.clear();
+    }
+  }, [highlightGreen]);
 
   // ── Fetch tiles + update viewport state ───────────────────────────
 
@@ -270,12 +284,16 @@ export default function POILayer({
         continue;
       }
 
-      // New marker — merchants get elevated z-index so they render on top
+      // New marker — merchants get elevated z-index so they render on top.
+      // Green spaces glow + sit above normal POIs when the Ruang Hijau toggle is on.
       const isMerchant = !!(f.poi as any)._isMerchant;
+      const greenHi = highlightGreen && !isMerchant && isGreenSpace(f.poi.types || []);
       const marker = L.marker([f.lat, f.lng], {
-        icon: getPoiIcon(f.poi, markerSize),
+        icon: greenHi
+          ? getGreenHighlightDivIcon(resolveIcon(f.poi.types || []).iconKey, markerSize)
+          : getPoiIcon(f.poi, markerSize),
         bubblingMouseEvents: false,
-        zIndexOffset: isMerchant ? 5000 : 0,
+        zIndexOffset: isMerchant ? 5000 : greenHi ? 3000 : 0,
       }).addTo(map);
 
       const hasLabel = !!placement?.show;
@@ -334,7 +352,7 @@ export default function POILayer({
     }
     diagEnd('render-cycle', { markers: pool.size });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serial, visible, zoomLevel, bboxKey, activeFilter, showMerchants]);
+  }, [serial, visible, zoomLevel, bboxKey, activeFilter, showMerchants, highlightGreen]);
 
   // Full cleanup on unmount
   useEffect(() => {

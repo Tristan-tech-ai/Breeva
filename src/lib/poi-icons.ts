@@ -359,6 +359,24 @@ export function resolvePriority(types: string[]): number {
   return best;
 }
 
+/**
+ * Is this POI a green space (park / garden / forest / nature reserve)? Used by the
+ * "Ruang Hijau" highlight toggle to make these markers glow. Excludes parking.
+ */
+export function isGreenSpace(types: string[]): boolean {
+  return types.some((t) => {
+    const lt = t.toLowerCase();
+    if (lt.includes('parking')) return false;
+    return lt === 'national_park'
+      || lt.endsWith('.park')
+      || lt.includes('garden')
+      || lt.includes('forest')
+      || lt.includes('meadow')
+      || lt.includes('nature_reserve')
+      || lt.includes('recreation_ground');
+  });
+}
+
 // ── Cached DivIcon factory ────────────────────────────────────────────
 
 const divIconCache = new Map<string, L.DivIcon>();
@@ -372,6 +390,33 @@ export function getCategoryDivIcon(iconKey: string, color: string, size: 'sm' | 
   const cls = size === 'lg' ? 'poi-icon-marker poi-icon-marker-lg' : 'poi-icon-marker';
   const svgInner = ICONS[iconKey] || ICONS['generic'];
   const html = `<div class="${cls}" style="--poi-color:${color}">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="${svgPx}" height="${svgPx}">${svgInner}</svg>
+  </div>`;
+
+  const icon = L.divIcon({
+    className: 'poi-icon-wrapper',
+    html,
+    iconSize: [px, px],
+    iconAnchor: [px / 2, px / 2],
+  });
+  divIconCache.set(cacheKey, icon);
+  return icon;
+}
+
+/**
+ * Green-space marker with a green glow halo (for the "Ruang Hijau" highlight toggle).
+ * Keeps the POI's own icon but forces a green tint + glowing ring so parks/gardens
+ * stand out among other POIs. The basemap already tints green AREAS — this just makes
+ * the POI markers pop.
+ */
+export function getGreenHighlightDivIcon(iconKey: string, size: 'sm' | 'lg' = 'sm'): L.DivIcon {
+  const cacheKey = `greenhi_${iconKey}_${size}`;
+  if (divIconCache.has(cacheKey)) return divIconCache.get(cacheKey)!;
+
+  const px = size === 'lg' ? 38 : 32;
+  const svgPx = size === 'lg' ? 18 : 15;
+  const svgInner = ICONS[iconKey] || ICONS['park'];
+  const html = `<div class="poi-icon-marker" style="--poi-color:#16a34a;box-shadow:0 0 0 3px rgba(34,197,94,.30),0 0 14px 2px rgba(34,197,94,.6);">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="${svgPx}" height="${svgPx}">${svgInner}</svg>
   </div>`;
 

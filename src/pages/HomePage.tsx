@@ -101,6 +101,7 @@ export default function HomePage() {
   const [showAQIOverlay, setShowAQIOverlay] = useState(false);
   const [showAQIStations, setShowAQIStations] = useState(false);
   const [showPOIs, setShowPOIs] = useState(true);
+  const [highlightGreen, setHighlightGreen] = useState(false);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [forecastHour, setForecastHour] = useState(0);
   // 'total' = absolute pollutant level vs WHO/EPA bands (default); 'delta' = pure
@@ -149,6 +150,7 @@ export default function HomePage() {
           showAQIOverlay={showAQIOverlay}
           showAQIStations={showAQIStations}
           showPOIs={showPOIs}
+          highlightGreen={highlightGreen}
           mapStyle={mapStyle}
           activeFilter={activeFilter}
           pollutant={pollutant}
@@ -604,6 +606,8 @@ export default function HomePage() {
         onAQIStationsToggle={() => setShowAQIStations(!showAQIStations)}
         showPOIs={showPOIs}
         onPOIsToggle={() => setShowPOIs(!showPOIs)}
+        showGreenHighlight={highlightGreen}
+        onGreenHighlightToggle={() => setHighlightGreen(!highlightGreen)}
         currentAQI={currentAQI}
         pollutant={pollutant}
         onPollutantChange={setPollutant}
