@@ -1,7 +1,27 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const SEARCHAPI_KEY = (process.env.SEARCHAPI_KEY || '').trim();
 const SEARCHAPI_BASE = 'https://www.searchapi.io/api/v1/search';
+
+// ─── Multi-key pool ─────────────────────────────────────────
+// SearchAPI credits are a hard, non-resetting cap per key, so keys are drained
+// sequentially: once one is exhausted (401 invalid / 429 out-of-credits) we
+// advance to the next and never look back. Keys come from SEARCHAPI_KEYS
+// (comma-separated) with a fallback to the legacy single SEARCHAPI_KEY — never
+// hardcoded in source.
+const SEARCHAPI_KEYS: string[] = (() => {
+  const multi = (process.env.SEARCHAPI_KEYS || '')
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean);
+  if (multi.length) return multi;
+  const single = (process.env.SEARCHAPI_KEY || '').trim();
+  return single ? [single] : [];
+})();
+
+// Redis-persisted index of the first still-live key, so exhausted keys aren't
+// re-probed on every request (each dead probe is a wasted round-trip). Optional:
+// if Redis is unavailable we just start at 0 and rotate in-request.
+const POINTER_KEY = 'searchapi:key_index';
 
 // Allowed engines to prevent abuse
 const ALLOWED_ENGINES = new Set([
@@ -10,6 +30,54 @@ const ALLOWED_ENGINES = new Set([
   'google_maps_reviews',
   'google_maps_photos',
 ]);
+
+// ─── Redis pointer helpers (Upstash REST) ───────────────────
+async function redisGetInt(key: string): Promise<number | null> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  try {
+    const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const n = parseInt(json.result, 10);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+async function redisSetInt(key: string, val: number): Promise<void> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return;
+  try {
+    await fetch(`${url}/set/${encodeURIComponent(key)}/${val}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    /* non-fatal — pointer is an optimization, not correctness */
+  }
+}
+
+// 401 = invalid/disabled key · 429 = out of credits (or rate-limited).
+// Either way the key is unusable right now → rotate to the next one.
+function isKeyExhausted(status: number): boolean {
+  return status === 401 || status === 429;
+}
+
+// Bounded fetch so a slow upstream can't hang the function across N retries.
+async function fetchWithTimeout(target: string, ms: number): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(target, { headers: { Accept: 'application/json' }, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS
@@ -20,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  if (!SEARCHAPI_KEY) {
+  if (!SEARCHAPI_KEYS.length) {
     return res.status(500).json({ error: 'SearchAPI key not configured' });
   }
 
@@ -30,34 +98,69 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid or missing engine parameter' });
   }
 
-  try {
-    const url = new URL(SEARCHAPI_BASE);
-    url.searchParams.set('api_key', SEARCHAPI_KEY);
-    url.searchParams.set('engine', engine);
-
-    // Forward allowed query params
-    for (const [key, value] of Object.entries(params)) {
-      if (typeof value === 'string' && key !== 'api_key') {
-        url.searchParams.set(key, value);
-      }
+  // Build the upstream URL once (api_key is injected per-attempt below).
+  const baseUrl = new URL(SEARCHAPI_BASE);
+  baseUrl.searchParams.set('engine', engine);
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === 'string' && key !== 'api_key') {
+      baseUrl.searchParams.set(key, value);
     }
-
-    const response = await fetch(url.toString(), {
-      headers: { Accept: 'application/json' },
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      return res.status(response.status).json({ error: `SearchAPI error: ${response.status}`, details: text });
-    }
-
-    const data = await response.json();
-
-    // Cache for 5 minutes
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
-    return res.status(200).json(data);
-  } catch (err) {
-    console.error('SearchAPI proxy error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
   }
+
+  // Start at the first key not yet known-dead.
+  let startIdx = (await redisGetInt(POINTER_KEY)) ?? 0;
+  if (!Number.isInteger(startIdx) || startIdx < 0 || startIdx >= SEARCHAPI_KEYS.length) {
+    startIdx = 0;
+  }
+
+  let lastStatus = 502;
+  let lastDetails = '';
+
+  for (let i = startIdx; i < SEARCHAPI_KEYS.length; i++) {
+    const url = new URL(baseUrl.toString());
+    url.searchParams.set('api_key', SEARCHAPI_KEYS[i]);
+
+    let response: Response;
+    try {
+      response = await fetchWithTimeout(url.toString(), 12_000);
+    } catch {
+      // Network error / timeout — could be transient; try the next key but
+      // don't burn the pointer on it.
+      lastStatus = 504;
+      lastDetails = 'upstream timeout';
+      continue;
+    }
+
+    if (response.ok) {
+      const data = await response.json();
+      // Remember the first live key so dead ones ahead of it are skipped next time.
+      if (i !== startIdx) await redisSetInt(POINTER_KEY, i);
+      res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+      res.setHeader('X-SearchAPI-Key-Index', String(i));
+      return res.status(200).json(data);
+    }
+
+    const text = (await response.text()).slice(0, 300);
+
+    if (isKeyExhausted(response.status)) {
+      // This key is dead — advance the pointer past it permanently and rotate.
+      await redisSetInt(POINTER_KEY, Math.min(i + 1, SEARCHAPI_KEYS.length - 1));
+      lastStatus = response.status;
+      lastDetails = text;
+      continue;
+    }
+
+    // A non-key error (bad params, upstream 5xx): not solved by rotating — surface it.
+    return res
+      .status(response.status)
+      .json({ error: `SearchAPI error: ${response.status}`, details: text });
+  }
+
+  // Every key from the pointer onward is exhausted.
+  console.error('SearchAPI: all keys exhausted', { tried: SEARCHAPI_KEYS.length - startIdx, lastStatus });
+  return res.status(503).json({
+    error: 'All SearchAPI keys exhausted',
+    last_status: lastStatus,
+    details: lastDetails,
+  });
 }
