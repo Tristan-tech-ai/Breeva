@@ -2507,7 +2507,8 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
   });
 
   const startTime = Date.now();
-  const stamp = (label: string) => console.log(`[clean-route][t] +${Date.now() - startTime}ms ${label}`);
+  const timings: { label: string; ms: number }[] = [];
+  const stamp = (label: string) => { timings.push({ label, ms: Date.now() - startTime }); console.log(`[clean-route][t] +${Date.now() - startTime}ms ${label}`); };
 
   try {
     const body = req.body || {};
@@ -3303,7 +3304,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     return res.status(200).json({
       routes,
-      meta: { vayu_scored: routes.some(r => r.vayu_scored), gemini_used: reasoning !== null, response_ms: responseMs },
+      meta: { vayu_scored: routes.some(r => r.vayu_scored), gemini_used: reasoning !== null, response_ms: responseMs, timings },
     });
   } catch (error) {
     console.error('Clean-route error:', error);
