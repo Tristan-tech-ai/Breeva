@@ -1,87 +1,164 @@
 import { Link, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Home, Store, Gift, User } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { Wind, Megaphone, Gift, User } from 'lucide-react';
 import logoBreeva from '../../assets/logo-breeva.svg';
 import { haptic } from '../../lib/haptic';
+import { useMapStore } from '../../stores/mapStore';
 
-const tabs = [
-  { path: '/home', label: 'Home', Icon: Home, badgeKey: null },
-  { path: '/merchants', label: 'Merchants', Icon: Store, badgeKey: null },
-  { path: '/walk', label: 'Breeva', Icon: null as unknown as typeof Home, isCenter: true, badgeKey: null },
-  { path: '/rewards', label: 'Rewards', Icon: Gift, badgeKey: 'rewards' as const },
-  { path: '/profile', label: 'Profile', Icon: User, badgeKey: 'profile' as const },
+// AQI band → color (mirrors --color-aqi-* tokens / LeafletMap getAQIColor) so the
+// center beacon's halo doubles as a live air-quality indicator.
+function aqiToColor(aqi: number | null | undefined): string {
+  if (aqi == null) return '#10b981'; // brand emerald (no reading yet)
+  if (aqi <= 50) return '#22c55e';
+  if (aqi <= 100) return '#eab308';
+  if (aqi <= 150) return '#f97316';
+  if (aqi <= 200) return '#ef4444';
+  if (aqi <= 300) return '#a855f7';
+  return '#7f1d1d';
+}
+
+type BadgeKey = 'rewards' | 'profile';
+interface Tab {
+  path: string;
+  label: string;
+  Icon: typeof Wind;
+  badgeKey: BadgeKey | null;
+}
+
+const TABS: Tab[] = [
+  { path: '/paparan', label: 'Paparan', Icon: Wind, badgeKey: null },
+  { path: '/contribute', label: 'Kontribusi', Icon: Megaphone, badgeKey: null },
+  { path: '/rewards', label: 'Hadiah', Icon: Gift, badgeKey: 'rewards' },
+  { path: '/profile', label: 'Profil', Icon: User, badgeKey: 'profile' },
 ];
 
 interface BottomNavigationProps {
-  badges?: Partial<Record<'rewards' | 'profile', boolean>>;
+  badges?: Partial<Record<BadgeKey, boolean>>;
 }
 
 export default function BottomNavigation({ badges }: BottomNavigationProps) {
   const location = useLocation();
+  const reduce = useReducedMotion();
+  const currentAQI = useMapStore((s) => s.currentAQI);
+  const aqi = currentAQI?.aqi ?? null;
+  const aqiColor = aqiToColor(aqi);
+  const homeActive = location.pathname === '/home';
+
+  const isActive = (path: string) =>
+    location.pathname === path || location.pathname.startsWith(path + '/');
+
+  const renderTab = (tab: Tab) => {
+    const active = isActive(tab.path);
+    return (
+      <Link
+        key={tab.path}
+        to={tab.path}
+        role="tab"
+        aria-current={active ? 'page' : undefined}
+        aria-label={tab.label}
+        onClick={() => haptic('light')}
+        className="group relative flex flex-1 flex-col items-center justify-center gap-1 min-h-[44px]"
+      >
+        <span className="relative flex h-7 w-11 items-center justify-center">
+          {active && (
+            <motion.span
+              layoutId="nav-lozenge"
+              className="absolute inset-0 rounded-full bg-primary-500/15 dark:bg-primary-400/20"
+              transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+            />
+          )}
+          <tab.Icon
+            className={`relative h-[22px] w-[22px] transition-colors duration-200 ${
+              active
+                ? 'text-primary-600 dark:text-primary-400'
+                : 'text-gray-500 group-hover:text-gray-700 dark:text-gray-400 dark:group-hover:text-gray-200'
+            }`}
+            strokeWidth={active ? 2.4 : 1.8}
+          />
+          {tab.badgeKey && badges?.[tab.badgeKey] && !active && (
+            <span className="absolute right-1.5 top-0.5 h-2 w-2 rounded-full bg-danger-500 ring-2 ring-white dark:ring-gray-900" />
+          )}
+        </span>
+        <span
+          className={`text-[10.5px] leading-none transition-colors duration-200 ${
+            active
+              ? 'font-bold text-primary-600 dark:text-primary-400'
+              : 'font-medium text-gray-500 dark:text-gray-400'
+          }`}
+        >
+          {tab.label}
+        </span>
+      </Link>
+    );
+  };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 safe-area-bottom" role="navigation" aria-label="Main navigation">
-      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl border-t border-white/20 dark:border-white/10">
-        <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2" role="tablist">
-          {tabs.map((tab) => {
-            const isActive =
-              location.pathname === tab.path ||
-              (tab.path !== '/home' && location.pathname.startsWith(tab.path));
+    // pointer-events-none on the wrapper so the map stays draggable in the margins
+    // beside the floating dock; the dock itself re-enables pointer events.
+    <nav
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))]"
+      role="navigation"
+      aria-label="Navigasi utama"
+    >
+      <div
+        className="pointer-events-auto relative mx-auto flex h-[60px] max-w-md items-center justify-around rounded-[26px] glass-nav border border-white/30 px-1.5 shadow-[0_10px_34px_-8px_rgba(0,0,0,0.3)] dark:border-white/10"
+        role="tablist"
+      >
+        {renderTab(TABS[0])}
+        {renderTab(TABS[1])}
 
-            if (tab.isCenter) {
-              return (
-                <Link
-                  key={tab.path}
-                  to={tab.path}
-                  role="tab"
-                  aria-current={isActive ? 'page' : undefined}
-                  aria-label="Breeva Home"
-                  className="relative flex flex-col items-center justify-center flex-1 -mt-5"
+        {/* Center — Beranda air-beacon (Home/map + live-AQI breathing halo) */}
+        <Link
+          to="/home"
+          role="tab"
+          aria-current={homeActive ? 'page' : undefined}
+          aria-label={`Beranda${aqi != null ? ` — kualitas udara AQI ${Math.round(aqi)}` : ''}`}
+          onClick={() => haptic('medium')}
+          className="relative flex flex-1 flex-col items-center justify-end gap-1 self-stretch pb-1.5"
+        >
+          <div className="relative -mt-7 flex items-center justify-center">
+            {/* breathing AQI halo (decorative) */}
+            <motion.span
+              aria-hidden
+              className="absolute rounded-full"
+              style={{ width: 60, height: 60, background: aqiColor, filter: 'blur(11px)' }}
+              initial={false}
+              animate={
+                reduce
+                  ? { opacity: 0.4, scale: 1 }
+                  : { opacity: [0.35, 0.6, 0.35], scale: [1, 1.16, 1] }
+              }
+              transition={reduce ? undefined : { duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            {/* glass core with brand mark + AQI ring */}
+            <div
+              className="relative flex h-[56px] w-[56px] items-center justify-center rounded-full bg-white transition-transform duration-200 active:scale-95 dark:bg-gray-900"
+              style={{ boxShadow: `0 6px 18px -4px ${aqiColor}80, 0 0 0 3px ${aqiColor}` }}
+            >
+              <img src={logoBreeva} alt="" className="h-9 w-9 object-contain" />
+              {aqi != null && (
+                <span
+                  className="text-shadow-glass absolute -bottom-0.5 rounded-full px-1 text-[8.5px] font-extrabold leading-none text-white"
+                  style={{ background: aqiColor }}
                 >
-                  <div className="w-14 h-14 rounded-2xl bg-white dark:bg-gray-900 flex items-center justify-center shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 hover:scale-105 active:scale-95 transition-all ring-2 ring-primary-200">
-                    <img src={logoBreeva} alt="Breeva" className="w-9 h-9 object-contain" />
-                  </div>
-                </Link>
-              );
-            }
-
-            return (
-              <Link
-                key={tab.path}
-                to={tab.path}
-                role="tab"
-                aria-current={isActive ? 'page' : undefined}
-                aria-label={tab.label}
-                onClick={() => haptic('light')}
-                className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 relative transition-colors duration-200 ${
-                  isActive
-                    ? 'text-primary-600 dark:text-primary-400'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                }`}
-              >
-                <div className="relative">
-                  <tab.Icon
-                    className="w-5 h-5"
-                    strokeWidth={isActive ? 2 : 1.5}
-                  />
-                  {tab.badgeKey && badges?.[tab.badgeKey] && !isActive && (
-                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-danger-500 ring-2 ring-white dark:ring-gray-900" />
-                  )}
-                </div>
-                <span className={`text-[11px] font-medium ${isActive ? 'font-semibold' : ''}`}>
-                  {tab.label}
+                  {Math.round(aqi)}
                 </span>
-                {isActive && (
-                  <motion.div
-                    layoutId="nav-dot"
-                    className="absolute -top-0.5 w-1 h-1 rounded-full bg-primary-500"
-                    transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-                  />
-                )}
-              </Link>
-            );
-          })}
-        </div>
+              )}
+            </div>
+          </div>
+          <span
+            className={`text-[10.5px] leading-none ${
+              homeActive
+                ? 'font-bold text-primary-600 dark:text-primary-400'
+                : 'font-semibold text-gray-600 dark:text-gray-300'
+            }`}
+          >
+            Beranda
+          </span>
+        </Link>
+
+        {renderTab(TABS[2])}
+        {renderTab(TABS[3])}
       </div>
     </nav>
   );

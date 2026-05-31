@@ -87,6 +87,14 @@
   --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
   --radius-full: 9999px;
+
+  /* Motion tokens (A7) — standard easing + durations (150–300ms) for new/refined
+     transitions. prefers-reduced-motion already neutralizes durations globally. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 300ms;
 }
 
 /* Base Styles */
@@ -179,9 +187,16 @@
     border-color: rgba(255, 255, 255, 0.1);
   }
 
-  .glass-input:focus {
-    border-color: rgba(16, 185, 129, 0.5);
-    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  /* A1: keyboard focus aligns with the app's global :focus-visible standard
+     (the old rule suppressed it via outline:none + a near-invisible 0.1 ring). */
+  .glass-input:focus-visible {
+    border-color: var(--color-primary-500);
+    outline: 2px solid var(--color-primary-500);
+    outline-offset: 2px;
+  }
+  .glass-input:focus:not(:focus-visible) {
+    border-color: var(--color-primary-500);
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
     outline: none;
   }
 
@@ -253,6 +268,11 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+
+  /* A10: legibility for text sitting over glass/map overlays (badges, legend,
+     popups) — cheaper + safer than increasing backdrop blur. */
+  .text-shadow-glass { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
+  .dark .text-shadow-glass { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55); }
 
   /* Screen reader only */
   .sr-only {
