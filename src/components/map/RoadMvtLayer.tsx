@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import type { Map as MlMap } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css'; // GL canvas sizing/positioning inside Leaflet
 import '@maplibre/maplibre-gl-leaflet';
 import type { PollutantType, RoadDisplayMode } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
