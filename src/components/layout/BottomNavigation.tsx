@@ -101,7 +101,7 @@ export default function BottomNavigation({ badges }: BottomNavigationProps) {
       aria-label="Navigasi utama"
     >
       <div
-        className="pointer-events-auto relative mx-auto flex h-[60px] max-w-md items-center justify-around rounded-[26px] border border-white/50 bg-white/60 px-1.5 shadow-[0_10px_34px_-8px_rgba(0,0,0,0.28)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-gray-900/65"
+        className="pointer-events-auto relative mx-auto flex h-[60px] max-w-md items-center justify-around rounded-[26px] border border-white/40 bg-gradient-to-b from-white/70 to-white/55 px-1.5 shadow-[0_8px_28px_-6px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.85)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:from-gray-900/75 dark:to-gray-900/55 dark:shadow-[0_8px_28px_-6px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.1)]"
         role="tablist"
       >
         {renderTab(TABS[0])}

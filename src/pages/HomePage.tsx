@@ -9,8 +9,6 @@ import {
   MapPin,
   Navigation,
   Sparkles,
-  Flame,
-  Trophy,
   ChevronRight,
   Menu,
   Bookmark,
@@ -35,6 +33,7 @@ import SearchBar from '../components/map/SearchBar';
 import BottomSheet from '../components/map/BottomSheet';
 import RouteCard from '../components/map/RouteCard';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import HomeStatCards from '../components/features/HomeStatCards';
 import Sidebar from '../components/layout/Sidebar';
 import TransportModeSelector from '../components/map/TransportModeSelector';
 import AQIBadge from '../components/features/AQIBadge';
@@ -394,32 +393,8 @@ export default function HomePage() {
           {/* === No destination — home state === */}
           {!destination && (
             <div>
-              {/* Quick stats */}
-              <div className="grid grid-cols-3 gap-2.5 mb-4">
-                <div className="bg-primary-50/80 dark:bg-primary-950/30 rounded-2xl p-3.5 text-center border border-primary-100/50 dark:border-primary-800/20">
-                  <div className="flex items-center justify-center gap-1.5 mb-1">
-                    <Sparkles className="w-3.5 h-3.5 text-primary-500" />
-                    <p className="text-lg font-bold text-primary-600 dark:text-primary-400 tabular-nums">0/3</p>
-                  </div>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Quests</p>
-                </div>
-                <div className="bg-amber-50/80 dark:bg-amber-950/30 rounded-2xl p-3.5 text-center border border-amber-100/50 dark:border-amber-800/20">
-                  <div className="flex items-center justify-center gap-1.5 mb-1">
-                    <Flame className="w-3.5 h-3.5 text-amber-500" />
-                    <p className="text-lg font-bold text-amber-600 dark:text-amber-400 tabular-nums">
-                      {profile?.current_streak || 0}
-                    </p>
-                  </div>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Streak</p>
-                </div>
-                <div className="bg-blue-50/80 dark:bg-blue-950/30 rounded-2xl p-3.5 text-center border border-blue-100/50 dark:border-blue-800/20">
-                  <div className="flex items-center justify-center gap-1.5 mb-1">
-                    <Trophy className="w-3.5 h-3.5 text-blue-500" />
-                    <p className="text-lg font-bold text-blue-600 dark:text-blue-400 tabular-nums">#--</p>
-                  </div>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Rank</p>
-                </div>
-              </div>
+              {/* Quick stats — live data (quests/streak/rank) + tappable to detail */}
+              <HomeStatCards />
 
               {/* AQI summary card */}
               {currentAQI && (
