@@ -312,8 +312,18 @@ function MapController({
   // Interactive WAQI station markers (replaces raster tile overlay)
   useAQIStationLayer(map, !!showAQIStations);
 
-  return showPOIs ? (
-    <POILayer visible={showPOIs} activeFilter={activeFilter} onPlaceSelect={onPlaceSelect} showMerchants={showMerchants} highlightGreen={highlightGreen} />
+  // Render the POI layer when Places OR Ruang Hijau is on. When only Ruang Hijau is on
+  // (Places off), POILayer shows ONLY green spaces (still glowing). Both off → nothing.
+  const showPOILayer = showPOIs || highlightGreen;
+  return showPOILayer ? (
+    <POILayer
+      visible={showPOILayer}
+      activeFilter={activeFilter}
+      onPlaceSelect={onPlaceSelect}
+      showMerchants={showMerchants}
+      highlightGreen={highlightGreen}
+      greenOnly={highlightGreen && !showPOIs}
+    />
   ) : null;
 }
 

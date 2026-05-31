@@ -69,6 +69,8 @@ interface POILayerProps {
   onPlaceSelect?: (poi: POI) => void;
   showMerchants?: boolean;
   highlightGreen?: boolean;
+  // When true (Places off but Ruang Hijau on): render ONLY green-space POIs.
+  greenOnly?: boolean;
 }
 
 export default function POILayer({
@@ -77,6 +79,7 @@ export default function POILayer({
   onPlaceSelect,
   showMerchants = true,
   highlightGreen = false,
+  greenOnly = false,
 }: POILayerProps) {
   const map = useMap();
   const navigate = useNavigate();
@@ -178,11 +181,14 @@ export default function POILayer({
     diagStart('render-cycle');
     diagStart('reindex');
     let allPOIs = getPOIArray();
-    // Filter out merchants if toggle is off
-    if (!showMerchants) {
+    if (greenOnly) {
+      // Places off + Ruang Hijau on → keep ONLY green spaces (merchants/others hidden).
+      allPOIs = allPOIs.filter(p => isGreenSpace(p.types || []));
+    } else if (!showMerchants) {
+      // Filter out merchants if toggle is off
       allPOIs = allPOIs.filter(p => !(p as any)._isMerchant);
     }
-    reindex(allPOIs, serial, zoomLevel, showAll, showMerchants);
+    reindex(allPOIs, serial, zoomLevel, showAll, showMerchants, greenOnly);
     diagEnd('reindex', { pois: allPOIs.length });
 
     // Query with buffer (1.3× viewport) so panning shows markers immediately
@@ -352,7 +358,7 @@ export default function POILayer({
     }
     diagEnd('render-cycle', { markers: pool.size });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serial, visible, zoomLevel, bboxKey, activeFilter, showMerchants, highlightGreen]);
+  }, [serial, visible, zoomLevel, bboxKey, activeFilter, showMerchants, highlightGreen, greenOnly]);
 
   // Full cleanup on unmount
   useEffect(() => {
