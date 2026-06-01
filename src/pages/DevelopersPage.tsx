@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft, KeyRound, Plus, Copy, Check, Trash2, ShieldCheck,
   Activity, AlertTriangle, Zap, Terminal, Loader2,
@@ -77,7 +76,6 @@ export default function DevelopersPage() {
   const [newTier, setNewTier] = useState<ApiKeyRow['tier']>('free');
   const [minting, setMinting] = useState(false);
   const [mintError, setMintError] = useState<string | null>(null);
-  const [mintedKey, setMintedKey] = useState<string | null>(null);
 
   const [copied, setCopied] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
@@ -140,9 +138,9 @@ export default function DevelopersPage() {
     }
     const row = Array.isArray(data) ? data[0] : data;
     if (row?.api_key) {
-      setMintedKey(row.api_key as string);
       setNewName('');
-      await load();
+      // Hand the once-shown key to the dashboard, which renders the reveal + monitoring.
+      navigate('/developers/dashboard', { state: { freshKey: row.api_key, prefix: row.prefix } });
     }
   };
 
@@ -170,6 +168,13 @@ export default function DevelopersPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 pt-4 pb-12 space-y-4">
+        {/* Tabs */}
+        <div className="flex gap-1 p-1 rounded-xl bg-gray-100 dark:bg-gray-800/60 text-xs font-semibold">
+          <span className="flex-1 text-center py-1.5 rounded-lg bg-white dark:bg-gray-900 shadow-sm text-primary-600 dark:text-primary-400">Keys</span>
+          <Link to="/developers/dashboard" className="flex-1 text-center py-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition">Dashboard</Link>
+          <Link to="/developers" className="flex-1 text-center py-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition">Docs</Link>
+        </div>
+
         {/* Intro */}
         <div className="glass-card p-4">
           <div className="flex items-start gap-3">
@@ -196,41 +201,6 @@ export default function DevelopersPage() {
             Authenticate every request with <span className="font-mono">Authorization: Bearer &lt;key&gt;</span>
           </p>
         </div>
-
-        {/* Minted key — shown once */}
-        <AnimatePresence>
-          {mintedKey && (
-            <motion.div
-              initial={{ opacity: 0, y: -8, height: 0 }}
-              animate={{ opacity: 1, y: 0, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="rounded-2xl border border-green-300 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10 p-4">
-                <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                  <Check className="w-4 h-4" />
-                  <h3 className="text-sm font-bold">Key created — copy it now</h3>
-                </div>
-                <p className="text-[11px] text-green-700/80 dark:text-green-400/70 mt-1 flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  This is the only time the full key is shown. Store it somewhere safe.
-                </p>
-                <div className="mt-3 flex items-center gap-2 rounded-xl bg-gray-900 dark:bg-black/60 px-3 py-2.5">
-                  <code className="text-[11px] sm:text-xs text-green-300 font-mono break-all flex-1">{mintedKey}</code>
-                  <button onClick={() => handleCopy(mintedKey, 'minted')} className="text-gray-400 hover:text-white transition shrink-0">
-                    {copied === 'minted' ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                </div>
-                <button
-                  onClick={() => setMintedKey(null)}
-                  className="mt-3 text-xs font-semibold text-green-700 dark:text-green-400 hover:underline"
-                >
-                  I've saved it — dismiss
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Mint form */}
         <div className="glass-card p-4">
@@ -359,47 +329,32 @@ export default function DevelopersPage() {
           )}
         </section>
 
-        {/* Endpoints reference */}
+        {/* Endpoints at a glance — full docs on the landing */}
         <section>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white px-1 mb-2">Endpoints</h3>
-          <div className="space-y-3">
+          <div className="glass-card divide-y divide-gray-100 dark:divide-gray-800/50">
             {ENDPOINTS.map((ep) => (
-              <div key={ep.path} className="glass-card p-4">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md ${
-                      ep.method === 'GET'
-                        ? 'bg-sky-100 dark:bg-sky-500/15 text-sky-600 dark:text-sky-300'
-                        : 'bg-violet-100 dark:bg-violet-500/15 text-violet-600 dark:text-violet-300'
-                    }`}
-                  >
-                    {ep.method}
-                  </span>
+              <div key={ep.path} className="flex items-start gap-2.5 p-3">
+                <span
+                  className={`mt-0.5 shrink-0 px-1.5 py-0.5 text-[9px] font-bold rounded-md ${
+                    ep.method === 'GET'
+                      ? 'bg-sky-100 dark:bg-sky-500/15 text-sky-600 dark:text-sky-300'
+                      : 'bg-violet-100 dark:bg-violet-500/15 text-violet-600 dark:text-violet-300'
+                  }`}
+                >
+                  {ep.method}
+                </span>
+                <div className="min-w-0">
                   <code className="text-xs font-mono font-semibold text-gray-900 dark:text-white">{ep.path}</code>
-                </div>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 leading-relaxed">{ep.desc}</p>
-                <div className="mt-2 relative">
-                  <pre className="rounded-xl bg-gray-900 dark:bg-black/60 px-3 py-2.5 overflow-x-auto text-[10px] leading-relaxed text-gray-200 font-mono scrollbar-hide">
-                    {ep.example}
-                  </pre>
-                  <button
-                    onClick={() => handleCopy(ep.example.replace(/\\\n\s*/g, ' '), ep.path)}
-                    className="absolute top-2 right-2 text-gray-400 hover:text-white transition"
-                  >
-                    {copied === ep.path ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">{ep.desc}</p>
                 </div>
               </div>
             ))}
           </div>
-          <a
-            href="/openapi.json"
-            target="_blank"
-            rel="noreferrer"
-            className="mt-3 block text-center text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline"
-          >
-            View full OpenAPI specification →
-          </a>
+          <div className="flex items-center justify-center gap-4 mt-3 text-xs font-semibold">
+            <Link to="/developers" className="text-primary-600 dark:text-primary-400 hover:underline">Full docs &amp; examples →</Link>
+            <a href="/openapi.json" target="_blank" rel="noreferrer" className="text-gray-500 dark:text-gray-400 hover:underline">OpenAPI</a>
+          </div>
         </section>
       </div>
 
