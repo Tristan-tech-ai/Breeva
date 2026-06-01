@@ -46,6 +46,7 @@ const ContributionHistoryPage = lazy(() => import('./pages/ContributionHistoryPa
 const YearInReviewPage = lazy(() => import('./pages/YearInReviewPage'));
 const PaparanPage = lazy(() => import('./pages/PaparanPage'));
 const DevelopersPage = lazy(() => import('./pages/DevelopersPage'));
+const DeveloperLandingPage = lazy(() => import('./pages/DeveloperLandingPage'));
 
 // Page loading fallback — content-shaped skeleton (avoids the blank flash of a bare spinner).
 function PageLoader() {
@@ -200,8 +201,11 @@ function App() {
               </ProtectedRoute>
             } />
 
-            {/* Developer API portal */}
-            <Route path="/developers" element={
+            {/* Developer API — public marketing landing (SEO-indexed) */}
+            <Route path="/developers" element={<DeveloperLandingPage />} />
+
+            {/* Developer API — authed key dashboard */}
+            <Route path="/developers/keys" element={
               <ProtectedRoute>
                 <DevelopersPage />
               </ProtectedRoute>

@@ -53,7 +53,7 @@ const menuSections = [
   {
     title: 'Developers',
     items: [
-      { icon: Code2, label: 'Developer API', path: '/developers', color: 'text-teal-500' },
+      { icon: Code2, label: 'Developer API', path: '/developers/keys', color: 'text-teal-500' },
     ],
   },
   {

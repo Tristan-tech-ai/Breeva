@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft, KeyRound, Plus, Copy, Check, Trash2, ShieldCheck,
   Activity, AlertTriangle, Zap, Terminal, Loader2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { NoIndex } from '../components/Seo';
 import { useAuthStore } from '../stores/authStore';
 import BottomNavigation from '../components/layout/BottomNavigation';
 
@@ -158,13 +159,14 @@ export default function DevelopersPage() {
 
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24">
+      <NoIndex />
       {/* Header */}
       <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between safe-area-top">
         <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
           <ChevronLeft className="w-6 h-6" />
         </button>
-        <h1 className="text-base font-semibold text-gray-900 dark:text-white">Developer API</h1>
-        <div className="w-8" />
+        <h1 className="text-base font-semibold text-gray-900 dark:text-white">API Keys</h1>
+        <Link to="/developers" className="text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline">Overview</Link>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 pt-4 pb-12 space-y-4">
