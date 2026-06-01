@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft, Crown, Medal, Award, Footprints, MapPin, Building2,
-  Landmark, Globe, Users, LocateFixed, Coins, Route, Sparkles,
+  Landmark, Globe, Users, LocateFixed, Coins, Route, Sparkles, Share2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import toast from 'react-hot-toast';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -473,6 +474,23 @@ export default function LeaderboardPage() {
   const showGpsCta = needsRegion && !hasRegion;
   const listRows = mode === 'people' ? people : regions;
 
+  // Region name at the current scope — for the "be the first in <region>" placeholder.
+  const scopeRegionLabel = useMemo(() => {
+    if (mode === 'regions') return 'wilayahmu';
+    if (scope === 'desa') return myRegion?.desa_name ?? 'desamu';
+    if (scope === 'kabupaten') return myRegion?.kab_name ?? 'kotamu';
+    if (scope === 'provinsi') return myRegion?.prov_name ?? 'provinsimu';
+    return 'Indonesia';
+  }, [mode, scope, myRegion]);
+
+  const inviteFriends = useCallback(async () => {
+    const text = `Ayo gabung papan peringkat Breeva di ${scopeRegionLabel}! 🌿🚶 Jalan kaki, hindari polusi, kumpulkan EcoPoin. Aku mau jadi #1 di wilayah kita — temani aku!\n\nhttps://breeva.site`;
+    try {
+      if (navigator.share) await navigator.share({ title: 'Gabung Breeva', text, url: 'https://breeva.site' });
+      else { await navigator.clipboard.writeText(text); toast.success('Ajakan disalin — tinggal tempel ke chat temanmu! 🎉'); }
+    } catch { /* cancelled */ }
+  }, [scopeRegionLabel]);
+
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24 relative overflow-hidden">
       {/* atmospheric blobs */}
@@ -608,11 +626,7 @@ export default function LeaderboardPage() {
             desc={`Aktifkan lokasi agar kami bisa menampilkan peringkat ${SCOPE_NOUN[scope]}.`}
           />
         ) : listRows.length === 0 ? (
-          <EmptyState
-            icon={<Sparkles className="w-7 h-7 text-primary-500" />}
-            title="Belum ada peringkat"
-            desc="Mulai berjalan untuk mengisi papan peringkat pekan ini."
-          />
+          <BeFirstState where={scopeRegionLabel} onStart={() => navigate('/home')} onInvite={inviteFriends} />
         ) : (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <Podium rows={listRows} mode={mode} metric={metric} />
@@ -644,6 +658,36 @@ function EmptyState({ icon, title, desc }: { icon: React.ReactNode; title: strin
       <div className="text-sm font-bold text-gray-900 dark:text-white">{title}</div>
       <div className="text-xs text-gray-500 dark:text-gray-400 max-w-[240px]">{desc}</div>
     </div>
+  );
+}
+
+/** Motivating placeholder when a region has no leaderboard yet — "be the first" + invite. */
+function BeFirstState({ where, onStart, onInvite }: { where: string; onStart: () => void; onInvite: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="relative overflow-hidden glass-card p-6 flex flex-col items-center text-center gap-3 mt-2"
+    >
+      <div className="pointer-events-none absolute -top-10 -right-8 w-32 h-32 rounded-full bg-primary-400/15 blur-2xl" />
+      <div className="relative w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center shadow-lg glow-primary">
+        <Crown className="w-8 h-8 text-white" />
+      </div>
+      <div className="relative">
+        <div className="text-base font-extrabold text-gray-900 dark:text-white">Belum ada peringkat di {where}</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-[270px] mx-auto leading-relaxed">
+          Papan di sini masih kosong — <b className="text-primary-600 dark:text-primary-400">jadilah yang pertama!</b> Mulai jalan untuk merebut posisi #1, lalu ajak temanmu biar makin seru.
+        </div>
+      </div>
+      <div className="relative flex flex-col gap-2 w-full max-w-[280px] mt-1">
+        <button onClick={onStart} className="w-full py-2.5 rounded-xl gradient-primary text-white text-sm font-bold shadow-sm flex items-center justify-center gap-2 active:scale-[0.98] transition">
+          <Footprints className="w-4 h-4" /> Mulai Jalan &amp; Rebut #1
+        </button>
+        <button onClick={onInvite} className="w-full py-2.5 rounded-xl bg-white dark:bg-gray-900/60 text-primary-600 dark:text-primary-400 text-sm font-bold flex items-center justify-center gap-2 border border-primary-200/70 dark:border-primary-800/60 active:scale-[0.98] transition">
+          <Share2 className="w-4 h-4" /> Ajak Teman
+        </button>
+      </div>
+    </motion.div>
   );
 }
 
