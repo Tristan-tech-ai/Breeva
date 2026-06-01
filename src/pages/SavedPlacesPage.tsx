@@ -463,12 +463,12 @@ export default function SavedPlacesPage() {
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setShowAdd(false)}
-              className="fixed inset-0 z-40 bg-black/50"
+              className="fixed inset-0 z-[60] bg-black/50"
             />
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 32, stiffness: 320 }}
-              className="fixed bottom-0 left-0 right-0 z-50 glass-sheet p-5 pb-8 max-w-2xl mx-auto will-change-transform"
+              className="fixed bottom-0 left-0 right-0 z-[70] glass-sheet p-5 pb-[max(1.75rem,env(safe-area-inset-bottom))] max-w-2xl mx-auto will-change-transform"
             >
               <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600 mx-auto mb-4" />
               <div className="flex items-center gap-2 mb-4">
