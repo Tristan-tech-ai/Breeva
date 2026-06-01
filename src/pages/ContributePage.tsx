@@ -1,447 +1,379 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import {
-  ChevronLeft,
-  MapPinPlus,
-  Store,
-  TreePine,
-  AlertTriangle,
-  Camera,
-  Send,
-  CheckCircle2,
-  LocateFixed,
-  Wind,
-  Footprints,
-  Clock,
+  ChevronLeft, MapPinPlus, Store, TreePine, Wind, Camera, Send, CheckCircle2,
+  LocateFixed, Clock, Loader2, Sparkles, ShieldCheck, ShieldAlert, ArrowRight,
+  MapPin, X, Coins,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import { Seo } from '../components/Seo';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
+import { submitContribution, reverseGeocode, type SubmitContributionResult } from '../lib/api';
 
-type ReportType = 'missing_place' | 'eco_merchant' | 'green_space' | 'hazard';
+const LocationPicker = lazy(() => import('../components/contribute/LocationPicker'));
 
-const reportTypes: { type: ReportType; icon: React.ReactNode; label: string; description: string; color: string }[] = [
-  {
-    type: 'missing_place',
-    icon: <MapPinPlus className="w-5 h-5" />,
-    label: 'Missing Place',
-    description: 'Report a place not on the map',
-    color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20',
-  },
-  {
-    type: 'eco_merchant',
-    icon: <Store className="w-5 h-5" />,
-    label: 'Eco Merchant',
-    description: 'Suggest a sustainable business',
-    color: 'text-primary-500 bg-primary-50 dark:bg-primary-900/20',
-  },
-  {
-    type: 'green_space',
-    icon: <TreePine className="w-5 h-5" />,
-    label: 'Green Space',
-    description: 'Report a park or green area',
-    color: 'text-green-500 bg-green-50 dark:bg-green-900/20',
-  },
-  {
-    type: 'hazard',
-    icon: <AlertTriangle className="w-5 h-5" />,
-    label: 'Air Quality Hazard',
-    description: 'Report poor air quality zone',
-    color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/20',
-  },
+type Mode = 'aqi' | 'missing_place' | 'eco_merchant' | 'green_space';
+
+// 1 (cleanest) .. 5 (hazardous) — stored as air_quality_reports.aqi_rating.
+const SEVERITY: { value: number; label: string; color: string }[] = [
+  { value: 1, label: 'Sangat baik', color: '#22c55e' },
+  { value: 2, label: 'Baik', color: '#84cc16' },
+  { value: 3, label: 'Sedang', color: '#eab308' },
+  { value: 4, label: 'Buruk', color: '#f97316' },
+  { value: 5, label: 'Berbahaya', color: '#ef4444' },
 ];
+
+const POI_TYPES: { type: Exclude<Mode, 'aqi'>; icon: LucideIcon; label: string; description: string; color: string; categories: string[] }[] = [
+  { type: 'missing_place', icon: MapPinPlus, label: 'Tempat baru', description: 'Lokasi yang belum ada di peta', color: '#3b82f6',
+    categories: ['Restoran', 'Kafe', 'Toko', 'Sekolah', 'Masjid', 'RS', 'Taman', 'Lainnya'] },
+  { type: 'eco_merchant', icon: Store, label: 'Merchant ramah lingkungan', description: 'Usaha berkelanjutan', color: '#10b981',
+    categories: ['Refill Station', 'Thrift', 'Vegan', 'Reparasi', 'Produk Eco', 'Pasar Organik'] },
+  { type: 'green_space', icon: TreePine, label: 'Ruang hijau', description: 'Taman atau area hijau', color: '#16a34a', categories: [] },
+];
+
+const STATUS_THEME: Record<SubmitContributionResult['status'], { label: string; color: string; Icon: LucideIcon }> = {
+  approved: { label: 'Terverifikasi', color: '#22c55e', Icon: ShieldCheck },
+  pending: { label: 'Menunggu verifikasi', color: '#f59e0b', Icon: Clock },
+  rejected: { label: 'Perlu ditinjau ulang', color: '#ef4444', Icon: ShieldAlert },
+};
 
 export default function ContributePage() {
   const navigate = useNavigate();
-  const [selectedType, setSelectedType] = useState<ReportType | null>(null);
-  const [placeName, setPlaceName] = useState('');
-  const [placeDescription, setPlaceDescription] = useState('');
-  const [placeCategory, setPlaceCategory] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const reduce = useReducedMotion() ?? false;
+  const user = useAuthStore((s) => s.user);
+
+  const [mode, setMode] = useState<Mode>('aqi');
+  const [severity, setSeverity] = useState(3);
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('');
+  const [description, setDescription] = useState('');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [address, setAddress] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locError, setLocError] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [result, setResult] = useState<SubmitContributionResult | null>(null);
 
-  const handleGetLocation = () => {
+  const isPoi = mode !== 'aqi';
+  const poi = POI_TYPES.find((t) => t.type === mode);
+
+  const container: Variants = { hidden: {}, show: { transition: { staggerChildren: reduce ? 0 : 0.06, delayChildren: reduce ? 0 : 0.04 } } };
+  const item: Variants = reduce
+    ? { hidden: { opacity: 1 }, show: { opacity: 1 } }
+    : { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.38, ease: [0.22, 1, 0.36, 1] } } };
+
+  const applyCoords = async (lat: number, lng: number) => {
+    setCoords({ lat, lng });
+    setAddress(null);
+    try { const r = await reverseGeocode({ lat, lng }); if (r.address) setAddress(r.address); } catch { /* non-fatal */ }
+  };
+
+  const handleLocate = () => {
+    if (!('geolocation' in navigator)) { setLocError('Perangkat tidak mendukung lokasi.'); return; }
+    setLocating(true); setLocError(null);
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setCurrentCoords({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
-      },
-      () => {
-        alert('Could not get your location');
-      },
-      { enableHighAccuracy: true }
+      (pos) => { setLocating(false); void applyCoords(pos.coords.latitude, pos.coords.longitude); },
+      () => { setLocating(false); setLocError('Tidak bisa mengambil lokasi. Aktifkan izin lokasi atau geser pin di peta.'); },
+      { enableHighAccuracy: true, timeout: 10000 },
     );
   };
 
+  const handlePhoto = (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setFormError('Ukuran foto maksimal 5MB.'); return; }
+    setFormError(null);
+    setPhotoFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setPhotoPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = async () => {
-    const errors: Record<string, string> = {};
-    if (!selectedType) errors.type = 'Please select a report type';
-    if (!placeName.trim()) errors.placeName = 'Place name is required';
-    else if (placeName.trim().length < 3) errors.placeName = 'Name must be at least 3 characters';
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      return;
-    }
-    setFieldErrors({});
+    if (!user) return;
+    setFormError(null);
+    if (mode === 'aqi' && !coords) { setFormError('Tentukan lokasi laporan dulu.'); return; }
+    if (isPoi && name.trim().length < 3) { setFormError('Nama tempat minimal 3 karakter.'); return; }
 
-    setIsSubmitting(true);
-
+    setSubmitting(true);
     try {
-      const { user } = useAuthStore.getState();
-      let photoUrl: string | null = null;
-
-      // Upload photo if provided
-      if (photoFile && user) {
+      let photo_url: string | undefined;
+      if (photoFile) {
         const ext = photoFile.name.split('.').pop() || 'jpg';
         const filePath = `${user.id}/${Date.now()}.${ext}`;
-        const { error: uploadErr } = await supabase.storage
-          .from('contributions')
-          .upload(filePath, photoFile, { contentType: photoFile.type });
-
-        if (!uploadErr) {
-          const { data: urlData } = supabase.storage
-            .from('contributions')
-            .getPublicUrl(filePath);
-          photoUrl = urlData.publicUrl;
-        }
+        const { error: upErr } = await supabase.storage.from('contributions').upload(filePath, photoFile, { contentType: photoFile.type });
+        if (!upErr) photo_url = supabase.storage.from('contributions').getPublicUrl(filePath).data.publicUrl;
       }
 
-      // Submit air quality hazard reports to Supabase
-      if (selectedType === 'hazard' && currentCoords && user) {
-        await supabase.from('air_quality_reports').insert({
-          user_id: user.id,
-          lat: currentCoords.lat,
-          lng: currentCoords.lng,
-          aqi_rating: 4, // poor
-          description: `${placeName.trim()} — ${placeDescription.trim()}`,
-          ...(photoUrl && { photo_url: photoUrl }),
-        });
-      }
+      const res = await submitContribution({
+        type: mode === 'aqi' ? 'hazard' : mode,
+        user_id: user.id,
+        ...(isPoi ? { name: name.trim(), category: category || undefined } : {}),
+        ...(description.trim() ? { description: description.trim() } : {}),
+        ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
+        ...(mode === 'aqi' ? { aqi_rating: severity } : {}),
+        ...(photo_url ? { photo_url } : {}),
+      });
 
-      // Award EcoPoints for contribution
-      if (user) {
-        // Server-authoritative + daily-capped (idempotent in claim_reward).
-        await supabase.rpc('claim_reward', {
-          p_user_id: user.id,
-          p_type: 'contribution',
-        });
-        useAuthStore.getState().fetchProfile();
-      }
-
-      // Store all contributions locally + as a backup
-      const contribution = {
-        id: crypto.randomUUID(),
-        type: selectedType,
-        name: placeName.trim(),
-        description: placeDescription.trim(),
-        category: placeCategory.trim(),
-        coordinate: currentCoords,
-        createdAt: new Date().toISOString(),
-        ...(photoUrl && { photoUrl }),
-      };
-
-      const contributions = JSON.parse(localStorage.getItem('breeva_contributions') || '[]');
-      contributions.push(contribution);
-      localStorage.setItem('breeva_contributions', JSON.stringify(contributions));
-    } catch (err) {
-      console.error('Submission error:', err);
+      if (!res.ok) { setFormError('Gagal mengirim. Coba lagi.'); return; }
+      useAuthStore.getState().fetchProfile?.();
+      setResult(res);
+    } catch {
+      setFormError('Terjadi kesalahan. Coba lagi.');
+    } finally {
+      setSubmitting(false);
     }
-
-    setIsSubmitting(false);
-    setIsSubmitted(true);
   };
 
-  const handleReset = () => {
-    setSelectedType(null);
-    setPlaceName('');
-    setPlaceDescription('');
-    setPlaceCategory('');
-    setIsSubmitted(false);
-    setCurrentCoords(null);
-    setPhotoFile(null);
-    setPhotoPreview(null);
-    setFieldErrors({});
+  const resetAll = () => {
+    setMode('aqi'); setSeverity(3); setName(''); setCategory(''); setDescription('');
+    setCoords(null); setAddress(null); setLocError(null); setPhotoFile(null); setPhotoPreview(null);
+    setFormError(null); setResult(null);
   };
+
+  // ── Success ────────────────────────────────────────────────────────────────
+  if (result) {
+    const st = STATUS_THEME[result.status];
+    return (
+      <div className="gradient-mesh-bg min-h-screen pb-24">
+        <div className="max-w-2xl mx-auto px-4 pt-16">
+          <motion.div
+            initial={reduce ? false : { opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}
+            className="glass-card relative overflow-hidden p-7 text-center" role="status" aria-live="polite"
+          >
+            <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(120% 80% at 50% -10%, ${st.color}1f, transparent 60%)` }} />
+            <motion.div initial={reduce ? false : { scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: reduce ? 0 : 0.15 }}
+              className="relative grid place-items-center w-16 h-16 mx-auto rounded-2xl mb-4" style={{ background: `${st.color}1f` }}>
+              <CheckCircle2 className="w-9 h-9" style={{ color: st.color }} />
+            </motion.div>
+            <h2 className="relative text-xl font-extrabold text-gray-900 dark:text-white">Terima kasih!</h2>
+            <p className="relative text-sm text-gray-500 dark:text-gray-400 mt-1">Kontribusimu membantu memperbaiki peta udara bersih untuk semua.</p>
+
+            <div className="relative mt-4 flex flex-col items-center gap-2">
+              {result.ecopoints_earned > 0 ? (
+                <div className="inline-flex items-center gap-1.5 text-primary-600 dark:text-primary-400 font-bold">
+                  <Coins className="w-4 h-4" /> +{result.ecopoints_earned} EcoPoints
+                </div>
+              ) : result.capped ? (
+                <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">
+                  Batas poin harian (5/hari) tercapai — laporanmu <strong>tetap dihitung</strong>.
+                </p>
+              ) : null}
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold" style={{ color: st.color, background: `${st.color}1f` }}>
+                <st.Icon className="w-3.5 h-3.5" /> {st.label}
+              </span>
+              {result.status === 'rejected' && result.ai_notes && (
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 max-w-xs leading-relaxed">{result.ai_notes}</p>
+              )}
+              {result.quest_updates.map((q) => (
+                <div key={q.title} className="inline-flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                  <Sparkles className="w-3 h-3" /> Quest selesai: {q.title} (+{q.reward})
+                </div>
+              ))}
+            </div>
+
+            <div className="relative flex gap-2.5 mt-6">
+              <button onClick={resetAll} className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm font-semibold text-gray-700 dark:text-gray-200">Tambah lagi</button>
+              <button onClick={() => navigate('/contribute/history')} className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm font-semibold text-gray-700 dark:text-gray-200">Riwayat</button>
+              <button onClick={() => navigate('/')} className="flex-1 py-3 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 text-white text-sm font-semibold shadow-lg shadow-primary-500/30">Ke peta</button>
+            </div>
+          </motion.div>
+        </div>
+        <BottomNavigation />
+      </div>
+    );
+  }
+
+  const sevTheme = SEVERITY[severity - 1];
 
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24">
+      <Seo title="Kontribusi Udara & Peta — Breeva" description="Laporkan kualitas udara per-jalan dan tambahkan tempat ke peta Breeva. Kontribusimu memberi makan engine VAYU dan memajukan quest harian." path="/contribute" />
+
       {/* Header */}
       <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between safe-area-top">
-        <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
+        <button onClick={() => navigate(-1)} aria-label="Kembali" className="text-gray-600 dark:text-gray-300 p-1 -ml-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition">
           <ChevronLeft className="w-6 h-6" />
         </button>
-        <h1 className="text-base font-semibold text-gray-900 dark:text-white">Contribute</h1>
-        <button onClick={() => navigate('/contribute/history')} className="text-primary-500 p-1">
+        <h1 className="text-base font-semibold text-gray-900 dark:text-white">Kontribusi</h1>
+        <button onClick={() => navigate('/contribute/history')} aria-label="Riwayat kontribusi" className="text-primary-500 p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition">
           <Clock className="w-5 h-5" />
         </button>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 pt-4 pb-12">
-        {/* Success State */}
-        {isSubmitted ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="glass-card p-8 text-center"
-          >
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', delay: 0.2 }}
-            >
-              <CheckCircle2 className="w-16 h-16 text-primary-500 mx-auto mb-4" />
-            </motion.div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Thank You!</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-              Your contribution helps make Breeva better for everyone.
+      <motion.div variants={container} initial="hidden" animate="show" className="max-w-2xl mx-auto px-4 pt-4 pb-12 space-y-4">
+        {/* Branded explainer */}
+        <motion.div variants={item} className="relative overflow-hidden rounded-2xl p-5 text-white shadow-lg shadow-emerald-900/10"
+          style={{ background: 'linear-gradient(135deg,#047857 0%,#059669 42%,#0ea5e9 100%)' }}>
+          <div className="absolute -top-10 -right-8 w-36 h-36 rounded-full bg-white/15 blur-2xl" aria-hidden />
+          <div className="relative">
+            <div className="flex items-center gap-1.5 text-white/90">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="text-[10px] uppercase tracking-[0.18em] font-bold">Komunitas · VAYU Contributor</span>
+            </div>
+            <h2 className="mt-2 text-lg font-extrabold leading-snug">{isPoi ? 'Tambahkan tempat ke peta' : 'Laporkan kualitas udara di sekitarmu'}</h2>
+            <p className="mt-1.5 text-[12.5px] text-white/85 leading-relaxed max-w-md">
+              {isPoi
+                ? 'Lengkapi peta Breeva — usulanmu ditinjau lalu membantu navigasi udara bersih semua pengguna.'
+                : 'Laporanmu memberi makan engine VAYU per-jalan dan memajukan quest harian “Lapor udara”.'}
             </p>
-            <p className="text-xs text-primary-500 font-medium mb-6">
-              +25 EcoPoints earned for contributing!
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleReset}
-                className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm font-semibold text-gray-700 dark:text-gray-300"
-              >
-                Add Another
-              </button>
-              <button
-                onClick={() => navigate('/home')}
-                className="flex-1 gradient-primary text-white py-3 rounded-xl text-sm font-semibold"
-              >
-                Back to Map
-              </button>
+          </div>
+        </motion.div>
+
+        {/* AQI hero report (primary) */}
+        {!isPoi && (
+          <motion.div variants={item} className="glass-card p-4 space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 block">Seberapa buruk udaranya di sini?</label>
+              <div className="flex gap-1.5">
+                {SEVERITY.map((s) => {
+                  const active = severity === s.value;
+                  return (
+                    <button key={s.value} type="button" onClick={() => setSeverity(s.value)}
+                      aria-label={s.label} aria-pressed={active}
+                      className="flex-1 h-11 rounded-xl text-sm font-bold transition border-2"
+                      style={active
+                        ? { background: s.color, borderColor: s.color, color: '#fff' }
+                        : { background: `${s.color}14`, borderColor: 'transparent', color: s.color }}>
+                      {s.value}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-xs font-semibold" style={{ color: sevTheme.color }}>{sevTheme.label}</p>
             </div>
           </motion.div>
-        ) : (
-          <>
-            {/* Description */}
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              Help make Breeva's map more complete and accurate. Your contributions improve eco-routing for everyone.
-            </p>
-
-            {/* VAYU Air Quality Contributor */}
-            <div className="glass-card p-4 mb-5 border border-primary-200/50 dark:border-primary-800/30 bg-gradient-to-r from-primary-50/50 to-emerald-50/50 dark:from-primary-950/30 dark:to-emerald-950/30">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-emerald-500 flex items-center justify-center shadow-sm">
-                  <Wind className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-gray-900 dark:text-white">VAYU Air Contributor</h4>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">Otomatis aktif saat kamu jalan</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed mb-3">
-                Setiap kali kamu berjalan dengan Breeva, data pergerakanmu (tanpa identitas) membantu membangun peta kualitas udara real-time untuk semua pengguna. Semakin sering kamu jalan, semakin akurat VAYU Engine.
-              </p>
-              <div className="flex items-center gap-4 text-[10px]">
-                <div className="flex items-center gap-1 text-primary-600 dark:text-primary-400 font-medium">
-                  <Footprints className="w-3 h-3" />
-                  Tier 0: Auto-trace
-                </div>
-                <div className="flex items-center gap-1 text-gray-400 dark:text-gray-500">
-                  <CheckCircle2 className="w-3 h-3" />
-                  Anonim & aman
-                </div>
-              </div>
-            </div>
-
-            {/* Report Type Selection */}
-            {!selectedType && (
-              <div className="space-y-2.5">
-                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 px-1">
-                  What would you like to add?
-                </h3>
-                {reportTypes.map((type, i) => (
-                  <motion.button
-                    key={type.type}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    onClick={() => {
-                      setSelectedType(type.type);
-                      handleGetLocation();
-                    }}
-                    className="w-full glass-card p-4 flex items-center gap-4 text-left hover:shadow-md transition-shadow"
-                  >
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${type.color}`}>
-                      {type.icon}
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{type.label}</h4>
-                      <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">{type.description}</p>
-                    </div>
-                  </motion.button>
-                ))}
-              </div>
-            )}
-
-            {/* Report Form */}
-            {selectedType && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-4"
-              >
-                <button
-                  onClick={() => setSelectedType(null)}
-                  className="text-xs text-primary-500 font-medium"
-                >
-                  ← Change type
-                </button>
-
-                {/* Place Name */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
-                    Place Name *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Taman Kota Baru"
-                    value={placeName}
-                    onChange={e => { setPlaceName(e.target.value); setFieldErrors(prev => { const { placeName: _, ...rest } = prev; return rest; }); }}
-                    className={`w-full bg-white dark:bg-gray-900/80 backdrop-blur-sm rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none border transition ${
-                      fieldErrors.placeName
-                        ? 'border-danger-500 focus:border-danger-500'
-                        : 'border-gray-200 dark:border-gray-700/50 focus:border-primary-500'
-                    }`}
-                    aria-invalid={!!fieldErrors.placeName}
-                    aria-describedby={fieldErrors.placeName ? 'placeName-error' : undefined}
-                  />
-                  {fieldErrors.placeName && (
-                    <p id="placeName-error" className="mt-1 text-xs text-danger-500" role="alert">{fieldErrors.placeName}</p>
-                  )}
-                </div>
-
-                {/* Category */}
-                {(selectedType === 'missing_place' || selectedType === 'eco_merchant') && (
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
-                      Category
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {(selectedType === 'eco_merchant'
-                        ? ['Refill Station', 'Thrift Store', 'Vegan Restaurant', 'Repair Shop', 'Eco Products', 'Organic Market']
-                        : ['Restaurant', 'Cafe', 'Shop', 'School', 'Mosque', 'Hospital', 'Park', 'Other']
-                      ).map((cat) => (
-                        <button
-                          key={cat}
-                          onClick={() => setPlaceCategory(cat)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                            placeCategory === cat
-                              ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 border border-primary-200 dark:border-primary-800'
-                              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          {cat}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Description */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
-                    Description (optional)
-                  </label>
-                  <textarea
-                    placeholder="Any details that would help..."
-                    value={placeDescription}
-                    onChange={e => setPlaceDescription(e.target.value)}
-                    rows={3}
-                    className="w-full bg-white dark:bg-gray-900/80 backdrop-blur-sm rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none border border-gray-200 dark:border-gray-700/50 focus:border-primary-500 transition resize-none"
-                  />
-                </div>
-
-                {/* Location */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
-                    Location
-                  </label>
-                  <button
-                    onClick={handleGetLocation}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition w-full ${
-                      currentCoords
-                        ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 border border-primary-200 dark:border-primary-800'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                    }`}
-                  >
-                    <LocateFixed className="w-4 h-4" />
-                    {currentCoords
-                      ? `📍 ${currentCoords.lat.toFixed(4)}, ${currentCoords.lng.toFixed(4)}`
-                      : 'Use Current Location'
-                    }
-                  </button>
-                </div>
-
-                {/* Photo */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
-                    Photo (optional)
-                  </label>
-                  {photoPreview ? (
-                    <div className="relative">
-                      <img src={photoPreview} alt="Preview" className="w-full h-40 object-cover rounded-xl" />
-                      <button
-                        onClick={() => { setPhotoFile(null); setPhotoPreview(null); }}
-                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center text-xs"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="flex flex-col items-center gap-2 w-full py-6 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-primary-300 hover:text-primary-500 transition cursor-pointer">
-                      <Camera className="w-6 h-6" />
-                      <span className="text-xs font-medium">Tap to add photo</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          if (file.size > 5 * 1024 * 1024) { alert('Max 5MB'); return; }
-                          setPhotoFile(file);
-                          const reader = new FileReader();
-                          reader.onload = () => setPhotoPreview(reader.result as string);
-                          reader.readAsDataURL(file);
-                        }}
-                      />
-                    </label>
-                  )}
-                </div>
-
-                {/* Submit */}
-                <button
-                  onClick={handleSubmit}
-                  disabled={!placeName.trim() || isSubmitting}
-                  className="w-full gradient-primary text-white py-3.5 rounded-xl text-sm font-semibold shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      Submit Contribution
-                    </>
-                  )}
-                </button>
-              </motion.div>
-            )}
-          </>
         )}
-      </div>
+
+        {/* POI form */}
+        {isPoi && poi && (
+          <motion.div variants={item} className="glass-card p-4 space-y-4">
+            <button onClick={() => { setMode('aqi'); setFormError(null); }} className="text-xs text-primary-500 font-medium flex items-center gap-1">
+              <ChevronLeft className="w-3.5 h-3.5" /> Kembali ke laporan udara
+            </button>
+            <div className="flex items-center gap-2.5">
+              <span className="grid place-items-center w-9 h-9 rounded-xl" style={{ background: `${poi.color}1f` }}><poi.icon className="w-[18px] h-[18px]" style={{ color: poi.color }} /></span>
+              <span className="text-sm font-bold text-gray-900 dark:text-white">{poi.label}</span>
+            </div>
+            <div>
+              <label htmlFor="poi-name" className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 block">Nama tempat *</label>
+              <input id="poi-name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="mis. Taman Kota Baru"
+                className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition" />
+            </div>
+            {poi.categories.length > 0 && (
+              <div>
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 block">Kategori</label>
+                <div className="flex flex-wrap gap-2">
+                  {poi.categories.map((cat) => (
+                    <button key={cat} type="button" onClick={() => setCategory(cat === category ? '' : cat)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${category === cat
+                        ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-300 border border-primary-200 dark:border-primary-800'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* Shared: location */}
+        <motion.div variants={item} className="glass-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-gray-600 dark:text-gray-400">Lokasi {!isPoi && <span className="text-danger-500">*</span>}</label>
+            <button onClick={handleLocate} disabled={locating} className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 dark:text-primary-400 disabled:opacity-60">
+              {locating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LocateFixed className="w-3.5 h-3.5" />} Gunakan lokasi saya
+            </button>
+          </div>
+          {coords ? (
+            <>
+              <Suspense fallback={<div className="h-[168px] rounded-[14px] bg-gray-100 dark:bg-gray-800 animate-pulse" />}>
+                <LocationPicker lat={coords.lat} lng={coords.lng} onChange={(la, ln) => void applyCoords(la, ln)} />
+              </Suspense>
+              <p className="flex items-start gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+                <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary-500" />
+                <span>{address || `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`} · ketuk/geser pin untuk menyesuaikan</span>
+              </p>
+            </>
+          ) : (
+            <button onClick={handleLocate} className="w-full py-6 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-primary-300 hover:text-primary-500 transition flex flex-col items-center gap-1.5">
+              <MapPin className="w-6 h-6" />
+              <span className="text-xs font-medium">Tentukan lokasi</span>
+            </button>
+          )}
+          {locError && <p className="text-xs text-amber-600 dark:text-amber-400" role="alert">{locError}</p>}
+        </motion.div>
+
+        {/* Shared: description + photo */}
+        <motion.div variants={item} className="glass-card p-4 space-y-4">
+          <div>
+            <label htmlFor="desc" className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 block">Catatan (opsional)</label>
+            <textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Detail yang membantu…"
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition resize-none" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 block">Foto (opsional)</label>
+            {photoPreview ? (
+              <div className="relative">
+                <img src={photoPreview} alt="Pratinjau" className="w-full h-40 object-cover rounded-xl" />
+                <button onClick={() => { setPhotoFile(null); setPhotoPreview(null); }} aria-label="Hapus foto" className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white grid place-items-center">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center gap-2 w-full py-6 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-primary-300 hover:text-primary-500 transition cursor-pointer">
+                <Camera className="w-6 h-6" />
+                <span className="text-xs font-medium">Ketuk untuk tambah foto</span>
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => handlePhoto(e.target.files?.[0])} />
+              </label>
+            )}
+          </div>
+        </motion.div>
+
+        {formError && <motion.p variants={item} className="text-xs text-danger-500 text-center" role="alert">{formError}</motion.p>}
+
+        {/* Submit */}
+        <motion.button variants={item} whileTap={reduce ? undefined : { scale: 0.98 }} onClick={handleSubmit}
+          disabled={submitting || (mode === 'aqi' ? !coords : name.trim().length < 3)}
+          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-primary-500 to-primary-600 text-white text-sm font-semibold shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 disabled:opacity-50 disabled:shadow-none transition">
+          {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Mengirim…</> : <><Send className="w-4 h-4" /> Kirim kontribusi</>}
+        </motion.button>
+
+        {/* Secondary: add a place (only on the AQI view) */}
+        {!isPoi && (
+          <motion.div variants={item} className="pt-2">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2 px-1">Atau tambahkan ke peta</p>
+            <div className="space-y-2">
+              {POI_TYPES.map((t) => (
+                <button key={t.type} onClick={() => { setMode(t.type); setFormError(null); }}
+                  className="w-full glass-card p-3.5 flex items-center gap-3 text-left hover:shadow-md transition">
+                  <span className="grid place-items-center w-10 h-10 rounded-xl shrink-0" style={{ background: `${t.color}1f` }}><t.icon className="w-5 h-5" style={{ color: t.color }} /></span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold text-gray-900 dark:text-white">{t.label}</span>
+                    <span className="block text-[11px] text-gray-400 dark:text-gray-500">{t.description}</span>
+                  </span>
+                  <ArrowRight className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* VAYU auto-trace note */}
+        <motion.div variants={item} className="glass-card p-4 flex gap-3">
+          <span className="grid place-items-center w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-emerald-500 shrink-0"><Wind className="w-[18px] h-[18px] text-white" /></span>
+          <div>
+            <p className="text-xs font-bold text-gray-900 dark:text-white">VAYU Auto-trace aktif</p>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed mt-0.5">Setiap kali kamu berjalan, jejak anonimmu otomatis memperkaya peta udara real-time — tanpa identitas, +5 EcoPoints/sesi.</p>
+          </div>
+        </motion.div>
+      </motion.div>
 
       <BottomNavigation />
     </div>

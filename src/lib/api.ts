@@ -410,6 +410,72 @@ export async function completeWalkViaApi(payload: CompleteWalkPayload): Promise<
   };
 }
 
+export interface SubmitContributionPayload {
+  type: 'hazard' | 'missing_place' | 'eco_merchant' | 'green_space';
+  user_id: string;
+  name?: string;
+  category?: string;
+  description?: string;
+  lat?: number;
+  lng?: number;
+  aqi_rating?: number; // hazard: self-reported severity 1 (best) .. 5 (worst)
+  photo_url?: string;
+}
+
+export interface SubmitContributionResult {
+  ok: boolean;
+  queued: boolean;
+  status: 'pending' | 'approved' | 'rejected';
+  ecopoints_earned: number;
+  capped: boolean;
+  quest_updates: Array<{ title: string; reward: number }>;
+  ai_notes: string | null;
+}
+
+/**
+ * Submit a contribution via the server-authoritative endpoint (api/contributions/submit).
+ * Mirrors completeWalkViaApi: Bearer auth + offline queue. Points/quests/status come back
+ * REAL from the server — never granted or guessed client-side.
+ */
+export async function submitContribution(payload: SubmitContributionPayload): Promise<SubmitContributionResult> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+  const result = await sendOrQueueMutation({
+    url: '/api/contributions/submit',
+    method: 'POST',
+    headers,
+    body: payload,
+    dedupeKey: `contribution:${payload.user_id}:${payload.type}:${payload.name ?? ''}:${Math.round((payload.lat ?? 0) * 1e4)}:${Math.round((payload.lng ?? 0) * 1e4)}`,
+  });
+
+  if (result.queued) {
+    return { ok: true, queued: true, status: 'pending', ecopoints_earned: 0, capped: false, quest_updates: [], ai_notes: null };
+  }
+  if (!result.ok) {
+    return { ok: false, queued: false, status: 'pending', ecopoints_earned: 0, capped: false, quest_updates: [], ai_notes: null };
+  }
+
+  const json = (result.data || {}) as {
+    status?: 'pending' | 'approved' | 'rejected';
+    ecopoints_earned?: number; capped?: boolean;
+    quest_updates?: Array<{ title: string; reward: number }>;
+    ai?: { notes?: string | null };
+  };
+  return {
+    ok: true,
+    queued: false,
+    status: json.status || 'pending',
+    ecopoints_earned: Number(json.ecopoints_earned || 0),
+    capped: Boolean(json.capped),
+    quest_updates: Array.isArray(json.quest_updates) ? json.quest_updates : [],
+    ai_notes: json.ai?.notes ?? null,
+  };
+}
+
 /**
  * Gemini AI - Generate eco-friendly route suggestions
  */
@@ -1259,6 +1325,7 @@ export async function submitAQCalibration(
       lng,
       aqi_rating: aqRating,
       description: `Walk calibration (walk: ${walkId})`,
+      source: 'calibration', // excluded from the Kontribusi history + contribution_count
     });
     return !error;
   } catch {

@@ -1,129 +1,148 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { ChevronLeft, MapPinPlus, Store, TreePine, AlertTriangle, Clock, Leaf } from 'lucide-react';
+import { motion, useReducedMotion, type Variants } from 'framer-motion';
+import {
+  ChevronLeft, MapPinPlus, Store, TreePine, Wind, Clock, Coins,
+  ShieldCheck, ShieldAlert, Send, Loader2,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
+import { submitContribution } from '../lib/api';
 
-interface Contribution {
+type Kind = 'aqi' | 'missing_place' | 'eco_merchant' | 'green_space';
+type Status = 'pending' | 'approved' | 'rejected';
+
+interface HistItem {
   id: string;
-  type: string;
-  name: string;
-  description: string;
-  coordinate: { lat: number; lng: number } | null;
-  photoUrl?: string;
+  kind: Kind;
+  title: string;
+  status: Status;
   createdAt: string;
+  severity?: number;
 }
 
-const typeConfig: Record<string, { icon: typeof MapPinPlus; label: string; color: string }> = {
-  missing_place: { icon: MapPinPlus, label: 'Missing Place', color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
-  eco_merchant: { icon: Store, label: 'Eco Merchant', color: 'text-primary-500 bg-primary-50 dark:bg-primary-900/20' },
-  green_space: { icon: TreePine, label: 'Green Space', color: 'text-green-500 bg-green-50 dark:bg-green-900/20' },
-  hazard: { icon: AlertTriangle, label: 'Air Quality Hazard', color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/20' },
+interface AqrRow { id: string; description: string | null; aqi_rating: number | null; status: string | null; created_at: string }
+interface PlaceRow { id: string; type: string; name: string; status: string | null; created_at: string }
+interface LegacyContribution { type?: string; name?: string; description?: string; category?: string; coordinate?: { lat: number; lng: number } | null }
+
+const TYPE_CFG: Record<Kind, { icon: LucideIcon; label: string; color: string }> = {
+  aqi: { icon: Wind, label: 'Laporan udara', color: '#f59e0b' },
+  missing_place: { icon: MapPinPlus, label: 'Tempat baru', color: '#3b82f6' },
+  eco_merchant: { icon: Store, label: 'Merchant eco', color: '#10b981' },
+  green_space: { icon: TreePine, label: 'Ruang hijau', color: '#16a34a' },
 };
+
+const STATUS_CFG: Record<Status, { label: string; color: string; Icon: LucideIcon }> = {
+  approved: { label: 'Terverifikasi', color: '#22c55e', Icon: ShieldCheck },
+  pending: { label: 'Menunggu', color: '#f59e0b', Icon: Clock },
+  rejected: { label: 'Ditinjau', color: '#ef4444', Icon: ShieldAlert },
+};
+
+const SEVERITY_COLOR = ['#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444'];
+
+const TIERS = [
+  { min: 0, label: 'Pemula', icon: '🌱' },
+  { min: 5, label: 'Kontributor', icon: '🌿' },
+  { min: 15, label: 'Penjelajah', icon: '🗺️' },
+  { min: 30, label: 'Perintis', icon: '🧭' },
+  { min: 50, label: 'Kartografer', icon: '🏆' },
+];
+
+const fmtDate = (d: string) => new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 
 export default function ContributionHistoryPage() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
-  const [contributions, setContributions] = useState<Contribution[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const reduce = useReducedMotion() ?? false;
+  const user = useAuthStore((s) => s.user);
+  const [items, setItems] = useState<HistItem[]>([]);
+  const [count, setCount] = useState(0);
+  const [points, setPoints] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [legacy, setLegacy] = useState<number>(0);
+  const [migrating, setMigrating] = useState(false);
 
-  useEffect(() => {
-    // Load from localStorage (all contributions stored locally)
-    const stored = JSON.parse(localStorage.getItem('breeva_contributions') || '[]') as Contribution[];
+  const load = useCallback(async () => {
+    if (!user) { setLoading(false); return; }
+    const [aqr, place, countRow, ptx] = await Promise.all([
+      supabase.from('air_quality_reports').select('id, description, aqi_rating, status, created_at')
+        .eq('user_id', user.id).neq('source', 'calibration').order('created_at', { ascending: false }).limit(100),
+      supabase.from('place_contributions').select('id, type, name, status, created_at')
+        .eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('users').select('contribution_count').eq('id', user.id).single(),
+      supabase.from('points_transactions').select('amount').eq('user_id', user.id).eq('transaction_type', 'contribution'),
+    ]);
 
-    // Also fetch AQ reports from Supabase
-    if (user) {
-      supabase
-        .from('air_quality_reports')
-        .select('id, description, lat, lng, photo_url, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(100)
-        .then(({ data }) => {
-          const dbContributions: Contribution[] = (data || []).map(r => ({
-            id: r.id,
-            type: 'hazard',
-            name: r.description?.split(' — ')[0] || 'AQ Report',
-            description: r.description || '',
-            coordinate: r.lat && r.lng ? { lat: r.lat, lng: r.lng } : null,
-            photoUrl: r.photo_url || undefined,
-            createdAt: r.created_at,
-          }));
+    const aqiItems: HistItem[] = ((aqr.data || []) as AqrRow[]).map((r) => ({
+      id: r.id, kind: 'aqi',
+      title: (r.description?.split(' — ')[0]) || 'Laporan kualitas udara',
+      status: (r.status as Status) || 'pending', createdAt: r.created_at, severity: r.aqi_rating ?? undefined,
+    }));
+    const placeItems: HistItem[] = ((place.data || []) as PlaceRow[]).map((r) => ({
+      id: r.id, kind: (r.type as Kind), title: r.name, status: (r.status as Status) || 'pending', createdAt: r.created_at,
+    }));
+    const merged = [...aqiItems, ...placeItems].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-          // Merge: DB reports + local contributions, deduplicate by id
-          const ids = new Set(dbContributions.map(c => c.id));
-          const merged = [...dbContributions, ...stored.filter(c => !ids.has(c.id))];
-          merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          setContributions(merged);
-          setIsLoading(false);
-        });
-    } else {
-      setContributions(stored.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-      setIsLoading(false);
-    }
+    setItems(merged);
+    setCount(countRow.data?.contribution_count ?? merged.length);
+    setPoints(((ptx.data || []) as { amount: number | null }[]).reduce((s, r) => s + (r.amount || 0), 0));
+    setLoading(false);
+
+    // Legacy localStorage contributions awaiting migration to the user's account.
+    try {
+      if (!localStorage.getItem('breeva_contributions_migrated')) {
+        const stored = JSON.parse(localStorage.getItem('breeva_contributions') || '[]');
+        if (Array.isArray(stored) && stored.length > 0) setLegacy(stored.length);
+      }
+    } catch { /* ignore */ }
   }, [user]);
 
-  const totalPoints = contributions.length * 25;
+  useEffect(() => { void load(); }, [load]);
 
-  const tiers = [
-    { min: 0, label: 'Newcomer', icon: '🌱', color: 'text-gray-500' },
-    { min: 5, label: 'Contributor', icon: '🌿', color: 'text-green-500' },
-    { min: 15, label: 'Scout', icon: '🗺️', color: 'text-blue-500' },
-    { min: 30, label: 'Pathfinder', icon: '🧭', color: 'text-purple-500' },
-    { min: 50, label: 'Cartographer', icon: '🏆', color: 'text-amber-500' },
-  ];
-  const currentTier = [...tiers].reverse().find(t => contributions.length >= t.min) || tiers[0];
-  const nextTier = tiers.find(t => t.min > contributions.length);
-  const tierProgress = nextTier ? ((contributions.length - currentTier.min) / (nextTier.min - currentTier.min)) * 100 : 100;
+  const migrateLegacy = async () => {
+    if (!user || migrating) return;
+    setMigrating(true);
+    localStorage.setItem('breeva_contributions_migrated', '1'); // guard against re-runs first
+    try {
+      const stored = JSON.parse(localStorage.getItem('breeva_contributions') || '[]') as LegacyContribution[];
+      for (const c of stored) {
+        const coord = c.coordinate || null;
+        const t = c.type;
+        if (t === 'hazard') {
+          if (!coord) continue;
+          await submitContribution({ type: 'hazard', user_id: user.id, lat: coord.lat, lng: coord.lng, aqi_rating: 4, description: c.description || c.name });
+        } else if (t === 'missing_place' || t === 'eco_merchant' || t === 'green_space') {
+          if (!c.name) continue;
+          await submitContribution({ type: t, user_id: user.id, name: c.name, category: c.category || undefined, description: c.description || undefined, ...(coord ? { lat: coord.lat, lng: coord.lng } : {}) });
+        }
+      }
+      localStorage.removeItem('breeva_contributions');
+    } catch { /* best-effort */ } finally {
+      setLegacy(0);
+      setMigrating(false);
+      useAuthStore.getState().fetchProfile?.();
+      void load();
+    }
+  };
 
-  const formatDate = (d: string) =>
-    new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const tier = [...TIERS].reverse().find((t) => count >= t.min) || TIERS[0];
+  const nextTier = TIERS.find((t) => t.min > count);
+  const progress = nextTier ? ((count - tier.min) / (nextTier.min - tier.min)) * 100 : 100;
 
-  if (isLoading) {
+  const container: Variants = { hidden: {}, show: { transition: { staggerChildren: reduce ? 0 : 0.05, delayChildren: reduce ? 0 : 0.03 } } };
+  const itemV: Variants = reduce
+    ? { hidden: { opacity: 1 }, show: { opacity: 1 } }
+    : { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.34, ease: [0.22, 1, 0.36, 1] } } };
+
+  if (loading) {
     return (
       <div className="gradient-mesh-bg min-h-screen pb-24">
-        <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between">
-          <div className="w-6 h-6 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
-          <div className="w-36 h-4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
-          <div className="w-6" />
-        </div>
+        <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center gap-2"><div className="w-6 h-6 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" /><div className="w-40 h-4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" /></div>
         <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
-          {/* Stats card skeleton */}
-          <div className="gradient-primary rounded-2xl p-5 animate-pulse flex flex-col items-center gap-2">
-            <div className="w-7 h-7 rounded bg-white/20" />
-            <div className="w-28 h-2.5 rounded bg-white/20" />
-            <div className="w-16 h-8 rounded bg-white/20" />
-            <div className="w-24 h-2.5 rounded bg-white/10" />
-          </div>
-          {/* Tier skeleton */}
-          <div className="glass-card p-4 animate-pulse">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded bg-gray-200 dark:bg-gray-700" />
-              <div className="space-y-1">
-                <div className="w-20 h-3.5 rounded bg-gray-200 dark:bg-gray-700" />
-                <div className="w-16 h-2.5 rounded bg-gray-100 dark:bg-gray-800" />
-              </div>
-            </div>
-            <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full" />
-          </div>
-          {/* List skeleton */}
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="glass-card p-4 animate-pulse">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
-                <div className="flex-1 space-y-1.5">
-                  <div className="w-32 h-3.5 rounded bg-gray-200 dark:bg-gray-700" />
-                  <div className="w-20 h-2.5 rounded bg-gray-100 dark:bg-gray-800" />
-                </div>
-                <div className="text-right space-y-1">
-                  <div className="w-14 h-3.5 rounded bg-gray-200 dark:bg-gray-700" />
-                  <div className="w-16 h-2.5 rounded bg-gray-100 dark:bg-gray-800" />
-                </div>
-              </div>
-            </div>
-          ))}
+          <div className="glass-card p-5 h-28 animate-pulse" />
+          <div className="glass-card p-4 h-20 animate-pulse" />
+          {[...Array(4)].map((_, i) => <div key={i} className="glass-card p-3.5 h-16 animate-pulse" />)}
         </div>
       </div>
     );
@@ -131,90 +150,92 @@ export default function ContributionHistoryPage() {
 
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24">
-      <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between safe-area-top">
-        <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
-          <ChevronLeft className="w-6 h-6" />
-        </button>
-        <h1 className="text-base font-semibold text-gray-900 dark:text-white">Contribution History</h1>
-        <div className="w-6" />
+      <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center gap-2 safe-area-top">
+        <button onClick={() => navigate(-1)} aria-label="Kembali" className="text-gray-600 dark:text-gray-300 p-1 -ml-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition"><ChevronLeft className="w-6 h-6" /></button>
+        <h1 className="text-base font-semibold text-gray-900 dark:text-white">Riwayat Kontribusi</h1>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 pt-4 pb-12 space-y-4">
-        {/* Stats Card */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="gradient-primary rounded-2xl p-5 text-center">
-          <Leaf className="w-7 h-7 text-white/80 mx-auto mb-1" />
-          <p className="text-white/60 text-[10px] uppercase tracking-wider">Total Contributions</p>
-          <h2 className="text-3xl font-bold text-white">{contributions.length}</h2>
-          <p className="text-white/50 text-xs mt-1">+{totalPoints} EcoPoints earned</p>
-        </motion.div>
-
-        {/* Contribution Tier */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="glass-card p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-2xl">{currentTier.icon}</span>
+      <motion.div variants={container} initial="hidden" animate="show" className="max-w-2xl mx-auto px-4 pt-4 pb-12 space-y-4">
+        {/* Hero stats */}
+        <motion.div variants={itemV} className="relative overflow-hidden rounded-2xl p-5 text-white shadow-lg shadow-emerald-900/10" style={{ background: 'linear-gradient(135deg,#047857 0%,#059669 45%,#0ea5e9 100%)' }}>
+          <div className="absolute -top-10 -right-8 w-32 h-32 rounded-full bg-white/15 blur-2xl" aria-hidden />
+          <div className="relative flex items-end justify-between">
             <div>
-              <h3 className={`text-sm font-bold ${currentTier.color}`}>{currentTier.label}</h3>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500">Contribution Rank</p>
+              <p className="text-white/70 text-[10px] uppercase tracking-wider">Total kontribusi</p>
+              <h2 className="text-4xl font-extrabold tabular-nums leading-none mt-1">{count}</h2>
+            </div>
+            <div className="text-right">
+              <p className="text-white/70 text-[10px] uppercase tracking-wider">EcoPoints</p>
+              <p className="text-xl font-bold tabular-nums inline-flex items-center gap-1"><Coins className="w-4 h-4" />{points}</p>
             </div>
           </div>
-          {nextTier && (
-            <div>
+        </motion.div>
+
+        {/* Legacy migration banner */}
+        {legacy > 0 && (
+          <motion.div variants={itemV} className="glass-card p-4 flex items-center gap-3 border border-amber-300/40 bg-amber-500/5">
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">{legacy} kontribusi lama di perangkat ini</p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">Kirim ke akunmu agar tersimpan permanen & dihitung.</p>
+            </div>
+            <button onClick={migrateLegacy} disabled={migrating} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 text-white text-xs font-semibold disabled:opacity-60">
+              {migrating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Kirim
+            </button>
+          </motion.div>
+        )}
+
+        {/* Tier */}
+        <motion.div variants={itemV} className="glass-card p-4">
+          <div className="flex items-center gap-3 mb-2">
+            <span className="text-2xl">{tier.icon}</span>
+            <div><h3 className="text-sm font-bold text-gray-900 dark:text-white">{tier.label}</h3><p className="text-[10px] text-gray-400 dark:text-gray-500">Peringkat kontributor</p></div>
+          </div>
+          {nextTier ? (
+            <>
               <div className="flex justify-between text-[10px] text-gray-400 dark:text-gray-500 mb-1">
-                <span>{contributions.length} contributions</span>
-                <span>Next: {nextTier.icon} {nextTier.label} ({nextTier.min})</span>
+                <span>{count} kontribusi</span><span>Berikutnya: {nextTier.icon} {nextTier.label} ({nextTier.min})</span>
               </div>
               <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                <div className="h-full gradient-primary rounded-full transition-all" style={{ width: `${tierProgress}%` }} />
+                <motion.div className="h-full rounded-full bg-gradient-to-r from-primary-500 to-primary-600" initial={{ width: reduce ? `${progress}%` : 0 }} animate={{ width: `${progress}%` }} transition={{ duration: reduce ? 0 : 0.8, ease: [0.22, 1, 0.36, 1] }} />
               </div>
-            </div>
-          )}
-          {!nextTier && (
-            <p className="text-[10px] text-amber-500 font-medium">Max rank achieved! 🎉</p>
-          )}
+            </>
+          ) : <p className="text-[10px] text-amber-500 font-medium">Peringkat tertinggi tercapai! 🎉</p>}
         </motion.div>
 
         {/* List */}
-        {contributions.length === 0 ? (
-          <div className="glass-card p-10 text-center">
+        {items.length === 0 ? (
+          <motion.div variants={itemV} className="glass-card p-10 text-center">
             <MapPinPlus className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">No contributions yet</p>
-            <button onClick={() => navigate('/contribute')} className="gradient-primary text-white text-sm px-5 py-2 rounded-xl font-medium">
-              Make First Contribution
-            </button>
-          </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Belum ada kontribusi</p>
+            <button onClick={() => navigate('/contribute')} className="bg-gradient-to-r from-primary-500 to-primary-600 text-white text-sm px-5 py-2 rounded-xl font-medium">Buat kontribusi pertama</button>
+          </motion.div>
         ) : (
           <div className="space-y-2">
-            {contributions.map((c, i) => {
-              const cfg = typeConfig[c.type] || typeConfig.missing_place;
-              const Icon = cfg.icon;
+            {items.map((c) => {
+              const cfg = TYPE_CFG[c.kind];
+              const st = STATUS_CFG[c.status];
               return (
-                <motion.div
-                  key={c.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                  className="glass-card p-3.5 flex items-center gap-3"
-                >
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${cfg.color}`}>
-                    <Icon className="w-5 h-5" />
+                <motion.div key={c.id} variants={itemV} className="glass-card p-3.5 flex items-center gap-3">
+                  <div className="grid place-items-center w-10 h-10 rounded-xl shrink-0 relative" style={{ background: `${cfg.color}1f` }}>
+                    <cfg.icon className="w-5 h-5" style={{ color: cfg.color }} />
+                    {c.kind === 'aqi' && c.severity && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-gray-900" style={{ background: SEVERITY_COLOR[c.severity - 1] }} />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{c.name}</h4>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-gray-400 dark:text-gray-500">{cfg.label}</span>
-                      <span className="text-[10px] text-gray-300 dark:text-gray-600">·</span>
-                      <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-0.5">
-                        <Clock size={9} /> {formatDate(c.createdAt)}
-                      </span>
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{c.title}</h4>
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
+                      <span>{cfg.label}</span><span className="text-gray-300 dark:text-gray-600">·</span>
+                      <span className="flex items-center gap-0.5"><Clock size={9} /> {fmtDate(c.createdAt)}</span>
                     </div>
                   </div>
-                  <span className="text-[10px] text-primary-500 font-medium">+25 pts</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold shrink-0" style={{ color: st.color, background: `${st.color}1a` }}>
+                    <st.Icon className="w-3 h-3" /> {st.label}
+                  </span>
                 </motion.div>
               );
             })}
           </div>
         )}
-      </div>
+      </motion.div>
 
       <BottomNavigation />
     </div>

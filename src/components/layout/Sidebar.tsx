@@ -45,9 +45,9 @@ const menuSections = [
     ],
   },
   {
-    title: 'Contribute',
+    title: 'Kontribusi',
     items: [
-      { icon: MapPinPlus, label: 'Add Missing Place', path: '/contribute', color: 'text-rose-500' },
+      { icon: MapPinPlus, label: 'Tambah Tempat', path: '/contribute', color: 'text-rose-500' },
     ],
   },
   {
