@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Star, Sparkles, Gift, Ticket, QrCode, RotateCcw,
+  Star, Sparkles, Gift, Ticket, QrCode, X,
   Coffee, ShoppingBag, Dumbbell, Film, Tag,
   ArrowRight, Clock, Search, SlidersHorizontal,
   ChevronDown, TrendingUp, Coins, CheckCircle2, XCircle,
@@ -14,6 +14,8 @@ import { cacheCollection, getCachedCollection } from '../lib/offline-db';
 import RewardRedemptionModal from '../components/features/RewardRedemptionModal';
 import { SkeletonGrid } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
+
+const QrImage = lazy(() => import('../components/ui/QrImage'));
 
 interface RewardRow {
   id: string;
@@ -91,7 +93,7 @@ export default function RewardsPage() {
   const [activeTab, setActiveTab] = useState<'available' | 'my-vouchers'>('available');
   const [selectedReward, setSelectedReward] = useState<RewardRow | null>(null);
   const [myVouchers, setMyVouchers] = useState<Voucher[]>([]);
-  const [flippedVoucher, setFlippedVoucher] = useState<string | null>(null);
+  const [selectedVoucher, setSelectedVoucher] = useState<Voucher | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('points-asc');
   const [showSort, setShowSort] = useState(false);
@@ -617,80 +619,62 @@ export default function RewardsPage() {
                 ) : (
                   <div className="space-y-3">
                     {filteredVouchers.map((v, i) => {
-                      const isFlipped = flippedVoucher === v.id;
                       const statusCfg = getStatusConfig(v.status);
                       const StatusIcon = statusCfg.icon;
+                      const isActive = v.status === 'active';
                       return (
                         <motion.div
                           key={v.id}
                           initial={{ opacity: 0, y: 12 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: i * 0.04 }}
-                          className="relative h-[100px] cursor-pointer"
-                          style={{ perspective: '800px' }}
-                          onClick={() => setFlippedVoucher(isFlipped ? null : v.id)}
+                          onClick={() => isActive && setSelectedVoucher(v)}
+                          className={`relative rounded-2xl bg-white dark:bg-gray-900/80 border border-gray-100 dark:border-gray-700/30 shadow-sm p-4 flex items-center gap-3 ${isActive ? 'cursor-pointer hover:shadow-md transition-shadow' : 'opacity-70'}`}
                         >
-                          <motion.div
-                            animate={{ rotateY: isFlipped ? 180 : 0 }}
-                            transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
-                            style={{ transformStyle: 'preserve-3d' }}
-                            className="absolute inset-0"
-                          >
-                            {/* Front */}
-                            <div
-                              className="absolute inset-0 rounded-2xl bg-white dark:bg-gray-900/80 border border-gray-100 dark:border-gray-700/30 shadow-sm p-4 flex items-center gap-3"
-                              style={{ backfaceVisibility: 'hidden' }}
-                            >
-                              {/* Dashed divider */}
-                              <div className="absolute left-[60px] top-2 bottom-2 border-l border-dashed border-gray-200 dark:border-gray-700/50" />
-
-                              <div className={`w-11 h-11 rounded-xl ${statusCfg.bg} flex items-center justify-center flex-shrink-0`}>
-                                <QrCode size={20} className={statusCfg.color} />
-                              </div>
-
-                              <div className="flex-1 min-w-0 pl-2">
-                                <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                                  {(v.reward as { title: string } | null)?.title || 'Reward'}
-                                </h4>
-                                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                                  {(v.merchant as { name: string } | null)?.name}
-                                  <span className="mx-1 text-gray-300 dark:text-gray-600">·</span>
-                                  {v.points_spent.toLocaleString()} pts
-                                </p>
-                                <div className="flex items-center gap-1 mt-1.5">
-                                  <Clock size={10} className="text-gray-400" />
-                                  <span className="text-[10px] text-gray-400">{formatExpiry(v.expires_at)}</span>
-                                </div>
-                              </div>
-
-                              <div className="flex flex-col items-end gap-1.5">
-                                <span className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg ${statusCfg.bg} ${statusCfg.color}`}>
-                                  <StatusIcon size={10} />
-                                  {statusCfg.label}
-                                </span>
-                                <span className="text-[9px] text-gray-400 dark:text-gray-500">Tap to reveal</span>
-                              </div>
-                            </div>
-
-                            {/* Back */}
-                            <div
-                              className="absolute inset-0 rounded-2xl bg-gradient-to-r from-emerald-50 via-white to-teal-50 dark:from-emerald-900/10 dark:via-gray-900/80 dark:to-teal-900/10 border border-primary-200 dark:border-primary-800/30 shadow-sm p-4 flex items-center justify-center"
-                              style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
-                            >
-                              <div className="text-center">
-                                <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium mb-1">Redemption Code</p>
-                                <p className="text-xl font-mono font-bold text-primary-600 dark:text-primary-400 tracking-[0.2em]">{v.qr_code}</p>
-                                <p className="text-[10px] text-gray-400 mt-1.5 font-mono">Backup: {v.backup_code}</p>
-                              </div>
-                              <RotateCcw size={14} className="text-gray-400 absolute top-3.5 right-3.5" />
-                            </div>
-                          </motion.div>
+                          <div className="absolute left-[60px] top-2 bottom-2 border-l border-dashed border-gray-200 dark:border-gray-700/50" />
+                          <div className={`w-11 h-11 rounded-xl ${statusCfg.bg} flex items-center justify-center flex-shrink-0`}>
+                            <QrCode size={20} className={statusCfg.color} />
+                          </div>
+                          <div className="flex-1 min-w-0 pl-2">
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{v.reward?.title || 'Reward'}</h4>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                              {v.merchant?.name}<span className="mx-1 text-gray-300 dark:text-gray-600">·</span>{v.points_spent.toLocaleString()} pts
+                            </p>
+                            <div className="flex items-center gap-1 mt-1.5"><Clock size={10} className="text-gray-400" /><span className="text-[10px] text-gray-400">{formatExpiry(v.expires_at)}</span></div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5">
+                            <span className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg ${statusCfg.bg} ${statusCfg.color}`}><StatusIcon size={10} />{statusCfg.label}</span>
+                            {isActive && <span className="text-[9px] text-primary-500 font-medium">Tap for QR</span>}
+                          </div>
                         </motion.div>
                       );
                     })}
                   </div>
                 )}
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Voucher QR Modal */}
+        <AnimatePresence>
+          {selectedVoucher && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setSelectedVoucher(null)}>
+              <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl p-6 text-center safe-area-bottom">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white truncate">{selectedVoucher.reward?.title || 'Voucher'}</h3>
+                  <button onClick={() => setSelectedVoucher(null)} className="p-1 text-gray-400 hover:text-gray-600 shrink-0"><X size={20} /></button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{selectedVoucher.merchant?.name} · show this to the cashier</p>
+                <div className="bg-white p-3 rounded-2xl shadow-sm inline-block">
+                  <Suspense fallback={<div className="w-[180px] h-[180px] bg-gray-100 animate-pulse rounded-lg" />}>
+                    <QrImage value={selectedVoucher.qr_code} size={180} />
+                  </Suspense>
+                </div>
+                <p className="text-lg font-mono font-bold text-gray-900 dark:text-white tracking-[0.15em] mt-4">{selectedVoucher.qr_code}</p>
+                <p className="text-[11px] text-gray-400 mt-1 font-mono">Backup: {selectedVoucher.backup_code}</p>
+                <div className="flex items-center justify-center gap-1.5 mt-3 text-xs text-gray-400"><Clock size={12} />{formatExpiry(selectedVoucher.expires_at)}</div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>

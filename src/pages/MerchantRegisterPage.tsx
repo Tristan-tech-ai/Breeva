@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
+import { registerMerchant, type RegisterMerchantResult } from '../lib/api';
 
 const CATEGORIES = [
   'Refill Station',
@@ -40,7 +41,7 @@ export default function MerchantRegisterPage() {
   const [website, setWebsite] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [result, setResult] = useState<RegisterMerchantResult | null>(null);
   const [error, setError] = useState('');
   const [docFile, setDocFile] = useState<File | null>(null);
   const [docName, setDocName] = useState('');
@@ -63,45 +64,36 @@ export default function MerchantRegisterPage() {
     setIsSubmitting(true);
     setError('');
 
-    let docUrl: string | null = null;
-    if (docFile && user) {
+    let docUrl: string | undefined;
+    if (docFile) {
       const ext = docFile.name.split('.').pop() || 'pdf';
       const path = `${user.id}/${Date.now()}.${ext}`;
-      const { error: uploadErr } = await supabase.storage
-        .from('merchant-docs')
-        .upload(path, docFile, { contentType: docFile.type });
-      if (!uploadErr) {
-        const { data: urlData } = supabase.storage.from('merchant-docs').getPublicUrl(path);
-        docUrl = urlData.publicUrl;
-      }
+      const { error: uploadErr } = await supabase.storage.from('merchant-docs').upload(path, docFile, { contentType: docFile.type });
+      if (!uploadErr) docUrl = supabase.storage.from('merchant-docs').getPublicUrl(path).data.publicUrl;
     }
 
-    const { error: insertErr } = await supabase.from('merchants').insert({
+    // Server-authoritative: Gemini sanity-check sets status (owner can't self-verify).
+    const res = await registerMerchant({
+      user_id: user.id,
       name: name.trim(),
-      description: description.trim() || null,
       category,
-      address: address.trim() || null,
+      description: description.trim() || undefined,
+      address: address.trim() || undefined,
       lat: coords.lat,
       lng: coords.lng,
-      phone: phone.trim() || null,
-      website: website.trim() || null,
-      owner_id: user.id,
-      is_verified: true,
-      is_active: true,
-      ...(docUrl && { document_url: docUrl }),
+      phone: phone.trim() || undefined,
+      website: website.trim() || undefined,
+      ...(docUrl ? { document_url: docUrl } : {}),
     });
 
     setIsSubmitting(false);
-
-    if (insertErr) {
-      setError('Failed to submit. Please try again.');
-      console.error(insertErr);
-    } else {
-      setIsSubmitted(true);
-    }
+    if (!res.ok) { setError(res.error || 'Failed to submit. Please try again.'); return; }
+    setResult(res);
   };
 
-  if (isSubmitted) {
+  if (result) {
+    const approved = result.status === 'approved';
+    const rejected = result.status === 'rejected';
     return (
       <div className="gradient-mesh-bg min-h-screen">
         <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between">
@@ -113,17 +105,23 @@ export default function MerchantRegisterPage() {
         </div>
         <div className="px-4 pt-16 max-w-md mx-auto text-center">
           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring' }}>
-            <CheckCircle2 className="w-16 h-16 text-primary-500 mx-auto mb-4" />
+            <CheckCircle2 className={`w-16 h-16 mx-auto mb-4 ${rejected ? 'text-amber-500' : 'text-primary-500'}`} />
           </motion.div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Submitted!</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+            {approved ? 'Verified & live!' : rejected ? 'Needs a quick review' : 'Submitted!'}
+          </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-            Your merchant registration is under review. We'll notify you once it's verified.
+            {approved
+              ? 'Your merchant is now on the Breeva map. Add rewards & manage it from your dashboard.'
+              : rejected
+                ? `${result.ai_notes || 'Some details need adjusting.'} You can edit and resubmit from your dashboard.`
+                : "Your registration is under review and will appear publicly once verified. You can already manage it."}
           </p>
           <button
-            onClick={() => navigate('/merchants')}
+            onClick={() => navigate(result.merchant_id ? `/merchants/${result.merchant_id}/manage` : '/merchants')}
             className="gradient-primary text-white py-3 px-8 rounded-xl text-sm font-semibold"
           >
-            Back to Merchants
+            {result.merchant_id ? 'Go to Dashboard' : 'Back to Merchants'}
           </button>
         </div>
       </div>

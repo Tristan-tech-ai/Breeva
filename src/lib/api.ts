@@ -476,6 +476,83 @@ export async function submitContribution(payload: SubmitContributionPayload): Pr
   };
 }
 
+export interface RegisterMerchantPayload {
+  user_id: string;
+  merchant_id?: string;
+  name: string;
+  category?: string;
+  description?: string;
+  address?: string;
+  lat?: number;
+  lng?: number;
+  phone?: string;
+  website?: string;
+  instagram?: string;
+  whatsapp?: string;
+  logo_url?: string;
+  cover_image_url?: string;
+  document_url?: string;
+  opening_hours?: unknown;
+  gallery_urls?: string[];
+}
+
+export interface RegisterMerchantResult {
+  ok: boolean;
+  merchant_id: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  is_verified: boolean;
+  ai_notes: string | null;
+  error?: string;
+}
+
+/**
+ * Register or edit a merchant via the server-authoritative endpoint (Gemini sanity-check
+ * sets status). Service-role write so the client can't self-set is_verified.
+ */
+export async function registerMerchant(payload: RegisterMerchantPayload): Promise<RegisterMerchantResult> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  try {
+    const resp = await fetch('/api/merchants/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+      body: JSON.stringify({ mode: 'register', ...payload }),
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) return { ok: false, merchant_id: null, status: 'pending', is_verified: false, ai_notes: null, error: json.error || 'Registration failed' };
+    return { ok: true, merchant_id: json.merchant_id ?? null, status: json.status || 'pending', is_verified: !!json.is_verified, ai_notes: json.ai?.notes ?? null };
+  } catch {
+    return { ok: false, merchant_id: null, status: 'pending', is_verified: false, ai_notes: null, error: 'Network error' };
+  }
+}
+
+export interface VerifyRedemptionResult {
+  valid: boolean;
+  reward?: { title: string; description: string; discount_percentage?: number; discount_amount?: number };
+  user?: { name: string };
+  error?: string;
+  used_at?: string;
+  expired_at?: string;
+}
+
+/** Owner-side voucher verification (marks a redemption used). */
+export async function verifyRedemption(qr_code: string, merchant_id: string): Promise<VerifyRedemptionResult> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  try {
+    const resp = await fetch('/api/merchants/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+      body: JSON.stringify({ qr_code, merchant_id }),
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) return { valid: false, error: json.error || 'Verification failed', used_at: json.used_at, expired_at: json.expired_at };
+    return json as VerifyRedemptionResult;
+  } catch {
+    return { valid: false, error: 'Network error' };
+  }
+}
+
 /**
  * Gemini AI - Generate eco-friendly route suggestions
  */

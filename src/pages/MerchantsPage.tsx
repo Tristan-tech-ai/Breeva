@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, BadgeCheck, Star, MapPin, Plus, Settings } from 'lucide-react';
+import { Search, BadgeCheck, Star, MapPin, Plus, Settings, Leaf } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { supabase } from '../lib/supabase';
 import { SkeletonList } from '../components/ui/Skeleton';
@@ -9,6 +9,7 @@ import EmptyState from '../components/ui/EmptyState';
 import LazyImage from '../components/ui/LazyImage';
 import SpotlightCard from '../components/ui/SpotlightCard';
 import { useAuthStore } from '../stores/authStore';
+import { tierFor } from '../lib/merchant-tiers';
 
 interface MerchantRow {
   id: string;
@@ -23,6 +24,9 @@ interface MerchantRow {
   is_active: boolean;
   rating: number;
   review_count: number;
+  sponsor_tier: string;
+  is_eco_certified: boolean;
+  eco_badge: string | null;
 }
 
 const categoryEmoji: Record<string, string> = {
@@ -43,7 +47,7 @@ export default function MerchantsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [ownedMerchant, setOwnedMerchant] = useState<{ id: string; is_verified: boolean } | null>(null);
+  const [ownedMerchant, setOwnedMerchant] = useState<{ id: string; is_verified: boolean; status: string } | null>(null);
 
   useEffect(() => {
     const fetchMerchants = async () => {
@@ -72,9 +76,9 @@ export default function MerchantsPage() {
     if (!user) return;
     supabase
       .from('merchants')
-      .select('id, is_verified')
+      .select('id, is_verified, status')
       .eq('owner_id', user.id)
-      .eq('is_active', true)
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
       .then(({ data }) => {
@@ -100,12 +104,14 @@ export default function MerchantsPage() {
             <p className="text-sm text-gray-500 dark:text-gray-400">Discover sustainable businesses near you</p>
           </div>
           <div className="flex items-center gap-2">
-            {ownedMerchant?.is_verified && (
+            {ownedMerchant && (
               <Link
                 to={`/merchants/${ownedMerchant.id}/manage`}
-                className="w-9 h-9 rounded-xl bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700/30 flex items-center justify-center shadow-sm"
+                title={ownedMerchant.status === 'approved' ? 'Manage your merchant' : 'Your merchant (pending review)'}
+                className="relative w-9 h-9 rounded-xl bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700/30 flex items-center justify-center shadow-sm"
               >
                 <Settings className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                {ownedMerchant.status !== 'approved' && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-500 border-2 border-white dark:border-gray-900" />}
               </Link>
             )}
             <Link
@@ -192,12 +198,18 @@ export default function MerchantsPage() {
                     )}
                   </div>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{merchant.category || 'General'} · {merchant.address || 'No address'}</p>
-                  <div className="flex items-center gap-2 mt-1.5">
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                     <div className="flex items-center gap-0.5">
                       <Star size={11} className="text-amber-400" fill="currentColor" />
                       <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{merchant.rating?.toFixed(1) || '—'}</span>
                     </div>
                     <span className="text-[10px] text-gray-400 dark:text-gray-500">({merchant.review_count || 0})</span>
+                    {tierFor(merchant.sponsor_tier).key !== 'free' && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">{tierFor(merchant.sponsor_tier).badge || tierFor(merchant.sponsor_tier).label}</span>
+                    )}
+                    {merchant.is_eco_certified && (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"><Leaf className="w-2.5 h-2.5" /> Eco</span>
+                    )}
                   </div>
                 </div>
               </motion.div>

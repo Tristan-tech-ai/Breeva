@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, AlertTriangle, CheckCircle2, Copy, QrCode } from 'lucide-react';
+import { X, AlertTriangle, CheckCircle2, Copy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
+
+const QrImage = lazy(() => import('../ui/QrImage'));
 
 interface RewardForRedeem {
   id: string;
@@ -135,10 +137,14 @@ export default function RewardRedemptionModal({ reward, onClose, onSuccess }: Pr
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
                 Show this code to the merchant to claim your reward
               </p>
-              <div className="glass-card p-4 mb-4">
-                <QrCode size={20} className="text-gray-400 mx-auto mb-2" />
-                <p className="text-lg font-mono font-bold text-gray-900 dark:text-white tracking-wider">{qrCode}</p>
-                <button onClick={copyCode} className="mt-2 flex items-center gap-1 mx-auto text-xs text-primary-500">
+              <div className="glass-card p-4 mb-4 flex flex-col items-center">
+                <div className="bg-white p-2.5 rounded-2xl shadow-sm">
+                  <Suspense fallback={<div className="w-[160px] h-[160px] bg-gray-100 animate-pulse rounded-lg" />}>
+                    <QrImage value={qrCode} size={160} />
+                  </Suspense>
+                </div>
+                <p className="text-base font-mono font-bold text-gray-900 dark:text-white tracking-wider mt-3">{qrCode}</p>
+                <button onClick={copyCode} className="mt-1.5 flex items-center gap-1 mx-auto text-xs text-primary-500">
                   <Copy size={12} /> Copy code
                 </button>
               </div>
