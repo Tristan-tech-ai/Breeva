@@ -44,8 +44,17 @@ function getMeasureCtx(): CanvasRenderingContext2D {
   return _measureCtx;
 }
 
+// Memoized: the same POI names are measured on every pan/zoom; caching the width
+// eliminates thousands of canvas.measureText() calls in dense viewports. Bounded so it
+// can't grow without limit.
+const _widthCache = new Map<string, number>();
 function measureText(text: string): number {
-  return getMeasureCtx().measureText(text).width;
+  const cached = _widthCache.get(text);
+  if (cached !== undefined) return cached;
+  const w = getMeasureCtx().measureText(text).width;
+  if (_widthCache.size > 5000) _widthCache.clear();
+  _widthCache.set(text, w);
+  return w;
 }
 
 const LABEL_PAD_X = 8;  // css padding (2×6) + border

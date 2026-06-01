@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createHash } from 'crypto';
 
 const SEARCHAPI_BASE = 'https://www.searchapi.io/api/v1/search';
 
@@ -62,6 +63,35 @@ async function redisSetInt(key: string, val: number): Promise<void> {
   }
 }
 
+// ─── Response cache (Upstash) ───────────────────────────────
+// SearchAPI place-details/search results barely change but are slow (1.5–3s) AND burn
+// finite credits. Cache the full JSON server-side so repeat / popular POIs are instant
+// and don't consume a credit. Command form = large payloads ride the POST body, not the URL.
+async function redisCmd(args: Array<string | number>): Promise<unknown> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()).result ?? null;
+  } catch {
+    return null;
+  }
+}
+async function cacheGet(key: string): Promise<unknown | null> {
+  const v = await redisCmd(['GET', key]);
+  if (typeof v !== 'string') return null;
+  try { return JSON.parse(v); } catch { return null; }
+}
+async function cacheSet(key: string, data: unknown, ttlSec: number): Promise<void> {
+  try { await redisCmd(['SET', key, JSON.stringify(data), 'EX', ttlSec]); } catch { /* best-effort */ }
+}
+
 // 401 = invalid/disabled key · 429 = out of credits (or rate-limited).
 // Either way the key is unusable right now → rotate to the next one.
 function isKeyExhausted(status: number): boolean {
@@ -107,6 +137,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── Serve from cache if we have a recent identical response (skips the slow upstream + a credit) ──
+  const cacheKey = `sapi:${engine}:${createHash('sha1').update(baseUrl.search).digest('hex')}`;
+  const ttlSec = engine === 'google_maps_place' ? 604_800 : 86_400; // details 7d · search/photos/reviews 1d
+  const cached = await cacheGet(cacheKey);
+  if (cached) {
+    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+    res.setHeader('X-SearchAPI-Cache', 'HIT');
+    return res.status(200).json(cached);
+  }
+
   // Start at the first key not yet known-dead.
   let startIdx = (await redisGetInt(POINTER_KEY)) ?? 0;
   if (!Number.isInteger(startIdx) || startIdx < 0 || startIdx >= SEARCHAPI_KEYS.length) {
@@ -135,8 +175,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const data = await response.json();
       // Remember the first live key so dead ones ahead of it are skipped next time.
       if (i !== startIdx) await redisSetInt(POINTER_KEY, i);
+      await cacheSet(cacheKey, data, ttlSec); // populate cache so the next open is instant
       res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
       res.setHeader('X-SearchAPI-Key-Index', String(i));
+      res.setHeader('X-SearchAPI-Cache', 'MISS');
       return res.status(200).json(data);
     }
 

@@ -29,9 +29,16 @@ type PointProps = { poiId: string; name: string; category: string; priority: num
 
 const index = new Supercluster<PointProps, Record<string, never>>({
   radius: 60,     // cluster radius in pixels
-  maxZoom: 17,     // individual points above z17
+  maxZoom: 20,     // keep clustering dense pockets up to z20 — caps marker count in dense
+                   // cities (Jakarta) instead of exploding into hundreds of DOM markers at z18+
   minPoints: 3,    // need 3+ to form a cluster
 });
+
+// Hard render budget: cap individual (non-cluster) markers per viewport so dense areas
+// never spawn hundreds of DOM markers. The most-important POIs (merchants, low priority
+// number) are kept; the long tail stays clustered / reappears as you zoom in. Mirrors how
+// Google shows labels for key places + clusters the rest, staying interactive + smooth.
+const MAX_RENDER_POINTS = 120;
 
 let loadedSerial = -1;
 let loadedZoom = -1;
@@ -98,7 +105,8 @@ export function getVisibleFeatures(
   zoom: number,
 ): ClusterFeature[] {
   const raw = index.getClusters([west, south, east, north], Math.floor(zoom));
-  const result: ClusterFeature[] = [];
+  const clusters: ClusterFeature[] = [];
+  const points: Array<ClusterPoint & { _priority: number }> = [];
 
   for (const f of raw) {
     const [lng, lat] = f.geometry.coordinates;
@@ -109,7 +117,7 @@ export function getVisibleFeatures(
     };
 
     if (props.cluster) {
-      result.push({
+      clusters.push({
         type: 'cluster',
         id: props.cluster_id!,
         lng,
@@ -120,16 +128,17 @@ export function getVisibleFeatures(
     } else {
       const poi = poiLookup.get(props.poiId);
       if (poi) {
-        result.push({
-          type: 'point',
-          poi,
-          lng,
-          lat,
-          id: poi.id,
-        });
+        points.push({ type: 'point', poi, lng, lat, id: poi.id, _priority: props.priority ?? 99 });
       }
     }
   }
 
-  return result;
+  // Cap individual markers to the render budget — keep the most-important (lowest
+  // priority number; merchants rank highest). Clusters are always kept (they expand on tap).
+  if (points.length > MAX_RENDER_POINTS) {
+    points.sort((a, b) => a._priority - b._priority);
+    points.length = MAX_RENDER_POINTS;
+  }
+
+  return [...clusters, ...points]; // points carry a harmless extra _priority field
 }
