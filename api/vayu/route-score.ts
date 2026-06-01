@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireApiKey } from './_apiauth.js';
 // v2 prior (Layer A Background-β + Layer D GP) — shared underscore module (inlines into the bundle;
 // .js extension required by Node ESM under type:module). Lets route scoring use the SAME calibrated
 // ambient as the map (road-aqi), instead of raw CAMS — the validated 45%-LODO accuracy lever.
@@ -1995,6 +1996,11 @@ export async function scorePolyline(
 
 // ─── Handler ────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Developer-API surface (/api/v1/route-score -> ?v1=1): require + rate-limit an API key.
+  if (req.query.v1) {
+    const gate = await requireApiKey(req, res, 'route-score');
+    if (!gate.ok) return;
+  }
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

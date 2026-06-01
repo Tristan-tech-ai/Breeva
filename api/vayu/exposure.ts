@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireApiKey } from './_apiauth.js';
 
 /**
  * VAYU Cumulative Exposure Calculator — Self-contained.
@@ -79,6 +80,11 @@ function samplePolyline(
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Developer-API surface (/api/v1/exposure -> ?v1=1): require + rate-limit an API key.
+  if (req.query.v1) {
+    const gate = await requireApiKey(req, res, 'exposure');
+    if (!gate.ok) return;
+  }
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

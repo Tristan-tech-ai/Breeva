@@ -8,6 +8,9 @@
   "rewrites": [
     { "source": "/api/tiles/road/:z/:x/:y", "destination": "/api/vayu/road-aqi?tile=1&z=:z&x=:x&y=:y" },
     { "source": "/api/tiles/road-mvt/:z/:x/:y", "destination": "/api/vayu/road-aqi?mvt=1&z=:z&x=:x&y=:y" },
+    { "source": "/api/v1/road-aqi", "destination": "/api/vayu/road-aqi?v1=1" },
+    { "source": "/api/v1/route-score", "destination": "/api/vayu/route-score?v1=1" },
+    { "source": "/api/v1/exposure", "destination": "/api/vayu/exposure?v1=1" },
     { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
   ],
   "headers": [

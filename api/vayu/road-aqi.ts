@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireApiKey } from './_apiauth.js';
 // v2 engine (Phase 3): import the parity-tested CALINE4 line-source from _caline4.ts.
 // MUST be an underscore-prefixed module — Vercel INLINES non-route (_-prefixed) modules into the
 // importing function bundle, so the import resolves at runtime. Importing the same fns from
@@ -1678,6 +1679,11 @@ function bboxCacheKey(south: number, west: number, north: number, east: number, 
 
 // ─── Handler ────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Developer-API surface (/api/v1/road-aqi -> ?v1=1): require + rate-limit an API key.
+  if (req.query.v1) {
+    const gate = await requireApiKey(req, res, 'road-aqi');
+    if (!gate.ok) return;
+  }
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
