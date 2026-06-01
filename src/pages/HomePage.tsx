@@ -1,4 +1,5 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Crosshair,
@@ -95,6 +96,7 @@ export default function HomePage() {
 
   const { profile } = useAuthStore();
   const { addPlace, isPlaceSaved } = useSavedPlacesStore();
+  const location = useLocation();
   const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
   const [showWalkComplete, setShowWalkComplete] = useState(false);
   const [showAQIOverlay, setShowAQIOverlay] = useState(false);
@@ -117,6 +119,17 @@ export default function HomePage() {
     startLocating();
     return () => stopLocating();
   }, [startLocating, stopLocating]);
+
+  // Consume a destination handed off via router state (e.g. "Rute" from Saved Places).
+  useEffect(() => {
+    const st = location.state as { destination?: { lat: number; lng: number }; destinationName?: string } | null;
+    if (st?.destination) {
+      setDestination(st.destination, st.destinationName);
+      setCenter(st.destination);
+      // Clear so a back-nav or refresh doesn't re-apply the stale destination.
+      window.history.replaceState({}, '');
+    }
+  }, [location.state, setDestination, setCenter]);
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
