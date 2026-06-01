@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import AnimatedNumber from '../components/ui/AnimatedNumber';
 import WeeklySummaryCard from '../components/features/WeeklySummaryCard';
+import { co2KgFromGrams, treesFromCo2Kg, caloriesFromKm, waterFromKm, WEEKLY_GOAL_KM } from '../lib/metrics';
 
 const LazyCharts = lazy(() => import('recharts').then(m => ({
   default: ({ data, tab }: { data: WeeklyData[]; tab: 'co2' | 'distance' }) => (
@@ -94,10 +95,10 @@ export default function EcoImpactPage() {
 
   const totalKm = profile?.total_distance_km || 0;
   const totalWalks = profile?.total_walks || 0;
-  const co2Saved = ((profile?.total_co2_saved_grams || 0) / 1000).toFixed(1); // Use server-side value (grams -> kg)
-  const treesEquivalent = (Number(co2Saved) / 22).toFixed(2); // 22kg CO2 absorbed per tree/year
-  const caloriesBurned = Math.round(totalKm * 60);
-  const waterSaved = (totalKm * 3.8).toFixed(0); // ~3.8L water per km of car driving
+  const co2Saved = co2KgFromGrams(profile?.total_co2_saved_grams || 0).toFixed(1);
+  const treesEquivalent = treesFromCo2Kg(Number(co2Saved)).toFixed(2);
+  const caloriesBurned = caloriesFromKm(totalKm);
+  const waterSaved = waterFromKm(totalKm).toFixed(0);
   const currentStreak = profile?.current_streak || 0;
 
   const handleShareImpact = async () => {
@@ -147,7 +148,7 @@ export default function EcoImpactPage() {
     },
   ];
 
-  const weeklyGoal = 35; // km per week target
+  const weeklyGoal = WEEKLY_GOAL_KM;
   const weeklyProgress = Math.min((totalKm % weeklyGoal) / weeklyGoal * 100, 100);
 
   const milestones = [
