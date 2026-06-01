@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   ChevronLeft, Copy, Check, AlertTriangle, Activity, KeyRound, Globe,
-  ShieldAlert, Loader2, TrendingUp, ServerCog, Wifi,
+  ShieldAlert, Loader2, TrendingUp, ServerCog, Wifi, Clock, Download, Gauge,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { NoIndex } from '../components/Seo';
@@ -21,6 +21,9 @@ const EP_META: Record<string, { label: string; color: string }> = {
   'exposure':    { label: 'Exposure',    color: '#f59e0b' },
 };
 const TIER_LABEL: Record<string, string> = { free: 'Free', pro: 'Pro', enterprise: 'Enterprise' };
+// Daily per-key request cap by tier (mirrors the gate's TIER_CAPS; enterprise = unlimited).
+const TIER_CAP: Record<string, number | null> = { free: 1000, pro: 50000, enterprise: null };
+const RANGES = [{ d: 7, label: '7d' }, { d: 30, label: '30d' }, { d: 90, label: '90d' }];
 
 const FLAG_META: Record<string, { label: string; tone: string }> = {
   vpn:              { label: 'VPN traffic',          tone: 'amber' },
@@ -53,7 +56,7 @@ function flagAccent(t: string): string { return TONE[FLAG_META[t]?.tone ?? 'gray
 // ─── Lazy Recharts (kept off the main bundle, EcoImpactPage pattern) ─────────
 type ChartKind = 'area' | 'bars' | 'errline';
 const Charts = lazy(() => import('recharts').then((m) => ({
-  default: ({ kind, data }: { kind: ChartKind; data: unknown[] }) => {
+  default: ({ kind, data, keys }: { kind: ChartKind; data: unknown[]; keys?: string[] }) => {
     const tip = { contentStyle: { fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' } };
     if (kind === 'area') {
       return (
@@ -71,7 +74,7 @@ const Charts = lazy(() => import('recharts').then((m) => ({
             <m.XAxis dataKey="day" tick={{ fontSize: 9 }} stroke="#9ca3af" interval="preserveStartEnd" minTickGap={24} />
             <m.YAxis tick={{ fontSize: 9 }} stroke="#9ca3af" width={32} allowDecimals={false} />
             <m.Tooltip {...tip} />
-            {Object.entries(EP_META).map(([k, v]) => (
+            {Object.entries(EP_META).filter(([k]) => !keys || keys.includes(k)).map(([k, v]) => (
               <m.Area key={k} type="monotone" dataKey={k} name={v.label} stackId="1" stroke={v.color} strokeWidth={1.5} fill={`url(#g-${k})`} />
             ))}
           </m.AreaChart>
@@ -106,10 +109,10 @@ const Charts = lazy(() => import('recharts').then((m) => ({
   },
 })));
 
-const ChartBox = ({ kind, data, height = 'h-48' }: { kind: ChartKind; data: unknown[]; height?: string }) => (
+const ChartBox = ({ kind, data, height = 'h-48', keys }: { kind: ChartKind; data: unknown[]; height?: string; keys?: string[] }) => (
   <div className={height}>
     <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-gray-300" /></div>}>
-      <Charts kind={kind} data={data} />
+      <Charts kind={kind} data={data} keys={keys} />
     </Suspense>
   </div>
 );
@@ -149,14 +152,19 @@ export default function DeveloperDashboardPage() {
   const [endpointTotals, setEndpointTotals] = useState<{ name: string; value: number; fill: string }[]>([]);
   const [ips, setIps] = useState<IpRow[]>([]);
   const [flags, setFlags] = useState<FlagRow[]>([]);
+  const [perKeyToday, setPerKeyToday] = useState<Record<string, number>>({});
+  const [rangeDays, setRangeDays] = useState(30);
+  const [epFilter, setEpFilter] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true); setErr(null);
-    const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+    const since = new Date(Date.now() - rangeDays * 86_400_000).toISOString().slice(0, 10);
+    const todayUTC = new Date().toISOString().slice(0, 10);
     const [tsRes, ipRes, flagRes, keysRes, usageRes] = await Promise.all([
-      supabase.rpc('dev_usage_timeseries', { p_days: 30 }),
-      supabase.rpc('dev_ip_summary', { p_days: 30 }),
+      supabase.rpc('dev_usage_timeseries', { p_days: rangeDays }),
+      supabase.rpc('dev_ip_summary', { p_days: rangeDays }),
       supabase.rpc('dev_recent_flags', { p_limit: 50 }),
       supabase.from('api_keys').select('id,name,prefix,tier,created_at,last_used_at,revoked_at').order('created_at', { ascending: false }),
       supabase.from('api_key_usage').select('key_id,request_count,error_count,day').gte('day', since),
@@ -184,15 +192,19 @@ export default function DeveloperDashboardPage() {
     if (!keysRes.error) setKeys((keysRes.data as KeyRow[]) ?? []);
 
     const pk: Record<string, { req: number; errs: number }> = {};
-    for (const r of (usageRes.data as { key_id: string; request_count: number; error_count: number }[]) ?? []) {
+    const pkToday: Record<string, number> = {};
+    for (const r of (usageRes.data as { key_id: string; request_count: number; error_count: number; day: string }[]) ?? []) {
       const a = pk[r.key_id] ?? { req: 0, errs: 0 };
       a.req += r.request_count ?? 0; a.errs += r.error_count ?? 0; pk[r.key_id] = a;
+      if (r.day === todayUTC) pkToday[r.key_id] = (pkToday[r.key_id] ?? 0) + (r.request_count ?? 0);
     }
     setPerKey(pk);
+    setPerKeyToday(pkToday);
     setLoading(false);
-  }, [user]);
+  }, [user, rangeDays]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(t); }, []);
 
   const copyKey = async () => {
     if (!freshKey) return;
@@ -208,6 +220,20 @@ export default function DeveloperDashboardPage() {
   const activeKeys = keys.filter((k) => !k.revoked_at).length;
   const flaggedIps = ips.filter((i) => i.is_vpn || i.is_datacenter || i.risk_score >= 80).length;
   const errLine = series.map((d) => ({ day: d.day, rate: d.total > 0 ? (d.errors / d.total) * 100 : 0 }));
+
+  // Daily quota resets at 00:00 UTC (the gate keys its counter on the UTC date).
+  const msToReset = (() => { const d = new Date(now); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - now; })();
+  const resetIn = `${Math.floor(msToReset / 3_600_000)}h ${Math.floor((msToReset % 3_600_000) / 60_000)}m`;
+  const activeKeyList = keys.filter((k) => !k.revoked_at);
+
+  const exportCsv = () => {
+    const header = ['day', 'road-aqi', 'route-score', 'exposure', 'total', 'errors'];
+    const rows = series.map((d) => [d.day, d['road-aqi'] ?? 0, d['route-score'] ?? 0, d['exposure'] ?? 0, d.total, d.errors]);
+    const csv = [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a'); a.href = url; a.download = `breeva-api-usage-${rangeDays}d.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24">
@@ -259,10 +285,55 @@ export default function DeveloperDashboardPage() {
           </div>
         ) : (
           <>
+            {/* Range filter + export */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex gap-1 p-1 rounded-xl bg-gray-100 dark:bg-gray-800/60 text-[11px] font-semibold">
+                {RANGES.map((r) => (
+                  <button key={r.d} onClick={() => setRangeDays(r.d)}
+                    className={`px-3 py-1 rounded-lg transition ${rangeDays === r.d ? 'bg-white dark:bg-gray-900 shadow-sm text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+              <button onClick={exportCsv} disabled={series.length === 0}
+                className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 disabled:opacity-40 transition">
+                <Download className="w-3.5 h-3.5" /> Export CSV
+              </button>
+            </div>
+
+            {/* Daily quota — usage vs cap + reset countdown */}
+            {activeKeyList.length > 0 && (
+              <div className="glass-card p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1.5"><Gauge className="w-3.5 h-3.5 text-primary-500" /> Daily quota</h3>
+                  <span className="text-[10px] text-gray-400 flex items-center gap-1"><Clock className="w-3 h-3" /> resets in {resetIn} · 00:00 UTC</span>
+                </div>
+                <div className="space-y-3">
+                  {activeKeyList.map((k) => {
+                    const used = perKeyToday[k.id] ?? 0;
+                    const cap = TIER_CAP[k.tier];
+                    const pct = cap ? Math.min(100, (used / cap) * 100) : 0;
+                    const barColor = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-primary-500';
+                    return (
+                      <div key={k.id}>
+                        <div className="flex items-center justify-between text-[11px] mb-1">
+                          <span className="font-medium text-gray-700 dark:text-gray-300 truncate">{k.name} <span className="text-gray-400">· {TIER_LABEL[k.tier]}</span></span>
+                          <span className="tabular-nums text-gray-500 dark:text-gray-400">{used.toLocaleString()} / {cap ? cap.toLocaleString() : '∞'}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                          <div className={`h-full rounded-full ${cap ? barColor : 'bg-primary-300'}`} style={{ width: cap ? `${pct}%` : '100%' }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Stat cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <StatCard icon={Activity} label="Requests today" value={todayReq.toLocaleString()} tone="primary" />
-              <StatCard icon={TrendingUp} label="Requests · 30d" value={total30d.toLocaleString()} tone="sky" />
+              <StatCard icon={TrendingUp} label={`Requests · ${rangeDays}d`} value={total30d.toLocaleString()} tone="sky" />
               <StatCard icon={AlertTriangle} label="Error rate" value={`${errorRate.toFixed(1)}%`} sub={`${errors30d.toLocaleString()} errors`} tone="amber" />
               <StatCard icon={KeyRound} label="Active keys" value={`${activeKeys}`} sub={`of 10`} tone="violet" />
             </div>
@@ -271,15 +342,20 @@ export default function DeveloperDashboardPage() {
             <div className="glass-card p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Requests over time</h3>
-                <span className="text-[10px] text-gray-400">last 30 days</span>
+                <span className="text-[10px] text-gray-400">last {rangeDays} days</span>
               </div>
-              {series.length > 0 ? <ChartBox kind="area" data={series} /> : <p className="text-xs text-gray-400 py-8 text-center">No requests in the last 30 days.</p>}
-              <div className="flex items-center gap-4 mt-2 justify-center">
-                {Object.entries(EP_META).map(([k, v]) => (
-                  <span key={k} className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400">
-                    <span className="w-2 h-2 rounded-full" style={{ background: v.color }} /> {v.label}
-                  </span>
-                ))}
+              {series.length > 0 ? <ChartBox kind="area" data={series} keys={epFilter ? [epFilter] : undefined} /> : <p className="text-xs text-gray-400 py-8 text-center">No requests in this period.</p>}
+              <div className="flex items-center gap-2 mt-2 justify-center flex-wrap">
+                {Object.entries(EP_META).map(([k, v]) => {
+                  const active = !epFilter || epFilter === k;
+                  return (
+                    <button key={k} onClick={() => setEpFilter(epFilter === k ? null : k)}
+                      className={`flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded-full transition ${epFilter === k ? 'bg-gray-100 dark:bg-gray-800' : ''} ${active ? 'text-gray-600 dark:text-gray-300' : 'text-gray-300 dark:text-gray-600'}`}>
+                      <span className="w-2 h-2 rounded-full" style={{ background: v.color, opacity: active ? 1 : 0.4 }} /> {v.label}
+                    </button>
+                  );
+                })}
+                {epFilter && <button onClick={() => setEpFilter(null)} className="text-[10px] text-primary-600 dark:text-primary-400 hover:underline">clear</button>}
               </div>
             </div>
 
