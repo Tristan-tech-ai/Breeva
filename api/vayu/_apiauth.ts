@@ -122,24 +122,25 @@ async function flagOncePerDay(ip: string, type: string, fn: () => void): Promise
   } catch { /* skip */ }
 }
 
-// Fire-and-forget service-role RPC POST.
-function rpcPost(path: string, body: unknown): void {
+// Service-role RPC POST. Returns the promise so callers can await (Vercel may freeze
+// the instance after the response, dropping un-awaited fetches).
+function rpcPost(path: string, body: unknown): Promise<void> {
   const { url, key } = supaEnv();
-  if (!url || !key) return;
-  fetch(`${url}/rest/v1/rpc/${path}`, {
+  if (!url || !key) return Promise.resolve();
+  return fetch(`${url}/rest/v1/rpc/${path}`, {
     method: 'POST',
     headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  }).catch(() => {});
+  }).then(() => {}, () => {});
 }
-function recordIpCall(keyId: string, userId: string, ip: string, country: string | null, isError: boolean): void {
-  rpcPost('bump_ip_usage', { p_key_id: keyId, p_user_id: userId, p_ip: ip, p_country: country, p_is_error: isError });
+function recordIpCall(keyId: string, userId: string, ip: string, country: string | null, isError: boolean): Promise<void> {
+  return rpcPost('bump_ip_usage', { p_key_id: keyId, p_user_id: userId, p_ip: ip, p_country: country, p_is_error: isError });
 }
-function ensureDeveloperIdentity(userId: string, ip: string, country: string | null, asn: string | null, risk: number): void {
-  rpcPost('ensure_developer_identity', { p_user_id: userId, p_ip: ip, p_country: country, p_asn: asn, p_risk: risk });
+function ensureDeveloperIdentity(userId: string, ip: string, country: string | null, asn: string | null, risk: number): Promise<void> {
+  return rpcPost('ensure_developer_identity', { p_user_id: userId, p_ip: ip, p_country: country, p_asn: asn, p_risk: risk });
 }
-function logFlag(userId: string, keyId: string | null, ip: string, flagType: string, severity: number, detail: unknown): void {
-  rpcPost('log_abuse_flag', { p_user_id: userId, p_key_id: keyId, p_ip: ip, p_flag_type: flagType, p_severity: severity, p_detail: detail });
+function logFlag(userId: string, keyId: string | null, ip: string, flagType: string, severity: number, detail: unknown): Promise<void> {
+  return rpcPost('log_abuse_flag', { p_user_id: userId, p_key_id: keyId, p_ip: ip, p_flag_type: flagType, p_severity: severity, p_detail: detail });
 }
 
 // Log VPN/proxy/datacenter/tor/high-risk verdicts (deduped per ip/type/day).
@@ -223,10 +224,13 @@ export async function requireApiKey(req: VercelRequest, res: VercelResponse, end
     }
   }
 
-  await recordCall(k.id, k.user_id, endpoint, false);
-  // Fire-and-forget anti-abuse instrumentation (no added request latency).
-  recordIpCall(k.id, k.user_id, ip, country, false);
-  ensureDeveloperIdentity(k.user_id, ip, country, null, 0);
+  // Persist usage + per-IP rollup + identity in parallel (one round-trip; reliable on
+  // serverless). IP reputation is best-effort + cached, so it stays truly async.
+  await Promise.all([
+    recordCall(k.id, k.user_id, endpoint, false),
+    recordIpCall(k.id, k.user_id, ip, country, false),
+    ensureDeveloperIdentity(k.user_id, ip, country, null, 0),
+  ]);
   runIpIntel(ip, country, k.user_id, k.id);
   return { ok: true, userId: k.user_id, tier: k.tier, keyId: k.id };
 }
