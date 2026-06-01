@@ -45,7 +45,7 @@ import TurnByTurn from '../components/map/TurnByTurn';
 import PlaceDetailSheet from '../components/map/PlaceDetailSheet';
 import MapLayersSheet from '../components/map/MapLayersSheet';
 import type { POI } from '../lib/poi-api';
-import type { PollutantType, RoadDisplayMode } from '../types';
+import type { PollutantType, RoadDisplayMode, SavedPlace } from '../types';
 import type { RoadLayerMeta } from '../components/map/RoadPollutionLayer';
 
 const FILTER_CHIPS = [
@@ -58,6 +58,26 @@ const FILTER_CHIPS = [
   { key: 'atm',        label: 'ATMs',         icon: CreditCard,      color: '#6366f1' },
   { key: 'gas',        label: 'Gas',          icon: Fuel,            color: '#ea580c' },
 ];
+
+/** Map a Geoapify POI's category hierarchy (e.g. "catering.restaurant") to a SavedPlace category. */
+function poiToSavedCategory(poi?: { category?: string; subcategory?: string; types?: string[] } | null): SavedPlace['category'] {
+  if (!poi) return 'favorite';
+  const hay = [poi.subcategory, ...(poi.types ?? []), poi.category].filter(Boolean).join(' ').toLowerCase();
+  const has = (...kw: string[]) => kw.some((k) => hay.includes(k));
+  if (has('cafe', 'coffee')) return 'cafe';
+  if (has('restaurant', 'fast_food', 'food_court', 'catering', 'bar', 'pub', 'food')) return 'food';
+  if (has('accommodation', 'hotel', 'hostel', 'motel', 'guest_house')) return 'hotel';
+  if (has('mosque')) return 'mosque';
+  if (has('church', 'christian', 'cathedral', 'chapel')) return 'church';
+  if (has('park', 'garden')) return 'park';
+  if (has('fitness', 'sports_centre', 'gym', 'sport')) return 'gym';
+  if (has('school', 'university', 'college', 'kindergarten', 'education')) return 'school';
+  if (has('hospital', 'clinic', 'pharmacy', 'doctors', 'healthcare')) return 'hospital';
+  if (has('museum', 'monument', 'attraction', 'tourism', 'viewpoint', 'artwork', 'memorial', 'landmark')) return 'landmark';
+  if (has('public_transport', 'railway', 'airport', 'bus_stop', 'subway', 'station', 'transport')) return 'transport';
+  if (has('commercial', 'supermarket', 'mall', 'marketplace', 'shop', 'store')) return 'shop';
+  return 'favorite';
+}
 
 export default function HomePage() {
   const {
@@ -576,7 +596,7 @@ export default function HomePage() {
           setSelectedPOI(null);
         }}
         onSave={(name, coord) => {
-          if (!isPlaceSaved(coord)) addPlace(name, coord, 'favorite');
+          if (!isPlaceSaved(coord)) addPlace(name, coord, poiToSavedCategory(selectedPOI));
         }}
         isSaved={selectedPOI ? isPlaceSaved(selectedPOI.coordinate) : false}
         userLocation={userLocation}
