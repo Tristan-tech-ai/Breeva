@@ -11,6 +11,13 @@ interface State {
   error: Error | null;
 }
 
+// A lazy chunk that 404'd because the session predates the latest deploy.
+// Resetting state would just re-attempt the dead import — only a reload fixes it.
+function isChunkError(err: Error | null): boolean {
+  const m = err?.message || '';
+  return /dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError|error loading dynamically/i.test(m);
+}
+
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -21,7 +28,19 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
+  componentDidCatch(error: Error) {
+    if (isChunkError(error)) {
+      const KEY = 'breeva:chunk-reload-at';
+      const last = Number(sessionStorage.getItem(KEY) || '0');
+      if (Date.now() - last > 15000) {
+        sessionStorage.setItem(KEY, String(Date.now()));
+        window.location.reload(); // fetch fresh index + asset hashes
+      }
+    }
+  }
+
   handleReset = () => {
+    if (isChunkError(this.state.error)) { window.location.reload(); return; }
     this.setState({ hasError: false, error: null });
   };
 

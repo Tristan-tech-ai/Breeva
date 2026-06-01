@@ -15,6 +15,19 @@ if (userExplicitlySetDark) {
   document.documentElement.classList.add('dark');
 }
 
+// Self-heal stale lazy-chunk 404s after a deploy. A tab loaded before a new deploy
+// references old asset hashes (e.g. assets/es6-OLD.js) that no longer exist, so the
+// first lazy route/import 404s. Reload once to fetch the fresh index (SW serves
+// navigations NetworkFirst → new hashes). A 15s sessionStorage stamp prevents loops.
+window.addEventListener('vite:preloadError', (event: Event) => {
+  const KEY = 'breeva:chunk-reload-at';
+  const last = Number(sessionStorage.getItem(KEY) || '0');
+  if (Date.now() - last < 15000) return; // already retried recently → let the error UI show
+  sessionStorage.setItem(KEY, String(Date.now()));
+  event.preventDefault();
+  window.location.reload();
+});
+
 // Error boundary for debugging
 class ErrorBoundary extends Component<
   { children: ReactNode },
