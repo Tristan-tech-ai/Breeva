@@ -1,7 +1,11 @@
 import { useMemo, useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { ChevronLeft, Wind, Cigarette, Activity, Info, Save, Check } from 'lucide-react';
+import { motion, useReducedMotion, type Variants } from 'framer-motion';
+import {
+  ChevronLeft, Wind, Cigarette, Activity, Info, Save, Check, Sparkles,
+  ShieldCheck, ShieldAlert, Clock, Gauge, Waves,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import ProfileForm from '../components/exposure/ProfileForm';
 import RouteSelector, { type SelectedRouteData } from '../components/exposure/RouteSelector';
@@ -9,57 +13,154 @@ import { useAuthStore } from '../stores/authStore';
 import { Seo } from '../components/Seo';
 import { saveExposureLedger } from '../lib/exposure-ledger';
 import {
-  computeDose, doseBreakdown, riskColor, CIGARETTE_CAVEAT, WHO_24H_PM25,
-  type UserExposureProfile, type ExposureDoseResult,
+  computeDose, doseBreakdown, CIGARETTE_CAVEAT, WHO_24H_PM25,
+  type UserExposureProfile, type ExposureDoseResult, type RiskLevel,
 } from '../lib/exposure';
 
-const RISK_TEXT: Record<ExposureDoseResult['risk_level'], string> = {
-  low: 'Aman', moderate: 'Sedang', high: 'Tinggi', very_high: 'Sangat tinggi',
+// ─── Risk presentation theme — one mapping the whole result section reads from ──
+interface RiskTheme { label: string; color: string; Icon: LucideIcon; }
+const RISK_THEME: Record<RiskLevel, RiskTheme> = {
+  low:       { label: 'Aman',          color: '#22c55e', Icon: ShieldCheck },
+  moderate:  { label: 'Sedang',        color: '#eab308', Icon: Info },
+  high:      { label: 'Tinggi',        color: '#f97316', Icon: ShieldAlert },
+  very_high: { label: 'Sangat tinggi', color: '#ef4444', Icon: ShieldAlert },
 };
 
-// Lazy recharts (same pattern as EcoImpactPage) — area chart of µg accumulated along the route.
+// Lazy recharts — area chart of µg accumulated along the route (risk-tinted gradient fill).
 const LazyDoseChart = lazy(() => import('recharts').then((m) => ({
-  default: ({ data }: { data: { x: number; ug: number }[] }) => (
+  default: ({ data, color }: { data: { x: number; ug: number }[]; color: string }) => (
     <m.ResponsiveContainer width="100%" height="100%">
-      <m.AreaChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: -16 }}>
-        <m.XAxis dataKey="x" tick={{ fontSize: 10 }} stroke="#9ca3af" unit="%" />
-        <m.YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" width={34} />
+      <m.AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
+        <defs>
+          <linearGradient id="doseFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.38} />
+            <stop offset="95%" stopColor={color} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <m.CartesianGrid strokeDasharray="3 3" stroke="#9ca3af" strokeOpacity={0.15} vertical={false} />
+        <m.XAxis dataKey="x" tick={{ fontSize: 10 }} stroke="#9ca3af" unit="%" tickLine={false} axisLine={false} />
+        <m.YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" width={34} tickLine={false} axisLine={false} />
         <m.Tooltip
-          contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+          contentStyle={{ fontSize: 11, borderRadius: 10, border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.14)' }}
           formatter={(v) => [`${v} µg`, 'Dosis']}
           labelFormatter={(l) => `${l}% rute`}
         />
-        <m.Area type="monotone" dataKey="ug" stroke="#f97316" fill="#fed7aa" strokeWidth={2} />
+        <m.Area type="monotone" dataKey="ug" stroke={color} fill="url(#doseFill)" strokeWidth={2.5} />
       </m.AreaChart>
     </m.ResponsiveContainer>
   ),
 })));
 
-function DoseGauge({ result }: { result: ExposureDoseResult }) {
-  const color = riskColor(result.risk_level);
+// ─── Big animated dose gauge — the centerpiece readout ──────────────────────────
+function DoseGauge({ result, animate }: { result: ExposureDoseResult; animate: boolean }) {
+  const theme = RISK_THEME[result.risk_level];
   const pct = Math.min(result.dose_ug / 2000, 1); // fill toward the "very high" band cap
-  const R = 52;
-  const C = 2 * Math.PI * R;
+  const SIZE = 184, R = 70, C = 2 * Math.PI * R;
   return (
-    <div className="relative flex items-center justify-center w-[140px] h-[140px]">
-      <svg width="140" height="140" viewBox="0 0 140 140">
-        <circle cx="70" cy="70" r={R} fill="none" strokeWidth="12"
-          className="text-gray-100 dark:text-gray-800" stroke="currentColor" />
-        <circle cx="70" cy="70" r={R} fill="none" strokeWidth="12" strokeLinecap="round"
-          stroke={color} strokeDasharray={C} strokeDashoffset={C * (1 - pct)}
-          transform="rotate(-90 70 70)" />
+    <div className="relative grid place-items-center shrink-0" style={{ width: SIZE, height: SIZE }}>
+      {/* soft risk glow behind the dial */}
+      <div className="absolute rounded-full blur-2xl" style={{ width: SIZE * 0.7, height: SIZE * 0.7, background: `${theme.color}33` }} />
+      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="-rotate-90">
+        <circle cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none" strokeWidth="13"
+          className="text-gray-200/80 dark:text-gray-700/60" stroke="currentColor" />
+        <motion.circle
+          cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none" strokeWidth="13" strokeLinecap="round"
+          stroke={theme.color} strokeDasharray={C}
+          initial={{ strokeDashoffset: animate ? C : C * (1 - pct) }}
+          animate={{ strokeDashoffset: C * (1 - pct) }}
+          transition={{ duration: animate ? 1.1 : 0, ease: [0.22, 1, 0.36, 1] }}
+          style={{ filter: `drop-shadow(0 0 5px ${theme.color}88)` }}
+        />
       </svg>
       <div className="absolute text-center">
-        <div className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{Math.round(result.dose_ug)}</div>
-        <div className="text-[10px] text-gray-400 dark:text-gray-500">µg PM2.5 terhirup</div>
-        <div className="text-xs font-semibold mt-0.5" style={{ color }}>{RISK_TEXT[result.risk_level]}</div>
+        <div className="text-[46px] leading-none font-extrabold tabular-nums" style={{ color: theme.color }}>
+          {Math.round(result.dose_ug)}
+        </div>
+        <div className="text-[10.5px] font-medium text-gray-400 dark:text-gray-500 mt-1">µg PM2.5 terhirup</div>
+        <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold"
+          style={{ color: theme.color, background: `${theme.color}1f` }}>
+          <theme.Icon className="w-3 h-3" /> {theme.label}
+        </span>
       </div>
     </div>
   );
 }
 
+// ─── Cigarette equivalent rendered as real glyphs (full + one clipped fraction) ──
+function CigaretteMeter({ equiv }: { equiv: number }) {
+  const MAX = 20, ICON = 18;
+  const full = Math.min(Math.floor(equiv), MAX);
+  const frac = equiv - Math.floor(equiv);
+  const showPartial = frac > 0.04 && full < MAX;
+  return (
+    <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 mt-2.5">
+      {Array.from({ length: full }).map((_, i) => (
+        <Cigarette key={i} className="text-amber-500" style={{ width: ICON, height: ICON }} aria-hidden />
+      ))}
+      {showPartial && (
+        <span className="relative inline-block" style={{ width: ICON, height: ICON }} aria-hidden>
+          <Cigarette className="absolute inset-0 text-amber-500/20" style={{ width: ICON, height: ICON }} />
+          <span className="absolute inset-0 overflow-hidden" style={{ width: `${Math.max(0.1, frac) * 100}%` }}>
+            <Cigarette className="text-amber-500" style={{ width: ICON, height: ICON }} />
+          </span>
+        </span>
+      )}
+      {equiv < 0.04 && <span className="text-xs text-gray-400 dark:text-gray-500">hampir nol</span>}
+    </div>
+  );
+}
+
+// ─── WHO threshold scale (0–3× of the daily guideline) ──────────────────────────
+function WhoScale({ ratio, animate }: { ratio: number; animate: boolean }) {
+  const pct = Math.min(ratio / 3, 1) * 100;
+  const over = ratio > 1;
+  const col = over ? '#f97316' : '#22c55e';
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2.5">
+        <span className="text-sm font-semibold text-gray-900 dark:text-white">vs Ambang WHO</span>
+        <span className="font-extrabold tabular-nums" style={{ color: col }}>
+          <span className="text-2xl">{ratio.toFixed(1)}</span><span className="text-base">×</span>
+        </span>
+      </div>
+      <div className="relative h-3 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+        <motion.div className="h-full rounded-full" style={{ background: col }}
+          initial={{ width: animate ? 0 : `${pct}%` }} animate={{ width: `${pct}%` }}
+          transition={{ duration: animate ? 0.9 : 0, ease: [0.22, 1, 0.36, 1], delay: animate ? 0.15 : 0 }} />
+        {/* 1× WHO threshold marker (= 1/3 of the 0–3× scale) */}
+        <div className="absolute inset-y-0 w-0.5 bg-white dark:bg-gray-950 shadow-sm" style={{ left: '33.33%' }} />
+      </div>
+      <div className="relative mt-1.5 h-3 text-[9px] text-gray-400 dark:text-gray-500">
+        <span className="absolute left-0">0</span>
+        <span className="absolute -translate-x-1/2 font-semibold text-gray-500 dark:text-gray-400" style={{ left: '33.33%' }}>
+          WHO {WHO_24H_PM25}µg
+        </span>
+        <span className="absolute right-0">3×+</span>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ icon: Icon, label, value, unit }: { icon: LucideIcon; label: string; value: string; unit: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">
+        <Icon className="w-3 h-3" /> {label}
+      </div>
+      <div className="mt-0.5 text-[15px] font-bold tabular-nums text-gray-900 dark:text-white truncate">
+        {value}<span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 ml-0.5">{unit}</span>
+      </div>
+    </div>
+  );
+}
+
+const RECO_ICON: Record<RiskLevel, LucideIcon> = {
+  low: ShieldCheck, moderate: Info, high: ShieldAlert, very_high: ShieldAlert,
+};
+
 export default function PaparanPage() {
   const navigate = useNavigate();
+  const reduce = useReducedMotion() ?? false;
   const [profile, setProfile] = useState<UserExposureProfile>({
     age_bucket: 'adult', mode: 'walk_slow', health_sensitive: false,
   });
@@ -84,13 +185,20 @@ export default function PaparanPage() {
     });
     setSaveState(res.ok ? 'saved' : 'error');
   };
+
   const chartData = useMemo(() => {
     if (!selected) return [];
     return doseBreakdown(selected.segments, selected.durationSeconds, profile)
       .map((b) => ({ x: Math.round(b.fraction_along * 100), ug: b.ug }));
   }, [selected, profile]);
 
-  const whoPct = result ? Math.min(result.who_24h_ratio / 3, 1) * 100 : 0; // bar scaled to 3× WHO
+  const theme = result ? RISK_THEME[result.risk_level] : null;
+
+  // Staggered reveal for the result cascade (gated by reduced-motion).
+  const container: Variants = { hidden: {}, show: { transition: { staggerChildren: reduce ? 0 : 0.07, delayChildren: reduce ? 0 : 0.04 } } };
+  const item: Variants = reduce
+    ? { hidden: { opacity: 1 }, show: { opacity: 1 } }
+    : { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] } } };
 
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24">
@@ -101,115 +209,133 @@ export default function PaparanPage() {
       />
       {/* Header */}
       <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center gap-2 safe-area-top">
-        <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
+        <button onClick={() => navigate(-1)} aria-label="Kembali"
+          className="text-gray-600 dark:text-gray-300 p-1 -ml-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition">
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-base font-semibold text-gray-900 dark:text-white">Lensa Paparan Udara</h1>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 pt-4 pb-12 space-y-4">
-        {/* Intro */}
+        {/* Branded explainer banner */}
         <motion.div
-          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-4 flex gap-3"
+          initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          className="relative overflow-hidden rounded-2xl p-5 text-white shadow-lg shadow-emerald-900/10"
+          style={{ background: 'linear-gradient(135deg, #047857 0%, #059669 42%, #0ea5e9 100%)' }}
         >
-          <Wind className="w-5 h-5 text-sky-500 shrink-0 mt-0.5" />
-          <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
-            Hitung berapa banyak PM2.5 yang benar-benar Anda hirup pada sebuah rute — dari AQI per-jalan
-            engine v2 (Layer 1), rute (Layer 2), laju napas (usia & aktivitas), dan perlindungan moda.
-          </p>
+          <div className="absolute -top-10 -right-8 w-36 h-36 rounded-full bg-white/15 blur-2xl" aria-hidden />
+          <div className="absolute -bottom-12 -left-10 w-40 h-40 rounded-full bg-sky-300/20 blur-3xl" aria-hidden />
+          <div className="relative">
+            <div className="flex items-center gap-1.5 text-white/90">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="text-[10px] uppercase tracking-[0.18em] font-bold">Layer 3 · Lensa Paparan</span>
+            </div>
+            <h2 className="mt-2 text-lg font-extrabold leading-snug">Berapa PM2.5 yang benar-benar kamu hirup?</h2>
+            <p className="mt-1.5 text-[12.5px] text-white/85 leading-relaxed max-w-md">
+              Bukan sekadar AQI rata-rata — kami hitung dosis nyata dari konsentrasi per-jalan (engine v2),
+              laju napas (usia & aktivitas), dan perlindungan moda perjalananmu.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              {['AQI per-jalan', '× laju napas', '× moda', '× waktu'].map((t) => (
+                <span key={t} className="px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-sm text-[10.5px] font-semibold whitespace-nowrap">
+                  {t}
+                </span>
+              ))}
+            </div>
+          </div>
         </motion.div>
 
         <ProfileForm profile={profile} onChange={setProfile} />
         <RouteSelector selectedKey={selected?.key ?? null} onSelect={setSelected} />
 
         {/* Results */}
-        {result && selected && (
-          <motion.div
-            key={selected.key}
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            className="space-y-4"
-          >
-            {/* Gauge + headline */}
-            <div className="glass-card p-4 flex items-center gap-4">
-              <DoseGauge result={result} />
-              <div className="flex-1 space-y-1.5">
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">{selected.label}</p>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                  {result.duration_minutes.toFixed(0)} menit · rata-rata {result.mean_pm25.toFixed(0)} µg/m³ · puncak {result.peak_pm25.toFixed(0)} µg/m³
-                </p>
-                <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
-                  <Activity className="w-3 h-3" />
-                  napas {result.breathing_rate_m3min.toFixed(3)} m³/mnt · intake {Math.round(result.intake_fraction * 100)}%
+        {result && selected && theme && (
+          <motion.div key={selected.key + profile.mode + profile.age_bucket} variants={container} initial="hidden" animate="show" className="space-y-4">
+            {/* Hero: gauge + headline + stat strip, tinted by risk band */}
+            <motion.div variants={item} className="glass-card relative overflow-hidden p-5 sm:p-6">
+              <div className="absolute inset-0 pointer-events-none" aria-hidden
+                style={{ background: `radial-gradient(120% 90% at 50% -10%, ${theme.color}1f 0%, transparent 60%)` }} />
+              <div className="relative flex flex-col sm:flex-row items-center gap-5">
+                <DoseGauge result={result} animate={!reduce} />
+                <div className="w-full min-w-0 space-y-3.5">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Rute dinilai</p>
+                    <p className="text-base font-bold text-gray-900 dark:text-white truncate">{selected.label}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3.5 pt-1">
+                    <Stat icon={Clock} label="Durasi" value={result.duration_minutes.toFixed(0)} unit="mnt" />
+                    <Stat icon={Wind} label="Rata-rata" value={result.mean_pm25.toFixed(0)} unit="µg/m³" />
+                    <Stat icon={Gauge} label="Puncak" value={result.peak_pm25.toFixed(0)} unit="µg/m³" />
+                    <Stat icon={Activity} label="Laju napas" value={result.breathing_rate_m3min.toFixed(3)} unit="m³/mnt" />
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400 pt-0.5">
+                    <Waves className="w-3.5 h-3.5 shrink-0" />
+                    Intake efektif {Math.round(result.intake_fraction * 100)}%
+                    {result.penetration > 1 && <> · napas {result.penetration.toFixed(1)}× lebih dalam</>}
+                  </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Cigarette equivalent */}
-            <div className="glass-card p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Cigarette className="w-4 h-4 text-amber-600" />
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  Setara {result.cigarette_equiv.toFixed(2)} batang rokok
-                </span>
+            <motion.div variants={item} className="glass-card p-4">
+              <div className="flex items-baseline gap-1.5">
+                <Cigarette className="w-5 h-5 text-amber-500 self-center" />
+                <span className="text-2xl font-extrabold text-amber-500 tabular-nums">{result.cigarette_equiv.toFixed(2)}</span>
+                <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">batang rokok</span>
               </div>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed">{CIGARETTE_CAVEAT}</p>
-            </div>
+              <CigaretteMeter equiv={result.cigarette_equiv} />
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed mt-2.5">{CIGARETTE_CAVEAT}</p>
+            </motion.div>
 
             {/* WHO comparison */}
-            <div className="glass-card p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">vs Ambang WHO</span>
-                <span className="text-sm font-bold" style={{ color: result.who_24h_ratio > 1 ? '#f97316' : '#22c55e' }}>
-                  {result.who_24h_ratio.toFixed(1)}×
-                </span>
-              </div>
-              <div className="relative h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all"
-                  style={{ width: `${whoPct}%`, background: result.who_24h_ratio > 1 ? '#f97316' : '#22c55e' }} />
-                {/* WHO threshold marker at 1× (= 1/3 of the 3× scale) */}
-                <div className="absolute top-0 bottom-0 w-px bg-gray-400 dark:bg-gray-500" style={{ left: '33.3%' }} />
-              </div>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5">
-                Rasio konsentrasi rata-rata rute terhadap ambang harian WHO 2021 ({WHO_24H_PM25} µg/m³). Garis = 1× (ambang).
+            <motion.div variants={item} className="glass-card p-4">
+              <WhoScale ratio={result.who_24h_ratio} animate={!reduce} />
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-3 leading-relaxed">
+                Rasio konsentrasi rata-rata rute terhadap ambang harian WHO 2021 ({WHO_24H_PM25} µg/m³).
               </p>
-            </div>
+            </motion.div>
 
             {/* Breakdown chart */}
             {chartData.length > 1 && (
-              <div className="glass-card p-4">
+              <motion.div variants={item} className="glass-card p-4">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Dosis sepanjang rute</h3>
                 <div className="h-40">
                   <Suspense fallback={<div className="h-full bg-gray-50 dark:bg-gray-800/40 rounded-lg animate-pulse" />}>
-                    <LazyDoseChart data={chartData} />
+                    <LazyDoseChart data={chartData} color={theme.color} />
                   </Suspense>
                 </div>
-              </div>
+              </motion.div>
             )}
 
-            {/* Recommendation */}
-            <div className="glass-card p-4 flex gap-3">
-              <Info className="w-4 h-4 text-primary-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">{result.recommendation}</p>
-            </div>
+            {/* Recommendation — tinted by risk */}
+            <motion.div variants={item} className="rounded-2xl p-4 flex gap-3 border"
+              style={{ background: `${theme.color}12`, borderColor: `${theme.color}33` }}>
+              {(() => { const Icon = RECO_ICON[result.risk_level]; return <Icon className="w-4 h-4 shrink-0 mt-0.5" style={{ color: theme.color }} />; })()}
+              <p className="text-xs text-gray-700 dark:text-gray-200 leading-relaxed">{result.recommendation}</p>
+            </motion.div>
 
             {/* Save to exposure_ledger (logged-in only; RLS own-rows) */}
-            {user ? (
-              <button
-                onClick={handleSave}
-                disabled={saveState === 'saving' || saveState === 'saved'}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary-500 text-white text-sm font-semibold disabled:opacity-70 transition"
-              >
-                {saveState === 'saved' ? (<><Check className="w-4 h-4" /> Tersimpan</>)
-                  : saveState === 'saving' ? 'Menyimpan…'
-                  : saveState === 'error' ? 'Gagal — coba lagi'
-                  : (<><Save className="w-4 h-4" /> Simpan paparan</>)}
-              </button>
-            ) : (
-              <p className="text-center text-[11px] text-gray-400 dark:text-gray-500">
-                Masuk untuk menyimpan riwayat paparan Anda.
-              </p>
-            )}
+            <motion.div variants={item}>
+              {user ? (
+                <motion.button
+                  whileTap={reduce ? undefined : { scale: 0.98 }}
+                  onClick={handleSave}
+                  disabled={saveState === 'saving' || saveState === 'saved'}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-primary-500 to-primary-600 text-white text-sm font-semibold shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 disabled:opacity-70 disabled:shadow-none transition"
+                >
+                  {saveState === 'saved' ? (<><Check className="w-4 h-4" /> Tersimpan</>)
+                    : saveState === 'saving' ? 'Menyimpan…'
+                    : saveState === 'error' ? 'Gagal — coba lagi'
+                    : (<><Save className="w-4 h-4" /> Simpan paparan</>)}
+                </motion.button>
+              ) : (
+                <p className="text-center text-[11px] text-gray-400 dark:text-gray-500">
+                  Masuk untuk menyimpan riwayat paparan Anda.
+                </p>
+              )}
+            </motion.div>
           </motion.div>
         )}
       </div>
