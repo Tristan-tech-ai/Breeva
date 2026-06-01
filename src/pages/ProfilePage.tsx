@@ -14,6 +14,8 @@ import OnboardingTour from '../components/features/OnboardingTour';
 import type { TourStep } from '../components/features/OnboardingTour';
 import type { HeatmapCategory } from '../components/features/StreakHeatmap';
 import { supabase } from '../lib/supabase';
+import { co2KgFromGrams, treesFromCo2Kg, caloriesFromKm } from '../lib/metrics';
+import NextBadgeCard from '../components/features/NextBadgeCard';
 
 export default function ProfilePage() {
   const { profile, user, signOut, isLoading } = useAuthStore();
@@ -111,9 +113,12 @@ export default function ProfilePage() {
     navigate('/login', { replace: true });
   };
 
-  const co2Saved = ((profile?.total_distance_km || 0) * 0.17).toFixed(1);
-  const calories = Math.round((profile?.total_distance_km || 0) * 60);
-  const treesEquivalent = ((profile?.total_distance_km || 0) * 0.17 / 22).toFixed(2);
+  // CO₂ from STORED grams (canonical 120 g/km) via metrics — never recomputed from
+  // distance — so Profile / EcoImpact / YearInReview all agree.
+  const co2Kg = co2KgFromGrams(profile?.total_co2_saved_grams || 0);
+  const co2Saved = co2Kg.toFixed(1);
+  const calories = caloriesFromKm(profile?.total_distance_km || 0);
+  const treesEquivalent = treesFromCo2Kg(co2Kg).toFixed(2);
 
   const profileTourSteps: TourStep[] = [
     { target: '[data-tour="stats-bar"]', title: 'Your Stats at a Glance', description: 'Track your EcoPoints, distance, walks, and streak all in one place.' },
@@ -446,6 +451,11 @@ export default function ProfilePage() {
             </div>
           </div>
         </motion.div>
+
+        {/* Next-badge nudge */}
+        <div className="mx-4 mt-4">
+          <NextBadgeCard />
+        </div>
 
         {/* Menu List */}
         <motion.div

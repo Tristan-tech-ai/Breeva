@@ -1,14 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Trophy, Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { cacheCollection, getCachedCollection } from '../lib/offline-db';
 import { useAuthStore } from '../stores/authStore';
+import { co2KgFromGrams } from '../lib/metrics';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { SkeletonGrid } from '../components/ui/Skeleton';
+import PageHeader from '../components/ui/PageHeader';
+import HeroCard from '../components/ui/HeroCard';
+import SectionCard from '../components/ui/SectionCard';
+import ProgressBar from '../components/ui/ProgressBar';
+import CelebrationBurst from '../components/ui/CelebrationBurst';
+import IconBadge from '../components/features/IconBadge';
+import { useAchievementUnlocks } from '../components/features/useAchievementUnlocks';
 
-interface Achievement {
-  id: string;
+interface ProgressRow {
+  achievement_id: string;
   name: string;
   description: string;
   icon: string;
@@ -16,223 +25,128 @@ interface Achievement {
   requirement_type: string;
   requirement_value: number;
   points_reward: number;
+  is_unlocked: boolean;
+  unlocked_at: string | null;
+  current_value: number;
+  remaining: number;
+  progress_pct: number;
 }
 
-interface UserAchievementData {
-  achievement_id: string;
-  unlocked_at: string;
-}
+const CATEGORY_LABEL: Record<string, string> = {
+  milestone: 'Tonggak', streak: 'Beruntun', points: 'Poin', eco: 'Lingkungan', distance: 'Jarak',
+};
 
-type CachedAchievement = Achievement & {
-  unlocked_at?: string;
+function remainingLabel(r: ProgressRow): string {
+  switch (r.requirement_type) {
+    case 'total_distance': return `${(r.remaining / 1000).toFixed(1)} km lagi`;
+    case 'co2_saved': return `${co2KgFromGrams(r.remaining).toFixed(1)} kg CO₂ lagi`;
+    case 'walks': return `${r.remaining} jalan lagi`;
+    case 'streak': return `${r.remaining} hari lagi`;
+    case 'total_points': return `${r.remaining} poin lagi`;
+    default: return `${r.remaining} lagi`;
+  }
 }
 
 export default function AchievementsPage() {
-  const { user, profile } = useAuthStore();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+  const [rows, setRows] = useState<ProgressRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { celebrate } = useAchievementUnlocks();
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!user) return;
+    if (!user) return;
+    let alive = true;
+    (async () => {
       setIsLoading(true);
-
       try {
-        if (!navigator.onLine) {
-          const cached = await getCachedCollection<CachedAchievement>('achievements');
-          if (cached.length > 0) {
-            setAchievements(cached.map(({ unlocked_at: _unlockedAt, ...achievement }) => achievement));
-            setUnlockedIds(new Set(cached.filter((achievement) => achievement.unlocked_at).map((achievement) => achievement.id)));
-            return;
-          }
+        const { data, error } = await supabase.rpc('get_achievement_progress', { p_user_id: user.id });
+        if (error) throw error;
+        if (alive && data) {
+          setRows(data as ProgressRow[]);
+          cacheCollection('achievements', (data as ProgressRow[]).map((r) => ({ id: r.achievement_id, ...r }))).catch(() => {});
         }
-
-        // Fetch all achievements
-        const { data: allAchievements } = await supabase
-          .from('achievements')
-          .select('*')
-          .order('requirement_value', { ascending: true });
-
-        // Fetch user's unlocked achievements
-        const { data: userAchievements } = await supabase
-          .from('user_achievements')
-          .select('achievement_id, unlocked_at')
-          .eq('user_id', user.id);
-
-        if (allAchievements) setAchievements(allAchievements);
-        if (userAchievements) {
-          setUnlockedIds(new Set(userAchievements.map((ua: UserAchievementData) => ua.achievement_id)));
-        }
-
-        if (allAchievements) {
-          const unlockedMap = new Map<string, string>();
-          userAchievements?.forEach((achievement: UserAchievementData) => {
-            unlockedMap.set(achievement.achievement_id, achievement.unlocked_at);
-          });
-
-          cacheCollection('achievements', allAchievements.map((achievement) => ({
-            ...achievement,
-            unlocked_at: unlockedMap.get(achievement.id),
-          }))).catch(() => {});
-        }
-      } catch (err) {
-        console.error('Failed to fetch achievements:', err);
-
-        const cached = await getCachedCollection<CachedAchievement>('achievements');
-        if (cached.length > 0) {
-          setAchievements(cached.map(({ unlocked_at: _unlockedAt, ...achievement }) => achievement));
-          setUnlockedIds(new Set(cached.filter((achievement) => achievement.unlocked_at).map((achievement) => achievement.id)));
-        }
+      } catch {
+        const cached = await getCachedCollection<ProgressRow & { id: string }>('achievements');
+        if (alive && cached.length) setRows(cached);
       } finally {
-        setIsLoading(false);
+        if (alive) setIsLoading(false);
       }
-    };
-
-    fetchData();
+    })();
+    return () => { alive = false; };
   }, [user]);
 
-  const getProgress = (achievement: Achievement): number => {
-    if (!profile) return 0;
-    switch (achievement.requirement_type) {
-      case 'distance':
-        return Math.min(100, ((profile.total_distance_km || 0) / achievement.requirement_value) * 100);
-      case 'walks':
-        return Math.min(100, ((profile.total_walks || 0) / achievement.requirement_value) * 100);
-      case 'streak':
-        return Math.min(100, ((profile.longest_streak || 0) / achievement.requirement_value) * 100);
-      case 'points':
-        return Math.min(100, ((profile.ecopoints_balance || 0) / achievement.requirement_value) * 100);
-      default:
-        return 0;
+  const unlocked = rows.filter((r) => r.is_unlocked).length;
+  const total = rows.length;
+  const pct = total ? Math.round((unlocked / total) * 100) : 0;
+
+  const groups = useMemo(() => {
+    const g: Record<string, ProgressRow[]> = {};
+    for (const r of rows) (g[r.category] ??= []).push(r);
+    // within a category: in-progress (by closeness) first, then unlocked.
+    for (const k of Object.keys(g)) {
+      g[k].sort((a, b) => Number(a.is_unlocked) - Number(b.is_unlocked) || b.progress_pct - a.progress_pct);
     }
-  };
-
-  const categoryGroups = achievements.reduce((acc, a) => {
-    const cat = a.category || 'General';
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(a);
-    return acc;
-  }, {} as Record<string, Achievement[]>);
-
-  // If no achievements in DB yet, show placeholder
-  const placeholderAchievements = [
-    { icon: '🥾', name: 'First Steps', desc: 'Complete your first walk', locked: true },
-    { icon: '🏃', name: '5K Walker', desc: 'Walk 5 kilometers total', locked: true },
-    { icon: '🔥', name: 'Streak Starter', desc: 'Maintain a 3-day streak', locked: true },
-    { icon: '🌍', name: 'Eco Warrior', desc: 'Walk 50km total', locked: true },
-    { icon: '💎', name: 'Point Collector', desc: 'Earn 1,000 EcoPoints', locked: true },
-    { icon: '🏆', name: 'Champion', desc: 'Complete 50 walks', locked: true },
-    { icon: '⭐', name: 'Super Streak', desc: 'Maintain a 30-day streak', locked: true },
-    { icon: '🌟', name: 'Legend', desc: 'Walk 100km total', locked: true },
-  ];
+    return g;
+  }, [rows]);
 
   return (
-    <div className="gradient-mesh-bg min-h-screen pb-24">
-      {/* Header */}
-      <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between">
-        <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h1 className="text-base font-semibold text-gray-900 dark:text-white">Achievements</h1>
-        <div className="w-6" />
-      </div>
+    <div className="gradient-mesh-bg min-h-screen pb-24 relative overflow-hidden">
+      <div className="pointer-events-none absolute -top-24 -left-16 w-72 h-72 rounded-full bg-primary-400/15 blur-3xl" />
+      <CelebrationBurst active={celebrate} />
+      <PageHeader title="Pencapaian" onBack={() => navigate(-1)} />
 
-      <div className="max-w-2xl mx-auto px-4 pt-4 pb-12">
-        {/* Summary */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-5 mb-6 text-center"
+      <div className="relative max-w-2xl mx-auto px-4 pt-4 space-y-5">
+        <HeroCard
+          eyebrow="Koleksi badge"
+          title={`${unlocked} dari ${total || '—'} terbuka`}
+          subtitle={`${pct}% selesai`}
+          media={<div className="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center"><Trophy className="w-7 h-7 text-white" /></div>}
         >
-          <div className="text-3xl font-bold text-primary-500">
-            {unlockedIds.size}/{achievements.length || placeholderAchievements.length}
-          </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wider">
-            Achievements Unlocked
-          </div>
-        </motion.div>
+          <ProgressBar value={pct} className="bg-white/20" barClassName="bg-white" height={8} />
+        </HeroCard>
 
         {isLoading ? (
           <SkeletonGrid count={6} />
-        ) : achievements.length > 0 ? (
-          // Real achievements from database
-          Object.entries(categoryGroups).map(([category, items]) => (
-            <div key={category} className="mb-6">
-              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-1">
-                {category}
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                {items.map((achievement, index) => {
-                  const unlocked = unlockedIds.has(achievement.id);
-                  const progress = getProgress(achievement);
-                  return (
-                    <motion.div
-                      key={achievement.id}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: index * 0.05 }}
-                      className={`glass-card p-4 text-center transition-all ${
-                        unlocked ? 'glow-primary' : 'opacity-60'
-                      }`}
-                    >
-                      <div className={`text-3xl mb-2 ${unlocked ? '' : 'grayscale'}`}>
-                        {achievement.icon || '🏅'}
+        ) : total === 0 ? (
+          <SectionCard><div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Belum ada pencapaian.</div></SectionCard>
+        ) : (
+          Object.entries(groups).map(([cat, items]) => (
+            <SectionCard key={cat} title={CATEGORY_LABEL[cat] ?? cat}>
+              <div className="grid grid-cols-1 gap-2.5">
+                {items.map((r, i) => (
+                  <motion.div
+                    key={r.achievement_id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(i * 0.04, 0.3) }}
+                    className={`flex items-center gap-3 rounded-xl p-2.5 ${
+                      r.is_unlocked ? 'bg-primary-50/70 dark:bg-primary-900/15' : 'bg-gray-50/70 dark:bg-gray-800/30'
+                    }`}
+                  >
+                    <IconBadge icon={r.icon} category={r.category} unlocked={r.is_unlocked} size={44} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-bold text-gray-900 dark:text-white truncate">{r.name}</span>
+                        <span className={`text-[11px] font-extrabold shrink-0 ${r.is_unlocked ? 'text-primary-500' : 'text-gray-400'}`}>+{r.points_reward}</span>
                       </div>
-                      <div className="text-xs font-semibold text-gray-900 dark:text-white mb-1">
-                        {achievement.name}
-                      </div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mb-2">
-                        {achievement.description}
-                      </div>
-                      {unlocked ? (
-                        <span className="text-[10px] text-primary-500 font-medium">
-                          ✅ +{achievement.points_reward} pts
-                        </span>
+                      <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{r.description}</div>
+                      {r.is_unlocked ? (
+                        <div className="text-[10px] text-primary-600 dark:text-primary-400 font-semibold mt-0.5 flex items-center gap-1">
+                          <Trophy className="w-3 h-3" /> Terbuka{r.unlocked_at ? ` · ${new Date(r.unlocked_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}` : ''}
+                        </div>
                       ) : (
-                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
-                          <div
-                            className="h-full gradient-primary rounded-full transition-all duration-500"
-                            style={{ width: `${progress}%` }}
-                          />
+                        <div className="mt-1.5">
+                          <ProgressBar value={r.progress_pct} height={5} />
+                          <div className="text-[10px] text-gray-400 mt-1 flex items-center gap-1"><Lock className="w-2.5 h-2.5" /> {remainingLabel(r)}</div>
                         </div>
                       )}
-                    </motion.div>
-                  );
-                })}
+                    </div>
+                  </motion.div>
+                ))}
               </div>
-            </div>
+            </SectionCard>
           ))
-        ) : (
-          // Placeholder achievements
-          <div className="grid grid-cols-2 gap-3">
-            {placeholderAchievements.map((achv, index) => (
-              <motion.div
-                key={achv.name}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: index * 0.05 }}
-                className="glass-card p-4 text-center opacity-60"
-              >
-                <div className="text-3xl mb-2 grayscale">{achv.icon}</div>
-                <div className="text-xs font-semibold text-gray-900 dark:text-white mb-1">
-                  {achv.name}
-                </div>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 mb-2">
-                  {achv.desc}
-                </div>
-                <div className="flex items-center justify-center gap-1 text-[10px] text-gray-400 dark:text-gray-500">
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                  Locked
-                </div>
-              </motion.div>
-            ))}
-          </div>
         )}
       </div>
 

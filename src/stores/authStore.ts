@@ -19,9 +19,9 @@ export interface UserProfile {
   longest_streak: number;
   last_walk_date: string | null;
   subscription_tier: string;
-  xp?: number;
-  level?: number;
-  tier?: string;
+  xp: number;
+  level: number;
+  tier: string;
   created_at: string;
   updated_at: string;
   onboarding_completed?: boolean;

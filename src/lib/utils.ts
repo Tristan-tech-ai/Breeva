@@ -55,12 +55,14 @@ export function formatNumber(num: number): string {
 }
 
 /**
- * Calculate CO2 saved based on distance walked (vs driving)
- * Average car emits ~170g CO2 per km
+ * Calculate CO2 saved (grams) for a distance vs driving.
+ * Canonical rate = 120 g/km, matching the complete_walk RPC and src/lib/metrics.ts.
+ * For DISPLAY prefer metrics.co2KgFromGrams(storedGrams) (read the stored value);
+ * this compute-from-distance helper is for previews/estimates only.
  */
 export function calculateCO2Saved(distanceMeters: number): number {
   const distanceKm = distanceMeters / 1000;
-  const co2GramsPerKm = 170;
+  const co2GramsPerKm = 120;
   return Math.round(distanceKm * co2GramsPerKm);
 }
 
