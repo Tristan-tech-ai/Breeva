@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X } from 'lucide-react';
 
@@ -10,6 +11,7 @@ interface BeforeInstallPromptEvent extends Event {
 export default function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [dismissed, setDismissed] = useState(() => sessionStorage.getItem('breeva_pwa_dismissed') === '1');
+  const { pathname } = useLocation();
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -43,7 +45,8 @@ export default function PWAInstallBanner() {
     sessionStorage.setItem('breeva_pwa_dismissed', '1');
   };
 
-  if (!deferredPrompt || dismissed) return null;
+  // Hide on the developer landing — it's a marketing hero, not an installable app surface.
+  if (!deferredPrompt || dismissed || pathname === '/developers') return null;
 
   return (
     <AnimatePresence>
