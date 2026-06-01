@@ -73,29 +73,51 @@ function timeAgo(dateStr: string): string {
   return mo < 12 ? `${mo} bln lalu` : `${Math.floor(mo / 12)} thn lalu`;
 }
 
-/** Fetch live AQI for each place (batched, cached via getAirQuality). */
+// Per-place AQI snapshot (localStorage) — lets the list paint last-known air quality
+// instantly on revisit, then revalidate. getAirQuality keeps the source-of-truth cache
+// (15-min TTL in offline-db), so values only re-fetch when the AQI at that spot changes.
+const AQI_SNAPSHOT_KEY = 'breeva_place_aqi_v1';
+function loadAqiSnapshot(): Record<string, AirQualityData> {
+  try { return JSON.parse(localStorage.getItem(AQI_SNAPSHOT_KEY) || '{}'); } catch { return {}; }
+}
+function saveAqiSnapshot(map: Record<string, AirQualityData | null>) {
+  try {
+    const clean: Record<string, AirQualityData> = {};
+    for (const [k, v] of Object.entries(map)) if (v) clean[k] = v;
+    localStorage.setItem(AQI_SNAPSHOT_KEY, JSON.stringify(clean));
+  } catch { /* quota */ }
+}
+
+/**
+ * Live AQI per saved place — optimized load:
+ *  - paints last-known AQI instantly from the snapshot (zero-latency on revisit),
+ *  - fetches every place in PARALLEL, streaming each card in the moment it resolves
+ *    (cached spots return instantly; only stale/new ones touch the network),
+ *  - persists fresh values back to the snapshot.
+ */
 function usePlaceAqi(places: SavedPlace[]): Record<string, AirQualityData | null> {
-  const [aqiMap, setAqiMap] = useState<Record<string, AirQualityData | null>>({});
-  const known = useRef<Set<string>>(new Set());
+  const [aqiMap, setAqiMap] = useState<Record<string, AirQualityData | null>>(() => loadAqiSnapshot());
+  const requested = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const todo = places.filter((p) => !known.current.has(p.id)).slice(0, 30);
+    const todo = places.filter((p) => !requested.current.has(p.id)).slice(0, 50);
     if (!todo.length) return;
-    todo.forEach((p) => known.current.add(p.id));
+    todo.forEach((p) => requested.current.add(p.id));
     let cancelled = false;
-    (async () => {
-      for (let i = 0; i < todo.length; i += 6) {
-        const batch = todo.slice(i, i + 6);
-        const res = await Promise.allSettled(
-          batch.map((p) => getAirQuality(p.coordinate).then((r) => ({ id: p.id, data: r.data })))
-        );
-        if (cancelled) return;
-        setAqiMap((prev) => {
-          const next = { ...prev };
-          res.forEach((r) => { if (r.status === 'fulfilled') next[r.value.id] = r.value.data; });
-          return next;
+    for (const p of todo) {
+      getAirQuality(p.coordinate)
+        .then((r) => {
+          if (cancelled) return;
+          setAqiMap((prev) => {
+            const next = { ...prev, [p.id]: r.data ?? prev[p.id] ?? null };
+            if (r.data) saveAqiSnapshot(next);
+            return next;
+          });
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setAqiMap((prev) => ({ ...prev, [p.id]: prev[p.id] ?? null }));
         });
-      }
-    })();
+    }
     return () => { cancelled = true; };
   }, [places]);
   return aqiMap;
@@ -216,7 +238,7 @@ export default function SavedPlacesPage() {
     );
   };
 
-  const pending = places.length > 0 && Object.keys(aqiMap).length < Math.min(places.length, 30);
+  const pending = places.some((p) => !(p.id in aqiMap));
 
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24 relative overflow-hidden">
