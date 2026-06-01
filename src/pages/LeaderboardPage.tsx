@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   ChevronLeft, Crown, Medal, Award, Footprints, MapPin, Building2,
   Landmark, Globe, Users, LocateFixed, Coins, Route, Sparkles, Share2,
@@ -394,9 +394,11 @@ export default function LeaderboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Refetch on category change WITHOUT flashing the skeleton — the board stays
+  // mounted and rows swap in place (no collapse/jitter). The mount effect above
+  // owns the one-time initial skeleton.
   useEffect(() => {
-    setLoading(true);
-    fetchBoard().finally(() => setLoading(false));
+    fetchBoard();
   }, [fetchBoard]);
 
   // ── GPS auto-detect: if region unknown, ask once and resolve it ────────────
@@ -589,21 +591,11 @@ export default function LeaderboardPage() {
               { value: 'regions', label: 'Adu Wilayah', Icon: Landmark },
             ]}
           />
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={mode}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.15 }}
-            >
-              {mode === 'people' ? (
-                <Segmented<Scope> idBase="seg-scope" value={scope} onChange={(v) => { scopeTouched.current = true; setScope(v); }} options={SCOPES} />
-              ) : (
-                <Segmented<RegionLevel> idBase="seg-level" value={level} onChange={setLevel} options={LEVELS} />
-              )}
-            </motion.div>
-          </AnimatePresence>
+          {mode === 'people' ? (
+            <Segmented<Scope> idBase="seg-scope" value={scope} onChange={(v) => { scopeTouched.current = true; setScope(v); }} options={SCOPES} />
+          ) : (
+            <Segmented<RegionLevel> idBase="seg-level" value={level} onChange={setLevel} options={LEVELS} />
+          )}
           <Segmented<Metric>
             idBase="seg-metric"
             size="sm"
@@ -629,12 +621,13 @@ export default function LeaderboardPage() {
           <BeFirstState where={scopeRegionLabel} onStart={() => navigate('/home')} onInvite={inviteFriends} />
         ) : (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <Podium rows={listRows} mode={mode} metric={metric} />
+            {/* Podium needs 3; with 1–2 entries show them as a plain list (was blank before). */}
+            {listRows.length >= 3 && <Podium rows={listRows} mode={mode} metric={metric} />}
             {mode === 'people' ? (
-              <PeopleList rows={people.slice(3)} metric={metric} />
+              <PeopleList rows={listRows.length >= 3 ? people.slice(3) : people} metric={metric} />
             ) : (
               <div>
-                {regions.slice(3).map((r) => (
+                {(listRows.length >= 3 ? regions.slice(3) : regions).map((r) => (
                   <RegionRowItem key={r.region_code} r={r} metric={metric} />
                 ))}
               </div>
