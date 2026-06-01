@@ -20,6 +20,7 @@ import {
   Swords,
   BarChart3,
   Store,
+  Code2,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useI18nStore } from '../../stores/i18nStore';
@@ -47,6 +48,12 @@ const menuSections = [
     title: 'Contribute',
     items: [
       { icon: MapPinPlus, label: 'Add Missing Place', path: '/contribute', color: 'text-rose-500' },
+    ],
+  },
+  {
+    title: 'Developers',
+    items: [
+      { icon: Code2, label: 'Developer API', path: '/developers', color: 'text-teal-500' },
     ],
   },
   {
@@ -128,7 +135,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-[60] bg-black/50 will-change-[opacity]"
           />
 
           {/* Sidebar Panel */}
@@ -140,7 +147,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             role="dialog"
             aria-modal="true"
             aria-label="Navigation menu"
-            className="fixed top-0 left-0 bottom-0 z-[61] w-[300px] max-w-[85vw] bg-white dark:bg-gray-900/95 backdrop-blur-2xl shadow-2xl flex flex-col"
+            className="fixed top-0 left-0 bottom-0 z-[61] w-[300px] max-w-[85vw] bg-white dark:bg-gray-900 shadow-2xl flex flex-col will-change-transform"
           >
             {/* User Header */}
             <div className="gradient-primary p-5 pt-12">

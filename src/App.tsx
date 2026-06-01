@@ -45,6 +45,7 @@ const EcoTipsPage = lazy(() => import('./pages/EcoTipsPage'));
 const ContributionHistoryPage = lazy(() => import('./pages/ContributionHistoryPage'));
 const YearInReviewPage = lazy(() => import('./pages/YearInReviewPage'));
 const PaparanPage = lazy(() => import('./pages/PaparanPage'));
+const DevelopersPage = lazy(() => import('./pages/DevelopersPage'));
 
 // Page loading fallback — content-shaped skeleton (avoids the blank flash of a bare spinner).
 function PageLoader() {
@@ -196,6 +197,13 @@ function App() {
             <Route path="/saved" element={
               <ProtectedRoute>
                 <SavedPlacesPage />
+              </ProtectedRoute>
+            } />
+
+            {/* Developer API portal */}
+            <Route path="/developers" element={
+              <ProtectedRoute>
+                <DevelopersPage />
               </ProtectedRoute>
             } />
 

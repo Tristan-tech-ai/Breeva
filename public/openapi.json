@@ -1,0 +1,230 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Breeva Developer API",
+    "version": "1.0.0",
+    "description": "Calibrated per-road air quality, pollution-aware routing, and cumulative exposure dose for Indonesian cities — the engine behind breeva.site, exposed as a REST API.\n\n## Authentication\nEvery request requires an API key, minted from the Developer portal at https://breeva.site/developers. Pass it as either:\n- `Authorization: Bearer brv_live_…`\n- `x-api-key: brv_live_…`\n\n## Rate limits\nPer-key daily quota by tier (resets 00:00 UTC). Every response carries `X-RateLimit-Limit` and `X-RateLimit-Remaining`; exceeding the quota returns `429`.\n\n| Tier | Requests / day |\n|------|----------------|\n| free | 1,000 |\n| pro | 50,000 |\n| enterprise | unlimited |",
+    "contact": { "name": "Breeva", "url": "https://breeva.site" }
+  },
+  "servers": [
+    { "url": "https://breeva.site/api/v1", "description": "Production" }
+  ],
+  "security": [
+    { "bearerAuth": [] },
+    { "apiKeyHeader": [] }
+  ],
+  "tags": [
+    { "name": "Air Quality" },
+    { "name": "Routing" },
+    { "name": "Exposure" }
+  ],
+  "paths": {
+    "/road-aqi": {
+      "get": {
+        "tags": ["Air Quality"],
+        "summary": "Per-road AQI for a bounding box",
+        "description": "Returns road segments within the bounding box, each annotated with calibrated PM2.5 / NO₂ and an AQI value, as a list of LineString geometries.",
+        "parameters": [
+          { "name": "south", "in": "query", "required": true, "schema": { "type": "number" }, "description": "Min latitude of the bbox.", "example": -6.30 },
+          { "name": "west", "in": "query", "required": true, "schema": { "type": "number" }, "description": "Min longitude of the bbox.", "example": 106.70 },
+          { "name": "north", "in": "query", "required": true, "schema": { "type": "number" }, "description": "Max latitude of the bbox.", "example": -6.10 },
+          { "name": "east", "in": "query", "required": true, "schema": { "type": "number" }, "description": "Max longitude of the bbox.", "example": 106.90 },
+          { "name": "zoom", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 8, "maximum": 19 }, "description": "Map zoom level; controls road density/detail.", "example": 13 }
+        ],
+        "responses": {
+          "200": {
+            "description": "Road segments with AQI.",
+            "headers": {
+              "X-RateLimit-Limit": { "schema": { "type": "integer" }, "description": "Daily quota for the key's tier." },
+              "X-RateLimit-Remaining": { "schema": { "type": "integer" }, "description": "Requests left today." }
+            },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RoadAqiResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/route-score": {
+      "post": {
+        "tags": ["Routing"],
+        "summary": "Pollution-aware routing",
+        "description": "Given a start and end point, returns route options (cleanest / balanced / fastest) each scored with average AQI exposure along the path.",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RouteScoreRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Scored route options.",
+            "headers": {
+              "X-RateLimit-Limit": { "schema": { "type": "integer" } },
+              "X-RateLimit-Remaining": { "schema": { "type": "integer" } }
+            },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RouteScoreResponse" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/exposure": {
+      "post": {
+        "tags": ["Exposure"],
+        "summary": "Cumulative PM2.5 dose for a path",
+        "description": "Computes inhaled PM2.5 dose along a polyline for a given transport mode and trip duration, expressed in micrograms and cigarette-equivalents (660 µg = 1 cigarette).",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ExposureRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Exposure dose result.",
+            "headers": {
+              "X-RateLimit-Limit": { "schema": { "type": "integer" } },
+              "X-RateLimit-Remaining": { "schema": { "type": "integer" } }
+            },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ExposureResponse" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "brv_live_*" },
+      "apiKeyHeader": { "type": "apiKey", "in": "header", "name": "x-api-key" }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or invalid API key.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" }, "examples": {
+          "missing": { "value": { "error": "missing_api_key", "detail": "Provide your key via \"Authorization: Bearer <key>\" or the \"x-api-key\" header." } },
+          "invalid": { "value": { "error": "invalid_api_key", "detail": "Key not found or revoked." } }
+        } } }
+      },
+      "RateLimited": {
+        "description": "Daily quota exceeded for the key's tier.",
+        "headers": {
+          "X-RateLimit-Limit": { "schema": { "type": "integer" } },
+          "X-RateLimit-Remaining": { "schema": { "type": "integer" }, "description": "0 when limited." }
+        },
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" }, "example": { "error": "rate_limit_exceeded", "detail": "Daily limit of 1000 requests for the 'free' tier reached." } } }
+      },
+      "BadRequest": {
+        "description": "Malformed request body or parameters.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" }, "example": { "error": "polyline required (array of [lat,lon] pairs)" } } }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" },
+          "detail": { "type": "string" }
+        },
+        "required": ["error"]
+      },
+      "LineString": {
+        "type": "object",
+        "description": "GeoJSON LineString. Coordinates are [lon, lat] pairs.",
+        "properties": {
+          "type": { "type": "string", "enum": ["LineString"] },
+          "coordinates": { "type": "array", "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 } }
+        }
+      },
+      "RoadAqiResponse": {
+        "type": "object",
+        "properties": {
+          "roads": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "osm_way_id": { "type": "integer", "description": "OpenStreetMap way id." },
+                "geometry": { "$ref": "#/components/schemas/LineString" },
+                "aqi": { "type": "number", "description": "US-EPA AQI for the segment." },
+                "pm25": { "type": "number", "description": "Calibrated PM2.5 (µg/m³)." },
+                "no2": { "type": "number", "description": "NO₂ (µg/m³)." }
+              }
+            }
+          }
+        }
+      },
+      "RouteScoreRequest": {
+        "type": "object",
+        "required": ["start", "end"],
+        "properties": {
+          "start": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "[lat, lng] of origin.", "example": [-6.20, 106.80] },
+          "end": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "[lat, lng] of destination.", "example": [-6.17, 106.83] },
+          "profile": { "type": "string", "default": "foot-walking", "description": "Travel profile.", "example": "foot-walking" },
+          "alternatives": { "type": "boolean", "default": true, "description": "Return multiple route options." },
+          "aqi_weight": { "type": "number", "minimum": 0, "maximum": 1, "description": "Clean↔fast preference: 0 = fastest, 1 = cleanest." }
+        }
+      },
+      "RouteScoreResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "routes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "polyline": { "type": "array", "items": { "type": "object", "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } } } },
+                "distance_meters": { "type": "number" },
+                "duration_seconds": { "type": "number" },
+                "vayu_avg_aqi": { "type": "number", "description": "Mean AQI exposure along the route." },
+                "route_label": { "type": "string", "description": "cleanest | balanced | fastest" }
+              }
+            }
+          },
+          "meta": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "ExposureRequest": {
+        "type": "object",
+        "required": ["polyline", "duration_minutes"],
+        "properties": {
+          "polyline": {
+            "type": "array",
+            "description": "Path as [lat, lon] pairs (2–5000 points).",
+            "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+            "example": [[-6.20, 106.80], [-6.19, 106.81]]
+          },
+          "vehicle_type": {
+            "type": "string",
+            "default": "pedestrian",
+            "enum": ["pedestrian", "cyclist", "motorcycle_open", "motorcycle_full", "car_window_open", "car_ac_recirculate", "car_ac_fresh", "public_transport"],
+            "description": "Transport mode (determines ventilation rate + intake fraction)."
+          },
+          "duration_minutes": { "type": "number", "minimum": 0, "exclusiveMinimum": true, "description": "Trip duration in minutes.", "example": 20 }
+        }
+      },
+      "ExposureResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "total_dose_ug": { "type": "number", "description": "Total inhaled PM2.5 (µg)." },
+              "cigarette_equivalent": { "type": "number", "description": "Dose ÷ 660 µg (1 cigarette)." },
+              "health_risk_level": { "type": "string", "enum": ["low", "moderate", "high", "very_high"] },
+              "avg_pm25": { "type": "number", "description": "Mean PM2.5 along the path (µg/m³)." },
+              "vehicle_type": { "type": "string" },
+              "vehicle_label": { "type": "string", "description": "Human-readable mode (Indonesian)." },
+              "duration_minutes": { "type": "number" },
+              "sample_count": { "type": "integer", "description": "Points sampled along the polyline." }
+            }
+          }
+        }
+      }
+    }
+  }
+}
