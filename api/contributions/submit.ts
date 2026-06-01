@@ -54,7 +54,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
-    const { data: { user: authUser }, error: authError } = await userClient.auth.getUser();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- supabase auth type omits getUser in some type resolutions (same cast as api/walks/complete.ts)
+    const { data: { user: authUser }, error: authError } = await (userClient.auth as any).getUser();
     if (authError || !authUser) return res.status(401).json({ error: 'Invalid or expired token' });
 
     const body = (req.body || {}) as SubmitBody;
