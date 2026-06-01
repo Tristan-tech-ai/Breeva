@@ -67,29 +67,38 @@ async function redisSetInt(key: string, val: number): Promise<void> {
 // SearchAPI place-details/search results barely change but are slow (1.5–3s) AND burn
 // finite credits. Cache the full JSON server-side so repeat / popular POIs are instant
 // and don't consume a credit. Command form = large payloads ride the POST body, not the URL.
-async function redisCmd(args: Array<string | number>): Promise<unknown> {
+// Path-form (proven by the pointer/counter helpers): GET, SET-with-body (large payload
+// rides the POST body, not the URL), then /expire for the TTL.
+async function cacheGet(key: string): Promise<unknown | null> {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
   try {
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(args),
-    });
+    const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, { headers: { Authorization: `Bearer ${token}` } });
     if (!resp.ok) return null;
-    return (await resp.json()).result ?? null;
+    const v = (await resp.json()).result;
+    if (typeof v !== 'string') return null;
+    return JSON.parse(v);
   } catch {
     return null;
   }
 }
-async function cacheGet(key: string): Promise<unknown | null> {
-  const v = await redisCmd(['GET', key]);
-  if (typeof v !== 'string') return null;
-  try { return JSON.parse(v); } catch { return null; }
-}
 async function cacheSet(key: string, data: unknown, ttlSec: number): Promise<void> {
-  try { await redisCmd(['SET', key, JSON.stringify(data), 'EX', ttlSec]); } catch { /* best-effort */ }
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return;
+  try {
+    const resp = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    });
+    if (resp.ok) {
+      await fetch(`${url}/expire/${encodeURIComponent(key)}/${ttlSec}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+    }
+  } catch {
+    /* best-effort */
+  }
 }
 
 // 401 = invalid/disabled key · 429 = out of credits (or rate-limited).
