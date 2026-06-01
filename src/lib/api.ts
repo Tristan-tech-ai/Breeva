@@ -445,7 +445,7 @@ export async function submitContribution(payload: SubmitContributionPayload): Pr
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
   const result = await sendOrQueueMutation({
-    url: '/api/contributions/submit',
+    url: '/api/vayu/contribute', // consolidated endpoint (dispatches on body.type); Vercel 12-function cap
     method: 'POST',
     headers,
     body: payload,
