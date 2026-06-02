@@ -6,6 +6,7 @@ import 'leaflet-rotate';
 import { LocateFixed, Compass, Navigation } from 'lucide-react';
 import { useMapStore } from '../../stores/mapStore';
 import { useWalkStore } from '../../stores/walkStore';
+import { useDeviceHeading } from '../../hooks/useDeviceHeading';
 import { lookAheadPoint, routeProgress, splitPathAtFraction } from '../../lib/geo';
 import { useRoadPollutionLayer } from './RoadPollutionLayer';
 import { useRoadMvtLayer } from './RoadMvtLayer';
@@ -206,6 +207,10 @@ function MapController({
   const walkPos = useWalkStore((s) => s.currentPosition);
   const heading = useWalkStore((s) => s.heading);
   const navFraction = useWalkStore((s) => s.navProgress?.fraction ?? 0);
+  // Live compass (where the phone points) — drives the puck chevron. Falls back to
+  // the movement-derived heading when no orientation sensor / permission.
+  const deviceHeading = useDeviceHeading(isTracking);
+  const puckHeading = deviceHeading ?? heading;
 
   const prevCenterRef = useRef(center);
   const userMarkerRef = useRef<L.Marker | null>(null);
@@ -281,22 +286,23 @@ function MapController({
       } else {
         userMarkerRef.current.setLatLng([livePos.lat, livePos.lng]);
       }
-      // Spin the chevron to the travel bearing, compensated for any map rotation.
+      // Spin the chevron to where the phone points (compass), compensated for any
+      // map rotation so it stays correct in both north-up and heading-up modes.
       const el = userMarkerRef.current.getElement();
       const rotor = el?.querySelector('.puck-rotor') as HTMLElement | null;
       if (rotor) {
-        if (heading == null) {
+        if (puckHeading == null) {
           rotor.style.opacity = '0';
         } else {
           rotor.style.opacity = '1';
-          rotor.style.transform = `rotate(${(heading - getMapBearing(map) + 360) % 360}deg)`;
+          rotor.style.transform = `rotate(${(puckHeading - getMapBearing(map) + 360) % 360}deg)`;
         }
       }
     } else if (userMarkerRef.current) {
       userMarkerRef.current.remove();
       userMarkerRef.current = null;
     }
-  }, [livePos, heading, map]);
+  }, [livePos, puckHeading, map]);
 
   // Keep the follow flag in a ref for the drag handler + rAF loop.
   useEffect(() => {

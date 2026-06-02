@@ -201,9 +201,11 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
 
               const route = ms.selectedRoute;
               const wps = route?.waypoints;
+              let routeMetersRemaining: number | null = null;
               if (wps && wps.length >= 2) {
                 const prog = routeProgress(point, wps, route?.distance_meters);
                 if (prog) {
+                  routeMetersRemaining = prog.metersRemaining;
                   const { distanceMeters, durationSeconds } = get();
                   // ETA from the rolling average speed, floored so a brief stop
                   // doesn't blow the estimate to infinity.
@@ -219,10 +221,15 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
                 }
               }
 
-              // Arrival latch: within 30 m of the destination after a real walk.
-              // HomePage observes `arrived` to run the finish + celebration flow.
+              // Arrival latch (after a real >50 m walk): fire when close to the
+              // destination OR when the route is essentially complete — the tapped
+              // destination can sit a few metres off the snapped route end, so the
+              // geofence alone would miss "0 m tersisa". HomePage observes `arrived`
+              // to run the finish + celebration flow.
               const dest = ms.destination;
-              if (dest && !get().arrived && get().distanceMeters > 50 && withinGeofence(point, dest, 30)) {
+              const nearDest = dest != null && withinGeofence(point, dest, 35);
+              const routeDone = routeMetersRemaining != null && routeMetersRemaining < 20;
+              if (dest && !get().arrived && get().distanceMeters > 50 && (nearDest || routeDone)) {
                 set({ arrived: true });
               }
             })

@@ -33,6 +33,7 @@ import { useWalkStore } from '../stores/walkStore';
 import { useAuthStore } from '../stores/authStore';
 import { useSavedPlacesStore } from '../stores/savedPlacesStore';
 import { useIsDark } from '../stores/settingsStore';
+import { requestDeviceHeadingPermission } from '../hooks/useDeviceHeading';
 // Lazy: defers leaflet (~122KB) + map layers out of the eager main-entry bundle.
 const LeafletMap = lazy(() => import('../components/map/LeafletMap'));
 import SearchBar from '../components/map/SearchBar';
@@ -652,7 +653,7 @@ export default function HomePage() {
                   animate={{ opacity: 1, y: 0 }}
                 >
                   <button
-                    onClick={() => startWalk(selectedRoute.id, transportMode)}
+                    onClick={() => { void requestDeviceHeadingPermission(); startWalk(selectedRoute.id, transportMode); }}
                     className="w-full gradient-primary text-white py-4 rounded-2xl text-base font-semibold shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2.5"
                   >
                     <Play className="w-5 h-5 fill-current" />
