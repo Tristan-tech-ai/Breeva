@@ -377,6 +377,15 @@ export function isGreenSpace(types: string[]): boolean {
   });
 }
 
+/** Raw inner SVG markup for an icon key — used by the canvas sprite atlas
+ * (poi-sprite-atlas.ts) to rasterize glyphs. Falls back to the generic dot. */
+export function getIconSvg(iconKey: string): string {
+  return ICONS[iconKey] || ICONS.generic;
+}
+
+/** Root-category → marker color (exported for the canvas atlas / non-DivIcon renderers). */
+export { ROOT_COLORS, FALLBACK_COLOR };
+
 // ── Cached DivIcon factory ────────────────────────────────────────────
 
 const divIconCache = new Map<string, L.DivIcon>();

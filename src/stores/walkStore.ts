@@ -4,11 +4,13 @@ import toast from 'react-hot-toast';
 import type { Coordinate, RoutePoint, WalkSession, ExposureResult } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from './authStore';
+import { useSettingsStore } from './settingsStore';
 import { completeWalkViaApi, getVayuVehicleType, submitVayuContribution, getRouteScoreSegments, pm25ToAQISimple } from '../lib/api';
 import { showNotification, isNotificationEnabled } from '../lib/notifications';
 import { formatLocalDateYYYYMMDD } from '../lib/utils';
 import { computeDose, type ExposureMode, type ExposureDoseResult, type UserExposureProfile } from '../lib/exposure';
 import { saveExposureLedger } from '../lib/exposure-ledger';
+import { bearing, smoothHeading, routeProgress, isOffRoute, withinGeofence } from '../lib/geo';
 
 // Map the walk's transport mode to the exposure dose model's mode.
 function transportToExposureMode(t: string): ExposureMode {
@@ -54,6 +56,13 @@ interface WalkTrackingState {
   // Live AQI refresh throttle — last time we asked mapStore to refetch AQI
   // for the user's current location during a walk.
   _lastAqiAt: number;
+
+  // Navigation: live heading (deg, de-jittered), progress along the selected
+  // route, off-route flag, and arrival latch (consumed by HomePage to auto-finish).
+  heading: number | null;
+  navProgress: { fraction: number; metersRemaining: number; etaSeconds: number } | null;
+  offRoute: boolean;
+  arrived: boolean;
 
   // Actions
   startWalk: (routeId?: string, transportMode?: string) => void;
@@ -113,6 +122,10 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
   exposureResult: null,
   activeTransportMode: 'walking',
   _lastAqiAt: 0,
+  heading: null,
+  navProgress: null,
+  offRoute: false,
+  arrived: false,
 
   startWalk: (routeId, transportMode) => {
     const user = useAuthStore.getState().user;
@@ -145,6 +158,10 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       pausedDuration: 0,
       exposureResult: null,
       activeTransportMode: transportMode || 'walking',
+      heading: null,
+      navProgress: null,
+      offRoute: false,
+      arrived: false,
     });
 
     // Start GPS tracking
@@ -159,20 +176,57 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
             timestamp: new Date().toISOString(),
           };
 
-          get().addRoutePoint(point);
-          set({ currentPosition: point });
-
-          // Refresh AQI for the user's new location at most once per 60s.
-          // Otherwise the LiveExposureTracker accumulates dose against the
-          // AQI value that was loaded when the app started — could be hours
-          // old and far from where the user actually is.
-          const now = Date.now();
-          if (now - get()._lastAqiAt > 60_000) {
-            set({ _lastAqiAt: now });
-            import('./mapStore')
-              .then(({ useMapStore }) => useMapStore.getState().fetchAirQuality(point))
-              .catch(() => { /* non-fatal */ });
+          // Heading from movement delta (GPS heading is unreliable when slow/
+          // stationary). De-jitter with a circular EMA; ignore sub-3 m wobble.
+          const prev = get().currentPosition;
+          let heading = get().heading;
+          if (prev) {
+            const moved = haversineDistance(prev, point);
+            if (moved >= 3) heading = smoothHeading(get().heading, bearing(prev, point));
           }
+
+          get().addRoutePoint(point);
+          set({ currentPosition: point, heading });
+
+          // Route progress + off-route + arrival. Needs the selected route +
+          // destination from mapStore (dynamic import avoids a store cycle).
+          const now = Date.now();
+          const refreshAqi = now - get()._lastAqiAt > 60_000;
+          if (refreshAqi) set({ _lastAqiAt: now });
+          import('./mapStore')
+            .then(({ useMapStore }) => {
+              const ms = useMapStore.getState();
+              // Live AQI refresh for the exposure tracker (throttled to 60s).
+              if (refreshAqi) ms.fetchAirQuality(point);
+
+              const route = ms.selectedRoute;
+              const wps = route?.waypoints;
+              if (wps && wps.length >= 2) {
+                const prog = routeProgress(point, wps, route?.distance_meters);
+                if (prog) {
+                  const { distanceMeters, durationSeconds } = get();
+                  // ETA from the rolling average speed, floored so a brief stop
+                  // doesn't blow the estimate to infinity.
+                  const spd = durationSeconds > 0 ? Math.max(0.7, distanceMeters / durationSeconds) : 1.2;
+                  set({
+                    navProgress: {
+                      fraction: prog.fraction,
+                      metersRemaining: prog.metersRemaining,
+                      etaSeconds: Math.round(prog.metersRemaining / spd),
+                    },
+                    offRoute: isOffRoute(prog.perpMeters, 30),
+                  });
+                }
+              }
+
+              // Arrival latch: within 30 m of the destination after a real walk.
+              // HomePage observes `arrived` to run the finish + celebration flow.
+              const dest = ms.destination;
+              if (dest && !get().arrived && get().distanceMeters > 50 && withinGeofence(point, dest, 30)) {
+                set({ arrived: true });
+              }
+            })
+            .catch(() => { /* non-fatal */ });
         },
         (error) => {
           console.warn('GPS error during walk:', error.message);
@@ -238,6 +292,10 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
         isPaused: false,
         watchId: null,
         timerInterval: null,
+        heading: null,
+        navProgress: null,
+        offRoute: false,
+        arrived: false,
       });
       if (session) {
         toast('Jalan terlalu pendek (<50m) — tidak dicatat.', { icon: '🚶' });
@@ -298,22 +356,28 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       // Auto-contribute walk trace. Geohash from route midpoint (precision 7
       // ≈ 153m × 153m cells) replaces the literal 'unknown' string that was
       // polluting the contributions table.
-      const midPoint = polyline[Math.floor(polyline.length / 2)];
-      const geohash = ngeohash.encode(midPoint[0], midPoint[1], 7);
-      submitVayuContribution(session.id, vehicleType, undefined, geohash).then(async (ok) => {
-        if (ok) {
-          const user = useAuthStore.getState().user;
-          if (user) {
-            try {
-              await supabase.rpc('claim_reward', {
-                p_user_id: user.id,
-                p_type: 'vayu_contribution',
-                p_reference_id: session.id,
-              });
-            } catch { /* ignore */ }
+      // Consent gate: skip the passive trace (and its reward) if the user opted out
+      // via Settings → Privacy → "VAYU Auto-trace". Read the unified settings store
+      // (cloud-synced, mirrors breeva_anonymous_data); default = enabled.
+      const autoTraceEnabled = useSettingsStore.getState().anonymous_data;
+      if (autoTraceEnabled) {
+        const midPoint = polyline[Math.floor(polyline.length / 2)];
+        const geohash = ngeohash.encode(midPoint[0], midPoint[1], 7);
+        submitVayuContribution(session.id, vehicleType, undefined, geohash).then(async (ok) => {
+          if (ok) {
+            const user = useAuthStore.getState().user;
+            if (user) {
+              try {
+                await supabase.rpc('claim_reward', {
+                  p_user_id: user.id,
+                  p_type: 'vayu_contribution',
+                  p_reference_id: session.id,
+                });
+              } catch { /* ignore */ }
+            }
           }
-        }
-      }).catch(() => {});
+        }).catch(() => {});
+      }
     }
 
     // Complete walk via API (with offline queue fallback)
@@ -384,6 +448,10 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       watchId: null,
       timerInterval: null,
       pointsEarned: completedSession.status === 'completed' ? points : 0,
+      heading: null,
+      navProgress: null,
+      offRoute: false,
+      arrived: false,
     });
 
     return completedSession;
@@ -407,6 +475,10 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       timerInterval: null,
       startTime: null,
       pausedDuration: 0,
+      heading: null,
+      navProgress: null,
+      offRoute: false,
+      arrived: false,
     });
   },
 

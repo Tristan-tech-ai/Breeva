@@ -37,6 +37,9 @@ SURFACE_CLASSES = ['asphalt', 'concrete', 'paved', 'unpaved', 'cobblestone']
 REGIONS = [
     'jakarta', 'bali', 'bandung', 'surabaya', 'semarang',
     'yogyakarta', 'solo', 'medan', 'palembang', 'makassar',
+    # +7 slugs present in road_segments.region as of 2026-05-17 (32% of rows
+    # were silently getting all-zero region one-hot before this addition):
+    'malang', 'sulsel', 'sulut', 'sulteng', 'sultra', 'sulbar', 'gorontalo',
 ]
 
 # Toggle Tier 4 feature pack (+10 dims). Off by default — turn on only when the

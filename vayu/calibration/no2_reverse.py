@@ -1,6 +1,43 @@
 """
 VAYU Engine — Reverse NO₂ Calibration via WAQI (Stage 10.2)
 ==============================================================
+
+DEPRECATED 2026-05-27 (B4 / R6 §4 audit).
+-----------------------------------------
+This script is a toy implementation that should NOT be re-activated:
+
+  1. It conflates emission factor (EF) error with traffic volume error.
+     Observed NO₂ deviation could be either, and this script cannot
+     disentangle them. The correction it derives is noise-attributed,
+     not a genuine EF or traffic correction.
+
+  2. It writes its output to `traffic_calibration_factor` (a vehicle-volume
+     field) even when the signal might be EF bias. Wrong table.
+
+  3. It has been DARK in the production pipeline (no pg_cron / scheduler
+     reference) since the last calibration at 2026-05-01. Confirmed via
+     scheduler audit during R6 research.
+
+  4. R6 sensitivity analysis (Berrocal 2010 + sequential residual training
+     in R3) shows EF structured bias contributes only ~5-8 % of final RMSE
+     budget. A dedicated inverse-calibration script is not the right tool;
+     the geo-additive sequential residual fusion in Phase 1d will absorb
+     the same structure with a principled architecture.
+
+Migration path — emission-factor refinement now happens in two places:
+  - Tier 1 (datathon, B4 done): ICCT TRUE Jakarta 2022 values applied
+    directly in `core/caline3.py` `EMISSION_FACTORS`.
+  - Tier 3 v2.1 (post-datathon): joint per-region EF scaling as free
+    parameters inside the LUR layer (Phase 1b regression-kriging) —
+    same information content, principled framework, single fit.
+
+Do not run, do not import from production. File retained for historical
+reference only. See `eve/breeva_aqi_engine_v2/research/R6_emission_factor.md`
+§4 for the full deprecation rationale.
+
+==============================================================
+Original docstring (kept for reference, behaviour unchanged):
+
 Uses ground-truth NO₂ measurements from WAQI (aqicn.org) monitoring
 stations to reverse-calibrate CALINE3 traffic volume estimates.
 
@@ -12,6 +49,15 @@ Free tier: ~1,000 requests/day.
 """
 
 from __future__ import annotations
+
+import warnings as _w
+_w.warn(
+    "vayu.calibration.no2_reverse is DEPRECATED (B4 / R6 §4). "
+    "Conflates EF + traffic errors; do not re-activate. "
+    "Migration: ICCT TRUE EFs (already applied) + Tier 3 v2.1 joint LUR EF scaling.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import logging
 import math

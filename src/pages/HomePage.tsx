@@ -1,6 +1,7 @@
-import { useEffect, useState, lazy, Suspense } from 'react';
+import { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 import {
   Crosshair,
   Pause,
@@ -23,11 +24,13 @@ import {
   Landmark,
   CreditCard,
   Fuel,
+  Clock,
 } from 'lucide-react';
 import { useMapStore } from '../stores/mapStore';
 import { useWalkStore } from '../stores/walkStore';
 import { useAuthStore } from '../stores/authStore';
 import { useSavedPlacesStore } from '../stores/savedPlacesStore';
+import { useIsDark } from '../stores/settingsStore';
 // Lazy: defers leaflet (~122KB) + map layers out of the eager main-entry bundle.
 const LeafletMap = lazy(() => import('../components/map/LeafletMap'));
 import SearchBar from '../components/map/SearchBar';
@@ -107,6 +110,10 @@ export default function HomePage() {
     pointsEarned,
     session: walkSession,
     exposureResult,
+    currentPosition,
+    navProgress,
+    arrived,
+    offRoute,
     startWalk,
     pauseWalk,
     resumeWalk,
@@ -117,7 +124,9 @@ export default function HomePage() {
   const { profile } = useAuthStore();
   const { addPlace, isPlaceSaved } = useSavedPlacesStore();
   const location = useLocation();
-  const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
+  // Dark mode comes from the unified settings store (reactive); applyTheme() keeps
+  // the <html> class in lockstep, so no DOM polling is needed.
+  const isDark = useIsDark();
   const [showWalkComplete, setShowWalkComplete] = useState(false);
   const [showAQIOverlay, setShowAQIOverlay] = useState(false);
   const [showAQIStations, setShowAQIStations] = useState(false);
@@ -151,14 +160,6 @@ export default function HomePage() {
     }
   }, [location.state, setDestination, setCenter]);
 
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setIsDark(document.documentElement.classList.contains('dark'));
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
-
   const handleEndWalk = async () => {
     const completed = await endWalk();
     if (completed) {
@@ -166,11 +167,47 @@ export default function HomePage() {
     }
   };
 
+  // Auto-arrival: walkStore latches `arrived` within 30 m of the destination —
+  // finish the walk + open the celebration modal automatically.
+  useEffect(() => {
+    if (!arrived || !isTracking) return;
+    toast('Kamu sudah sampai! 🎉', { icon: '📍' });
+    (async () => {
+      const completed = await endWalk();
+      if (completed) setShowWalkComplete(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrived, isTracking]);
+
+  // Off-route → reroute from the current position (debounced so a brief detour
+  // doesn't spam recalculations). walkStore sets `offRoute` past a 30 m threshold.
+  const rerouteAtRef = useRef(0);
+  useEffect(() => {
+    if (!isTracking || !offRoute || !destination) return;
+    const now = Date.now();
+    if (now - rerouteAtRef.current < 20000) return;
+    rerouteAtRef.current = now;
+    toast('Keluar dari rute — menghitung ulang…', { icon: '🧭' });
+    calculateRoutes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offRoute, isTracking, destination]);
+
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
+
+  // Human ETA ("12 mnt", "1 jam 5 mnt") + remaining distance ("350 m", "1,2 km").
+  const formatEta = (seconds: number) => {
+    const mins = Math.max(0, Math.round(seconds / 60));
+    if (mins < 1) return '<1 mnt';
+    if (mins < 60) return `${mins} mnt`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m ? `${h} jam ${m} mnt` : `${h} jam`;
+  };
+  const formatDistance = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-950">
@@ -190,6 +227,7 @@ export default function HomePage() {
           roadDisplayMode={roadDisplayMode}
           onRoadLayerMeta={setRoadLayerMeta}
           onPlaceSelect={(poi) => setSelectedPOI(poi)}
+          selectedPoiId={selectedPOI?.id ?? null}
         />
       </Suspense>
 
@@ -326,7 +364,7 @@ export default function HomePage() {
               <div className="px-4 mt-2 max-w-2xl mx-auto">
                 <TurnByTurn
                   instructions={selectedRoute.instructions}
-                  currentPosition={userLocation}
+                  currentPosition={currentPosition ?? userLocation}
                   routeWaypoints={selectedRoute.waypoints}
                 />
               </div>
@@ -337,15 +375,28 @@ export default function HomePage() {
           <div className="absolute bottom-6 left-0 right-0 z-30 px-4">
             <div className="max-w-2xl mx-auto">
               <div className="bg-white dark:bg-gray-900/80 backdrop-blur-xl rounded-3xl p-5 border border-gray-200 dark:border-gray-700/40 shadow-xl">
-                {/* Progress bar */}
+                {/* Progress bar — snapped route progress when available */}
                 {selectedRoute && (
-                  <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full mb-4 overflow-hidden">
+                  <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full mb-3 overflow-hidden">
                     <motion.div
                       className="h-full gradient-primary rounded-full"
-                      style={{
-                        width: `${Math.min((distanceMeters / selectedRoute.distance_meters) * 100, 100)}%`,
+                      animate={{
+                        width: `${Math.min((navProgress?.fraction ?? (distanceMeters / selectedRoute.distance_meters)) * 100, 100)}%`,
                       }}
+                      transition={{ duration: 0.5, ease: 'easeOut' }}
                     />
+                  </div>
+                )}
+
+                {/* ETA + remaining distance */}
+                {navProgress && selectedRoute && (
+                  <div className="flex items-center justify-center gap-2.5 mb-3 text-xs">
+                    <span className="inline-flex items-center gap-1 font-bold text-gray-900 dark:text-white">
+                      <Clock className="w-3.5 h-3.5 text-primary-500" />
+                      {formatEta(navProgress.etaSeconds)}
+                    </span>
+                    <span className="text-gray-300 dark:text-gray-600">•</span>
+                    <span className="text-gray-500 dark:text-gray-400">{formatDistance(navProgress.metersRemaining)} tersisa</span>
                   </div>
                 )}
 

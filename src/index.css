@@ -510,7 +510,7 @@
   background: var(--poi-color, #6b7280);
   border: 2px solid white;
   border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -529,7 +529,7 @@
   height: 36px;
   border-radius: 10px;
   border-width: 2.5px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .poi-icon-marker svg {
@@ -567,8 +567,7 @@
 
 /* POI label tooltip */
 .poi-label-tooltip {
-  background: rgba(255, 255, 255, 0.92) !important;
-  backdrop-filter: blur(8px) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
   border: 1px solid rgba(0, 0, 0, 0.1) !important;
   border-radius: 6px !important;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12) !important;
@@ -610,7 +609,7 @@
 }
 
 .dark .poi-label-tooltip {
-  background: rgba(15, 23, 42, 0.9) !important;
+  background: rgba(15, 23, 42, 0.96) !important;
   border-color: rgba(255, 255, 255, 0.1) !important;
   color: #e5e7eb !important;
 }
@@ -753,6 +752,27 @@
 @keyframes badge-premium-glow {
   0%, 100% { filter: brightness(1); box-shadow: 0 2px 10px rgba(5, 150, 105, 0.3); }
   50% { filter: brightness(1.1); box-shadow: 0 2px 16px rgba(5, 150, 105, 0.5); }
+}
+
+/* Mobile / touch + reduced-motion: kill POI animations, transitions and hover
+   transforms. Each composites or repaints per frame and tanks FPS on phones,
+   where there's no hover and motion should be minimal anyway. (Non-merchant POIs
+   render on canvas post-rewrite; this still covers the DOM merchant markers.) */
+@media (prefers-reduced-motion: reduce), (hover: none) and (pointer: coarse) {
+  .poi-label-fadein,
+  .poi-marker-enter,
+  .poi-merchant-premium,
+  .poi-merchant-featured,
+  .poi-merchant-badge-featured,
+  .poi-merchant-badge-premium { animation: none !important; }
+  .poi-icon-marker,
+  .poi-icon-marker-lg,
+  .poi-cluster-icon,
+  .poi-merchant-badge { transition: none !important; }
+  .poi-icon-marker:hover,
+  .poi-cluster-icon:hover,
+  .poi-merchant-badge:hover,
+  .poi-marker-hover { transform: none !important; filter: none !important; }
 }
 
 /* Custom marker resets */

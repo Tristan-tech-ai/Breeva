@@ -1,6 +1,47 @@
 """
 VAYU Engine — CALINE3 Line-Source Dispersion Model (Mode B)
 ============================================================
+
+═════════════════════════════════════════════════════════════════════════════
+PARTIAL DEPRECATION 2026-05-27 (audit/A01 + A02 + A04 verdict)
+─────────────────────────────────────────────────────────────────────────────
+WARNING: `_line_source_concentration()` IN THIS FILE IS NUMERICALLY BROKEN.
+
+  • Wind rotation bug (60× over-prediction in smoke test; see audit/A01 §3)
+  • Missing mixing zone σz0 (audit/A01 §Q2 found 1e22× distance-dependent error)
+  • Non-standard Martin 1976 σ coefficients with no class-dependent exponent
+
+DO NOT call `_line_source_concentration()` or `compute_dispersion()` from
+new code. Phase 1b/1d/Phase 3 wiring MUST use canonical v2 CALINE4 in
+`api/vayu/route-score.ts` (lines 234-820: caline4LineSourceConc +
+caline4PolylineConc with mixing zone σz0=5.5m, WL=30m, EPA Case 1 backfit
+verified ±20% per audit/A02 §3). When Phase 1b implementation needs Python
+access to canonical math, create a NEW `vayu/core/caline4.py` mirroring TS
+with explicit parity tests — DO NOT extend or re-validate this file's
+broken `_line_source_concentration`.
+
+What IS still safe in this file:
+  • `EmissionFactor` dataclass + `EMISSION_FACTORS` table (ICCT TRUE applied)
+  • `FLEET_WEIGHTS` + `FLEET_AVG` (constants only)
+  • `PG_CLASSES` table (data only — formula application is broken in helper)
+  • `classify_stability()` decision tree (data only)
+  • `LANDUSE_MODIFIERS` table
+  • `pm25_to_aqi()` US EPA breakpoint converter
+  • `_haversine_m()` distance helper
+
+Existing safe callers (use only constants from above, NOT dispersion fn):
+  • `vayu/calibration/synthetic_data.py` — uses FLEET_AVG only
+  • `vayu/jobs/refresh_hotspots.py` — uses FLEET_AVG only
+
+Already-deprecated callers (do not re-activate):
+  • `vayu/calibration/no2_reverse.py` — see banner in that file
+
+See `eve/breeva_aqi_engine_v2/audit/A01_dispersion_b6_gap.md` and
+`A02_b65_revalidation.md` for full evidence.
+═════════════════════════════════════════════════════════════════════════════
+
+Original docstring (kept for historical context, behaviour unchanged):
+
 Full CALINE3 implementation with line-source integration, mixing zone,
 wind-rotated coordinates, and Pasquill-Gifford stability classes.
 
@@ -8,15 +49,31 @@ ERD Section 5.1 — Modified CALINE3 for tropical Indonesia conditions.
 
 Mode B is more accurate than Mode A (TypeScript point-source approximation).
 Outputs layer_source=2, confidence=0.55.
+
+NOTE on the "mixing zone" claim above: the original implementation does NOT
+actually include the CALINE3 mixing zone correction. This was discovered
+during audit/A01 — the comment was aspirational, the code was not.
 """
 
 from __future__ import annotations
 
 import math
+import warnings as _w
 from dataclasses import dataclass
 from typing import Sequence
 
 import numpy as np
+
+
+def _line_source_concentration_deprecated_warning():
+    _w.warn(
+        "vayu.core.caline3._line_source_concentration is DEPRECATED — "
+        "uses broken wind rotation (60× error) + missing mixing zone. "
+        "Use canonical caline4 in api/vayu/route-score.ts (Phase 1b/1d/3 path) "
+        "or create vayu/core/caline4.py mirror. See audit/A01 + A02 + A04.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
 
 # ---------------------------------------------------------------------------
 # Emission factors — Indonesia vehicle fleet (ERD 5.1, KLHK / COPERT adapted)
@@ -30,12 +87,17 @@ class EmissionFactor:
     co: float
 
 EMISSION_FACTORS: dict[str, EmissionFactor] = {
-    "motor_2tak":   EmissionFactor(0.35, 0.09, 14.2),
-    "motor_4tak":   EmissionFactor(0.18, 0.02,  5.8),
+    "motor_2tak":   EmissionFactor(0.35, 0.09, 14.2),   # legacy 2-stroke; rare in 2021+ Jakarta fleet
+    # B4 update: motor_4tak calibrated to ICCT TRUE Jakarta 2022 real-world remote sensing
+    # of 93,000+ vehicles (Jan-Apr 2021). Reference: ICCT/TRUE Initiative + ITB Bandung,
+    # "Measurement of real-world motor vehicle emissions in Jakarta" Nov 2022.
+    # https://theicct.org/publication/true-jakarta-remote-sensing-nov22/
+    # Converted to g/km per e3s-conferences 2024 follow-up.
+    "motor_4tak":   EmissionFactor(0.46, 0.01,  1.95),  # ICCT TRUE Jakarta 2022; modern Euro4 catalytic, soot ≈ 0
     "mobil_bensin": EmissionFactor(0.62, 0.03,  8.1),
     "mobil_diesel": EmissionFactor(1.15, 0.12,  1.2),
     "angkot":       EmissionFactor(2.40, 0.45,  4.5),
-    "bus":          EmissionFactor(8.20, 1.10,  3.8),
+    "bus":          EmissionFactor(8.20, 1.10,  3.8),   # Lestari 2022: HDV dominates urban PM2.5 (43% from road)
     "truk":         EmissionFactor(11.5, 1.40,  4.2),
     "sepeda":       EmissionFactor(0.0,  0.0,   0.0),
 }
@@ -204,11 +266,19 @@ def _line_source_concentration(
     wind_direction_deg: float,
 ) -> float:
     """
-    CALINE3-style line-source integration.
+    DEPRECATED — DO NOT USE. See file header banner.
 
-    Integrates Gaussian dispersion contributions from sub-segments
-    along the road, accounting for wind-rotated coordinates.
+    Original docstring (preserved for context):
+    CALINE3-style line-source integration. Integrates Gaussian dispersion
+    contributions from sub-segments along the road, accounting for wind-rotated
+    coordinates.
+
+    Known bugs (audit/A01 §3):
+      • Wind rotation bearing convention mismatch → 60× over-prediction
+      • Missing mixing-zone σz0 → 1e22× distance-dependent error
+      • Non-standard Martin 1976 σ uniform-exponent coefficients
     """
+    _line_source_concentration_deprecated_warning()
     u = max(wind_speed, 0.5)
     Q = emission_rate_g_per_m_s * 1e6  # g/m/s → μg/m/s
 

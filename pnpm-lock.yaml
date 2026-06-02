@@ -53,6 +53,9 @@ importers:
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
+      leaflet-rotate:
+        specifier: ^0.2.8
+        version: 0.2.8(leaflet@1.9.4)
       leaflet.vectorgrid:
         specifier: ^1.3.0
         version: 1.3.0(leaflet@1.9.4)
@@ -2565,6 +2568,11 @@ packages:
 
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
+
+  leaflet-rotate@0.2.8:
+    resolution: {integrity: sha512-BHtkn35DuJ377yBNn/7XVuV0oIfwJtmqv/wFQ0Lvh7QuVCAD2wfCK0/m9oA3k/LVOnJG8VEGyf3Duf/wTVzeKQ==}
+    peerDependencies:
+      leaflet: ^1.9.3
 
   leaflet.vectorgrid@1.3.0:
     resolution: {integrity: sha512-kWmj1pKM+MVdo/7Mg5zsB3YrGZvo/uIuiANV9MvWUFOG+Y2xAJzrteDhoIcCgTjHSSRJ36xdeGdIQVhuWjnCZw==}
@@ -6367,6 +6375,10 @@ snapshots:
   keyv@4.5.4:
     dependencies:
       json-buffer: 3.0.1
+
+  leaflet-rotate@0.2.8(leaflet@1.9.4):
+    dependencies:
+      leaflet: 1.9.4
 
   leaflet.vectorgrid@1.3.0(leaflet@1.9.4):
     dependencies:

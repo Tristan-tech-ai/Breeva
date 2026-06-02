@@ -61,7 +61,21 @@ class RoadGraphDataset(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        return [f'data_h{self.hour}_dow{self.dow}_{self.target_col}.pt']
+        # P2-8: include short hash of labels.parquet + nodes.parquet sizes so
+        # cache auto-invalidates when inputs change. Falls back to plain name
+        # if either file is missing (will be created during process()).
+        try:
+            import hashlib
+            paths = [Path(self.root) / 'labels.parquet', Path(self.root) / 'nodes.parquet']
+            h = hashlib.md5()
+            for p in paths:
+                if p.exists():
+                    st = p.stat()
+                    h.update(f'{p.name}:{st.st_size}:{int(st.st_mtime)}'.encode())
+            tag = h.hexdigest()[:8]
+            return [f'data_h{self.hour}_dow{self.dow}_{self.target_col}_{tag}.pt']
+        except Exception:
+            return [f'data_h{self.hour}_dow{self.dow}_{self.target_col}.pt']
 
     def download(self):
         pass
@@ -70,6 +84,18 @@ class RoadGraphDataset(InMemoryDataset):
         nodes = pd.read_parquet(Path(self.root) / 'nodes.parquet')
         edges = pd.read_parquet(Path(self.root) / 'edges.parquet')
         labels = pd.read_parquet(Path(self.root) / 'labels.parquet')
+
+        # Encoder-coverage guardrail: prevent silent zero-vectors for new region
+        # slugs that haven't been added to gcn_features.REGIONS yet.
+        from vayu.ml.gcn_features import REGIONS as _REGIONS
+        if 'region' in nodes.columns:
+            unknown = sorted(set(nodes['region'].dropna().unique()) - set(_REGIONS))
+            if unknown:
+                raise ValueError(
+                    f'Unknown region slugs in nodes.parquet: {unknown}. '
+                    f'Add them to vayu/ml/gcn_features.REGIONS and bump in_dim. '
+                    f'Encoder has {len(_REGIONS)} regions.'
+                )
 
         # 1) Node features
         log.info(f'encoding {len(nodes)} nodes...')
@@ -96,16 +122,18 @@ class RoadGraphDataset(InMemoryDataset):
             raise ValueError(
                 f'target_col {self.target_col!r} not in labels parquet; available: {list(labels.columns)}'
             )
-        # take most recent per osm_way_id (predicted_at desc, dedupe)
-        labels_sorted = labels.sort_values('predicted_at', ascending=False).drop_duplicates('osm_way_id')
-        labeled_idx = []
-        for _, lrow in labels_sorted.iterrows():
-            wid = int(lrow['osm_way_id'])
-            if wid in osm_to_idx:
-                idx = osm_to_idx[wid]
-                if torch.isnan(y[idx]):
-                    y[idx] = float(lrow[self.target_col])
-                    labeled_idx.append(idx)
+        # Vectorized: take most recent per osm_way_id (predicted_at desc, dedupe)
+        labels_sorted = (labels
+                         .sort_values('predicted_at', ascending=False)
+                         .drop_duplicates('osm_way_id'))
+        labels_sorted = labels_sorted[labels_sorted['osm_way_id'].isin(osm_to_idx.keys())]
+        wids = labels_sorted['osm_way_id'].astype('int64').values
+        tgts = labels_sorted[self.target_col].astype('float32').values
+        idxs = np.fromiter((osm_to_idx[w] for w in wids), dtype=np.int64, count=len(wids))
+        y_np = y.numpy()
+        y_np[idxs] = tgts
+        y = torch.from_numpy(y_np)
+        labeled_idx = idxs.tolist()
         log.info(f'labeled {len(labeled_idx)} of {len(nodes)} nodes')
 
         # 5) spatial block hold-out via KMeans on (lng,lat) of LABELED nodes
@@ -114,10 +142,12 @@ class RoadGraphDataset(InMemoryDataset):
         test_mask = torch.zeros(len(nodes), dtype=torch.bool)
 
         if len(labeled_idx) >= 20:
-            from sklearn.cluster import KMeans
+            from sklearn.cluster import MiniBatchKMeans
             labeled_coords = nodes.iloc[labeled_idx][['lng', 'lat']].values
-            n_clusters = max(10, int(len(labeled_idx) * 0.05))
-            km = KMeans(n_clusters=n_clusters, random_state=self.seed, n_init=10).fit(labeled_coords)
+            # Cap clusters at 200 — large k on 500k+ samples explodes runtime
+            n_clusters = max(10, min(200, int(len(labeled_idx) * 0.05)))
+            km = MiniBatchKMeans(n_clusters=n_clusters, random_state=self.seed,
+                                 n_init=3, batch_size=4096, max_iter=100).fit(labeled_coords)
             cluster_ids = km.labels_
 
             rng = np.random.default_rng(self.seed)

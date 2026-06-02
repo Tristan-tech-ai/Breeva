@@ -9,6 +9,7 @@ import CelebrationBurst from '../ui/CelebrationBurst';
 import { submitAQCalibration } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import { co2KgFromGrams, co2SavedGramsForKm, caloriesFromKm } from '../../lib/metrics';
 
 interface WalkCompleteProps {
   session: WalkSession;
@@ -23,10 +24,13 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
   const isFailed = session.status === 'failed';
 
-  const distKm = (session.distance_meters / 1000).toFixed(2);
+  const km = session.distance_meters / 1000;
+  const distKm = km.toFixed(2);
   const durMin = Math.floor(session.duration_seconds / 60);
-  const co2Saved = (session.distance_meters * 0.00021).toFixed(2);
-  const calories = Math.round(session.distance_meters * 0.05);
+  // Canonical eco math (120 g CO₂/km, 60 kcal/km) — keeps the finish screen
+  // consistent with Profile / Eco-Impact, which read the same metrics helpers.
+  const co2Saved = co2KgFromGrams(co2SavedGramsForKm(km)).toFixed(2);
+  const calories = Math.round(caloriesFromKm(km));
 
   const handleRatingSubmit = async (rating: number, _photo?: File) => {
     if (ratingSubmitting || rated) return;

@@ -175,6 +175,34 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
         newFlight.delete(r.key);
       }
 
+      // ── Bound memory ────────────────────────────────────────────────
+      // A long dense-area session (panning across Jakarta) accumulates 10k+ POIs,
+      // and every Supercluster reindex is O(n) over the whole set. When we exceed the
+      // cap, evict POIs + their tiles that fall OUTSIDE a 3× expanded viewport, so the
+      // working set stays bounded and revisiting a region simply refetches (cheap —
+      // localStorage-cached now, edge-cached after Phase 3). Merchants are always kept
+      // (few, high-value, sourced from Supabase not tiles).
+      const POI_CAP = 4000;
+      if (newAll.size > POI_CAP) {
+        const latPad = bounds.getNorth() - bounds.getSouth();
+        const lngPad = bounds.getEast() - bounds.getWest();
+        const kw = bounds.getWest() - lngPad, ke = bounds.getEast() + lngPad;
+        const ks = bounds.getSouth() - latPad, kn = bounds.getNorth() + latPad;
+
+        for (const [id, poi] of newAll) {
+          if ((poi as POI & { _isMerchant?: boolean })._isMerchant) continue;
+          const c = poi.coordinate;
+          if (c.lng < kw || c.lng > ke || c.lat < ks || c.lat > kn) newAll.delete(id);
+        }
+        // Drop fetched tiles fully outside the keep-box so revisiting refetches them.
+        for (const key of [...newFetched]) {
+          const [z, x, y] = key.split('_').map(Number);
+          if (!Number.isFinite(z)) continue;
+          const tb = tileBounds(x, y, z);
+          if (tb.east < kw || tb.west > ke || tb.north < ks || tb.south > kn) newFetched.delete(key);
+        }
+      }
+
       set({
         allPOIs: newAll,
         fetchedTiles: newFetched,

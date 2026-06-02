@@ -4,10 +4,11 @@ import L from 'leaflet';
 import { useNavigate } from 'react-router-dom';
 import type { POI } from '../../lib/poi-api';
 import { usePoiStore } from '../../stores/poiStore';
-import { reindex, getVisibleFeatures, type ClusterFeature } from '../../lib/poi-cluster';
-import { resolveIcon, resolvePriority, getCategoryDivIcon, getClusterDivIcon, getMerchantDivIcon, merchantPriority, isGreenSpace, getGreenHighlightDivIcon } from '../../lib/poi-icons';
+import { reindex, getVisibleFeatures } from '../../lib/poi-cluster';
+import { resolvePriority, merchantPriority, isGreenSpace, getMerchantDivIcon } from '../../lib/poi-icons';
 import { resolveLabels, type LabelCandidate } from '../../lib/label-collision';
 import { diagStart, diagEnd } from '../../lib/poi-diagnostics';
+import { POICanvasLayer, type ComputeResult } from './POICanvasLayer';
 
 // ── Category filter → Geoapify categories ────────────────────────────
 
@@ -35,33 +36,11 @@ const FILTER_CHIP_COLORS: Record<string, string> = {
   gas:        '#ea580c',
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────
-
-/** Get the appropriate DivIcon for a POI using hierarchical resolution */
-function getPoiIcon(poi: POI, size: 'sm' | 'lg' = 'sm'): L.DivIcon {
-  // Merchant POIs get standout badge icons with name
-  const mp = poi as POI & { _isMerchant?: boolean; _sponsorTier?: string };
-  if (mp._isMerchant) {
-    return getMerchantDivIcon(mp._sponsorTier || 'free', poi.name);
-  }
-  const { iconKey, color } = resolveIcon(poi.types || []);
-  return getCategoryDivIcon(iconKey, color, size);
-}
-
-/** Get effective priority for a POI — handles merchant boost override */
-function getPoiPriority(poi: POI): number {
-  const mp = poi as POI & { _isMerchant?: boolean; _priorityBoost?: number };
-  if (mp._isMerchant) return merchantPriority(mp._priorityBoost || 0);
-  return resolvePriority(poi.types || []);
-}
-
-// ── Unique key for a cluster feature (used for diff) ─────────────────
-
-function featureKey(f: ClusterFeature): string {
-  return f.type === 'cluster' ? `c_${f.id}` : `p_${f.id}`;
-}
-
 // ── POI Layer component ──────────────────────────────────────────────
+// Controller (renders nothing). Non-merchant POIs are drawn on a single canvas
+// (POICanvasLayer) for smooth mobile pan; merchants stay as DOM markers so their
+// sponsor pill badges + tier glow are preserved exactly. The fetch half (tile
+// loading) is unchanged from the DOM-marker era.
 
 interface POILayerProps {
   visible?: boolean;
@@ -71,6 +50,9 @@ interface POILayerProps {
   highlightGreen?: boolean;
   // When true (Places off but Ruang Hijau on): render ONLY green-space POIs.
   greenOnly?: boolean;
+  // id of the POI whose detail sheet is open → draws a highlight ring on the canvas
+  selectedPoiId?: string | null;
+  isDark?: boolean;
 }
 
 export default function POILayer({
@@ -80,6 +62,8 @@ export default function POILayer({
   showMerchants = true,
   highlightGreen = false,
   greenOnly = false,
+  selectedPoiId = null,
+  isDark = false,
 }: POILayerProps) {
   const map = useMap();
   const navigate = useNavigate();
@@ -88,111 +72,39 @@ export default function POILayer({
   const serial = usePoiStore((s) => s.serial);
   const fetchForViewport = usePoiStore((s) => s.fetchForViewport);
   const setFilter = usePoiStore((s) => s.setFilter);
-  const getPOIArray = usePoiStore((s) => s.getPOIArray);
 
-  // Marker pool: keyed by feature key → Leaflet layer
-  const poolRef = useRef(new Map<string, L.Marker>());
+  // Canvas layer (non-merchant POIs) + DOM marker pool (merchants only)
+  const layerRef = useRef<POICanvasLayer | null>(null);
+  const merchantPoolRef = useRef(new Map<string, L.Marker>());
+  // Latest context for the (long-lived) compute closure + merchant diff
+  const ctxRef = useRef({ visible, activeFilter, showMerchants, highlightGreen, greenOnly });
+  // Keep callbacks fresh without recreating the layer
+  const onPlaceSelectRef = useRef(onPlaceSelect);
+  onPlaceSelectRef.current = onPlaceSelect;
   // Previous filter to detect changes
-  const prevFilterRef = useRef<string | null>(null);
-  // Previous highlight-green state — toggling it must rebuild markers (the diff path
-  // only updates labels, not icons, on already-placed markers).
-  const prevHighlightRef = useRef(highlightGreen);
-  // Track zoom level as state (only changes on zoomend, not moveend)
-  const [zoomLevel, setZoomLevel] = useState(() => map.getZoom());
-  // Track viewport bbox string — only used to trigger re-render for off-screen culling
-  const [bboxKey, setBboxKey] = useState('');
+  const prevFilterRef = useRef<string | null>(activeFilter);
+  // Integer zoom — only updated on zoomend (drives merchant visibility gating)
+  const [zoomLevel, setZoomLevel] = useState(() => Math.floor(map.getZoom()));
 
-  // ── Handle filter changes — immediate cleanup ─────────────────────
+  // ── Feature computation (called by the canvas layer on view-end) ──
+  // Reindex non-merchant POIs + query visible clusters/points + resolve labels.
+  // Returns null when nothing should render. Reads the store + ctxRef live (no
+  // stale closure) so it can be set on the layer once and reused.
+  const computeFeatures = useCallback((bounds: L.LatLngBounds, zoom: number): ComputeResult | null => {
+    const st = usePoiStore.getState();
+    const ctx = ctxRef.current;
+    if (!ctx.visible || zoom < 14) return null;
 
-  useEffect(() => {
-    if (activeFilter !== prevFilterRef.current) {
-      prevFilterRef.current = activeFilter;
+    let pois = st.getPOIArray().filter((p) => !(p as POI & { _isMerchant?: boolean })._isMerchant);
+    if (ctx.greenOnly) pois = pois.filter((p) => isGreenSpace(p.types || []));
 
-      // Immediately remove all old markers from the map — no animation delay
-      for (const layer of poolRef.current.values()) layer.remove();
-      poolRef.current.clear();
+    const currentZoom = Math.floor(zoom);
+    const showAll = !!ctx.activeFilter || currentZoom >= 17;
 
-      const cats = activeFilter && FILTER_CATEGORIES[activeFilter]
-        ? [FILTER_CATEGORIES[activeFilter].geoapify]
-        : undefined;
-      setFilter(activeFilter, cats);
-    }
-  }, [activeFilter, setFilter]);
-
-  // ── Highlight-green toggle → rebuild markers (re-icon green spaces) ──
-  useEffect(() => {
-    if (prevHighlightRef.current !== highlightGreen) {
-      prevHighlightRef.current = highlightGreen;
-      for (const layer of poolRef.current.values()) layer.remove();
-      poolRef.current.clear();
-    }
-  }, [highlightGreen]);
-
-  // ── Fetch tiles + update viewport state ───────────────────────────
-
-  const triggerFetch = useCallback(() => {
-    const z = map.getZoom();
-    setZoomLevel(z);
-    const b = map.getBounds();
-    setBboxKey(`${b.getWest().toFixed(3)}_${b.getSouth().toFixed(3)}_${b.getEast().toFixed(3)}_${b.getNorth().toFixed(3)}`);
-
-    if (!visible || z < 14) return;
-    const cats = activeFilter && FILTER_CATEGORIES[activeFilter]
-      ? [FILTER_CATEGORIES[activeFilter].geoapify]
-      : undefined;
-    fetchForViewport(b, z, cats);
-  }, [map, visible, activeFilter, fetchForViewport]);
-
-  // Debounced version — prevents rapid-fire on zoom/pan (150ms)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debouncedFetch = useCallback(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(triggerFetch, 150);
-  }, [triggerFetch]);
-
-  // Initial fetch on mount / filter change
-  useEffect(() => { triggerFetch(); }, [triggerFetch]);
-
-  // Only listen to moveend (fires on zoom too) — debounced to avoid double calls
-  useMapEvents({
-    moveend: () => debouncedFetch(),
-  });
-
-  // ── Render: reindex + diff-update markers ─────────────────────────
-
-  useEffect(() => {
-    // Clear everything if not visible or zoomed out
-    if (!visible || zoomLevel < 14) {
-      for (const layer of poolRef.current.values()) layer.remove();
-      poolRef.current.clear();
-      return;
-    }
-
-    const isFiltered = !!activeFilter;
-    const filterColor = activeFilter ? FILTER_CHIP_COLORS[activeFilter] : undefined;
-    const markerSize: 'sm' | 'lg' = isFiltered ? 'lg' : 'sm';
-    const markerPx = isFiltered ? 36 : 28;
-
-    const currentZoom = Math.floor(zoomLevel);
-    // At deep zoom (≥17), show ALL POIs regardless of priority
-    const showAll = isFiltered || currentZoom >= 17;
-
-    // Reindex supercluster — only priority-eligible POIs enter the index
-    diagStart('render-cycle');
     diagStart('reindex');
-    let allPOIs = getPOIArray();
-    if (greenOnly) {
-      // Places off + Ruang Hijau on → keep ONLY green spaces (merchants/others hidden).
-      allPOIs = allPOIs.filter(p => isGreenSpace(p.types || []));
-    } else if (!showMerchants) {
-      // Filter out merchants if toggle is off
-      allPOIs = allPOIs.filter(p => !(p as any)._isMerchant);
-    }
-    reindex(allPOIs, serial, zoomLevel, showAll, showMerchants, greenOnly);
-    diagEnd('reindex', { pois: allPOIs.length });
+    reindex(pois, st.serial, zoom, showAll, true, ctx.greenOnly);
+    diagEnd('reindex', { pois: pois.length });
 
-    // Query with buffer (1.3× viewport) so panning shows markers immediately
-    const bounds = map.getBounds();
     const latPad = (bounds.getNorth() - bounds.getSouth()) * 0.15;
     const lngPad = (bounds.getEast() - bounds.getWest()) * 0.15;
     const features = getVisibleFeatures(
@@ -200,173 +112,161 @@ export default function POILayer({
       bounds.getSouth() - latPad,
       bounds.getEast() + lngPad,
       bounds.getNorth() + latPad,
-      zoomLevel,
+      zoom,
     );
 
-    // ── Collision-aware label placement ──────────────────────────────
-    const pointFeatures = features.filter(
-      (f): f is Extract<ClusterFeature, { type: 'point' }> => f.type === 'point',
-    );
-
+    // Collision-aware label placement (screen space)
+    const markerPx = ctx.activeFilter ? 36 : 28;
     const candidates: LabelCandidate[] = [];
-    for (const f of pointFeatures) {
-      const priority = getPoiPriority(f.poi);
-      // When filtered or deep zoom, bypass priority check — show all POIs
-      if (!showAll && priority > currentZoom) continue;
-      const pt = map.latLngToContainerPoint([f.lat, f.lng]);
+    for (const f of features) {
+      if (f.type !== 'point') continue;
+      const priority = resolvePriority(f.poi.types || []);
       candidates.push({
         id: f.id,
-        screenX: pt.x,
-        screenY: pt.y,
+        screenX: 0, screenY: 0, // filled below
         name: f.poi.name,
         priority: showAll ? 0 : priority,
         markerSize: markerPx,
       });
+      const pt = map.latLngToContainerPoint([f.lat, f.lng]);
+      candidates[candidates.length - 1].screenX = pt.x;
+      candidates[candidates.length - 1].screenY = pt.y;
     }
-
     diagStart('label-collision');
     const placements = resolveLabels(candidates, currentZoom, showAll);
     diagEnd('label-collision', { candidates: candidates.length, placed: placements.size });
 
-    // Build new key set
-    const newKeys = new Set<string>();
-    for (const f of features) {
-      if (f.type === 'point') {
-        const priority = getPoiPriority(f.poi);
-        if (!showAll && priority > currentZoom) continue;
-      }
-      newKeys.add(featureKey(f));
-    }
-
-    // DIFF: remove markers no longer visible
-    const pool = poolRef.current;
-    for (const [key, layer] of pool) {
-      if (!newKeys.has(key)) {
-        layer.remove();
-        pool.delete(key);
-      }
-    }
-
-    // DIFF: add/update markers
-    for (const f of features) {
-      const k = featureKey(f);
-
-      if (f.type === 'cluster') {
-        if (!pool.has(k)) {
-          const marker = L.marker([f.lat, f.lng], {
-            icon: getClusterDivIcon(f.count, filterColor),
-            bubblingMouseEvents: false,
-          }).addTo(map);
-          marker.on('click', () => {
-            map.flyTo([f.lat, f.lng], f.expansionZoom, { duration: 0.4 });
-          });
-          pool.set(k, marker);
-        }
-        continue;
-      }
-
-      // Point feature — check priority
-      const priority = getPoiPriority(f.poi);
-      if (!isFiltered && priority > currentZoom) continue;
-
-      const placement = placements.get(f.id);
-      const existing = pool.get(k);
-
-      if (existing) {
-        // Update label: bind/unbind/reposition based on collision result
-        if (placement?.show) {
-          const tt = existing.getTooltip();
-          if (!tt) {
-            existing.bindTooltip(String(placement.displayName ?? ''), {
-              permanent: true,
-              direction: placement.direction,
-              offset: placement.offset,
-              className: 'poi-label-tooltip poi-label-fadein',
-            });
-          }
-        } else if (existing.getTooltip()) {
-          existing.unbindTooltip();
-        }
-        continue;
-      }
-
-      // New marker — merchants get elevated z-index so they render on top.
-      // Green spaces glow + sit above normal POIs when the Ruang Hijau toggle is on.
-      const isMerchant = !!(f.poi as any)._isMerchant;
-      const greenHi = highlightGreen && !isMerchant && isGreenSpace(f.poi.types || []);
-      const marker = L.marker([f.lat, f.lng], {
-        icon: greenHi
-          ? getGreenHighlightDivIcon(resolveIcon(f.poi.types || []).iconKey, markerSize)
-          : getPoiIcon(f.poi, markerSize),
-        bubblingMouseEvents: false,
-        zIndexOffset: isMerchant ? 5000 : greenHi ? 3000 : 0,
-      }).addTo(map);
-
-      const hasLabel = !!placement?.show;
-      if (hasLabel) {
-        try {
-          marker.bindTooltip(String(placement.displayName ?? ''), {
-            permanent: true,
-            direction: placement.direction,
-            offset: placement.offset,
-            className: 'poi-label-tooltip poi-label-fadein',
-          });
-        } catch { /* swallow: marker may already be detached during fast pan/zoom */ }
-      }
-
-      // Hover: bring marker + label to front
-      const rawName = String(f.poi.name ?? 'Unnamed');
-      const hoverName = rawName.length > 20 ? rawName.slice(0, 20) + '…' : rawName;
-      marker.on('mouseover', () => {
-        marker.setZIndexOffset(9000);
-        const el = (marker as any)._icon as HTMLElement | undefined;
-        if (el) el.classList.add('poi-marker-hover');
-        // Guard: marker must still be on a map AND not already have a hover tooltip.
-        // openTooltip → appendChild fails if marker was removed mid-event.
-        if (!hasLabel && (marker as any)._map && !(marker as any)._hoverTooltip) {
-          try {
-            marker.bindTooltip(hoverName, {
-              permanent: true, direction: 'top', offset: [0, -markerPx / 2 - 2],
-              className: 'poi-label-tooltip poi-label-fadein',
-            });
-            (marker as any)._hoverTooltip = true;
-          } catch { /* swallow: race with marker removal */ }
-        }
-      });
-      marker.on('mouseout', () => {
-        marker.setZIndexOffset(isMerchant ? 5000 : 0);
-        const el = (marker as any)._icon as HTMLElement | undefined;
-        if (el) el.classList.remove('poi-marker-hover');
-        if ((marker as any)._hoverTooltip) {
-          try {
-            marker.unbindTooltip();
-          } catch { /* swallow */ }
-          (marker as any)._hoverTooltip = false;
-        }
-      });
-
-      const poi = f.poi;
-      const mp = poi as POI & { _isMerchant?: boolean; _merchantId?: string; _isDemo?: boolean };
-      marker.on('click', () => {
-        if (mp._isMerchant && mp._merchantId && !mp._isDemo) {
-          navigate(`/merchants/${mp._merchantId}`);
-        } else {
-          onPlaceSelect?.(poi);
-        }
-      });
-      pool.set(k, marker);
-    }
-    diagEnd('render-cycle', { markers: pool.size });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serial, visible, zoomLevel, bboxKey, activeFilter, showMerchants, highlightGreen, greenOnly]);
-
-  // Full cleanup on unmount
-  useEffect(() => {
-    return () => {
-      for (const layer of poolRef.current.values()) layer.remove();
-      poolRef.current.clear();
+    return {
+      features,
+      placements,
+      filtered: !!ctx.activeFilter,
+      highlightGreen: ctx.highlightGreen,
+      clusterColor: ctx.activeFilter ? FILTER_CHIP_COLORS[ctx.activeFilter] : undefined,
     };
-  }, []);
+  }, [map]);
+
+  // ── Merchant DOM markers (few; preserve sponsor pill badges + glow) ──
+  const renderMerchants = useCallback(() => {
+    const st = usePoiStore.getState();
+    const ctx = ctxRef.current;
+    const pool = merchantPoolRef.current;
+    const currentZoom = Math.floor(map.getZoom());
+    const want = ctx.visible && !ctx.greenOnly && ctx.showMerchants && currentZoom >= 14;
+
+    const desired = new Map<string, POI>();
+    if (want) {
+      for (const p of st.getPOIArray()) {
+        const mp = p as POI & { _isMerchant?: boolean; _priorityBoost?: number };
+        if (!mp._isMerchant) continue;
+        // Honor tier min-zoom (featured always; premium early; etc.) unless filtered.
+        if (!ctx.activeFilter && merchantPriority(mp._priorityBoost || 0) > currentZoom) continue;
+        desired.set(p.id, p);
+      }
+    }
+    // Remove gone
+    for (const [id, m] of pool) {
+      if (!desired.has(id)) { m.remove(); pool.delete(id); }
+    }
+    // Add new
+    for (const [id, poi] of desired) {
+      if (pool.has(id)) continue;
+      const mp = poi as POI & { _sponsorTier?: string };
+      const marker = L.marker([poi.coordinate.lat, poi.coordinate.lng], {
+        icon: getMerchantDivIcon(mp._sponsorTier || 'free', poi.name),
+        bubblingMouseEvents: false,
+        zIndexOffset: 5000,
+      }).addTo(map);
+      marker.on('click', () => {
+        const m2 = poi as POI & { _merchantId?: string; _isDemo?: boolean };
+        if (m2._merchantId && !m2._isDemo) navigate(`/merchants/${m2._merchantId}`);
+        else onPlaceSelectRef.current?.(poi);
+      });
+      pool.set(id, marker);
+    }
+  }, [map, navigate]);
+
+  // ── Create the canvas layer once ──────────────────────────────────
+  useEffect(() => {
+    const layer = new POICanvasLayer();
+    layer.onPointTap = (poi) => onPlaceSelectRef.current?.(poi);
+    layer.onClusterTap = (lat, lng, ez) => map.flyTo([lat, lng], ez, { duration: 0.4 });
+    layer.setCompute(computeFeatures);
+    layer.setStyleContext({ dark: isDark });
+    layer.attach(map);
+    layerRef.current = layer;
+    return () => {
+      layer.detach();
+      layerRef.current = null;
+      const pool = merchantPoolRef.current;
+      for (const m of pool.values()) m.remove();
+      pool.clear();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map]);
+
+  // ── Fetch tiles ───────────────────────────────────────────────────
+  const triggerFetch = useCallback(() => {
+    const z = map.getZoom();
+    if (!visible || z < 14) return;
+    const cats = activeFilter && FILTER_CATEGORIES[activeFilter]
+      ? [FILTER_CATEGORIES[activeFilter].geoapify]
+      : undefined;
+    fetchForViewport(map.getBounds(), z, cats);
+  }, [map, visible, activeFilter, fetchForViewport]);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedFetch = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(triggerFetch, 300);
+  }, [triggerFetch]);
+
+  // Initial fetch on mount / filter change
+  useEffect(() => { triggerFetch(); }, [triggerFetch]);
+
+  // moveend fires on pan AND zoom; zoomend updates the integer zoom for merchant gating.
+  useMapEvents({
+    moveend: () => debouncedFetch(),
+    zoomend: () => setZoomLevel(Math.floor(map.getZoom())),
+  });
+
+  // ── Filter change → clear canvas + merchants, then refetch ────────
+  useEffect(() => {
+    if (activeFilter !== prevFilterRef.current) {
+      prevFilterRef.current = activeFilter;
+      layerRef.current?.clear();
+      const pool = merchantPoolRef.current;
+      for (const m of pool.values()) m.remove();
+      pool.clear();
+      const cats = activeFilter && FILTER_CATEGORIES[activeFilter]
+        ? [FILTER_CATEGORIES[activeFilter].geoapify]
+        : undefined;
+      setFilter(activeFilter, cats);
+    }
+  }, [activeFilter, setFilter]);
+
+  // ── Data / context changed → refresh canvas + reconcile merchants ──
+  useEffect(() => {
+    ctxRef.current = { visible, activeFilter, showMerchants, highlightGreen, greenOnly };
+    const layer = layerRef.current;
+    if (layer) {
+      if (!visible || zoomLevel < 14) layer.clear();
+      else layer.refresh();
+    }
+    renderMerchants();
+  }, [serial, zoomLevel, visible, activeFilter, showMerchants, highlightGreen, greenOnly, renderMerchants]);
+
+  // ── Selected POI → highlight ring (ring-only redraw) ──────────────
+  useEffect(() => {
+    layerRef.current?.setSelected(selectedPoiId ?? null);
+  }, [selectedPoiId]);
+
+  // ── Dark mode → restyle labels ────────────────────────────────────
+  useEffect(() => {
+    const layer = layerRef.current;
+    if (!layer) return;
+    layer.setStyleContext({ dark: isDark });
+    layer.refresh();
+  }, [isDark]);
 
   return null;
 }

@@ -77,6 +77,11 @@ interface MapState {
   // Bottom Sheet
   bottomSheetState: BottomSheetState;
 
+  // Navigation camera (chase-cam during an active walk)
+  navCameraMode: 'north' | 'heading';
+  isFollowing: boolean;
+  recenterNonce: number;
+
   // Actions
   setCenter: (center: Coordinate) => void;
   setZoom: (zoom: number) => void;
@@ -97,6 +102,10 @@ interface MapState {
   fetchAirQuality: (coord: Coordinate) => Promise<void>;
   setBottomSheetState: (state: BottomSheetState) => void;
   addRecentSearch: (result: SearchResult) => void;
+  setNavCameraMode: (mode: 'north' | 'heading') => void;
+  toggleNavCameraMode: () => void;
+  setFollowing: (v: boolean) => void;
+  recenter: () => void;
 }
 
 // Load recent searches from localStorage
@@ -138,6 +147,19 @@ export const useMapStore = create<MapState>()((set, get) => ({
 
   bottomSheetState: 'peek',
 
+  // Default north-up (always-smooth, no map rotation). Users opt into heading-up
+  // (rotates the map to travel direction) via the compass toggle; the choice persists.
+  navCameraMode: ((): 'north' | 'heading' => {
+    try {
+      const v = localStorage.getItem('breeva_nav_cam');
+      return v === 'north' || v === 'heading' ? v : 'north';
+    } catch {
+      return 'north';
+    }
+  })(),
+  isFollowing: true,
+  recenterNonce: 0,
+
   // Actions
   setCenter: (center) => set({ center }),
   setZoom: (zoom) => set({ zoom }),
@@ -145,6 +167,18 @@ export const useMapStore = create<MapState>()((set, get) => ({
     set({ userLocation: location });
     // Do NOT auto-set center here — that causes constant camera jitter
   },
+
+  setNavCameraMode: (mode) => {
+    try { localStorage.setItem('breeva_nav_cam', mode); } catch { /* ignore */ }
+    set({ navCameraMode: mode });
+  },
+  toggleNavCameraMode: () => {
+    const next = get().navCameraMode === 'north' ? 'heading' : 'north';
+    try { localStorage.setItem('breeva_nav_cam', next); } catch { /* ignore */ }
+    set({ navCameraMode: next });
+  },
+  setFollowing: (v) => set({ isFollowing: v }),
+  recenter: () => set((s) => ({ isFollowing: true, recenterNonce: s.recenterNonce + 1 })),
 
   startLocating: () => {
     if (!navigator.geolocation) {

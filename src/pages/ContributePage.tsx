@@ -11,6 +11,7 @@ import BottomNavigation from '../components/layout/BottomNavigation';
 import { Seo } from '../components/Seo';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import { submitContribution, reverseGeocode, type SubmitContributionResult } from '../lib/api';
 
 const LocationPicker = lazy(() => import('../components/contribute/LocationPicker'));
@@ -44,6 +45,8 @@ export default function ContributePage() {
   const navigate = useNavigate();
   const reduce = useReducedMotion() ?? false;
   const user = useAuthStore((s) => s.user);
+  // Reactive VAYU auto-trace consent (mirrors breeva_anonymous_data; default on).
+  const autoTraceOn = useSettingsStore((s) => s.anonymous_data);
 
   const [mode, setMode] = useState<Mode>('aqi');
   const [severity, setSeverity] = useState(3);
@@ -368,9 +371,21 @@ export default function ContributePage() {
         {/* VAYU auto-trace note */}
         <motion.div variants={item} className="glass-card p-4 flex gap-3">
           <span className="grid place-items-center w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-emerald-500 shrink-0"><Wind className="w-[18px] h-[18px] text-white" /></span>
-          <div>
-            <p className="text-xs font-bold text-gray-900 dark:text-white">VAYU Auto-trace aktif</p>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed mt-0.5">Setiap kali kamu berjalan, jejak anonimmu otomatis memperkaya peta udara real-time — tanpa identitas, +5 EcoPoints/sesi.</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-bold text-gray-900 dark:text-white">VAYU Auto-trace</p>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                style={autoTraceOn ? { color: '#16a34a', background: '#22c55e1f' } : { color: '#9ca3af', background: '#9ca3af1f' }}>
+                {autoTraceOn ? 'Aktif' : 'Nonaktif'}
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed mt-0.5">
+              Jejak pergerakan anonim (bukan identitasmu) memperkaya peta udara VAYU tiap kamu jalan — +5 EcoPoints/sesi. Bisa dimatikan kapan saja.
+            </p>
+            <div className="flex items-center gap-4 mt-2">
+              <button onClick={() => navigate('/privacy')} className="text-[11px] font-semibold text-primary-600 dark:text-primary-400">Pelajari privasi →</button>
+              <button onClick={() => navigate('/settings')} className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">Atur di Setelan</button>
+            </div>
           </div>
         </motion.div>
       </motion.div>

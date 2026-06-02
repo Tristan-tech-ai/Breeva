@@ -60,7 +60,7 @@ class Region:
 
 REGIONS: dict[str, Region] = {
     # --- Bali ---
-    "bali": Region("bali", -8.78, 115.10, -8.55, 115.30),             # Denpasar-Kuta-Ubud-Sanur
+    "bali": Region("bali", -8.95, 114.40, -8.05, 115.72),             # whole island + Nusa Penida — widened 2026-05-28 (Munduk/Kubu/Ubud/Nusa Dua/Sampalan gaps)
     "bali-badung": Region("bali", -8.85, 115.05, -8.55, 115.20),      # Kab. Badung (south-west, overlaps handled by on_conflict)
     "bali-gianyar": Region("bali", -8.60, 115.25, -8.35, 115.45),     # Kab. Gianyar
     "bali-karangasem": Region("bali", -8.55, 115.40, -8.30, 115.72),  # Kab. Karangasem (east Bali)
@@ -69,13 +69,13 @@ REGIONS: dict[str, Region] = {
     "bali-bangli": Region("bali", -8.50, 115.30, -8.25, 115.50),      # Kab. Bangli (central highlands)
     "bali-jembrana": Region("bali", -8.50, 114.43, -8.20, 114.85),    # Kab. Jembrana (west Bali)
     # --- Jawa (urban metro areas) ---
-    "jakarta": Region("jakarta", -6.30, 106.75, -6.10, 106.95),
+    "jakarta": Region("jakarta", -6.52, 106.45, -6.05, 107.20),  # Jabodetabek — widened 2026-05-28 to cover full sensor footprint (Bekasi/Tangerang/Depok/Bogor/Cikarang)
     "bandung": Region("bandung", -6.95, 107.57, -6.87, 107.67),
     "surabaya": Region("surabaya", -7.33, 112.70, -7.23, 112.80),
     "semarang": Region("semarang", -7.10, 110.30, -6.90, 110.55),       # +Demak suburbs
     "yogyakarta": Region("yogyakarta", -7.90, 110.25, -7.65, 110.50),    # +Sleman+Bantul
     "solo": Region("solo", -7.68, 110.70, -7.50, 110.92),                # +Sukoharjo+Karanganyar
-    "malang": Region("malang", -8.00, 112.60, -7.94, 112.66),
+    "malang": Region("malang", -8.06, 112.54, -7.85, 112.73),  # widened 2026-05-28 (Singosari gap)
     # --- Sumatra (urban metro) ---
     "medan": Region("medan", 3.52, 98.60, 3.70, 98.78),                  # Kota Medan
     "palembang": Region("palembang", -3.05, 104.70, -2.90, 104.85),      # Kota Palembang
@@ -562,7 +562,11 @@ def process_region(region: Region, api_base: str = "", api_headers: dict = None,
             "name": tags.get("name"),
             "landuse_proxy": landuse[:30] if landuse else landuse,
             "canyon_ratio": canyon,
-            "elevation_avg": None,  # needs DEM, skip for now
+            # elevation_avg intentionally OMITTED from the upsert payload: it is populated by a
+            # separate DEM backfill (A2), NOT here. Including it as None made on_conflict
+            # merge-duplicates WIPE the backfilled elevation on re-upserted existing segments
+            # (2026-05-28 incident during the Jabodetabek widening). Omit → preserved on conflict,
+            # NULL default on fresh insert (backfill fills new rows later).
             "traffic_base_estimate": get_traffic_estimate(tags),
             "region": region.name,
         })

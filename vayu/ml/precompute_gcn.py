@@ -54,6 +54,8 @@ def main():
                         help='explicit checkpoint path; if omitted, uses latest in model-dir')
     parser.add_argument('--data-root', default='D:/breeva-ml-data/graph/')
     parser.add_argument('--batch-hours', type=int, default=24)
+    parser.add_argument('--start-hour', type=int, default=0,
+                        help='resume from this hour (inclusive)')
     parser.add_argument('--dow', type=int, default=1, help='day-of-week to encode (0=Sun..6=Sat)')
     args = parser.parse_args()
 
@@ -65,7 +67,10 @@ def main():
 
     model_path = Path(args.model_path) if args.model_path else find_latest_model(Path(args.model_dir))
     log.info(f'loading model: {model_path}')
-    ckpt = torch.load(model_path, map_location=device)
+    # weights_only=False required: ckpt is a dict with python primitives + state_dict,
+    # default weights_only=True in torch 2.6+ blocks/hangs on this checkpoint format.
+    ckpt = torch.load(model_path, map_location=device, weights_only=False)
+    log.info(f'  ckpt keys: {list(ckpt.keys())[:5]}  in_dim={ckpt.get("in_dim")}')
     model = RoadGraphSAGE(
         in_dim=ckpt['in_dim'],
         hidden=ckpt['hidden'],
@@ -79,15 +84,17 @@ def main():
     if not pooler:
         log.error('SUPABASE_POOLER_URL missing')
         sys.exit(2)
-    log.info('connecting to pooler...')
-    conn = psycopg2.connect(pooler)
-    with conn.cursor() as cur:
-        cur.execute('SET statement_timeout = 0')
+
+    def open_conn():
+        c = psycopg2.connect(pooler)
+        with c.cursor() as cur:
+            cur.execute('SET statement_timeout = 0')
+        return c
 
     model_version = model_path.stem  # gcn_road_v20260530_120000
 
     total = 0
-    for hour in range(args.batch_hours):
+    for hour in range(args.start_hour, args.batch_hours):
         t0 = time.time()
         ds = RoadGraphDataset(root=args.data_root, hour=hour, dow=args.dow, target_col=ckpt.get('target_col', 'residual_corrected'))
         data = ds[0].to(device)
@@ -120,14 +127,27 @@ def main():
               model_version = EXCLUDED.model_version,
               predicted_at = NOW()
         """
-        with conn.cursor() as cur:
-            execute_values(cur, sql, rows, page_size=1000)
-        conn.commit()
+        # Fresh connection per hour — Supabase pooler drops idle/long sessions after ~75min.
+        attempts = 0
+        while True:
+            try:
+                conn = open_conn()
+                with conn.cursor() as cur:
+                    execute_values(cur, sql, rows, page_size=1000)
+                conn.commit()
+                conn.close()
+                break
+            except psycopg2.OperationalError as ex:
+                attempts += 1
+                if attempts >= 3:
+                    log.error(f'hour {hour:02d} upsert failed 3x: {ex}')
+                    raise
+                log.warning(f'hour {hour:02d} upsert retry {attempts}: {ex}')
+                time.sleep(5)
         total += len(rows)
         log.info(f'hour {hour:02d} → upserted {len(rows)} ({time.time()-t0:.1f}s)')
 
-    conn.close()
-    log.info(f'done. total upserts: {total} (≈ {total // max(args.batch_hours, 1)} nodes × {args.batch_hours} hours)')
+    log.info(f'done. total upserts: {total}')
 
 
 if __name__ == '__main__':
