@@ -44,6 +44,11 @@ export default defineConfig({
         // dist/assets and was bloating the precache. SVGs load on demand + are browser-cached; no need
         // to precache them offline. Keeps the SW install payload lean.
         globPatterns: ['**/*.{js,css,html,png,webp,woff2}'],
+        // Don't precache the heavy three.js chunk (~875 KB): it's only the landing page's
+        // decorative particle hero (lazy + skipped under reduced-motion). Precaching it taxed
+        // every first visit's bandwidth (competing with API calls on mobile) for code most
+        // logged-in users never hit. It still loads on demand when the landing page needs it.
+        globIgnores: ['**/vendor-three-*.js'],
       },
       devOptions: {
         enabled: true,

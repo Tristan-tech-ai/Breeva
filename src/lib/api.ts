@@ -1299,6 +1299,50 @@ export async function getVayuRouteScore(
   }
 }
 
+// ── Client-side cache for route-score segments ──────────────────────────────
+// A completed walk's polyline is FIXED, so re-scoring it (re-opening Paparan,
+// re-selecting the same walk, or scoring a walk we JUST scored at completion) is
+// a wasted 2–10 s round-trip. Cache the result by a hash of the rounded polyline
+// + duration. TTL 6 h — long enough to make repeat use instant, short enough that
+// the per-road AQI (precompute refreshes ~6 h) doesn't go stale.
+const RS_CACHE_PREFIX = 'breeva_rscore_';
+const RS_CACHE_TTL = 6 * 3600 * 1000;
+const RS_CACHE_MAX = 12;
+
+function rsCacheKey(polyline: [number, number][], duration?: number): string {
+  let h = 5381;
+  for (const [a, b] of polyline) {
+    const s = `${a.toFixed(5)},${b.toFixed(5)};`;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  }
+  return `${RS_CACHE_PREFIX}${(h >>> 0).toString(36)}_${Math.round(duration ?? 0)}`;
+}
+
+function rsCacheGet(key: string): VayuRouteScore | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { t, data } = JSON.parse(raw) as { t: number; data: VayuRouteScore };
+    if (Date.now() - t < RS_CACHE_TTL && data) return data;
+    localStorage.removeItem(key);
+  } catch { /* ignore */ }
+  return null;
+}
+
+function rsCacheSet(key: string, data: VayuRouteScore): void {
+  const write = () => localStorage.setItem(key, JSON.stringify({ t: Date.now(), data }));
+  try {
+    write();
+  } catch {
+    // Quota hit — evict our oldest entries and retry once.
+    try {
+      const mine = Object.keys(localStorage).filter((k) => k.startsWith(RS_CACHE_PREFIX));
+      mine.slice(0, Math.max(1, mine.length - RS_CACHE_MAX + 1)).forEach((k) => localStorage.removeItem(k));
+      write();
+    } catch { /* give up silently */ }
+  }
+}
+
 /**
  * Score an arbitrary polyline with the v2 engine and return the FULL per-segment result
  * (segments[].pm25 + fraction_along) — used by the Exposure Calculator to dose a saved walk.
@@ -1308,6 +1352,10 @@ export async function getRouteScoreSegments(
   polyline: [number, number][],
   durationSeconds?: number,
 ): Promise<VayuRouteScore | null> {
+  if (polyline.length < 2) return null;
+  const key = rsCacheKey(polyline, durationSeconds);
+  const cached = rsCacheGet(key);
+  if (cached) return cached;
   try {
     const resp = await fetch('/api/vayu/route-score', {
       method: 'POST',
@@ -1316,7 +1364,9 @@ export async function getRouteScoreSegments(
     });
     if (!resp.ok) return null;
     const json = await resp.json();
-    return (json.data ?? null) as VayuRouteScore | null;
+    const data = (json.data ?? null) as VayuRouteScore | null;
+    if (data) rsCacheSet(key, data);
+    return data;
   } catch {
     return null;
   }
