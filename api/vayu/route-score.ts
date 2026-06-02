@@ -2656,11 +2656,19 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
         .catch((e) => { console.error('ORS error:', e); return [] as ORSRoute[]; });
     })();
 
+    // Latency trim (Valhalla mode): when Valhalla serves we trust its native alternates
+    // (alternates=N) + AQI re-scoring for the cleanest/balanced/fastest labels, and skip the
+    // ORS-era corridor + through-road candidate machinery. That through-road ORS chaining was
+    // the ~2.7s tail and the 700-row corridor query padded the engine block — both added zero
+    // route diversity in uniform-AQI Jakarta. Empty arrays here make every candidate-gen block
+    // below short-circuit on its `length > 0` gate. Active pollution-avoidance moves to Valhalla's
+    // native per-edge AQI cost (VALHALLA_AQI_COST), the architecturally-correct layer for it.
+    const skipOrsCandidateGen = useValhalla;
     const [orsRoutes, throughRoads, graphEdges, corridorRoadRows, ...m1Results] = await Promise.all([
       enginePromise,
-      findThroughGangRoads(corridorSouth, corridorWest, corridorNorth, corridorEast).catch(() => [] as ThroughGangRoad[]),
+      skipOrsCandidateGen ? Promise.resolve([] as ThroughGangRoad[]) : findThroughGangRoads(corridorSouth, corridorWest, corridorNorth, corridorEast).catch(() => [] as ThroughGangRoad[]),
       graphRoutingEnabled ? findGraphOptimalRoute(startLat, startLng, endLat, endLng).catch(() => [] as GraphRouteEdge[]) : Promise.resolve([] as GraphRouteEdge[]),
-      findRoadsInBBox(corridorSouth, corridorWest, corridorNorth, corridorEast, 700, corridorHighways).catch(() => [] as RoadRow[]),
+      skipOrsCandidateGen ? Promise.resolve([] as RoadRow[]) : findRoadsInBBox(corridorSouth, corridorWest, corridorNorth, corridorEast, 700, corridorHighways).catch(() => [] as RoadRow[]),
       // Tier 2 M1 candidates (pgRouting multi-criteria Dijkstra). Failure is non-fatal —
       // pre-MV-refresh deployments return empty arrays and route-score falls back to
       // the legacy graphEdges + ORS pipeline.
