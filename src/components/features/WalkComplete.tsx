@@ -80,29 +80,34 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4" role="dialog" aria-modal="true" aria-label="Walk complete">
       <CelebrationBurst active={true} />
       <motion.div
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        initial={{ opacity: 0, scale: 0.92, y: 24 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        className="rounded-3xl overflow-hidden bg-white dark:bg-gray-900/90 backdrop-blur-2xl border border-gray-200 dark:border-gray-700/30 shadow-2xl p-6 max-w-sm w-full"
+        exit={{ opacity: 0, scale: 0.92 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+        className="rounded-[28px] overflow-hidden bg-white dark:bg-gray-900/95 backdrop-blur-2xl border border-gray-200/70 dark:border-gray-700/40 shadow-2xl max-w-sm w-full max-h-[90vh] overflow-y-auto scrollbar-hide"
       >
-        {/* Celebration header */}
-        <div className="text-center mb-6">
+        {/* Gradient hero header */}
+        <div className={`relative px-6 pt-7 pb-6 text-center overflow-hidden ${isFailed ? 'bg-gradient-to-br from-amber-400 to-orange-500' : 'bg-gradient-to-br from-emerald-400 via-primary-500 to-primary-600'}`}>
+          {/* soft glow accents */}
+          <div className="pointer-events-none absolute -top-8 -right-6 w-28 h-28 rounded-full bg-white/15 blur-2xl" />
+          <div className="pointer-events-none absolute -bottom-10 -left-8 w-32 h-32 rounded-full bg-white/10 blur-2xl" />
           <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', delay: 0.2 }}
-            className={`inline-flex items-center justify-center w-16 h-16 rounded-full ${isFailed ? 'bg-gradient-to-br from-amber-400 to-orange-500' : 'bg-gradient-to-br from-emerald-400 to-primary-500'} mb-3 shadow-lg ${isFailed ? 'shadow-orange-500/30' : 'shadow-primary-500/30'}`}
+            initial={{ scale: 0, rotate: -20 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', delay: 0.15, stiffness: 220 }}
+            className="relative inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/20 ring-1 ring-white/40 backdrop-blur-sm mb-3 shadow-lg"
           >
-            {isFailed ? <AlertTriangle size={28} className="text-white" /> : <Sparkles size={28} className="text-white" />}
+            {isFailed ? <AlertTriangle size={30} className="text-white" /> : <Sparkles size={30} className="text-white" />}
           </motion.div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            {isFailed ? 'Walk Save Failed' : 'Walk Complete!'}
+          <h2 className="relative text-2xl font-extrabold text-white tracking-tight">
+            {isFailed ? 'Gagal Menyimpan' : 'Perjalanan Selesai!'}
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {isFailed ? 'Your walk was recorded locally but failed to sync. It will retry next session.' : 'Great job making a difference!'}
+          <p className="relative text-sm text-white/85 mt-1">
+            {isFailed ? 'Tersimpan lokal, gagal sinkron — akan dicoba lagi nanti.' : 'Kerja bagus, langkahmu berarti! 🌿'}
           </p>
         </div>
 
+        <div className="p-5">
         {/* Stats grid */}
         <motion.div
           className="grid grid-cols-2 gap-2.5 mb-5"
@@ -111,16 +116,16 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.1 } } }}
         >
           <motion.div variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}>
-            <StatCard icon={<MapPin size={16} />} label="Distance" value={`${distKm} km`} color="text-blue-500" bg="bg-blue-50 dark:bg-blue-500/10" />
+            <StatCard icon={<MapPin size={16} />} label="Jarak" value={`${distKm} km`} color="text-blue-500" bg="bg-blue-50 dark:bg-blue-500/10" />
           </motion.div>
           <motion.div variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}>
-            <StatCard icon={<Clock size={16} />} label="Duration" value={`${durMin} min`} color="text-violet-500" bg="bg-violet-50 dark:bg-violet-500/10" />
+            <StatCard icon={<Clock size={16} />} label="Durasi" value={`${durMin} mnt`} color="text-violet-500" bg="bg-violet-50 dark:bg-violet-500/10" />
           </motion.div>
           <motion.div variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}>
-            <StatCard icon={<Leaf size={16} />} label="CO₂ Saved" value={`${co2Saved} kg`} color="text-emerald-500" bg="bg-emerald-50 dark:bg-emerald-500/10" />
+            <StatCard icon={<Leaf size={16} />} label="CO₂ Dihemat" value={`${co2Saved} kg`} color="text-emerald-500" bg="bg-emerald-50 dark:bg-emerald-500/10" />
           </motion.div>
           <motion.div variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}>
-            <StatCard icon={<Flame size={16} />} label="Calories" value={`${calories}`} color="text-orange-500" bg="bg-orange-50 dark:bg-orange-500/10" />
+            <StatCard icon={<Flame size={16} />} label="Kalori" value={`${calories}`} color="text-orange-500" bg="bg-orange-50 dark:bg-orange-500/10" />
           </motion.div>
         </motion.div>
 
@@ -178,7 +183,7 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
           transition={{ delay: 0.4 }}
           className="gradient-primary rounded-2xl p-4 text-center mb-5"
         >
-          <p className="text-white/80 text-xs mb-1">EcoPoints Earned</p>
+          <p className="text-white/80 text-xs mb-1">EcoPoin Didapat</p>
           <div className="flex items-center justify-center gap-2">
             <Star size={22} className="text-amber-300" fill="currentColor" />
             <motion.span
@@ -191,7 +196,7 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
             </motion.span>
           </div>
           {rated && (
-            <p className="text-white/80 text-xs mt-1">+5 bonus for rating!</p>
+            <p className="text-white/80 text-xs mt-1">+5 bonus dari rating!</p>
           )}
         </motion.div>
 
@@ -203,7 +208,7 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
               className="flex items-center justify-center gap-2 rounded-xl border border-primary-200 dark:border-primary-800 bg-primary-50/50 dark:bg-primary-500/10 px-4 py-3 text-sm font-semibold text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-500/20 transition-colors"
             >
               <Leaf size={16} />
-              Rate Air Quality (+5 pts)
+              Nilai Kualitas Udara (+5 poin)
             </button>
           )}
           <button
@@ -211,15 +216,16 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
             className="flex items-center justify-center gap-2 gradient-primary text-white text-sm font-semibold py-3 rounded-xl shadow-lg shadow-primary-500/25 hover:shadow-xl transition-all"
           >
             <Map size={16} />
-            Back to Map
+            Kembali ke Peta
             <ChevronRight size={14} />
           </button>
           <button
             onClick={() => { onClose(); navigate('/profile/history'); }}
-            className="text-sm text-gray-500 dark:text-gray-400 py-2 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-200 dark:text-gray-700 transition"
+            className="text-sm text-gray-500 dark:text-gray-400 py-2 hover:text-gray-700 dark:hover:text-gray-200 transition"
           >
-            View Walk History
+            Lihat Riwayat Jalan
           </button>
+        </div>
         </div>
       </motion.div>
     </div>

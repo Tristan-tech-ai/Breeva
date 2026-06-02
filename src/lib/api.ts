@@ -1392,10 +1392,9 @@ export async function submitAQCalibration(
   lng: number
 ): Promise<boolean> {
   try {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Use the app's AUTHENTICATED client (module singleton). A fresh anon client
+    // has no session, so air_quality_reports' RLS `auth.uid() = user_id` rejects
+    // the insert → silent failure. The shared client carries the user session.
     const { error } = await supabase.from('air_quality_reports').insert({
       user_id: userId,
       lat,
@@ -1404,8 +1403,10 @@ export async function submitAQCalibration(
       description: `Walk calibration (walk: ${walkId})`,
       source: 'calibration', // excluded from the Kontribusi history + contribution_count
     });
+    if (error) console.warn('submitAQCalibration insert failed:', error.message);
     return !error;
-  } catch {
+  } catch (e) {
+    console.warn('submitAQCalibration threw:', e);
     return false;
   }
 }

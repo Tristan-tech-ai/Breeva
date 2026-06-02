@@ -28,6 +28,8 @@ interface StreakHeatmapProps {
   categories: HeatmapCategory[];
   /** If not set, auto-fills container width. GitHub shows 52 weeks (1 year). */
   weeks?: number;
+  /** While true, show a shimmer placeholder instead of an empty (misleading "0") grid. */
+  loading?: boolean;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -178,7 +180,7 @@ function HeatmapTooltip({ anchor, value, date, unit }: {
   );
 }
 
-export default function StreakHeatmap({ categories, weeks: weeksProp }: StreakHeatmapProps) {
+export default function StreakHeatmap({ categories, weeks: weeksProp, loading = false }: StreakHeatmapProps) {
   const [activeKey, setActiveKey] = useState(categories[0]?.key || '');
   const [hoveredCell, setHoveredCell] = useState<{ cell: Cell; rect: DOMRect } | null>(null);
   // Reactive dark mode from the unified settings store (no DOM MutationObserver).
@@ -235,6 +237,32 @@ export default function StreakHeatmap({ categories, weeks: weeksProp }: StreakHe
   };
 
   const gridTotalW = DAY_LABEL_W + weeks * STEP;
+
+  // Loading: shimmer placeholder so the grid never flashes a misleading empty "0".
+  if (loading) {
+    return (
+      <div ref={containerRef}>
+        {categories.length > 1 && (
+          <div className="flex gap-1.5 mb-4">
+            {categories.map((cat) => {
+              const Icon = cat.icon;
+              return (
+                <div key={cat.key} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-gray-400 dark:text-gray-500 border border-transparent">
+                  <Icon size={12} />{cat.label}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="h-4 w-44 rounded animate-pulse bg-gray-200/80 dark:bg-gray-700/50 mb-3" />
+        <div className="rounded-xl animate-pulse bg-gray-200/70 dark:bg-gray-800/60" style={{ height: 7 * STEP + 18 }} />
+        <div className="flex items-center justify-between mt-2.5">
+          <div className="h-3 w-28 rounded animate-pulse bg-gray-200/70 dark:bg-gray-700/40" />
+          <div className="h-3 w-20 rounded animate-pulse bg-gray-200/70 dark:bg-gray-700/40" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

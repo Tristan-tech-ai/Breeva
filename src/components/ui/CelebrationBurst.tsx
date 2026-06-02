@@ -17,9 +17,15 @@ export default function CelebrationBurst({
 }: CelebrationBurstProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef(0);
+  // Keep the latest config without retriggering the burst. Previously `colors`
+  // (a fresh default array each render) sat in the deps, so any parent re-render
+  // — e.g. HomePage ticking on GPS updates — restarted the confetti endlessly.
+  const cfgRef = useRef({ count, colors });
+  cfgRef.current = { count, colors };
 
   useEffect(() => {
     if (!active) return;
+    const { count, colors } = cfgRef.current;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -73,7 +79,7 @@ export default function CelebrationBurst({
 
     rafRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [active, count, colors]);
+  }, [active]);
 
   if (!active) return null;
 

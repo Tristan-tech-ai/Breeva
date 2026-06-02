@@ -64,13 +64,14 @@ function setMapBearing(map: L.Map, deg: number): void {
   }
 }
 
-// Tighter zoom when slow, wider when fast — keeps the road ahead in frame.
+// Coarse, well-separated zoom levels so noisy GPS speed near walking pace can't
+// flip the zoom every tick. One stable level for the whole walking range; only
+// cycling/vehicle widen out. Combined with EMA-smoothed speed + ≥0.9 hysteresis,
+// the camera holds a steady zoom instead of pumping in/out.
 function zoomForSpeed(speed: number): number {
-  if (speed < 0.8) return 17.5;
-  if (speed < 1.6) return 17;
-  if (speed < 3) return 16.5;
-  if (speed < 6) return 16;
-  return 15.5;
+  if (speed < 2.4) return 17;  // standing → brisk walk (0–~8.6 km/h)
+  if (speed < 5.5) return 16;  // jog / cycling
+  return 15;                    // vehicle
 }
 // Bias the camera ahead of the user so they see the road they're walking into.
 function lookAheadForSpeed(speed: number): number {
@@ -219,6 +220,7 @@ function MapController({
   const routeLayerRef = useRef(L.layerGroup());
   const traveledLayerRef = useRef(L.layerGroup());
   const lastZoomRef = useRef<number | null>(null);
+  const speedEmaRef = useRef<number | null>(null);
   const followingRef = useRef(isFollowing);
 
   const livePos = isTracking ? (walkPos ?? userLocation) : userLocation;
@@ -317,30 +319,44 @@ function MapController({
       return;
     }
 
+    // Smooth the noisy GPS speed before it drives zoom/look-ahead.
+    speedEmaRef.current = speedEmaRef.current == null
+      ? currentSpeed
+      : speedEmaRef.current * 0.7 + currentSpeed * 0.3;
+    const smSpeed = speedEmaRef.current;
+
     // Look ahead along the route so the camera leads the puck.
     let target: Coordinate = pos;
     const wps = selectedRoute?.waypoints;
     if (wps && wps.length >= 2) {
       const prog = routeProgress(pos, wps, selectedRoute?.distance_meters);
-      if (prog) target = lookAheadPoint(wps, prog.snapped, prog.segIndex, lookAheadForSpeed(currentSpeed));
+      if (prog) target = lookAheadPoint(wps, prog.snapped, prog.segIndex, lookAheadForSpeed(smSpeed));
     }
-
-    // Quantize zoom so it doesn't re-animate every tick.
-    const z = zoomForSpeed(currentSpeed);
-    const zApply = lastZoomRef.current == null || Math.abs(z - lastZoomRef.current) >= 0.4 ? z : lastZoomRef.current;
-    lastZoomRef.current = zApply;
 
     if (navCameraMode === 'heading' && heading != null) setMapBearing(map, heading);
     else setMapBearing(map, 0);
 
     const reduce = prefersReducedMotion();
     try {
-      map.setView([target.lat, target.lng], zApply, {
-        animate: !reduce,
-        duration: reduce ? 0 : 0.7,
-        easeLinearity: 0.22,
-        noMoveStart: true,
-      });
+      // Pan every tick (smooth), but change ZOOM only when the level genuinely
+      // shifts (≥0.9) — otherwise setView would re-animate the zoom each tick and
+      // the map visibly pumps in/out even when the user is barely moving.
+      const desiredZoom = zoomForSpeed(smSpeed);
+      if (lastZoomRef.current == null) {
+        lastZoomRef.current = desiredZoom;
+        map.setView([target.lat, target.lng], desiredZoom, { animate: !reduce, duration: reduce ? 0 : 0.6 });
+      } else {
+        if (Math.abs(desiredZoom - lastZoomRef.current) >= 0.9) {
+          lastZoomRef.current = desiredZoom;
+          map.setZoom(desiredZoom, { animate: !reduce });
+        }
+        map.panTo([target.lat, target.lng], {
+          animate: !reduce,
+          duration: reduce ? 0 : 0.7,
+          easeLinearity: 0.22,
+          noMoveStart: true,
+        });
+      }
     } catch { /* map already removed */ }
   }, [walkPos, userLocation, isTracking, isFollowing, navCameraMode, heading, currentSpeed, selectedRoute, map]);
 
@@ -359,6 +375,7 @@ function MapController({
   useEffect(() => {
     if (!isTracking) {
       lastZoomRef.current = null;
+      speedEmaRef.current = null;
       setMapBearing(map, 0);
     }
   }, [isTracking, map]);

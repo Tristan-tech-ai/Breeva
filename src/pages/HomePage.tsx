@@ -25,6 +25,8 @@ import {
   CreditCard,
   Fuel,
   Clock,
+  AlertTriangle,
+  RotateCw,
 } from 'lucide-react';
 import { useMapStore } from '../stores/mapStore';
 import { useWalkStore } from '../stores/walkStore';
@@ -358,6 +360,37 @@ export default function HomePage() {
                 </button>
               </div>
             </div>
+
+            {/* Off-route warning — visible the moment you stray >30 m from the line */}
+            <AnimatePresence>
+              {(offRoute || isCalculatingRoutes) && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="px-4 mt-2 max-w-2xl mx-auto"
+                >
+                  <div className="flex items-center gap-2.5 rounded-2xl px-4 py-2.5 shadow-lg bg-amber-500 text-white">
+                    {isCalculatingRoutes ? (
+                      <RotateCw className="w-4 h-4 flex-shrink-0 animate-spin" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                    )}
+                    <p className="text-sm font-semibold flex-1">
+                      {isCalculatingRoutes ? 'Menghitung ulang rute…' : 'Kamu keluar dari rute'}
+                    </p>
+                    {offRoute && !isCalculatingRoutes && (
+                      <button
+                        onClick={() => { rerouteAtRef.current = Date.now(); calculateRoutes(); }}
+                        className="text-xs font-bold bg-white/25 hover:bg-white/35 rounded-full px-3 py-1 transition"
+                      >
+                        Rute ulang
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Turn-by-turn directions */}
             {selectedRoute && selectedRoute.instructions?.length > 0 && (

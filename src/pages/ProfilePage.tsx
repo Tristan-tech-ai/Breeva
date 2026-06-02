@@ -22,42 +22,44 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const [walkDays, setWalkDays] = useState<Record<string, number>>({});
   const [contributionDays, setContributionDays] = useState<Record<string, number>>({});
+  const [heatmapLoading, setHeatmapLoading] = useState(true);
 
-  // Fetch walk history dates for heatmap
+  // Fetch walk + contribution dates for the heatmap. Both queries run in parallel;
+  // we only flip `loading` off once BOTH resolve so the grid never flashes empty
+  // before data arrives (it would read as "0 walks" even when you have some).
   useEffect(() => {
     if (!user) return;
+    const since = new Date(Date.now() - 365 * 86400000).toISOString();
+    let cancelled = false;
+    // `heatmapLoading` starts true, so no synchronous reset here is needed for the
+    // first load; the queries below flip it false once both resolve.
 
-    // Walks
-    supabase
+    const walksQ = supabase
       .from('walks')
       .select('started_at')
       .eq('user_id', user.id)
-      .gte('started_at', new Date(Date.now() - 365 * 86400000).toISOString())
+      .gte('started_at', since)
       .then(({ data }) => {
-        if (!data) return;
         const counts: Record<string, number> = {};
-        for (const w of data) {
+        for (const w of data ?? []) {
           const day = new Date(w.started_at).toISOString().split('T')[0];
           counts[day] = (counts[day] || 0) + 1;
         }
-        setWalkDays(counts);
+        if (!cancelled) setWalkDays(counts);
       });
 
-    // AQ Contributions from Supabase
-    supabase
+    const contribQ = supabase
       .from('air_quality_reports')
       .select('created_at')
       .eq('user_id', user.id)
-      .gte('created_at', new Date(Date.now() - 365 * 86400000).toISOString())
+      .gte('created_at', since)
       .then(({ data }) => {
         const counts: Record<string, number> = {};
-        if (data) {
-          for (const r of data) {
-            const day = new Date(r.created_at).toISOString().split('T')[0];
-            counts[day] = (counts[day] || 0) + 1;
-          }
+        for (const r of data ?? []) {
+          const day = new Date(r.created_at).toISOString().split('T')[0];
+          counts[day] = (counts[day] || 0) + 1;
         }
-        // Also merge local contributions
+        // Also merge local (offline-queued) contributions
         try {
           const stored = JSON.parse(localStorage.getItem('breeva_contributions') || '[]') as { createdAt: string }[];
           for (const c of stored) {
@@ -65,8 +67,14 @@ export default function ProfilePage() {
             counts[day] = (counts[day] || 0) + 1;
           }
         } catch { /* ignore */ }
-        setContributionDays(counts);
+        if (!cancelled) setContributionDays(counts);
       });
+
+    Promise.all([walksQ, contribQ]).finally(() => {
+      if (!cancelled) setHeatmapLoading(false);
+    });
+
+    return () => { cancelled = true; };
   }, [user]);
 
   const heatmapCategories: HeatmapCategory[] = [
@@ -411,7 +419,7 @@ export default function ProfilePage() {
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
               Activity
             </h3>
-            <StreakHeatmap categories={heatmapCategories} />
+            <StreakHeatmap categories={heatmapCategories} loading={heatmapLoading} />
           </div>
         </motion.div>
 
