@@ -30,17 +30,18 @@ function Pill({ tone, children }: { tone: Tone; children: ReactNode }) {
 function Toggle({ on, onClick, disabled }: { on: boolean; onClick: () => void; disabled?: boolean }) {
   return (
     <button
+      type="button"
       onClick={(e) => { e.stopPropagation(); if (!disabled) onClick(); }}
       disabled={disabled}
       role="switch"
       aria-checked={on}
-      className={`w-11 h-6 rounded-full relative transition-colors duration-200 flex-shrink-0 ${
+      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full px-1 transition-colors duration-200 ${
         on ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'
       } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
     >
       <span
-        className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-          on ? 'translate-x-[22px]' : 'translate-x-[2px]'
+        className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+          on ? 'translate-x-5' : 'translate-x-0'
         }`}
       />
     </button>
@@ -307,8 +308,10 @@ export default function SettingsPage() {
         {/* Appearance */}
         <Section title={t('settings.appearance')} index={0} reduce={reduce}>
           <Row icon={Moon} label={t('settings.dark_mode')} desc={t('settings.dark_mode_desc')}
+            onClick={() => setSetting('dark_mode', !s.dark_mode)}
             right={<Toggle on={s.dark_mode} onClick={() => setSetting('dark_mode', !s.dark_mode)} />} />
           <Row icon={Contrast} label={t('settings.high_contrast')} desc={t('settings.high_contrast_desc')}
+            onClick={() => setSetting('high_contrast', !s.high_contrast)}
             right={<Toggle on={s.high_contrast} onClick={() => setSetting('high_contrast', !s.high_contrast)} />} />
         </Section>
 
@@ -325,8 +328,10 @@ export default function SettingsPage() {
         {/* Notifications */}
         <Section title={t('settings.notifications')} index={2} reduce={reduce}>
           <Row icon={Bell} label={t('settings.push')} desc={t('settings.push_desc')}
+            onClick={togglePush}
             right={<><Pill tone={pushPill.tone}>{pushPill.label}</Pill><Toggle on={s.push_notifications} onClick={togglePush} /></>} />
           <Row icon={CalendarDays} label={t('settings.quest_reminders')} desc={t('settings.quest_reminders_desc')}
+            onClick={s.push_notifications ? () => setSetting('quest_reminders', !s.quest_reminders) : undefined}
             right={<><Pill tone={s.push_notifications ? (s.quest_reminders ? 'active' : 'off') : 'warn'}>
               {s.push_notifications ? (s.quest_reminders ? t('status.active') : t('status.off')) : t('status.requires_push')}
             </Pill><Toggle on={s.quest_reminders} disabled={!s.push_notifications} onClick={() => setSetting('quest_reminders', !s.quest_reminders)} /></>} />
@@ -335,8 +340,10 @@ export default function SettingsPage() {
         {/* Privacy */}
         <Section title={t('settings.privacy')} index={3} reduce={reduce}>
           <Row icon={Wind} label={t('settings.vayu_trace')} desc={t('settings.vayu_trace_desc')}
+            onClick={() => setSetting('anonymous_data', !s.anonymous_data)}
             right={<Toggle on={s.anonymous_data} onClick={() => setSetting('anonymous_data', !s.anonymous_data)} />} />
           <Row icon={User} label={t('settings.profile_visible')} desc={t('settings.profile_visible_desc')}
+            onClick={() => setSetting('profile_visible', !s.profile_visible)}
             right={<><Pill tone={s.profile_visible ? 'active' : 'off'}>{s.profile_visible ? t('status.visible') : t('status.hidden')}</Pill>
               <Toggle on={s.profile_visible} onClick={() => setSetting('profile_visible', !s.profile_visible)} /></>} />
           <Row icon={Lock} label={t('settings.privacy_policy')} onClick={() => navigate('/privacy')}
