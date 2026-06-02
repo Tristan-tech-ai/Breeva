@@ -2704,7 +2704,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     // Valhalla-C: aqi_weight per route option [fastest, balanced, cleanest]. Higher = stronger
     // pollution avoidance. Tunable via VALHALLA_AQI_WEIGHTS. Uniform-AQI corridors barely deviate
     // (no cleaner option exists -> routes dedup to one, honestly); varied corridors diverge.
-    const aqiWeights = (envClean(process.env.VALHALLA_AQI_WEIGHTS) || '0,3,10')
+    const aqiWeights = (envClean(process.env.VALHALLA_AQI_WEIGHTS) || '0,0.6,1.5')
       .split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n));
     const aqiBaseOptions = { ...(valhallaOptions || {}), current_hour: (new Date().getUTCHours() + 7) % 24 };
     const valhallaOptionsFinal = valhallaAqiCost
