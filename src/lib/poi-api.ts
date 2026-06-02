@@ -1,7 +1,10 @@
 import type { Coordinate } from '../types';
 import { diagLog } from './poi-diagnostics';
 
-const GEOAPIFY_KEY = import.meta.env.VITE_GEOAPIFY_API_KEY || '';
+// POIs are fetched via our server proxy (/api/searchapi?provider=geoapify) so the
+// Geoapify key stays server-side (out of the client bundle) and popular tiles are
+// cached once in Redis for all users — conserving finite Geoapify credits.
+const POI_PROXY = '/api/searchapi?provider=geoapify';
 
 export interface POI {
   id: string;
@@ -83,10 +86,6 @@ export async function getNearbyPOIs(
   radiusMeters: number = 1500,
   categories?: string[],
 ): Promise<{ pois: POI[]; error: string | null }> {
-  if (!GEOAPIFY_KEY) {
-    return { pois: [], error: 'Geoapify API key not configured' };
-  }
-
   const cats = categories && categories.length > 0
     ? categories.join(',')
     : DEFAULT_CATEGORIES;
@@ -105,7 +104,7 @@ export async function getNearbyPOIs(
     const radius = Math.min(Math.round(radiusMeters), 5000);
     const limit = 80; // 4 credits per call — but 4× fewer tiles at z14 = net savings
 
-    const url = `https://api.geoapify.com/v2/places?categories=${encodeURIComponent(cats)}&filter=circle:${center.lng},${center.lat},${radius}&bias=proximity:${center.lng},${center.lat}&limit=${limit}&lang=id&apiKey=${GEOAPIFY_KEY}`;
+    const url = `${POI_PROXY}&categories=${encodeURIComponent(cats)}&filter=circle:${center.lng},${center.lat},${radius}&bias=proximity:${center.lng},${center.lat}&limit=${limit}&lang=id`;
 
     const res = await fetch(url);
     if (!res.ok) {
@@ -200,10 +199,6 @@ export async function getPOIsInRect(
   bounds: TileBounds,
   categories?: string[],
 ): Promise<{ pois: POI[]; error: string | null }> {
-  if (!GEOAPIFY_KEY) {
-    return { pois: [], error: 'Geoapify API key not configured' };
-  }
-
   const cats = categories && categories.length > 0
     ? categories.join(',')
     : DEFAULT_CATEGORIES;
@@ -218,7 +213,7 @@ export async function getPOIsInRect(
   try {
     const limit = 150;
     // Geoapify rect filter: lon1,lat1,lon2,lat2 (SW corner, NE corner)
-    const url = `https://api.geoapify.com/v2/places?categories=${encodeURIComponent(cats)}&filter=rect:${bounds.west},${bounds.south},${bounds.east},${bounds.north}&limit=${limit}&lang=id&apiKey=${GEOAPIFY_KEY}`;
+    const url = `${POI_PROXY}&categories=${encodeURIComponent(cats)}&filter=rect:${bounds.west},${bounds.south},${bounds.east},${bounds.north}&limit=${limit}&lang=id`;
 
     const res = await fetch(url);
     if (!res.ok) {
@@ -285,10 +280,8 @@ export async function getPOIsInRect(
 export async function getPlaceAtPoint(
   point: Coordinate,
 ): Promise<POI | null> {
-  if (!GEOAPIFY_KEY) return null;
-
   try {
-    const url = `https://api.geoapify.com/v2/places?categories=${encodeURIComponent(DEFAULT_CATEGORIES)}&filter=circle:${point.lng},${point.lat},100&bias=proximity:${point.lng},${point.lat}&limit=3&lang=id&apiKey=${GEOAPIFY_KEY}`;
+    const url = `${POI_PROXY}&categories=${encodeURIComponent(DEFAULT_CATEGORIES)}&filter=circle:${point.lng},${point.lat},100&bias=proximity:${point.lng},${point.lat}&limit=3&lang=id`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json() as {

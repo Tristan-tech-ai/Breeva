@@ -127,6 +127,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
+  // ── Geoapify Places proxy ───────────────────────────────────────────────
+  // The map's POI fetch routes through here instead of the browser hitting Geoapify
+  // directly, so the API key stays server-side (out of the client bundle) and popular
+  // tiles are cached ONCE in Redis for ALL users — conserving finite Geoapify credits.
+  // Thin pass-through: forward the caller's query to Geoapify with the key injected.
+  if (req.query.provider === 'geoapify') {
+    const gkey = process.env.GEOAPIFY_API_KEY || process.env.VITE_GEOAPIFY_API_KEY || '';
+    if (!gkey) return res.status(500).json({ error: 'Geoapify key not configured' });
+
+    const fwd = new URLSearchParams();
+    for (const [k, v] of Object.entries(req.query)) {
+      if (typeof v === 'string' && k !== 'provider' && k !== 'apiKey') fwd.set(k, v);
+    }
+    // Cache key = sorted params WITHOUT the api key (stable across key rotation).
+    const sortedParams = [...fwd.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => `${k}=${v}`).join('&');
+    const gCacheKey = `geoapify:${createHash('sha1').update(sortedParams).digest('hex')}`;
+
+    const gCached = await cacheGet(gCacheKey);
+    if (gCached) {
+      res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800');
+      res.setHeader('X-POI-Cache', 'HIT');
+      return res.status(200).json(gCached);
+    }
+
+    fwd.set('apiKey', gkey);
+    let gResp: Response;
+    try {
+      gResp = await fetchWithTimeout(`https://api.geoapify.com/v2/places?${fwd.toString()}`, 10_000);
+    } catch {
+      return res.status(504).json({ error: 'Geoapify upstream timeout' });
+    }
+    if (!gResp.ok) {
+      const t = (await gResp.text().catch(() => '')).slice(0, 200);
+      return res.status(gResp.status).json({ error: `Geoapify error: ${gResp.status}`, details: t });
+    }
+    const gData = await gResp.json();
+    await cacheSet(gCacheKey, gData, 604_800); // 7 days — POIs change slowly
+    res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800');
+    res.setHeader('X-POI-Cache', 'MISS');
+    return res.status(200).json(gData);
+  }
+
   if (!SEARCHAPI_KEYS.length) {
     return res.status(500).json({ error: 'SearchAPI key not configured' });
   }
