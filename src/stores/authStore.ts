@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { useSettingsStore } from './settingsStore';
 
 // Claim the daily login/streak bonus at most once per app session.
 let dailyBonusClaimed = false;
@@ -25,6 +26,7 @@ export interface UserProfile {
   created_at: string;
   updated_at: string;
   onboarding_completed?: boolean;
+  deletion_scheduled_at?: string | null;
 }
 
 // Helper to call our email API
@@ -379,6 +381,9 @@ export const useAuthStore = create<AuthState>()(
               ({ data: bonus }) => { if (bonus && bonus > 0) get().fetchProfile(); },
               () => {},
             );
+            // First profile load of the session also reconciles settings from cloud
+            // (cloud wins except keys the user changed this session). Fire-and-forget.
+            void useSettingsStore.getState().hydrateFromCloud(user.id);
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to load profile';

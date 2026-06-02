@@ -1,377 +1,507 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import toast from 'react-hot-toast';
 import {
-  Moon, Bell, MapPin, CalendarDays, BarChart3,
-  User, Trash2, Smartphone, FileText, Lock, Globe, Ruler, Contrast,
+  Moon, Bell, CalendarDays, Wind, User, Trash2, Smartphone, FileText, Lock,
+  Globe, Ruler, Contrast, LogOut, Download, RefreshCw, RotateCcw, ShieldAlert,
+  ChevronRight, Loader2, Check, X, Mail,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import PageHeader from '../components/ui/PageHeader';
 import { useAuthStore } from '../stores/authStore';
-import { supabase } from '../lib/supabase';
-import { requestNotificationPermission, isNotificationEnabled, scheduleStreakReminder, scheduleQuestReminder } from '../lib/notifications';
+import { useSettingsStore } from '../stores/settingsStore';
 import { useI18nStore } from '../stores/i18nStore';
+import { supabase } from '../lib/supabase';
+import { requestNotificationPermission } from '../lib/notifications';
 
-interface SettingSection {
-  title: string;
-  items: SettingItem[];
+type Tone = 'active' | 'off' | 'warn';
+function Pill({ tone, children }: { tone: Tone; children: ReactNode }) {
+  const cls =
+    tone === 'active'
+      ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
+      : tone === 'warn'
+      ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
+      : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500';
+  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${cls}`}>{children}</span>;
 }
 
-interface SettingItem {
-  icon: LucideIcon;
-  label: string;
-  description?: string;
-  type: 'toggle' | 'select' | 'link' | 'danger';
-  value?: boolean | string;
-  options?: string[];
-  onSelect?: (v: string) => void;
-  action?: () => void;
+function Toggle({ on, onClick, disabled }: { on: boolean; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); if (!disabled) onClick(); }}
+      disabled={disabled}
+      role="switch"
+      aria-checked={on}
+      className={`w-11 h-6 rounded-full relative transition-colors duration-200 flex-shrink-0 ${
+        on ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'
+      } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+    >
+      <span
+        className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+          on ? 'translate-x-[22px]' : 'translate-x-[2px]'
+        }`}
+      />
+    </button>
+  );
 }
 
-interface Settings {
-  dark_mode: boolean;
-  push_notifications: boolean;
-  location_tracking: boolean;
-  quest_reminders: boolean;
-  anonymous_data: boolean;
-  profile_visible: boolean;
+function Segmented<T extends string>({ value, options, onChange }: {
+  value: T; options: { value: T; label: string }[]; onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 flex-shrink-0">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={(e) => { e.stopPropagation(); onChange(opt.value); }}
+          className={`px-3 py-1.5 text-[11px] font-semibold transition ${
+            value === opt.value
+              ? 'bg-primary-500 text-white'
+              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
-const DEFAULTS: Settings = {
-  dark_mode: false,
-  push_notifications: true,
-  location_tracking: true,
-  quest_reminders: true,
-  anonymous_data: true,
-  profile_visible: true,
-};
+/** One settings row: icon chip + label/desc on the left, control/pill/chevron on the right. */
+function Row({ icon: Icon, label, desc, danger, onClick, right }: {
+  icon: LucideIcon; label: string; desc?: string; danger?: boolean;
+  onClick?: () => void; right?: ReactNode;
+}) {
+  const clickable = !!onClick;
+  return (
+    <div
+      onClick={onClick}
+      className={`w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors ${
+        clickable ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5' : ''
+      }`}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+          danger ? 'bg-red-50 dark:bg-red-900/20' : 'bg-primary-50 dark:bg-primary-900/20'
+        }`}>
+          <Icon className={`w-[18px] h-[18px] ${danger ? 'text-red-500' : 'text-primary-500'}`} strokeWidth={1.9} />
+        </div>
+        <div className="min-w-0">
+          <div className={`text-sm font-semibold ${danger ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>{label}</div>
+          {desc && <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">{desc}</div>}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">{right}</div>
+    </div>
+  );
+}
+
+function Section({ title, children, index, reduce }: {
+  title: string; children: ReactNode; index: number; reduce: boolean;
+}) {
+  return (
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: reduce ? 0 : index * 0.04 }}
+    >
+      <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 px-1">{title}</h3>
+      <div className="glass-card overflow-hidden divide-y divide-gray-100 dark:divide-gray-800/70">{children}</div>
+    </motion.div>
+  );
+}
+
+type ModalKind = null | 'deleteData' | 'reset' | 'clearCache' | 'deleteAccount';
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
-  const { locale, setLocale } = useI18nStore();
-  const [distanceUnit, setDistanceUnit] = useState<string>(() => localStorage.getItem('breeva_distance_unit') || 'km');
-  const [highContrast, setHighContrast] = useState(() => {
-    const saved = localStorage.getItem('breeva_high_contrast') === 'true';
-    if (saved) document.documentElement.classList.add('high-contrast');
-    return saved;
-  });
-  const [settings, setSettings] = useState<Settings>(() => {
-    // Init from localStorage
-    return {
-      dark_mode: document.documentElement.classList.contains('dark'),
-      push_notifications: localStorage.getItem('breeva_push_notifications') !== 'false',
-      location_tracking: localStorage.getItem('breeva_location_tracking') !== 'false',
-      quest_reminders: localStorage.getItem('breeva_quest_reminders') !== 'false',
-      anonymous_data: localStorage.getItem('breeva_anonymous_data') !== 'false',
-      profile_visible: localStorage.getItem('breeva_profile_visible') !== 'false',
-    };
-  });
+  const { user, profile, signOut, fetchProfile } = useAuthStore();
+  const { t } = useI18nStore();
+  const s = useSettingsStore();
+  const setSetting = useSettingsStore((st) => st.set);
+  const reduce = useReducedMotion() ?? false;
 
-  // Fetch from Supabase on mount
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from('user_settings')
-      .select('*')
-      .eq('user_id', user.id)
-      .single()
-      .then(({ data }) => {
-        if (data) {
-          const cloud: Settings = {
-            dark_mode: data.dark_mode ?? DEFAULTS.dark_mode,
-            push_notifications: data.push_notifications ?? DEFAULTS.push_notifications,
-            location_tracking: data.location_tracking ?? DEFAULTS.location_tracking,
-            quest_reminders: data.quest_reminders ?? DEFAULTS.quest_reminders,
-            anonymous_data: data.anonymous_data ?? DEFAULTS.anonymous_data,
-            profile_visible: data.profile_visible ?? DEFAULTS.profile_visible,
-          };
-          setSettings(cloud);
-          // Apply dark mode from cloud
-          document.documentElement.classList.toggle('dark', cloud.dark_mode);
-          // Cache locally
-          for (const [k, v] of Object.entries(cloud)) {
-            localStorage.setItem(`breeva_${k}`, String(v));
-          }
-        }
-      });
-  }, [user]);
+  const [perm, setPerm] = useState<NotificationPermission>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'denied',
+  );
+  const [modal, setModal] = useState<ModalKind>(null);
+  const [busy, setBusy] = useState(false);
 
-  const syncToCloud = useCallback((updated: Settings) => {
-    if (!user) return;
-    supabase
-      .from('user_settings')
-      .upsert({ user_id: user.id, ...updated, updated_at: new Date().toISOString() })
-      .then(() => {});
-  }, [user]);
+  // Delete-account OTP flow state
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpInput, setOtpInput] = useState('');
+  const [otpExpected, setOtpExpected] = useState('');
+  const [otpExpires, setOtpExpires] = useState(0);
+  const [otpError, setOtpError] = useState('');
+  const [scheduledFor, setScheduledFor] = useState<string | null>(null);
 
-  const toggle = async (key: keyof Settings) => {
-    // Special handling for push notifications — request permission
-    if (key === 'push_notifications' && !settings.push_notifications) {
-      const permission = await requestNotificationPermission();
-      if (permission !== 'granted') return; // User denied
+  const closeModalForce = () => {
+    setModal(null);
+    setOtpSent(false); setOtpInput(''); setOtpExpected(''); setOtpError(''); setScheduledFor(null);
+  };
+  const closeModal = () => { if (!busy) closeModalForce(); };
+
+  // ── Toggles ──────────────────────────────────────────────────────
+  const togglePush = async () => {
+    if (!s.push_notifications) {
+      const p = await requestNotificationPermission();
+      setPerm(p);
+      if (p !== 'granted') { toast.error(t('settings.push_denied')); return; }
     }
-
-    setSettings(prev => {
-      const updated = { ...prev, [key]: !prev[key] };
-      // localStorage cache
-      localStorage.setItem(`breeva_${key}`, String(updated[key]));
-      // Side effects
-      if (key === 'dark_mode') {
-        document.documentElement.classList.toggle('dark', updated.dark_mode);
-      }
-      if (key === 'push_notifications' && updated.push_notifications && isNotificationEnabled()) {
-        scheduleStreakReminder();
-        scheduleQuestReminder();
-      }
-      // Sync to cloud (non-blocking)
-      syncToCloud(updated);
-      return updated;
-    });
+    setSetting('push_notifications', !s.push_notifications);
   };
 
-  const sections: SettingSection[] = [
-    {
-      title: 'Appearance',
-      items: [
-        {
-          icon: Moon,
-          label: 'Dark Mode',
-          description: 'Switch between light and dark themes',
-          type: 'toggle',
-          value: settings.dark_mode,
-          action: () => toggle('dark_mode'),
-        },
-        {
-          icon: Contrast,
-          label: 'High Contrast',
-          description: 'Increase text and border contrast for accessibility',
-          type: 'toggle',
-          value: highContrast,
-          action: () => {
-            setHighContrast(prev => {
-              const next = !prev;
-              document.documentElement.classList.toggle('high-contrast', next);
-              localStorage.setItem('breeva_high_contrast', String(next));
-              return next;
-            });
-          },
-        },
-      ],
-    },
-    {
-      title: 'Language & Units',
-      items: [
-        {
-          icon: Globe,
-          label: 'Language',
-          description: locale === 'en' ? 'English' : 'Bahasa Indonesia',
-          type: 'select',
-          value: locale,
-          options: ['en', 'id'],
-          onSelect: (v: string) => setLocale(v as 'en' | 'id'),
-        },
-        {
-          icon: Ruler,
-          label: 'Distance Unit',
-          description: distanceUnit === 'km' ? 'Kilometers' : 'Miles',
-          type: 'select',
-          value: distanceUnit,
-          options: ['km', 'miles'],
-          onSelect: (v: string) => {
-            setDistanceUnit(v);
-            localStorage.setItem('breeva_distance_unit', v);
-          },
-        },
-      ],
-    },
-    {
-      title: 'Notifications',
-      items: [
-        {
-          icon: Bell,
-          label: 'Push Notifications',
-          description: 'Receive walk and quest reminders',
-          type: 'toggle',
-          value: settings.push_notifications,
-          action: () => toggle('push_notifications'),
-        },
-        {
-          icon: MapPin,
-          label: 'Location Updates',
-          description: 'Notify about nearby merchants',
-          type: 'toggle',
-          value: settings.location_tracking,
-          action: () => toggle('location_tracking'),
-        },
-        {
-          icon: CalendarDays,
-          label: 'Quest Reminders',
-          description: 'Daily quest availability alerts',
-          type: 'toggle',
-          value: settings.quest_reminders,
-          action: () => toggle('quest_reminders'),
-        },
-      ],
-    },
-    {
-      title: 'Privacy',
-      items: [
-        {
-          icon: BarChart3,
-          label: 'Anonymous Data',
-          description: 'Share anonymized usage data to improve Breeva',
-          type: 'toggle',
-          value: settings.anonymous_data,
-          action: () => toggle('anonymous_data'),
-        },
-        {
-          icon: User,
-          label: 'Profile Visibility',
-          description: 'Show your profile on leaderboards',
-          type: 'toggle',
-          value: settings.profile_visible,
-          action: () => toggle('profile_visible'),
-        },
-        {
-          icon: Trash2,
-          label: 'Delete My Data',
-          description: 'Permanently delete all your data',
-          type: 'danger',
-          action: () => {
-            if (confirm('Are you sure? This action cannot be undone.')) {
-              // TODO: Implement data deletion
-              alert('Data deletion request submitted.');
-            }
-          },
-        },
-      ],
-    },
-    {
-      title: 'About',
-      items: [
-        {
-          icon: Smartphone,
-          label: 'App Version',
-          description: 'v0.1.0 (Beta)',
-          type: 'link',
-        },
-        {
-          icon: FileText,
-          label: 'Terms of Service',
-          type: 'link',
-          action: () => navigate('/terms'),
-        },
-        {
-          icon: Lock,
-          label: 'Privacy Policy',
-          type: 'link',
-          action: () => navigate('/privacy'),
-        },
-      ],
-    },
-  ];
+  // ── Account actions ──────────────────────────────────────────────
+  const handleExport = async () => {
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.rpc('export_my_data');
+      if (error) throw error;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `breeva-data-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(t('account.export_ok'));
+    } catch {
+      toast.error(t('account.export_fail'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
+
+  const handleReset = async () => {
+    setBusy(true);
+    try {
+      useSettingsStore.getState().resetToDefaults();
+      toast.success(t('account.reset_ok'));
+      closeModalForce();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleClearCache = async () => {
+    setBusy(true);
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      try {
+        const reg = await navigator.serviceWorker?.getRegistration();
+        await reg?.update();
+      } catch { /* ignore */ }
+      toast.success(t('account.clear_cache_ok'));
+      setTimeout(() => window.location.reload(), 600);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteData = async () => {
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc('delete_my_data');
+      if (error) throw error;
+      await fetchProfile();
+      toast.success(t('account.delete_data_ok'));
+      closeModalForce();
+    } catch {
+      toast.error(t('common.error'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ── Delete account: client OTP (mirrors signup) → schedule 30-day grace ──
+  const sendDeleteOtp = async () => {
+    if (!user?.email) { toast.error(t('common.error')); return; }
+    setBusy(true); setOtpError('');
+    try {
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const res = await fetch('/api/auth/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'verification', email: user.email, name: profile?.full_name || 'there', otp: code }),
+      });
+      if (!res.ok) throw new Error('send failed');
+      setOtpExpected(code);
+      setOtpExpires(Date.now() + 15 * 60 * 1000);
+      setOtpSent(true);
+    } catch {
+      toast.error(t('account.code_fail'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (Date.now() > otpExpires) { setOtpError(t('account.code_expired')); return; }
+    if (otpInput.trim() !== otpExpected) { setOtpError(t('account.code_invalid')); return; }
+    setBusy(true); setOtpError('');
+    try {
+      const { data, error } = await supabase.rpc('request_account_deletion');
+      if (error) throw error;
+      setScheduledFor(typeof data === 'string' ? data : null);
+    } catch {
+      toast.error(t('common.error'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ── Derived status ───────────────────────────────────────────────
+  const pushPill: { tone: Tone; label: string } = !s.push_notifications
+    ? { tone: 'off', label: t('status.off') }
+    : perm !== 'granted'
+    ? { tone: 'warn', label: t('status.needs_permission') }
+    : { tone: 'active', label: t('status.active') };
+
+  const fmtDate = (iso: string) => {
+    try { return new Date(iso).toLocaleDateString(s.language === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' }); }
+    catch { return iso; }
+  };
 
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24">
-      {/* Header */}
-      <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between">
-        <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h1 className="text-base font-semibold text-gray-900 dark:text-white">Settings</h1>
-        <div className="w-6" />
-      </div>
+      <PageHeader title={t('settings.title')} onBack={() => navigate(-1)} />
 
-      <div className="max-w-2xl mx-auto px-4 pt-4 pb-12 space-y-6">
-        {sections.map((section, sIdx) => (
+      <div className="max-w-2xl mx-auto px-4 pt-4 pb-12 space-y-5">
+        {/* Grace banner */}
+        {profile?.deletion_scheduled_at && (
           <motion.div
-            key={section.title}
-            initial={{ opacity: 0, y: 10 }}
+            initial={reduce ? false : { opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: sIdx * 0.05 }}
+            className="rounded-2xl border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 p-4 flex items-start gap-3"
           >
-            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-1">
-              {section.title}
-            </h3>
-            <div className="glass-card overflow-hidden divide-y divide-gray-100 dark:divide-gray-800">
-              {section.items.map((item) => (
-                <button
-                  key={item.label}
-                  onClick={item.action}
-                  className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white dark:bg-gray-900/50 dark:hover:bg-white dark:bg-gray-900/5 transition-colors text-left"
-                >
-                  <div className="flex items-center gap-3">
-                    {(() => { const Icon = item.icon; return <Icon className={`w-5 h-5 ${item.type === 'danger' ? 'text-red-400' : 'text-primary-500'}`} strokeWidth={1.8} />; })()}
-                    <div>
-                      <div className={`text-sm font-medium ${
-                        item.type === 'danger'
-                          ? 'text-red-500'
-                          : 'text-gray-900 dark:text-white'
-                      }`}>
-                        {item.label}
-                      </div>
-                      {item.description && (
-                        <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-                          {item.description}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {item.type === 'toggle' && (
-                    <div
-                      className={`w-11 h-6 rounded-full relative transition-colors duration-200 ${
-                        item.value
-                          ? 'bg-primary-500'
-                          : 'bg-gray-300 dark:bg-gray-600'
-                      }`}
-                    >
-                      <div
-                        className={`absolute top-0.5 w-5 h-5 rounded-full bg-white dark:bg-gray-900 shadow-sm transition-transform duration-200 ${
-                          item.value ? 'translate-x-[22px]' : 'translate-x-[2px]'
-                        }`}
-                      />
-                    </div>
-                  )}
-
-                  {item.type === 'select' && item.options && (
-                    <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                      {item.options.map(opt => (
-                        <button
-                          key={opt}
-                          onClick={(e) => { e.stopPropagation(); item.onSelect?.(opt); }}
-                          className={`px-2.5 py-1 text-[10px] font-medium transition uppercase ${
-                            item.value === opt
-                              ? 'bg-primary-500 text-white'
-                              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                          }`}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {item.type === 'link' && !item.action && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{item.description}</span>
-                  )}
-
-                  {item.type === 'link' && item.action && (
-                    <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  )}
-                </button>
-              ))}
+            <ShieldAlert className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-red-700 dark:text-red-300">{t('account.scheduled_title')}</p>
+              <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-0.5">
+                {t('account.scheduled_until', { date: fmtDate(profile.deletion_scheduled_at) })}
+              </p>
+              <button
+                onClick={async () => {
+                  const { error } = await supabase.rpc('cancel_account_deletion');
+                  if (!error) { await fetchProfile(); toast.success(t('account.cancel_ok')); }
+                  else toast.error(t('common.error'));
+                }}
+                className="mt-2 text-xs font-bold text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                {t('account.cancel_deletion')}
+              </button>
             </div>
           </motion.div>
-        ))}
+        )}
+
+        {/* Appearance */}
+        <Section title={t('settings.appearance')} index={0} reduce={reduce}>
+          <Row icon={Moon} label={t('settings.dark_mode')} desc={t('settings.dark_mode_desc')}
+            right={<Toggle on={s.dark_mode} onClick={() => setSetting('dark_mode', !s.dark_mode)} />} />
+          <Row icon={Contrast} label={t('settings.high_contrast')} desc={t('settings.high_contrast_desc')}
+            right={<Toggle on={s.high_contrast} onClick={() => setSetting('high_contrast', !s.high_contrast)} />} />
+        </Section>
+
+        {/* Language & Units */}
+        <Section title={t('settings.lang_units')} index={1} reduce={reduce}>
+          <Row icon={Globe} label={t('settings.language')} desc={t('settings.language_desc')}
+            right={<Segmented value={s.language} onChange={(v) => setSetting('language', v)}
+              options={[{ value: 'id', label: 'ID' }, { value: 'en', label: 'EN' }]} />} />
+          <Row icon={Ruler} label={t('settings.distance_unit')} desc={t('settings.distance_unit_desc')}
+            right={<Segmented value={s.distance_unit} onChange={(v) => setSetting('distance_unit', v)}
+              options={[{ value: 'km', label: t('common.km') }, { value: 'miles', label: t('common.miles') }]} />} />
+        </Section>
+
+        {/* Notifications */}
+        <Section title={t('settings.notifications')} index={2} reduce={reduce}>
+          <Row icon={Bell} label={t('settings.push')} desc={t('settings.push_desc')}
+            right={<><Pill tone={pushPill.tone}>{pushPill.label}</Pill><Toggle on={s.push_notifications} onClick={togglePush} /></>} />
+          <Row icon={CalendarDays} label={t('settings.quest_reminders')} desc={t('settings.quest_reminders_desc')}
+            right={<><Pill tone={s.push_notifications ? (s.quest_reminders ? 'active' : 'off') : 'warn'}>
+              {s.push_notifications ? (s.quest_reminders ? t('status.active') : t('status.off')) : t('status.requires_push')}
+            </Pill><Toggle on={s.quest_reminders} disabled={!s.push_notifications} onClick={() => setSetting('quest_reminders', !s.quest_reminders)} /></>} />
+        </Section>
+
+        {/* Privacy */}
+        <Section title={t('settings.privacy')} index={3} reduce={reduce}>
+          <Row icon={Wind} label={t('settings.vayu_trace')} desc={t('settings.vayu_trace_desc')}
+            right={<Toggle on={s.anonymous_data} onClick={() => setSetting('anonymous_data', !s.anonymous_data)} />} />
+          <Row icon={User} label={t('settings.profile_visible')} desc={t('settings.profile_visible_desc')}
+            right={<><Pill tone={s.profile_visible ? 'active' : 'off'}>{s.profile_visible ? t('status.visible') : t('status.hidden')}</Pill>
+              <Toggle on={s.profile_visible} onClick={() => setSetting('profile_visible', !s.profile_visible)} /></>} />
+          <Row icon={Lock} label={t('settings.privacy_policy')} onClick={() => navigate('/privacy')}
+            right={<ChevronRight className="w-4 h-4 text-gray-400" />} />
+        </Section>
+
+        {/* Account */}
+        <Section title={t('settings.account')} index={4} reduce={reduce}>
+          <Row icon={User} label={t('account.edit_profile')} desc={t('account.edit_profile_desc')}
+            onClick={() => navigate('/profile/edit')} right={<ChevronRight className="w-4 h-4 text-gray-400" />} />
+          <Row icon={Download} label={t('account.export')} desc={t('account.export_desc')}
+            onClick={busy ? undefined : handleExport}
+            right={busy ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : <ChevronRight className="w-4 h-4 text-gray-400" />} />
+          <Row icon={RefreshCw} label={t('account.clear_cache')} desc={t('account.clear_cache_desc')}
+            onClick={() => setModal('clearCache')} right={<ChevronRight className="w-4 h-4 text-gray-400" />} />
+          <Row icon={RotateCcw} label={t('account.reset')} desc={t('account.reset_desc')}
+            onClick={() => setModal('reset')} right={<ChevronRight className="w-4 h-4 text-gray-400" />} />
+          <Row icon={LogOut} label={t('account.sign_out')} onClick={handleSignOut}
+            right={<ChevronRight className="w-4 h-4 text-gray-400" />} />
+          <Row icon={Trash2} label={t('account.delete_data')} desc={t('account.delete_data_desc')} danger
+            onClick={() => setModal('deleteData')} right={<ChevronRight className="w-4 h-4 text-red-300" />} />
+          <Row icon={ShieldAlert} label={t('account.delete_account')} desc={t('account.delete_account_desc')} danger
+            onClick={() => setModal('deleteAccount')} right={<ChevronRight className="w-4 h-4 text-red-300" />} />
+        </Section>
+
+        {/* About */}
+        <Section title={t('settings.about')} index={5} reduce={reduce}>
+          <Row icon={Smartphone} label={t('settings.version')} right={<span className="text-xs text-gray-400">v0.1.0</span>} />
+          <Row icon={FileText} label={t('settings.terms')} onClick={() => navigate('/terms')}
+            right={<ChevronRight className="w-4 h-4 text-gray-400" />} />
+        </Section>
       </div>
 
+      {/* ── Modals ── */}
+      <AnimatePresence>
+        {modal && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          >
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeModal} />
+            <motion.div
+              initial={reduce ? false : { y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={reduce ? { opacity: 0 } : { y: 40, opacity: 0 }}
+              className="relative w-full sm:max-w-md bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl safe-area-bottom"
+            >
+              {/* Simple confirms */}
+              {modal === 'clearCache' && (
+                <Confirm icon={RefreshCw} title={t('account.clear_cache_title')} body={t('account.clear_cache_explain')}
+                  cancel={t('common.cancel')} confirm={t('account.clear_cache')} busy={busy}
+                  onCancel={closeModal} onConfirm={handleClearCache} />
+              )}
+              {modal === 'reset' && (
+                <Confirm icon={RotateCcw} title={t('account.reset_title')} body={t('account.reset_explain')}
+                  cancel={t('common.cancel')} confirm={t('account.reset')} busy={busy}
+                  onCancel={closeModal} onConfirm={handleReset} />
+              )}
+              {modal === 'deleteData' && (
+                <Confirm icon={Trash2} danger title={t('account.delete_data_title')} body={t('account.delete_data_explain')}
+                  cancel={t('common.cancel')} confirm={t('account.delete_data')} busy={busy}
+                  onCancel={closeModal} onConfirm={handleDeleteData} />
+              )}
+
+              {/* Delete account — OTP + grace */}
+              {modal === 'deleteAccount' && (
+                <div>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-11 h-11 rounded-2xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
+                      <ShieldAlert className="w-5 h-5 text-red-500" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('account.delete_account')}</h3>
+                  </div>
+
+                  {scheduledFor ? (
+                    <div className="text-center py-2">
+                      <div className="w-14 h-14 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mx-auto mb-3">
+                        <Check className="w-7 h-7 text-emerald-500" />
+                      </div>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{t('account.scheduled_title')}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-5">
+                        {t('account.scheduled_until', { date: fmtDate(scheduledFor) })}
+                      </p>
+                      <button onClick={async () => { closeModalForce(); await handleSignOut(); }}
+                        className="w-full py-3 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm">
+                        {t('account.sign_out')}
+                      </button>
+                    </div>
+                  ) : !otpSent ? (
+                    <>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-4">{t('account.delete_account_explain')}</p>
+                      <div className="flex gap-2">
+                        <button onClick={closeModal} disabled={busy}
+                          className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold text-sm">
+                          {t('common.cancel')}
+                        </button>
+                        <button onClick={sendDeleteOtp} disabled={busy}
+                          className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-60">
+                          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                          {t('account.send_code')}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-1">
+                        {t('account.enter_code', { email: user?.email || '' })}
+                      </p>
+                      <input
+                        value={otpInput}
+                        onChange={(e) => { setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6)); setOtpError(''); }}
+                        inputMode="numeric" placeholder="000000" maxLength={6}
+                        className="w-full text-center text-2xl font-bold tracking-[0.5em] py-3 my-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-400"
+                      />
+                      {otpError && <p className="text-xs text-red-500 mb-2 flex items-center gap-1"><X className="w-3 h-3" />{otpError}</p>}
+                      <div className="flex gap-2 mt-1">
+                        <button onClick={closeModal} disabled={busy}
+                          className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold text-sm">
+                          {t('common.cancel')}
+                        </button>
+                        <button onClick={confirmDeleteAccount} disabled={busy || otpInput.length < 6}
+                          className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-60">
+                          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                          {t('account.confirm_delete')}
+                        </button>
+                      </div>
+                      <button onClick={sendDeleteOtp} disabled={busy}
+                        className="w-full mt-2 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        {t('account.resend_code')}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <BottomNavigation />
+    </div>
+  );
+}
+
+function Confirm({ icon: Icon, title, body, cancel, confirm, onCancel, onConfirm, busy, danger }: {
+  icon: LucideIcon; title: string; body: string; cancel: string; confirm: string;
+  onCancel: () => void; onConfirm: () => void; busy: boolean; danger?: boolean;
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${danger ? 'bg-red-50 dark:bg-red-900/20' : 'bg-primary-50 dark:bg-primary-900/20'}`}>
+          <Icon className={`w-5 h-5 ${danger ? 'text-red-500' : 'text-primary-500'}`} />
+        </div>
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
+      </div>
+      <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-5">{body}</p>
+      <div className="flex gap-2">
+        <button onClick={onCancel} disabled={busy}
+          className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold text-sm">{cancel}</button>
+        <button onClick={onConfirm} disabled={busy}
+          className={`flex-1 py-3 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-60 ${danger ? 'bg-red-500 hover:bg-red-600' : 'bg-primary-500 hover:bg-primary-600'}`}>
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}{confirm}
+        </button>
+      </div>
     </div>
   );
 }

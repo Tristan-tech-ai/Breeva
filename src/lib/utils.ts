@@ -23,11 +23,25 @@ export function formatLocalDateYYYYMMDD(date: Date = new Date()): string {
 /**
  * Format distance in meters to human readable string
  */
-export function formatDistance(meters: number): string {
+export function formatDistance(meters: number, unit: 'km' | 'miles' = 'km'): string {
+  if (unit === 'miles') {
+    const miles = meters / 1609.344;
+    // Sub-tenth-mile distances read better as feet (mirrors the metric "m" branch).
+    if (miles < 0.1) return `${Math.round(meters / 0.3048)} ft`;
+    return `${miles.toFixed(2)} mi`;
+  }
   if (meters < 1000) {
     return `${Math.round(meters)} m`;
   }
   return `${(meters / 1000).toFixed(2)} km`;
+}
+
+/**
+ * Format kilometers (the unit walks are stored in) honoring a distance-unit pref.
+ * Convenience for call sites that already hold km rather than meters.
+ */
+export function formatKm(km: number, unit: 'km' | 'miles' = 'km'): string {
+  return formatDistance(km * 1000, unit);
 }
 
 /**

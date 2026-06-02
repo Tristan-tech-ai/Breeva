@@ -1,11 +1,15 @@
 import { create } from 'zustand';
+import { useSettingsStore } from './settingsStore';
 
 type Locale = 'en' | 'id';
+
+type TVars = Record<string, string | number>;
 
 interface I18nState {
   locale: Locale;
   setLocale: (locale: Locale) => void;
-  t: (key: string) => string;
+  /** Translate a key with id→en→key fallback. Optional {var} interpolation. */
+  t: (key: string, vars?: TVars) => string;
 }
 
 const translations: Record<Locale, Record<string, string>> = {
@@ -52,6 +56,56 @@ const translations: Record<Locale, Record<string, string>> = {
     'settings.language_desc': 'Choose your preferred language',
     'settings.distance_unit': 'Distance Unit',
     'settings.distance_unit_desc': 'Choose km or miles',
+    'settings.title': 'Settings',
+    'settings.high_contrast': 'High Contrast',
+    'settings.high_contrast_desc': 'Increase contrast for readability',
+    'settings.lang_units': 'Language & Units',
+    'settings.push_denied': 'Notification permission was denied',
+    'settings.vayu_trace': 'VAYU Auto-trace',
+    'settings.vayu_trace_desc': 'Share anonymous movement traces while walking to improve the VAYU air map (+5 EcoPoints/session).',
+    'settings.account': 'Account',
+    'status.active': 'Active',
+    'status.off': 'Off',
+    'status.needs_permission': 'Needs permission',
+    'status.requires_push': 'Requires push',
+    'status.visible': 'Visible',
+    'status.hidden': 'Hidden',
+    'account.edit_profile': 'Edit Profile',
+    'account.edit_profile_desc': 'Name, photo and details',
+    'account.export': 'Export My Data',
+    'account.export_desc': 'Download all your data as JSON',
+    'account.export_ok': 'Data exported',
+    'account.export_fail': 'Export failed, please try again',
+    'account.clear_cache': 'Clear Cache',
+    'account.clear_cache_desc': 'Free up space and check for updates',
+    'account.clear_cache_title': 'Clear cache?',
+    'account.clear_cache_explain': 'Cached maps and assets will be cleared and the app will reload. Your account and settings stay intact.',
+    'account.clear_cache_ok': 'Cache cleared',
+    'account.reset': 'Reset Settings',
+    'account.reset_desc': 'Restore all settings to defaults',
+    'account.reset_title': 'Reset settings?',
+    'account.reset_explain': 'All preferences return to their defaults. Your account and walk data are not affected.',
+    'account.reset_ok': 'Settings reset',
+    'account.sign_out': 'Sign Out',
+    'account.delete_data': 'Delete My Data',
+    'account.delete_data_desc': 'Erase walks, points and history — keep account',
+    'account.delete_data_title': 'Delete your data?',
+    'account.delete_data_explain': 'This permanently erases your walks, points, rewards, reviews and history. Your account stays active and starts fresh. This cannot be undone.',
+    'account.delete_data_ok': 'Your data has been deleted',
+    'account.delete_account': 'Delete Account',
+    'account.delete_account_desc': 'Schedule permanent account deletion',
+    'account.delete_account_explain': 'We will email you a 6-digit code to confirm. After confirming, your account is scheduled for deletion in 30 days — sign in again any time before then to cancel.',
+    'account.send_code': 'Send Code',
+    'account.code_fail': 'Could not send the code, please try again',
+    'account.code_expired': 'Code expired, please resend',
+    'account.code_invalid': 'Invalid code',
+    'account.enter_code': 'Enter the 6-digit code sent to {email}',
+    'account.confirm_delete': 'Confirm',
+    'account.resend_code': 'Resend code',
+    'account.scheduled_title': 'Account deletion scheduled',
+    'account.scheduled_until': 'Your account will be deleted on {date}. Sign in before then to cancel.',
+    'account.cancel_ok': 'Deletion cancelled',
+    'account.cancel_deletion': 'Cancel deletion',
     'common.km': 'km',
     'common.miles': 'miles',
     'common.save': 'Save',
@@ -117,6 +171,56 @@ const translations: Record<Locale, Record<string, string>> = {
     'settings.language_desc': 'Pilih bahasa yang kamu inginkan',
     'settings.distance_unit': 'Satuan Jarak',
     'settings.distance_unit_desc': 'Pilih km atau mil',
+    'settings.title': 'Pengaturan',
+    'settings.high_contrast': 'Kontras Tinggi',
+    'settings.high_contrast_desc': 'Tingkatkan kontras agar lebih mudah dibaca',
+    'settings.lang_units': 'Bahasa & Satuan',
+    'settings.push_denied': 'Izin notifikasi ditolak',
+    'settings.vayu_trace': 'VAYU Auto-trace',
+    'settings.vayu_trace_desc': 'Bagikan jejak pergerakan anonim saat berjalan untuk menyempurnakan peta udara VAYU (+5 EcoPoints/sesi).',
+    'settings.account': 'Akun',
+    'status.active': 'Aktif',
+    'status.off': 'Nonaktif',
+    'status.needs_permission': 'Butuh izin',
+    'status.requires_push': 'Butuh push',
+    'status.visible': 'Terlihat',
+    'status.hidden': 'Tersembunyi',
+    'account.edit_profile': 'Edit Profil',
+    'account.edit_profile_desc': 'Nama, foto, dan detail',
+    'account.export': 'Ekspor Data Saya',
+    'account.export_desc': 'Unduh semua data kamu sebagai JSON',
+    'account.export_ok': 'Data diekspor',
+    'account.export_fail': 'Ekspor gagal, coba lagi',
+    'account.clear_cache': 'Bersihkan Cache',
+    'account.clear_cache_desc': 'Kosongkan ruang dan cek pembaruan',
+    'account.clear_cache_title': 'Bersihkan cache?',
+    'account.clear_cache_explain': 'Peta dan aset yang tersimpan akan dibersihkan dan aplikasi dimuat ulang. Akun dan pengaturanmu tetap aman.',
+    'account.clear_cache_ok': 'Cache dibersihkan',
+    'account.reset': 'Reset Pengaturan',
+    'account.reset_desc': 'Kembalikan semua pengaturan ke default',
+    'account.reset_title': 'Reset pengaturan?',
+    'account.reset_explain': 'Semua preferensi kembali ke default. Akun dan data jalanmu tidak terpengaruh.',
+    'account.reset_ok': 'Pengaturan direset',
+    'account.sign_out': 'Keluar',
+    'account.delete_data': 'Hapus Data Saya',
+    'account.delete_data_desc': 'Hapus jalan, poin & riwayat — akun tetap ada',
+    'account.delete_data_title': 'Hapus data kamu?',
+    'account.delete_data_explain': 'Ini menghapus permanen jalan, poin, hadiah, ulasan, dan riwayatmu. Akun tetap aktif dan dimulai dari awal. Tidak bisa dibatalkan.',
+    'account.delete_data_ok': 'Datamu telah dihapus',
+    'account.delete_account': 'Hapus Akun',
+    'account.delete_account_desc': 'Jadwalkan penghapusan akun permanen',
+    'account.delete_account_explain': 'Kami akan mengirim kode 6 digit ke email untuk konfirmasi. Setelah dikonfirmasi, akunmu dijadwalkan terhapus dalam 30 hari — masuk lagi kapan saja sebelum itu untuk membatalkan.',
+    'account.send_code': 'Kirim Kode',
+    'account.code_fail': 'Gagal mengirim kode, coba lagi',
+    'account.code_expired': 'Kode kedaluwarsa, kirim ulang',
+    'account.code_invalid': 'Kode salah',
+    'account.enter_code': 'Masukkan kode 6 digit yang dikirim ke {email}',
+    'account.confirm_delete': 'Konfirmasi',
+    'account.resend_code': 'Kirim ulang kode',
+    'account.scheduled_title': 'Penghapusan akun dijadwalkan',
+    'account.scheduled_until': 'Akunmu akan dihapus pada {date}. Masuk sebelum itu untuk membatalkan.',
+    'account.cancel_ok': 'Penghapusan dibatalkan',
+    'account.cancel_deletion': 'Batalkan penghapusan',
     'common.km': 'km',
     'common.miles': 'mil',
     'common.save': 'Simpan',
@@ -141,16 +245,28 @@ const translations: Record<Locale, Record<string, string>> = {
   },
 };
 
-export const useI18nStore = create<I18nState>()((set, get) => ({
-  locale: (localStorage.getItem('breeva_language') as Locale) || 'en',
+export const useI18nStore = create<I18nState>()((_set, get) => ({
+  // `language` is owned by the unified settingsStore (persisted locally + cloud-synced);
+  // i18nStore mirrors it so t() re-renders on change.
+  locale: useSettingsStore.getState().language,
 
   setLocale: (locale: Locale) => {
-    localStorage.setItem('breeva_language', locale);
-    set({ locale });
+    useSettingsStore.getState().set('language', locale);
   },
 
-  t: (key: string) => {
+  t: (key: string, vars?: TVars) => {
     const { locale } = get();
-    return translations[locale]?.[key] || translations.en[key] || key;
+    let str = translations[locale]?.[key] || translations.en[key] || key;
+    if (vars) {
+      for (const k of Object.keys(vars)) {
+        str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), String(vars[k]));
+      }
+    }
+    return str;
   },
 }));
+
+// Keep i18n locale in lockstep with the unified settings store.
+useSettingsStore.subscribe((s) => {
+  if (useI18nStore.getState().locale !== s.language) useI18nStore.setState({ locale: s.language });
+});

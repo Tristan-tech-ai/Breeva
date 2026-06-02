@@ -4,6 +4,7 @@ import type { Route } from '../../types';
 import { getAQIColor } from './LeafletMap';
 import RouteForecastBadge from './RouteForecastBadge';
 import { computeDose, type UserExposureProfile } from '../../lib/exposure';
+import { useDistanceUnit, type DistanceUnit } from '../../stores/settingsStore';
 
 // At-a-glance teaser uses a default adult-walker; the /paparan page lets users customize age/mode/health.
 const TEASER_PROFILE: UserExposureProfile = { age_bucket: 'adult', mode: 'walk_slow', health_sensitive: false };
@@ -36,7 +37,12 @@ function formatDuration(seconds: number): string {
   return `${hrs}h ${rem}m`;
 }
 
-function formatDistance(meters: number): string {
+function formatDistance(meters: number, unit: DistanceUnit = 'km'): string {
+  if (unit === 'miles') {
+    const mi = meters / 1609.344;
+    if (mi < 0.1) return `${Math.round(meters / 0.3048)}ft`;
+    return `${mi.toFixed(1)}mi`;
+  }
   if (meters < 1000) return `${Math.round(meters)}m`;
   return `${(meters / 1000).toFixed(1)}km`;
 }
@@ -53,6 +59,7 @@ function getAQILabel(aqi: number): string {
 export default function RouteCard({ route, isSelected, onSelect, isRecommended }: RouteCardProps) {
   const info = routeLabels[route.route_type] || routeLabels.balanced;
   const { Icon } = info;
+  const distanceUnit = useDistanceUnit();
   const traffic = route.traffic_level ? trafficConfig[route.traffic_level] : null;
   // Layer 3 teaser: inhaled-dose estimate from the route's v2 per-segment PM2.5 (default adult walker).
   const exposure = route.vayu_score?.segments?.length
@@ -108,7 +115,7 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
         <div className="flex items-center gap-1.5">
           <RouteIcon className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
           <span className="text-sm text-gray-600 dark:text-gray-300">
-            {formatDistance(route.distance_meters)}
+            {formatDistance(route.distance_meters, distanceUnit)}
           </span>
         </div>
         <div className="flex items-center gap-1.5">

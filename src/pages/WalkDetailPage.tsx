@@ -8,6 +8,7 @@ import BottomNavigation from '../components/layout/BottomNavigation';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { formatDistance, formatDuration, formatNumber } from '../lib/utils';
+import { useDistanceUnit } from '../stores/settingsStore';
 
 interface WalkDetail {
   id: string;
@@ -44,6 +45,7 @@ export default function WalkDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const distanceUnit = useDistanceUnit();
 
   const [walk, setWalk] = useState<WalkDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -125,7 +127,7 @@ export default function WalkDetailPage() {
   // Share walk stats
   const handleShare = async () => {
     if (!walk) return;
-    const text = `🚶 Breeva Walk\n📏 ${formatDistance(walk.distance_meters)}\n⏱ ${formatDuration(walk.duration_seconds)}\n🌱 ${(walk.co2_saved_grams / 1000).toFixed(2)} kg CO₂ saved\n⭐ +${formatNumber(walk.ecopoints_earned)} EcoPoints\n\nTrack your eco-impact at breeva.site`;
+    const text = `🚶 Breeva Walk\n📏 ${formatDistance(walk.distance_meters, distanceUnit)}\n⏱ ${formatDuration(walk.duration_seconds)}\n🌱 ${(walk.co2_saved_grams / 1000).toFixed(2)} kg CO₂ saved\n⭐ +${formatNumber(walk.ecopoints_earned)} EcoPoints\n\nTrack your eco-impact at breeva.site`;
     try {
       if (navigator.share) {
         await navigator.share({ title: 'My Breeva Walk', text });
@@ -166,7 +168,7 @@ export default function WalkDetailPage() {
     // Stats
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 48px system-ui, sans-serif';
-    ctx.fillText(formatDistance(walk.distance_meters), 40, 150);
+    ctx.fillText(formatDistance(walk.distance_meters, distanceUnit), 40, 150);
 
     ctx.font = '16px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
@@ -389,7 +391,7 @@ ${points}
         {/* Stats Grid */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="grid grid-cols-2 gap-3">
           <div className="glass-card p-3.5 text-center">
-            <p className="text-lg font-bold text-gray-900 dark:text-white">{formatDistance(walk.distance_meters)}</p>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">{formatDistance(walk.distance_meters, distanceUnit)}</p>
             <p className="text-[10px] text-gray-400 dark:text-gray-500">Distance</p>
           </div>
           <div className="glass-card p-3.5 text-center">

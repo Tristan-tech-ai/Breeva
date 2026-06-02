@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
 import type { LucideIcon } from 'lucide-react';
+import { useIsDark } from '../../stores/settingsStore';
 
 interface HeatmapCategory {
   key: string;
@@ -180,17 +181,10 @@ function HeatmapTooltip({ anchor, value, date, unit }: {
 export default function StreakHeatmap({ categories, weeks: weeksProp }: StreakHeatmapProps) {
   const [activeKey, setActiveKey] = useState(categories[0]?.key || '');
   const [hoveredCell, setHoveredCell] = useState<{ cell: Cell; rect: DOMRect } | null>(null);
-  const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
+  // Reactive dark mode from the unified settings store (no DOM MutationObserver).
+  const isDark = useIsDark();
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoWeeks, setAutoWeeks] = useState(weeksProp ?? 20);
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setIsDark(document.documentElement.classList.contains('dark'));
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
 
   // Auto-calculate weeks to fill container width
   useEffect(() => {

@@ -5,7 +5,8 @@ import { Footprints, Leaf, MapPin, Clock, Coins } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
-import { formatDistance, formatDuration, formatNumber } from '../lib/utils';
+import { formatDuration, formatNumber } from '../lib/utils';
+import { useFormatDistance } from '../stores/settingsStore';
 import { co2KgFromGrams } from '../lib/metrics';
 import { cacheCollection, getCachedCollection } from '../lib/offline-db';
 import BottomNavigation from '../components/layout/BottomNavigation';
@@ -49,6 +50,7 @@ function Cell({ Icon, value, label, accent }: { Icon: LucideIcon; value: string;
 export default function WalkHistoryPage() {
   const { user, profile } = useAuthStore();
   const navigate = useNavigate();
+  const fmtDist = useFormatDistance();
   const [walks, setWalks] = useState<Walk[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
@@ -190,7 +192,7 @@ export default function WalkHistoryPage() {
                           )}
                         </div>
                         <div className="grid grid-cols-4 gap-2 text-center">
-                          <Cell Icon={MapPin} accent="text-emerald-500" value={formatDistance(walk.distance_meters)} label="Jarak" />
+                          <Cell Icon={MapPin} accent="text-emerald-500" value={fmtDist(walk.distance_meters)} label="Jarak" />
                           <Cell Icon={Clock} accent="text-blue-500" value={formatDuration(walk.duration_seconds)} label="Durasi" />
                           <Cell Icon={Leaf} accent="text-green-500" value={`${co2KgFromGrams(walk.co2_saved_grams ?? 0).toFixed(1)}kg`} label="CO₂" />
                           <Cell Icon={Coins} accent="text-amber-500" value={`+${formatNumber(walk.ecopoints_earned)}`} label="Poin" />

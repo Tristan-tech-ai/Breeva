@@ -6,14 +6,11 @@ import { initNotifications } from './lib/notifications'
 import { initOfflineQueueSync } from './lib/offline-queue'
 import { initPwaLifecycle } from './lib/pwa'
 import { initWebVitals } from './lib/web-vitals'
+import { useSettingsStore } from './stores/settingsStore'
 
-// Force light mode as default. Only enable dark if user explicitly toggled it.
-// This overrides device-level dark mode (prefers-color-scheme: dark).
-const userExplicitlySetDark = localStorage.getItem('breeva_dark_mode') === 'true';
-document.documentElement.classList.remove('dark');
-if (userExplicitlySetDark) {
-  document.documentElement.classList.add('dark');
-}
+// Apply theme (dark + high-contrast) from the unified settings store before first paint.
+// The store reads localStorage synchronously (no FOUC); cloud hydrate reconciles after login.
+useSettingsStore.getState().applyTheme();
 
 // Self-heal stale lazy-chunk 404s after a deploy. A tab loaded before a new deploy
 // references old asset hashes (e.g. assets/es6-OLD.js) that no longer exist, so the
