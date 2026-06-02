@@ -3261,14 +3261,18 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
 
     const byDuration = [...filteredCandidates].sort((a, b) => a.duration_seconds - b.duration_seconds);
     const byClean = [...filteredCandidates].sort((a, b) => cleanCost(a) - cleanCost(b));
-    // F1: for car-family, force fastest = Valhalla primary (mode-recommended route).
-    // Reason: residential alternates often have lower duration than arterial primary in
-    // Indonesia (light traffic), causing primary to lose byDuration sort.
-    // For non-car-family (primaryScoredIndex===null), this falls back to byDuration[0] (original).
-    const primaryCandidate = primaryScoredIndex !== null
-      ? filteredCandidates.find((c) => c.index === primaryScoredIndex)
-      : null;
-    const fastestRoute = primaryCandidate ?? byDuration[0];
+    // Label "fastest" by ACTUAL metric: the genuine minimum-duration route (cleanest = minimum TRAP via
+    // byClean[0] below; balanced = the middle). This keeps the three options on a monotonic
+    // "faster = dirtier" frontier, so the card shown as "fastest" is never slower than balanced/cleanest.
+    //
+    // Was "F1": for car-family modes it forced fastest = the Valhalla mode-recommended primary. When the
+    // primary was not the genuine quickest, a faster alternate got labelled balanced/cleanest, surfacing
+    // as the "fastest is slower than cleanest" inversion (visible on motor/driving with 3 distinct routes;
+    // pedestrian was unaffected because preservePrimary is false there). Valhalla-C ETAs are honest, so
+    // the true min-duration route IS the correct "fastest"; keep cars off narrow gang roads via the
+    // routing cost, not a misleading label. primaryScoredIndex is still used below to exempt the
+    // recommended route from the redundant-middle drop.
+    const fastestRoute = byDuration[0];
     // Cleanest = lowest TRAP dose — but only present it as a DISTINCT option when it's genuinely worth
     // it: ≥5% lower inhaled dose OR ≥15% cleaner air (avg traffic concentration). A much-longer route
     // for a trivial benefit (e.g. +30% time for −1% dose) is a bad option — collapse to fastest so the
