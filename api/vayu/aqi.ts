@@ -1,5 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { latLngToCell } from 'h3-js';
+// NOTE: h3-js is imported LAZILY inside handleForecastMode (not here at the top).
+// Reason: prebuilt deploys on Windows/pnpm can drop the top-level node_modules/h3-js
+// symlink → ERR_MODULE_NOT_FOUND would crash the WHOLE function (incl. current AQI)
+// on every request. Lazy-loading isolates that risk to the forecast-by-coords path.
 // 24h ML forecast (Jakarta GRUHead) folded in here (?ml_forecast) to stay within the Hobby 12-fn
 // quota. Underscore module + .js extension so Node ESM resolves it in the bundle.
 import { forecast24 as gruForecast24 } from './_forecast24.js';
@@ -454,9 +457,13 @@ async function handleForecastMode(req: VercelRequest, res: VercelResponse) {
     const lng = Number(lngQuery);
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
       try {
+        // Lazy import — see note at top of file. A bundling miss degrades only this
+        // path (graceful empty forecast) instead of crashing the whole function.
+        const { latLngToCell } = await import('h3-js');
         cellId = latLngToCell(lat, lng, H3_RES_FORECAST);
       } catch {
-        return res.status(400).json({ error: 'Invalid lat/lng' });
+        res.setHeader('Cache-Control', 'public, max-age=300');
+        return res.json({ cell_id: null, predictions: [], fallback: 'h3_unavailable' });
       }
     }
   }
