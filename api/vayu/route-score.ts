@@ -3148,16 +3148,19 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(emptyResponse('no_distinct_routes_found'));
     }
 
-    // B6: cleanest comparison uses Haber-corrected dose when available — captures
-    // the C^1.3 × t toxicology of PM2.5 so a longer-but-cleaner route correctly
-    // beats a shorter-but-dirtier one. Falls back to length-weighted AQI, then
-    // avg AQI, then traffic-only pollution_index.
-    const cleanCost = (route: ScoredCandidate) =>
-      route.score?.haber_dose_pm25
-        ?? route.score?.length_weighted_aqi
+    // B6 (revised 2026-06-02): rank "cleanest" by the SAME linear inhaled-dose model the UI
+    // displays (computeDose ∝ avg concentration × travel time), so the route labeled cleanest is
+    // ALWAYS the one showing the lowest paparan to the user. Ranking by Haber dose (C^1.3·t) could
+    // disagree — a route avoiding concentration peaks but longer / higher-average would win
+    // "cleanest" yet display MORE µg than the fastest (the live label bug). Concentration =
+    // length-weighted AQI (avg exposure along the route); × duration = total inhaled-dose proxy.
+    const cleanCost = (route: ScoredCandidate) => {
+      const conc = route.score?.length_weighted_aqi
         ?? route.score?.avg_aqi
         ?? route.score?.pollution_index
-        ?? 999;
+        ?? 100;
+      return conc * Math.max(route.duration_seconds, 1);
+    };
     const shortestDuration = Math.min(...filteredCandidates.map((route) => route.duration_seconds));
     const cleanValues = filteredCandidates.map(cleanCost);
     const minClean = Math.min(...cleanValues);
@@ -3186,6 +3189,18 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       || byDuration[1]
       || filteredCandidates[0];
 
+    // Redundancy test for collapsing labels (used in the output dedup below): a candidate is
+    // redundant vs a reference if it's a near-duplicate (within ~3% time AND ~5% dose) or
+    // Pareto-dominated (slower-or-equal AND dirtier-or-equal). Drops a "balanced" that isn't a real
+    // middle option — a symptom of stock Valhalla's near-identical alternates (Valhalla-C diverges).
+    const doseOf = (r: ScoredCandidate) => cleanCost(r);
+    const isRedundant = (cand: ScoredCandidate, ref: ScoredCandidate) => {
+      const dt = Math.abs(cand.duration_seconds - ref.duration_seconds) / Math.max(ref.duration_seconds, 1);
+      const dd = Math.abs(doseOf(cand) - doseOf(ref)) / Math.max(doseOf(ref), 1);
+      const nearDuplicate = dt < 0.03 && dd < 0.05;
+      const paretoDominated = ref.duration_seconds <= cand.duration_seconds && doseOf(ref) <= doseOf(cand);
+      return nearDuplicate || paretoDominated;
+    };
     const selectedRoutes = [cleanestRoute, balancedRoute, fastestRoute].filter((route, index, self) => self.findIndex((candidate) => candidate.index === route.index) === index);
 
     const geminiInput = selectedRoutes.map((r) => {
@@ -3216,6 +3231,11 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
 
     const labeled: typeof allLabeled = [];
     for (const r of allLabeled) {
+      // Never show the SAME underlying candidate under two labels. When AQI is uniform across
+      // alternates, dose ∝ duration so the min-dose route IS the min-duration route → cleanest and
+      // fastest resolve to one candidate; show it once. (Index dedup is unconditional; the primary
+      // exemption below is only for DIFFERENT candidates that happen to share geometry.)
+      if (labeled.some((existing) => existing.index === r.index)) continue;
       const rCoords = r.polyline.map((p) => [p.lng, p.lat]);
       // F1: car-family primary exempt from labeled dedup — it must appear in output as
       // the mode-recommended route, even if geometrically similar to cleanest alternate.
@@ -3224,7 +3244,12 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       const isDup = !isPrimary && labeled.some((existing) =>
         isSimilarGeometry(rCoords, existing.polyline.map((p) => [p.lng, p.lat]), 60)
       );
-      if (!isDup) labeled.push(r);
+      // Drop a "balanced" that isn't a genuine middle — a near-duplicate of, or Pareto-dominated by,
+      // either anchor (cleanest/fastest). Prevents "balanced slower+dirtier than cleanest" and the
+      // same route shown under two labels. Anchors are always kept (check applies only to balanced).
+      const isRedundantMiddle = !isPrimary && r.label === 'balanced' &&
+        (isRedundant(r, cleanestRoute) || isRedundant(r, fastestRoute));
+      if (!isDup && !isRedundantMiddle) labeled.push(r);
     }
 
     // Tier 2 M2: per-route forecast at predicted arrival times. Done in parallel
