@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Wind, Droplets, CloudSun, Activity, Info, ShieldCheck } from 'lucide-react';
+import { ChevronDown, Wind, Droplets, CloudSun, Activity, Info, ShieldCheck, Clock } from 'lucide-react';
 import type { AirQualityData } from '../../types';
 import { getAQIColor } from '../map/LeafletMap';
 import { getAQILabel, getAQIEmoji } from './AQIBadge';
@@ -159,32 +159,22 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
                     {data.confidence >= 0.7 ? 'Akurat' : data.confidence >= 0.4 ? 'Estimasi' : 'Kasar'}
                   </span>
                 )}
-                {data.freshness && (
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                      data.freshness === 'live'
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : data.freshness === 'recent'
-                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                          : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                    }`}
-                  >
-                    {data.freshness === 'live' ? '⚡ Live' : data.freshness === 'recent' ? '🕐 Baru' : data.freshness === 'stale' ? '⚠️ Lama' : '⚠️ Fallback'}
+                {data.timestamp && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                    <Clock size={11} strokeWidth={2.4} />
+                    Diperbarui {new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 )}
               </div>
 
-              {/* Source + timestamp */}
-              <div className="mt-2.5 flex items-center justify-between text-[10.5px] text-gray-400 dark:text-gray-500">
+              {/* Source */}
+              <div className="mt-2.5 flex items-center text-[10.5px] text-gray-400 dark:text-gray-500">
                 <span className="inline-flex items-center gap-1">
                   <Info size={11} />
                   {data.layer_source === 3 ? 'Sensor langsung'
                     : data.layer_source === 2 ? 'Crowdsource'
                     : data.layer_source === 4 ? 'Prediksi ML'
                     : 'VAYU Dispersion Engine'}
-                </span>
-                <span className="tabular-nums">
-                  {new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
 
