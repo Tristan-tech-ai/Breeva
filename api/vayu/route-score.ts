@@ -2724,6 +2724,9 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       : valhallaOptions;
     // Valhalla first (with its own fetch timeout); if it errors or returns nothing, gracefully
     // fall back to ORS — so a Valhalla/Funnel hiccup degrades to ORS instead of failing the request.
+    // WS2: track the engine that ACTUALLY served the final routes (not just the env flag), so
+    // meta.engine is honest when Valhalla errors/times-out and we silently fall back to ORS.
+    let actualEngine: 'valhalla' | 'ors' = 'ors';
     const enginePromise = (async (): Promise<ORSRoute[]> => {
       if (useValhalla) {
         // Valhalla-C path: one AQI-cost-optimal route per weight -> genuinely distinct
@@ -2733,7 +2736,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
               .catch((e) => { console.error('Valhalla AQI-cost error:', e); return [] as ORSRoute[]; })
           : await fetchValhallaAlternatives(orsStart, orsEnd, valhallaCosting, alternatives, valhallaOptionsFinal)
               .catch((e) => { console.error('Valhalla error:', e); return [] as ORSRoute[]; });
-        if (v.length > 0) return v;
+        if (v.length > 0) { actualEngine = 'valhalla'; return v; }
         console.warn('[clean-route] Valhalla empty/failed -> ORS fallback');
       }
       return fetchORSAlternatives(orsStart, orsEnd, profile, alternatives)
@@ -3464,7 +3467,7 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
         vayu_scored: routes.some(r => r.vayu_scored), gemini_used: false, response_ms: responseMs, reasoning_key: reasoningKey,
         // WS2 observability: prove which engine actually served + how many routes it returned
         // (distinguishes "Valhalla serving" from "silent fallback to empty"). aqi_cost = Valhalla-C active.
-        engine: useValhalla ? 'valhalla' : 'ors', engine_route_count: orsRoutes.length, aqi_cost: valhallaAqiCost,
+        engine: actualEngine, engine_route_count: orsRoutes.length, aqi_cost: valhallaAqiCost,
         timings,
       },
     });
