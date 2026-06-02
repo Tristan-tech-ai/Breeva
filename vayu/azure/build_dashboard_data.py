@@ -27,6 +27,14 @@ CLUSTER = "https://kvc-c00cjha46ak8x8mp05.australiaeast.kusto.windows.net"
 DB = "breeva_db"
 OUT = Path(__file__).resolve().parent / "dashboard" / "panels.json"
 
+# Supabase pooler — only for the tiny labeled-validation coverage fact (a cheap aggregate, no spatial op).
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env.local")
+    POOLER = os.environ.get("SUPABASE_POOLER_URL")
+except Exception:
+    POOLER = None
+
 ANOMALY_KQL = """
 let cells = road_aqi | where region=='jakarta'
   | extend cell=strcat(bin(lat,0.01),'_',bin(lon,0.01))
@@ -38,6 +46,24 @@ road_aqi | where region=='jakarta'
 | where z>3 and no2_delta>50
 | top 12 by z desc
 | project name=coalesce(highway,'road'), no2_traffic=round(no2_delta,1), nbhd_avg=round(cavg,1), z=round(z,1), lat, lon
+"""
+
+# Monitoring-desert fairness: distance from each ~1km road-grid cell to the nearest REAL sensor
+# (geo_distance_2points), banded, with the model's own confidence label per band. The equity signal —
+# WHERE we can validate the model (near sensors) vs where it runs unchecked (deserts).
+FAIRNESS_KQL = """
+let stations = stations | where isnotnull(lat) and isnotnull(lon) | project slat=lat, slon=lon;
+let grid = road_aqi | where isnotnull(lat) and isnotnull(lon)
+  | summarize roads=count(), high=countif(confidence=='high'), medium=countif(confidence=='medium'),
+      refuse=countif(confidence=='refuse') by glat=round(lat,2), glon=round(lon,2), region;
+let banded = grid | extend k=1 | join kind=inner (stations | extend k=1) on k
+  | extend d_km = geo_distance_2points(glon, glat, slon, slat)/1000.0
+  | summarize nearest_km=min(d_km), roads=take_any(roads), high=take_any(high),
+      medium=take_any(medium), refuse=take_any(refuse), region=take_any(region) by glat, glon;
+banded
+| extend band = case(nearest_km<=2.0,'monitored', nearest_km<=5.0,'intermediate','desert')
+| summarize roads=sum(roads), high=sum(high), medium=sum(medium), refuse=sum(refuse), cells=count()
+    by band, region
 """
 
 client = KustoClient(KustoConnectionStringBuilder.with_az_cli_authentication(CLUSTER))
@@ -83,6 +109,53 @@ def probe_health() -> dict:
         return {"error": str(e)[:160]}
 
 
+def fairness() -> dict:
+    """Monitoring-desert equity (environmental justice). REAL data only: how much of the road
+    network is within reach of a real sensor, the model's OWN confidence by coverage band, and how
+    little of the network is independently validated by ground truth at all."""
+    rws = rows(FAIRNESS_KQL)
+    bands: dict = {}
+    regions: dict = {}
+    for r in rws:
+        b = r["band"]
+        reg = r.get("region") or "?"
+        bd = bands.setdefault(b, {"roads": 0, "high": 0, "medium": 0, "refuse": 0, "cells": 0})
+        for k in ("roads", "high", "medium", "refuse", "cells"):
+            bd[k] += int(r.get(k) or 0)
+        rg = regions.setdefault(reg, {"roads": 0, "desert": 0})
+        rg["roads"] += int(r["roads"] or 0)
+        if b == "desert":
+            rg["desert"] += int(r["roads"] or 0)
+    total = sum(b["roads"] for b in bands.values()) or 1
+    band_list = []
+    for name in ("monitored", "intermediate", "desert"):
+        b = bands.get(name)
+        if not b:
+            continue
+        rd = b["roads"] or 1
+        band_list.append({"band": name, "roads": b["roads"], "pct": round(100.0 * b["roads"] / total, 1),
+                          "high_pct": round(100.0 * b["high"] / rd, 1),
+                          "refuse_pct": round(100.0 * b["refuse"] / rd, 1)})
+    region_list = sorted(
+        ({"region": k, "roads": v["roads"], "desert_pct": round(100.0 * v["desert"] / (v["roads"] or 1), 1)}
+         for k, v in regions.items() if v["roads"] >= 1000),
+        key=lambda x: x["desert_pct"], reverse=True)
+    meta: dict = {"stations": rows("stations | count")[0]["Count"]}
+    if POOLER:
+        try:
+            import psycopg2
+            cn = psycopg2.connect(POOLER, connect_timeout=20)
+            cur = cn.cursor()
+            cur.execute("SELECT count(*), count(distinct osm_way_id), round(max(ground_truth_distance_km)::numeric,2) "
+                        "FROM prediction_logs WHERE ground_truth_pm25 IS NOT NULL")
+            n, roads_v, maxkm = cur.fetchone()
+            cn.close()
+            meta.update({"labeled": int(n), "roads_validated": int(roads_v), "labeled_max_km": float(maxkm or 0)})
+        except Exception as e:  # noqa: BLE001
+            meta["labeled_error"] = str(e)[:120]
+    return {"bands": band_list, "regions": region_list, "meta": meta}
+
+
 def main() -> None:
     panels: dict = {}
     panels["summary"] = {
@@ -100,13 +173,18 @@ def main() -> None:
         "road_aqi | where region=='jakarta' | summarize no2=round(avg(no2_delta),1), n=count() "
         "by lat=round(bin(lat,0.004),3), lon=round(bin(lon,0.004),3) | where n>=2 | project lat, lon, no2")
     panels["probe"] = probe_health()
+    panels["fairness"] = fairness()
+    panels["stations"] = rows("stations | where isnotnull(lat) and isnotnull(lon) | project lat, lon, region")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(panels, default=str), encoding="utf-8")
     print(f"wrote {OUT}")
+    fb = panels["fairness"]["bands"]
     print(f"  roads={panels['summary']['roads']:,} regions={panels['summary']['regions']} "
           f"eda={len(panels['eda'])} hotspots={len(panels['hotspots'])} heatmap={len(panels['heatmap'])} "
           f"probe={panels['probe']}")
+    print(f"  fairness bands: " + " | ".join(f"{b['band']}={b['pct']}%(refuse {b['refuse_pct']}%)" for b in fb)
+          + f"  meta={panels['fairness']['meta']}")
 
 
 if __name__ == "__main__":

@@ -24,8 +24,10 @@
   .panel { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 18px; margin-bottom:18px; }
   .panel h2 { font-size:13px; text-transform:uppercase; letter-spacing:.6px; color:var(--mut); margin:0 0 12px; font-weight:700; }
   #map { height:420px; border-radius:12px; overflow:hidden; }
+  .legend { font-size:11px; color:var(--mut); margin-top:8px; }
+  .legend i { display:inline-block; width:9px; height:9px; border-radius:50%; background:#7dd3fc; border:1px solid #38bdf8; margin-right:5px; vertical-align:middle; }
   .bar { display:flex; align-items:center; gap:10px; margin:6px 0; font-size:13px; }
-  .bar .lbl { width:120px; color:var(--ink); }
+  .bar .lbl { width:150px; color:var(--ink); }
   .bar .track { flex:1; height:10px; background:#0c1228; border-radius:6px; overflow:hidden; }
   .bar .fill { height:100%; background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444); }
   .bar .num { width:54px; text-align:right; color:var(--mut); font-variant-numeric:tabular-nums; }
@@ -34,6 +36,15 @@
   th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; }
   td.n { text-align:right; font-variant-numeric:tabular-nums; }
   .z { color:var(--bad); font-weight:700; }
+  .fair-head { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:14px; }
+  @media (max-width:760px){ .fair-head { grid-template-columns:1fr; } .bar .lbl { width:120px; } }
+  .fair-stat { background:#0c1228; border:1px solid var(--line); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:6px; }
+  .fbig { font-size:30px; font-weight:800; color:var(--acc); line-height:1; }
+  .fbig.fdesert { color:var(--bad); }
+  .flbl { font-size:12px; color:var(--mut); line-height:1.4; }
+  .fair-note { font-size:12.5px; color:var(--mut); margin:12px 2px 0; line-height:1.55; }
+  .fair-note b { color:var(--ink); }
+  code { background:#0c1228; border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:11.5px; color:#a7f3d0; }
   footer { color:var(--mut); font-size:12px; padding:18px 26px 40px; text-align:center; }
   .ok{color:var(--acc)} .deg{color:var(--warn)} .dn{color:var(--bad)}
 </style>
@@ -50,6 +61,7 @@
     <div class="panel">
       <h2>Per-road traffic NO₂ — Jakarta (Azure Data Explorer geospatial, 1.39M roads)</h2>
       <div id="map"></div>
+      <div class="legend"><i></i> <span id="legend-stations">real monitoring sensors</span> &nbsp;·&nbsp; heat = per-road traffic NO₂</div>
     </div>
     <div class="panel">
       <h2>Traffic pollution by road class — the routable signal</h2>
@@ -57,11 +69,21 @@
     </div>
   </div>
   <div class="panel">
+    <h2>Monitoring-desert equity — where the model is validated vs runs unchecked (AI accountability · environmental justice)</h2>
+    <div class="fair-head">
+      <div class="fair-stat"><span class="fbig" id="f-monitored">–</span><span class="flbl">of roads within 2&nbsp;km of a real sensor — the <b>only</b> zone with ground truth to check the model</span></div>
+      <div class="fair-stat"><span class="fbig fdesert" id="f-desert">–</span><span class="flbl">in monitoring deserts &gt;5&nbsp;km from any of <b id="f-stations">–</b> sensors — model runs unvalidated</span></div>
+      <div class="fair-stat"><span class="fbig" id="f-validated">–</span><span class="flbl">of roads ever checked against ground truth (<span id="f-labeled">–</span> observations, <b>all ≤2&nbsp;km</b>)</span></div>
+    </div>
+    <div id="fair-bands"></div>
+    <p class="fair-note">The model self-reports low confidence (<i>"refuse"</i>) on <b id="f-refuse">–</b> of desert roads vs ~0% where sensors exist — independent monitoring coverage and the model's own uncertainty agree. <span id="f-worst"></span><br/>Computed live on Azure Data Explorer (<code>geo_distance_2points</code> from every ~1&nbsp;km road cell to the nearest sensor) — strictly real data, no synthetic SES labels.</p>
+  </div>
+  <div class="panel">
     <h2>Pollution hotspots — spatial anomalies (>3σ vs ~1 km neighbourhood, KQL)</h2>
     <table id="hotspots"><thead><tr><th>Road class</th><th class="n">Traffic NO₂</th><th class="n">Nbhd avg</th><th class="n">z-score</th></tr></thead><tbody></tbody></table>
   </div>
   <div class="panel">
-    <h2>Coverage — 17 Indonesian regions</h2>
+    <h2>Coverage — Indonesian regions</h2>
     <div id="regions"></div>
   </div>
 </main>
@@ -73,6 +95,7 @@
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
 const card=(k,v,sub)=>`<div class="card"><div class="k">${k}</div><div class="v">${v}${sub?` <small>${sub}</small>`:''}</div></div>`;
+const pc=(n)=>(n==null?'–':n+'%');
 fetch('panels.json?_='+Date.now()).then(r=>r.json()).then(P=>{
   const s=P.summary||{}; document.getElementById('gen').textContent='updated '+(s.generated_at||'');
   const pr=P.probe||{};
@@ -94,6 +117,26 @@ fetch('panels.json?_='+Date.now()).then(r=>r.json()).then(P=>{
     return `<div class="bar"><span class="lbl">${d.highway}</span><span class="track"><span class="fill" style="width:${w}%"></span></span><span class="num">${d.avg_no2_traffic}</span></div>`;
   }).join('');
 
+  // Monitoring-desert equity
+  const F=P.fairness||{bands:[],regions:[],meta:{}}; const fm=F.meta||{};
+  const byBand=Object.fromEntries((F.bands||[]).map(b=>[b.band,b]));
+  const mon=byBand.monitored||{}, des=byBand.desert||{};
+  document.getElementById('f-monitored').textContent=pc(mon.pct);
+  document.getElementById('f-desert').textContent=pc(des.pct);
+  document.getElementById('f-stations').textContent=fm.stations||'–';
+  const valPct=(fm.roads_validated&&s.roads)?(100*fm.roads_validated/s.roads):null;
+  document.getElementById('f-validated').textContent=valPct!=null?valPct.toFixed(2)+'%':'–';
+  document.getElementById('f-labeled').textContent=(fm.labeled||0).toLocaleString();
+  document.getElementById('f-refuse').textContent=pc(des.refuse_pct);
+  const lbl={monitored:'monitored ≤2 km',intermediate:'intermediate 2–5 km',desert:'desert >5 km'};
+  const col={monitored:'#22c55e',intermediate:'#f59e0b',desert:'#ef4444'};
+  document.getElementById('fair-bands').innerHTML=['monitored','intermediate','desert'].map(n=>{
+    const b=byBand[n]; if(!b) return '';
+    return `<div class="bar"><span class="lbl">${lbl[n]}</span><span class="track"><span class="fill" style="width:${b.pct}%;background:${col[n]}"></span></span><span class="num">${b.pct}%</span></div>`;
+  }).join('');
+  const worst=(F.regions||[]).filter(r=>r.desert_pct>=99).slice(0,5).map(r=>r.region);
+  if(worst.length) document.getElementById('f-worst').textContent=`Entire regions have effectively no usable coverage: ${worst.join(', ')} (100% desert).`;
+
   // Hotspots table
   document.querySelector('#hotspots tbody').innerHTML = (P.hotspots||[]).map(h=>
     `<tr><td>${h.name}</td><td class="n">${h.no2_traffic}</td><td class="n">${h.nbhd_avg}</td><td class="n z">${h.z}</td></tr>`).join('');
@@ -105,7 +148,7 @@ fetch('panels.json?_='+Date.now()).then(r=>r.json()).then(P=>{
     return `<div class="bar"><span class="lbl">${d.region}</span><span class="track"><span class="fill" style="width:${w}%;background:#0ea5e9"></span></span><span class="num">${(d.roads||0).toLocaleString()}</span></div>`;
   }).join('');
 
-  // Map + heatmap + hotspots
+  // Map + heatmap + hotspots + the sparse real-sensor network
   const map=L.map('map',{zoomControl:true}).setView([-6.2,106.83],11);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© OSM © CARTO',maxZoom:18}).addTo(map);
   const hm=(P.heatmap||[]); const hmx=Math.max(...hm.map(d=>d.no2||0),1);
@@ -113,6 +156,10 @@ fetch('panels.json?_='+Date.now()).then(r=>r.json()).then(P=>{
     gradient:{0.2:'#22c55e',0.5:'#f59e0b',0.8:'#ef4444'}}).addTo(map);
   (P.hotspots||[]).forEach(h=>L.circleMarker([h.lat,h.lon],{radius:6,color:'#ef4444',weight:2,fillOpacity:.5})
     .bindPopup(`<b>${h.name}</b><br>traffic NO₂ ${h.no2_traffic} (z=${h.z}, nbhd ${h.nbhd_avg})`).addTo(map));
+  const stn=(P.stations||[]);
+  document.getElementById('legend-stations').textContent=`${stn.length} real monitoring sensors`;
+  stn.forEach(p=>L.circleMarker([p.lat,p.lon],{radius:3.5,color:'#38bdf8',weight:1,fillColor:'#7dd3fc',fillOpacity:.95})
+    .bindPopup(`real sensor · ${p.region||''}`).addTo(map));
 }).catch(e=>{document.getElementById('gen').textContent='failed to load panels.json: '+e;});
 </script>
 </body>
