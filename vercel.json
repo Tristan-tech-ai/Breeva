@@ -4,6 +4,7 @@
   "installCommand": "pnpm install",
   "framework": "vite",
   "outputDirectory": "dist",
+  "cleanUrls": true,
   "regions": ["bom1"],
   "rewrites": [
     { "source": "/api/tiles/road/:z/:x/:y", "destination": "/api/vayu/road-aqi?tile=1&z=:z&x=:x&y=:y" },

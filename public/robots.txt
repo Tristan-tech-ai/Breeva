@@ -1,3 +1,10 @@
+# Breeva robots.txt
+# Public content (marketing, docs, calculator) is open to all crawlers, including AI
+# assistants and search engines — we WANT Breeva to be discovered and cited.
+# Private/app routes (account, gameplay, API) stay disallowed for everyone.
+# Note: a crawler with its own named group ignores the "*" group entirely, so the
+# disallow list is repeated per named AI agent (robots.txt has no group aliasing).
+
 User-agent: *
 Allow: /
 Disallow: /home
@@ -14,4 +21,231 @@ Disallow: /year-in-review
 Disallow: /developers/keys
 Disallow: /api/
 
+# ── AI assistants & LLM crawlers (explicitly welcomed on public content) ──
+
+User-agent: GPTBot
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+User-agent: Claude-Web
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+User-agent: anthropic-ai
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+User-agent: Perplexity-User
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+User-agent: CCBot
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+User-agent: Bytespider
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+User-agent: Amazonbot
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+User-agent: Meta-ExternalAgent
+Allow: /
+Disallow: /home
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /auth
+Disallow: /merchants
+Disallow: /rewards
+Disallow: /saved
+Disallow: /quests
+Disallow: /leaderboard
+Disallow: /contribute
+Disallow: /year-in-review
+Disallow: /developers/keys
+Disallow: /api/
+
+# Machine-readable knowledge for LLMs: https://breeva.site/llms.txt
 Sitemap: https://breeva.site/sitemap.xml

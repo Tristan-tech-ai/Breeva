@@ -1,0 +1,130 @@
+# Breeva — Clean-Air Navigation for Indonesia
+
+Breeva (https://breeva.site) is a free progressive web app (PWA) that maps air quality
+at the level of individual roads, finds the cleanest walking route, forecasts the next
+24 hours, and calculates the PM2.5 dose you inhale on a trip. It is built for Indonesian
+cities and runs in any modern browser — no install required. Site language is Indonesian;
+this document summarises Breeva in English for reference.
+
+## What Breeva is
+
+- A clean-air navigation and air-quality intelligence platform for Indonesia.
+- Free to use, directly in the browser, as an installable PWA (no app store needed).
+- Core idea: turn air quality into a per-street, actionable signal — not a single city-wide
+  number — then guide people to the cleanest path and reward low-emission walking.
+- Released 2026 (Beta), Web + PWA.
+
+## How it works
+
+1. **See per-road AQI.** The map shows current air quality for each road segment, produced
+   by Breeva's in-house VAYU engine.
+2. **Choose the cleanest route.** Every trip returns three options — Clean (Bersih),
+   Balanced (Seimbang), and Fast (Cepat) — each with an air-quality score, distance,
+   duration, and an estimated PM2.5 exposure.
+3. **Walk and earn EcoPoints.** Breeva tracks your walk, monitors PM2.5 exposure, and awards
+   EcoPoints, levels, and achievements.
+
+Route colours on the map: **green = Clean route (best air), blue = Balanced, orange = Fast.**
+
+## The VAYU engine
+
+VAYU is Breeva's air-quality engine. It calibrates the Air Quality Index (AQI) per road
+segment, using a satellite/proxy baseline (including Open-Meteo data) blended with sensor
+references, and estimates per-segment PM2.5 and NO₂ rather than a single city average. Each
+estimate carries a confidence level. Lower AQI means cleaner air.
+
+## Supported cities
+
+Breeva covers Jakarta (Greater Jakarta / Jabodetabek), Bali, Bandung, Surabaya, and other
+Indonesian cities (4+), with per-road AQI estimates and a confidence level for each.
+
+## Exposure calculator (Paparan)
+
+Available at https://breeva.site/paparan. It estimates the **inhaled PM2.5 dose (in micrograms)**
+along a chosen route, given your profile:
+
+- **Age** (child / adult / elderly) and **activity / transport mode** (walking, jogging,
+  cycling, motorcycle, car, public transport) set your breathing rate and intake.
+- The result is compared against the **WHO 2021 air-quality guideline for 24-hour PM2.5
+  (15 µg/m³)** and expressed as a **cigarette-equivalent**, where roughly **660 µg of inhaled
+  PM2.5 ≈ 1 cigarette (Pope et al., 2009)**.
+- It separates avoidable, traffic-related exposure from unavoidable background levels.
+
+The cigarette-equivalent is an **illustrative comparison to make exposure intuitive — not a
+clinical or medical claim.**
+
+## Frequently asked questions
+
+### What is Breeva?
+Breeva is a clean-air navigation platform: a real-time per-road air-quality (AQI) map, a
+cleanest-walking-route finder, a 24-hour forecast, and a PM2.5 exposure calculator for
+Indonesian cities.
+
+### Is Breeva free?
+Yes. Breeva is free to use directly in the browser as a PWA, with no app install required.
+
+### Which cities does Breeva support?
+Jakarta (Jabodetabek), Bali, Bandung, Surabaya, and several other Indonesian cities, with
+per-road AQI estimates and a confidence level.
+
+### What is AQI and where does the data come from?
+AQI (Air Quality Index) shows how clean the air is. Breeva uses the VAYU engine, which
+calibrates AQI per road segment with a satellite + Open-Meteo baseline. Lower AQI = cleaner.
+
+### How is air exposure calculated?
+Open the Exposure Calculator at /paparan, choose a profile (age, activity) and a route;
+Breeva computes the inhaled PM2.5 dose, the comparison to the WHO threshold, and the
+cigarette-equivalent.
+
+### What is the difference between a clean route and a fast route?
+A clean route avoids poor-air areas and favours green corridors. It can be slightly longer,
+but the air is healthier and it earns more EcoPoints.
+
+### What are EcoPoints and how are they earned?
+EcoPoints are rewards for walking and choosing cleaner routes. They are computed from
+verified walking distance plus daily quests and achievements; motorised modes earn fewer
+points. Redeem them at eco-friendly merchants for discounts and perks.
+
+### Can I use other transport modes?
+Yes — walking, cycling, motorcycle, and car are supported. Walking and cycling earn the most
+EcoPoints because they are zero-emission.
+
+### Is my location data private?
+Location is used for navigation and nearby AQI, and is not sold or shared with third parties
+for advertising. See the Privacy Policy at /privacy for details.
+
+### Does Breeva have a developer API?
+Yes. The Breeva Developer API provides per-road AQI, pollution-aware routing, and PM2.5
+exposure over REST. Create a free API key at /developers — 1,000 requests/day on the free tier.
+
+## Developer API
+
+- **Base URL:** `https://breeva.site/api/v1`
+- **Authentication:** `Authorization: Bearer brv_live_…` or `x-api-key: brv_live_…` (mint a key at /developers).
+- **Endpoints:**
+  - `GET /road-aqi` — calibrated per-road air quality (GeoJSON) for a bounding box.
+  - `POST /route-score` — clean / balanced / fast route options, scored by air quality.
+  - `POST /exposure` — cumulative inhaled PM2.5 dose and cigarette-equivalents for a route.
+- **Rate limits (per key, resets 00:00 UTC):** free 1,000/day, pro 50,000/day, enterprise custom.
+- Full machine-readable spec: https://breeva.site/openapi.json
+
+## Eco tips
+
+- **Walking saves CO₂:** walking 1 km saves ~120 g CO₂ versus driving — tens of kilograms a year for a daily commuter.
+- **Pick a cleaner route:** routes near parks and green space can be far less polluted; VAYU finds the cleanest path.
+- **30 minutes of walking** a day lowers heart-disease risk and improves mood — free exercise.
+- **Trees filter air:** one tree absorbs ~22 kg CO₂ a year and traps harmful particles; walk near greenery when you can.
+- **Save water too:** a car needs ~3.8 L of water per km (production + washing); walking saves hidden resources.
+- **EcoPoints are real rewards:** redeem them at eco-friendly merchants for food, drink, and product discounts.
+- **Rush hour = peak pollution:** air is worst at 07:00–09:00 and 17:00–19:00; walk mid-morning or late afternoon for cleaner air.
+- **Walking meetings:** walking boosts creativity — good for you and your ideas.
+
+## Built with
+
+React 19, TypeScript, Vite, Tailwind CSS v4, Leaflet, Supabase (PostgreSQL + PostGIS),
+Valhalla routing, the VAYU air-quality engine, Framer Motion, and Zustand.
+
+## Contact
+
+- Email: halo@breeva.site
+- Web: https://breeva.site
