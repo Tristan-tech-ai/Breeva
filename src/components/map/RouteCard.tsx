@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Clock, Route as RouteIcon, Wind, Star, Leaf, Zap, Scale, Check, TreePine, Car } from 'lucide-react';
 import type { Route } from '../../types';
 import { getAQIColor } from './LeafletMap';
 import RouteForecastBadge from './RouteForecastBadge';
-import { computeDose, type UserExposureProfile } from '../../lib/exposure';
+import { computeDose, computeTrapDose, type UserExposureProfile } from '../../lib/exposure';
 import { useDistanceUnit, type DistanceUnit } from '../../stores/settingsStore';
 
 // At-a-glance teaser uses a default adult-walker; the /paparan page lets users customize age/mode/health.
@@ -61,10 +62,18 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
   const { Icon } = info;
   const distanceUnit = useDistanceUnit();
   const traffic = route.traffic_level ? trafficConfig[route.traffic_level] : null;
-  // Layer 3 teaser: inhaled-dose estimate from the route's v2 per-segment PM2.5 (default adult walker).
-  const exposure = route.vayu_score?.segments?.length
-    ? computeDose(route.vayu_score.segments, route.duration_seconds, TEASER_PROFILE)
-    : null;
+  const [showDetail, setShowDetail] = useState(false);
+  const segs = route.vayu_score?.segments;
+  // Layer 3 teaser: total inhaled dose (absolute, incl. background) — shown as honest context in detail.
+  const exposure = segs?.length ? computeDose(segs, route.duration_seconds, TEASER_PROFILE) : null;
+  // The differentiator: dose of the AVOIDABLE traffic increment (NO₂-dominant). A cleaner route lowers this.
+  const trapDose = segs?.length ? computeTrapDose(segs, route.duration_seconds, TEASER_PROFILE) : null;
+  const trapReduction = route.vayu_trap_reduction_pct;
+  // The 2 worst traffic (NO₂) segments — the busy roads this route does/doesn't take.
+  const worstNo2 = [...(segs ?? [])]
+    .filter((s) => (s.no2_delta ?? 0) > 0)
+    .sort((a, b) => (b.no2_delta ?? 0) - (a.no2_delta ?? 0))
+    .slice(0, 2);
 
   return (
     <motion.button
@@ -152,13 +161,52 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
         </div>
       )}
 
-      {/* Layer 3 — inhaled-dose teaser (tap a route's "Lensa Paparan" for full calculator) */}
-      {exposure && (
-        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400 flex-wrap">
-          <Wind className="w-3 h-3 text-sky-500" />
-          <span>Paparan ≈ <b className="text-gray-700 dark:text-gray-300">{Math.round(exposure.dose_ug)} µg</b></span>
-          <span>· {exposure.cigarette_equiv.toFixed(2)} 🚬</span>
-          <span>· {exposure.who_24h_ratio.toFixed(1)}× WHO</span>
+      {/* Layer 3 — TRAFFIC exposure differentiator (the avoidable part). Collapsed = traffic µg + how
+          much cleaner vs the fastest; "Lihat detail" reveals the NO₂ hotspots + the honest total air. */}
+      {trapDose && (
+        <div className="mt-2">
+          <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
+            <Wind className="w-3 h-3 text-sky-500" />
+            <span className="text-gray-600 dark:text-gray-300">
+              Paparan lalu lintas ≈ <b className="text-gray-800 dark:text-gray-200">{Math.round(trapDose.dose_ug)} µg</b>
+            </span>
+            {typeof trapReduction === 'number' && trapReduction >= 3 && (
+              <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-semibold">
+                −{trapReduction}% vs tercepat
+              </span>
+            )}
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); setShowDetail((v) => !v); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); setShowDetail((v) => !v); } }}
+              className="ml-auto text-sky-600 dark:text-sky-400 font-medium cursor-pointer hover:underline"
+            >
+              {showDetail ? 'Sembunyikan ▴' : 'Lihat detail ▾'}
+            </span>
+          </div>
+
+          {showDetail && (
+            <div className="mt-2 space-y-1 text-[10px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/40 rounded-lg p-2">
+              {worstNo2.length > 0 && (
+                <div>
+                  <span className="font-semibold text-gray-600 dark:text-gray-300">Jalan tersibuk (NO₂): </span>
+                  {worstNo2.map((s, i) => (
+                    <span key={i}>{i > 0 ? ', ' : ''}{s.name || s.highway} (+{Math.round(s.no2_delta ?? 0)})</span>
+                  ))}
+                </div>
+              )}
+              {exposure && (
+                <div>
+                  <span className="font-semibold text-gray-600 dark:text-gray-300">Total udara (termasuk latar): </span>
+                  AQI {Math.round(route.vayu_avg_aqi ?? route.avg_aqi)} · {Math.round(exposure.dose_ug)} µg terhirup · {exposure.cigarette_equiv.toFixed(2)} 🚬 · {exposure.who_24h_ratio.toFixed(1)}× WHO
+                </div>
+              )}
+              <div className="italic opacity-80">
+                Latar ~tak terhindarkan; yang bisa dihindari = paparan lalu lintas (angka atas).
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -869,6 +869,7 @@ interface RoadAQIComputation {
   pm10: number;
   pm25_delta: number;
   no2_delta: number;
+  pm10_delta: number;
 }
 
 interface CorridorRoadScore {
@@ -933,6 +934,27 @@ async function fetchCamsDailyMean(lat: number, lon: number, region: string, toda
   return NaN;
 }
 
+// ─── TRAP (traffic-related air pollution) exposure — single source of truth (SERVER side) ───
+// The cleanest route minimizes AVOIDABLE traffic exposure, not total ambient. Ambient PM2.5 is
+// background-dominated → spatially flat (Jakarta bg ≈ 33.6 µg everywhere) → useless for routing.
+// NO2 dominates: it has the steep near-road gradient + low background = the routable traffic
+// fingerprint (resolves ~30× by road class). Routing (the Valhalla overlay,
+// scripts/build_valhalla_aqi_overlay.py), ranking (cleanCost below), and the displayed dose
+// (src/lib/exposure.ts computeTrapDose) ALL use these weights — they MUST MATCH (parity test:
+// scripts/test_trap_parity.mjs). pm25/pm10 deltas are weak co-signals; ambient pm25 is excluded.
+const TRAP_W_NO2 = 0.70, TRAP_W_PM25 = 0.20, TRAP_W_PM10 = 0.10;
+const TRAP_K_NO2 = 7.4; // NO2 µg/m³ → PM2.5-equivalent toxicity scale (for the ranked/displayed dose)
+/**
+ * Per-segment PM2.5-equivalent TRAFFIC-increment concentration (µg/m³), NO2-dominant. The quantity
+ * we route by, rank by, and display so "cleanest" is genuinely + visibly the lowest-traffic route.
+ * MUST MATCH src/lib/exposure.ts trapConcentration().
+ */
+function trapConcentration(no2Delta: number, pm25Delta: number, pm10Delta: number): number {
+  return TRAP_W_NO2 * (Math.max(0, no2Delta) / TRAP_K_NO2)
+       + TRAP_W_PM25 * Math.max(0, pm25Delta)
+       + TRAP_W_PM10 * Math.max(0, pm10Delta);
+}
+
 // ─── Compute per-road AQI (from road-aqi.ts) ───────────────
 function computeRoadAQI(
   road: RoadRow,
@@ -989,6 +1011,7 @@ function computeRoadAQI(
     pm10: Math.round(pm10 * 100) / 100,
     pm25_delta: Math.round(pm25Delta * 1000) / 1000,
     no2_delta: Math.round(no2Delta * 1000) / 1000,
+    pm10_delta: Math.round(pm10Delta * 1000) / 1000,
   };
 }
 
@@ -1729,6 +1752,12 @@ export interface RouteScoreV2Result {
    * shorter-but-much-dirtier routes.
    */
   haber_dose_pm25: number;
+  /**
+   * Cumulative PM2.5-equivalent TRAFFIC exposure: Σ(trapConcentration_i · Δt_i), LINEAR in C·t.
+   * This is the quantity routing/ranking/display all share — the cleanest route minimizes it.
+   * Drops the C^1.3 Haber exponent (unjustified for chronic PM2.5). 0 when no traffic data.
+   */
+  trap_exposure: number;
   segments: Array<{
     osm_way_id: number;
     highway: string;
@@ -1738,6 +1767,8 @@ export interface RouteScoreV2Result {
     no2: number;
     fraction_along: number;
     pm25_delta: number;
+    no2_delta: number;
+    pm10_delta: number;
     length_m: number;
   }>;
 }
@@ -1844,6 +1875,8 @@ export async function scorePolyline(
       max_pm25_delta: 0,
       pollution_index: avgAqi, // use absolute AQI as proxy when no traffic data
       length_weighted_aqi: Math.round(avgAqi),
+      trap_exposure: 0, // no per-road traffic deltas here → cleanCost falls back to absolute dose
+
       // B6 fallback: approximate Haber dose from sampled pm25 values, evenly distributed
       // along the polyline. Δ = polyLen × 0.72 s/m × mean(pm25^1.3).
       haber_dose_pm25: Math.round(
@@ -1868,6 +1901,8 @@ export async function scorePolyline(
         no2: 0,
         fraction_along: i / (results.length - 1 || 1),
         pm25_delta: 0,
+        no2_delta: 0,
+        pm10_delta: 0,
         length_m: perSampleLen,
       })),
     };
@@ -1908,6 +1943,8 @@ export async function scorePolyline(
   // B6: Haber dose accumulator. Haber's rule: toxicological effect ∝ C^n × t with n>1.
   // For PM2.5 short-term cardiopulmonary endpoints, n ≈ 1.3. Walking speed 1.39 m/s ⇒ 0.72 s/m.
   let haberDosePm25 = 0;
+  // TRAP: cumulative traffic-increment exposure Σ(trapConc · Δt) — the metric routing/rank/display share.
+  let trapExposure = 0;
   const PEDESTRIAN_SEC_PER_M = 0.72;
   const HABER_EXPONENT = 1.3;
 
@@ -1946,6 +1983,7 @@ export async function scorePolyline(
     // B6: Haber-rule dose. Time spent in segment × concentration^n.
     const segDurationS = segLength * PEDESTRIAN_SEC_PER_M;
     haberDosePm25 += Math.pow(Math.max(0, result.pm25), HABER_EXPONENT) * segDurationS;
+    trapExposure += trapConcentration(result.no2_delta, result.pm25_delta, result.pm10_delta) * segDurationS;
     if (result.aqi > maxAqi) maxAqi = result.aqi;
     if (result.aqi < minAqi) minAqi = result.aqi;
     if (result.pm25_delta > maxPm25Delta) maxPm25Delta = result.pm25_delta;
@@ -1959,6 +1997,8 @@ export async function scorePolyline(
       no2: result.no2,
       fraction_along: road.fraction_along ?? 0,
       pm25_delta: result.pm25_delta,
+      no2_delta: result.no2_delta,
+      pm10_delta: result.pm10_delta,
       length_m: segLength,
     });
   }
@@ -1981,6 +2021,7 @@ export async function scorePolyline(
     pollution_index: pollutionIndex,
     length_weighted_aqi: lengthWeightedAqi,
     haber_dose_pm25: Math.round(haberDosePm25 * 100) / 100,
+    trap_exposure: Math.round(trapExposure * 100) / 100,
     combined_score: Math.round((weights.aqi * aqiScore + weights.time * timeScore) * 1000) / 1000,
     vehicle_type: vehicleType,
     segment_count: segments.length,
@@ -2399,6 +2440,26 @@ async function fetchValhallaAlternatives(
   return routes.slice(0, targetCount);
 }
 
+// Valhalla-C: fetch one AQI-cost-optimal route PER weight, in parallel. aqi_weight=0 -> fastest;
+// higher -> cleaner (the sif fork routes around high-AQI edges). Each request returns the single
+// optimal route for that cleanliness level; downstream scoring then labels + dedups them
+// (uniform-AQI corridors collapse to one honest route, varied corridors diverge). `secs` stays the
+// true travel time (the fork applies AQI to cost only), so ETAs remain honest.
+async function fetchValhallaAqiWeighted(
+  start: [number, number], end: [number, number],
+  costing: string, baseOptions: Record<string, unknown> | undefined,
+  weights: number[],
+): Promise<ORSRoute[]> {
+  const results = await Promise.all(
+    weights.map((w) =>
+      fetchValhallaAlternatives(start, end, costing, 1, { ...(baseOptions || {}), aqi_weight: w })
+        .then((rs) => rs[0] ?? null)
+        .catch((e) => { console.error(`Valhalla aqi_weight=${w} failed:`, e); return null; }),
+    ),
+  );
+  return results.filter((r): r is ORSRoute => r !== null);
+}
+
 async function fetchORSAlternatives(
   start: [number, number], end: [number, number],
   profile: string, targetCount: number,
@@ -2640,6 +2701,12 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     // clean<->fast slider + current Jakarta hour into costing_options so AQI becomes a NATIVE
     // per-edge routing cost. Stock Valhalla-B leaves this unset (no unknown-option risk).
     const valhallaAqiCost = useValhalla && process.env.VALHALLA_AQI_COST === '1';
+    // Valhalla-C: aqi_weight per route option [fastest, balanced, cleanest]. Higher = stronger
+    // pollution avoidance. Tunable via VALHALLA_AQI_WEIGHTS. Uniform-AQI corridors barely deviate
+    // (no cleaner option exists -> routes dedup to one, honestly); varied corridors diverge.
+    const aqiWeights = (envClean(process.env.VALHALLA_AQI_WEIGHTS) || '0,3,10')
+      .split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n));
+    const aqiBaseOptions = { ...(valhallaOptions || {}), current_hour: (new Date().getUTCHours() + 7) % 24 };
     const valhallaOptionsFinal = valhallaAqiCost
       ? { ...(valhallaOptions || {}), aqi_weight: userAqiWeight ?? 0.5, current_hour: (new Date().getUTCHours() + 7) % 24 }
       : valhallaOptions;
@@ -2647,8 +2714,13 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     // fall back to ORS — so a Valhalla/Funnel hiccup degrades to ORS instead of failing the request.
     const enginePromise = (async (): Promise<ORSRoute[]> => {
       if (useValhalla) {
-        const v = await fetchValhallaAlternatives(orsStart, orsEnd, valhallaCosting, alternatives, valhallaOptionsFinal)
-          .catch((e) => { console.error('Valhalla error:', e); return [] as ORSRoute[]; });
+        // Valhalla-C path: one AQI-cost-optimal route per weight -> genuinely distinct
+        // cleanest/balanced/fastest. Stock path: native alternates (+ AQI re-scoring labels).
+        const v = valhallaAqiCost
+          ? await fetchValhallaAqiWeighted(orsStart, orsEnd, valhallaCosting, aqiBaseOptions, aqiWeights)
+              .catch((e) => { console.error('Valhalla AQI-cost error:', e); return [] as ORSRoute[]; })
+          : await fetchValhallaAlternatives(orsStart, orsEnd, valhallaCosting, alternatives, valhallaOptionsFinal)
+              .catch((e) => { console.error('Valhalla error:', e); return [] as ORSRoute[]; });
         if (v.length > 0) return v;
         console.warn('[clean-route] Valhalla empty/failed -> ORS fallback');
       }
@@ -3111,10 +3183,12 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    if (orsApiKey && scoredRoutes.length < 3) {
+    if (orsApiKey && !useValhalla && scoredRoutes.length < 3) {
       // B9: try 'shortest' first on alternating sides — shortest preference forces
       // ORS to actually deviate (vs 'recommended' which often hugs the same arterial),
       // giving real geometric diversity for the AQI gate to choose from.
+      // Valhalla mode: SKIP this ORS padding — the AQI-weighted routes ARE the route set
+      // (<3 distinct = honestly fewer real options), and 6 sequential ORS calls added ~6s.
       const offsets = [200, -200, 350, -350, 550, -550];
       for (const offset of offsets) {
         if (scoredRoutes.length >= 3) break;
@@ -3148,17 +3222,19 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(emptyResponse('no_distinct_routes_found'));
     }
 
-    // B6 (revised 2026-06-02): rank "cleanest" by the SAME linear inhaled-dose model the UI
-    // displays (computeDose ∝ avg concentration × travel time), so the route labeled cleanest is
-    // ALWAYS the one showing the lowest paparan to the user. Ranking by Haber dose (C^1.3·t) could
-    // disagree — a route avoiding concentration peaks but longer / higher-average would win
-    // "cleanest" yet display MORE µg than the fastest (the live label bug). Concentration =
-    // length-weighted AQI (avg exposure along the route); × duration = total inhaled-dose proxy.
+    // TRAP fix (2026-06-02): rank "cleanest" by cumulative TRAFFIC exposure — the SAME quantity the UI
+    // displays (computeTrapDose) and the fork routes by (the NO2-dominant overlay). trap_exposure =
+    // Σ(traffic-increment µg-equiv · time). The OLD signal (absolute length_weighted_aqi × duration)
+    // was the bug: ambient PM2.5 is background-dominated → spatially flat, so a longer "cleaner" route
+    // scored WORSE (more time × ~equal concentration) → cleanest could show ≥ paparan than fastest.
+    // Routing/ranking/display now agree on traffic exposure. Fall back to the old absolute-dose proxy
+    // ONLY when there's no per-road traffic data (trap_exposure === 0, the roads.length===0 path).
     const cleanCost = (route: ScoredCandidate) => {
-      const conc = route.score?.length_weighted_aqi
-        ?? route.score?.avg_aqi
-        ?? route.score?.pollution_index
-        ?? 100;
+      const trap = route.score?.trap_exposure;
+      if (typeof trap === 'number' && trap > 0) return trap;
+      const avgDelta = route.score?.avg_pm25_delta ?? 0;
+      if (avgDelta > 0) return avgDelta * Math.max(route.duration_seconds, 1);
+      const conc = route.score?.length_weighted_aqi ?? route.score?.avg_aqi ?? route.score?.pollution_index ?? 100;
       return conc * Math.max(route.duration_seconds, 1);
     };
     const shortestDuration = Math.min(...filteredCandidates.map((route) => route.duration_seconds));
@@ -3195,9 +3271,11 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     // middle option — a symptom of stock Valhalla's near-identical alternates (Valhalla-C diverges).
     const doseOf = (r: ScoredCandidate) => cleanCost(r);
     const isRedundant = (cand: ScoredCandidate, ref: ScoredCandidate) => {
-      const dt = Math.abs(cand.duration_seconds - ref.duration_seconds) / Math.max(ref.duration_seconds, 1);
+      const dtSec = Math.abs(cand.duration_seconds - ref.duration_seconds);
       const dd = Math.abs(doseOf(cand) - doseOf(ref)) / Math.max(doseOf(ref), 1);
-      const nearDuplicate = dt < 0.03 && dd < 0.05;
+      // "Same route" only if close on BOTH axes (≤30s AND ≤5% traffic exposure). A route that's a
+      // bit slower but meaningfully cleaner (dd large) is a GENUINE option, not a duplicate → keep.
+      const nearDuplicate = dtSec < 30 && dd < 0.05;
       const paretoDominated = ref.duration_seconds <= cand.duration_seconds && doseOf(ref) <= doseOf(cand);
       return nearDuplicate || paretoDominated;
     };
@@ -3264,6 +3342,8 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     );
     stamp(`forecast (labeled=${labeled.length})`);
 
+    // TRAP: traffic-exposure reduction of each route vs the fastest (the headline "% cleaner").
+    const fastestTrapExposure = labeled.find((lr) => lr.label === 'fastest')?.score?.trap_exposure ?? 0;
     const routes = labeled.map((r, idx) => {
       const forecast = forecasts[idx];
       let forecastSummary: {
@@ -3286,11 +3366,16 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
         vayu_segment_count: r.score?.segment_count ?? 0, vayu_scored: r.score?.vayu_scored ?? false,
         vayu_pollution_index: r.score?.pollution_index ?? 0,
         vayu_haber_dose: r.score?.haber_dose_pm25 ?? 0,
+        vayu_trap_exposure: r.score?.trap_exposure ?? 0,
+        vayu_trap_reduction_pct: fastestTrapExposure > 0
+          ? Math.max(0, Math.round((1 - (r.score?.trap_exposure ?? 0) / fastestTrapExposure) * 100))
+          : 0,
         route_label: r.label, gemini_reasoning: r.reasoning,
         forecast_summary: forecastSummary,
         segments: (r.score?.segments || []).map((s) => ({
           osm_way_id: s.osm_way_id, highway: s.highway, name: s.name,
-          aqi: s.aqi, pm25: s.pm25, no2: s.no2, fraction_along: s.fraction_along, pm25_delta: s.pm25_delta,
+          aqi: s.aqi, pm25: s.pm25, no2: s.no2, fraction_along: s.fraction_along,
+          pm25_delta: s.pm25_delta, no2_delta: s.no2_delta, pm10_delta: s.pm10_delta,
         })),
         traffic_level: estimateTrafficLevel(r.score?.avg_aqi ?? 50),
         green_score: estimateGreenScore(r.score?.segments || []),

@@ -76,6 +76,8 @@ export interface Route {
   vayu_pollution_index?: number;
   vayu_segment_count?: number;
   vayu_haber_dose?: number;
+  vayu_trap_exposure?: number;        // cumulative AVOIDABLE traffic exposure (µg-equiv · s)
+  vayu_trap_reduction_pct?: number;   // % less traffic exposure vs the fastest route (card headline)
   gemini_reasoning?: string;
   route_label?: 'cleanest' | 'balanced' | 'fastest';
 
@@ -299,6 +301,8 @@ export interface RouteSegmentAQI {
   no2: number;
   fraction_along: number;  // 0.0–1.0 position along route
   pm25_delta?: number;
+  no2_delta?: number;      // traffic NO2 increment (µg/m³) — the routable traffic fingerprint
+  pm10_delta?: number;     // traffic PM10 increment (µg/m³)
   length_m?: number;       // optional: segment length, refines per-segment dose time-split
 }
 
@@ -324,6 +328,8 @@ export interface CleanRouteCandidate {
   vayu_segment_count: number;
   vayu_scored: boolean;
   vayu_haber_dose?: number;
+  vayu_trap_exposure?: number;
+  vayu_trap_reduction_pct?: number;
   route_label: 'cleanest' | 'balanced' | 'fastest';
   gemini_reasoning: string | null;
   segments: RouteSegmentAQI[];

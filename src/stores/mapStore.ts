@@ -379,6 +379,8 @@ export const useMapStore = create<MapState>()((set, get) => ({
           vayu_pollution_index: cr.vayu_pollution_index,
           vayu_segment_count: cr.vayu_segment_count,
           vayu_haber_dose: cr.vayu_haber_dose,
+          vayu_trap_exposure: cr.vayu_trap_exposure,
+          vayu_trap_reduction_pct: cr.vayu_trap_reduction_pct,
           gemini_reasoning: cr.gemini_reasoning ?? undefined,
           route_label: cr.route_label,
           forecast_summary: cr.forecast_summary ?? null,

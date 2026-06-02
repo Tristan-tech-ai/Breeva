@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import {
   ChevronLeft, Wind, Cigarette, Activity, Info, Save, Check, Sparkles,
-  ShieldCheck, ShieldAlert, Clock, Gauge, Waves,
+  ShieldCheck, ShieldAlert, Clock, Gauge, Waves, Car,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
@@ -13,7 +13,7 @@ import { useAuthStore } from '../stores/authStore';
 import { Seo } from '../components/Seo';
 import { saveExposureLedger } from '../lib/exposure-ledger';
 import {
-  computeDose, doseBreakdown, CIGARETTE_CAVEAT, WHO_24H_PM25,
+  computeDose, computeTrapDose, doseBreakdown, CIGARETTE_CAVEAT, WHO_24H_PM25,
   type UserExposureProfile, type ExposureDoseResult, type RiskLevel,
 } from '../lib/exposure';
 
@@ -172,6 +172,11 @@ export default function PaparanPage() {
     () => (selected ? computeDose(selected.segments, selected.durationSeconds, profile) : null),
     [selected, profile],
   );
+  // The AVOIDABLE traffic portion (NO₂-dominant) — what a cleaner route actually reduces.
+  const trapResult = useMemo(
+    () => (selected ? computeTrapDose(selected.segments, selected.durationSeconds, profile) : null),
+    [selected, profile],
+  );
 
   // Re-arm Save whenever the inputs change (so a new calc isn't shown as already-saved).
   useEffect(() => { setSaveState('idle'); }, [selected, profile]);
@@ -277,6 +282,29 @@ export default function PaparanPage() {
                 </div>
               </div>
             </motion.div>
+
+            {/* TRAFFIC exposure — the avoidable part (breeva's lever). The total above is the honest
+                "what you breathe"; this is the slice a cleaner route actually cuts. */}
+            {trapResult && (
+              <motion.div variants={item} className="glass-card p-4">
+                <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-sky-500 font-bold">
+                  <Car className="w-3.5 h-3.5" /> Paparan lalu lintas — bisa dihindari
+                </div>
+                <div className="mt-1.5 flex items-baseline gap-2 flex-wrap">
+                  <span className="text-2xl font-extrabold tabular-nums text-sky-600 dark:text-sky-400">
+                    {Math.round(trapResult.dose_ug)}
+                  </span>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    µg dari {Math.round(result.dose_ug)} µg total
+                    {result.dose_ug > 0 && <> · {Math.round((trapResult.dose_ug / result.dose_ug) * 100)}% paparanmu</>}
+                  </span>
+                </div>
+                <p className="text-[10.5px] text-gray-400 dark:text-gray-500 leading-relaxed mt-2">
+                  Sisanya (~{Math.max(0, Math.round(result.dose_ug - trapResult.dose_ug))} µg) adalah polusi latar yang ±sama di semua rute.
+                  Bagian lalu lintas ini — dari mobil, truk, dan motor di jalan ramai — yang ditekan rute "paling bersih".
+                </p>
+              </motion.div>
+            )}
 
             {/* Cigarette equivalent */}
             <motion.div variants={item} className="glass-card p-4">

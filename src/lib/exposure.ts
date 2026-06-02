@@ -244,6 +244,60 @@ export function doseBreakdown(
   }));
 }
 
+// ─── TRAP (traffic-related air pollution) — the AVOIDABLE traffic exposure breeva routes by ──────
+// breeva's cleaner-route value is avoiding TRAFFIC pollution (diesel trucks, 2-stroke motorbikes on
+// busy roads), NOT total ambient air — ambient PM2.5 is background-dominated (≈33.6 µg everywhere) and
+// spatially flat, so showing it makes every route look identical. NO2 dominates: steep near-road
+// gradient + low background = the routable fingerprint (separates road classes ~30×). These constants
+// MUST MATCH the server (api/vayu/route-score.ts trapConcentration) and the routing overlay
+// (scripts/build_valhalla_aqi_overlay.py weights). Parity guard: scripts/test_trap_parity.mjs.
+export const TRAP_W_NO2 = 0.70, TRAP_W_PM25 = 0.20, TRAP_W_PM10 = 0.10;
+export const TRAP_K_NO2 = 7.4; // NO2 µg/m³ → PM2.5-equivalent toxicity scale
+
+export interface TrapSegmentInput {
+  no2_delta?: number;
+  pm25_delta?: number;
+  pm10_delta?: number;
+  fraction_along?: number;
+  length_m?: number;
+}
+
+/** Per-segment PM2.5-equivalent TRAFFIC-increment concentration (µg/m³), NO2-dominant. */
+export function trapConcentration(s: TrapSegmentInput): number {
+  return TRAP_W_NO2 * (Math.max(0, s.no2_delta ?? 0) / TRAP_K_NO2)
+       + TRAP_W_PM25 * Math.max(0, s.pm25_delta ?? 0)
+       + TRAP_W_PM10 * Math.max(0, s.pm10_delta ?? 0);
+}
+
+/**
+ * Inhaled dose of the AVOIDABLE traffic increment (µg PM2.5-equivalent) — the headline a cleaner route
+ * reduces. Reuses computeDose verbatim, fed trap concentration instead of absolute pm25, so it shares
+ * the breathing-zone arithmetic (V·α·IF·Δt). Show the absolute total (computeDose) alongside as honest
+ * "incl. unavoidable background" context. mean_pm25/peak_pm25 in the result = mean/peak TRAP increment.
+ */
+export function computeTrapDose(
+  segments: TrapSegmentInput[],
+  durationSeconds: number,
+  profile: UserExposureProfile,
+): ExposureDoseResult {
+  const trapSegs: DoseSegmentInput[] = (segments || []).map((s) => ({
+    pm25: trapConcentration(s), fraction_along: s.fraction_along, length_m: s.length_m,
+  }));
+  return computeDose(trapSegs, durationSeconds, profile);
+}
+
+/** Per-segment µg of the traffic increment — for the breakdown chart (arterial spikes are the story). */
+export function computeTrapDoseBreakdown(
+  segments: TrapSegmentInput[],
+  durationSeconds: number,
+  profile: UserExposureProfile,
+): DoseSegmentContribution[] {
+  const trapSegs: DoseSegmentInput[] = (segments || []).map((s) => ({
+    pm25: trapConcentration(s), fraction_along: s.fraction_along, length_m: s.length_m,
+  }));
+  return doseBreakdown(trapSegs, durationSeconds, profile);
+}
+
 /** Convenience: estimate duration (s) from total distance (m) for a planned route lacking a time. */
 export function estimateDurationSeconds(distanceMeters: number, mode: ExposureMode): number {
   const v = SPEED_MPS[mode] ?? SPEED_MPS.walk_slow;
