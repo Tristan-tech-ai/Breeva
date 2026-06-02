@@ -617,8 +617,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const now = new Date().toISOString();
     const data: AQIResponse = { tile_id: tileId, ...result, freshness: 'live', computed_at: now };
 
-    // Cache in Redis (15 min)
-    await redisSetEx(redisKey, 900, JSON.stringify(data));
+    // Cache the v1 fallback for only 5 min (vs 15 for v2). The fallback is reached
+    // on a v2 miss — genuine no-coverage OR a TRANSIENT v2 error/timeout. A short
+    // TTL means a transient blip can't pin a whole ~28 m tile to low-confidence
+    // "Kasar" for everyone for 15 min; it self-heals on the next request.
+    await redisSetEx(redisKey, 300, JSON.stringify(data));
 
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     res.setHeader('X-Cache', 'MISS');
