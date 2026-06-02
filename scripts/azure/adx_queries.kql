@@ -1,0 +1,57 @@
+// Breeva — Azure Data Explorer (FREE cluster) per-road AQI engine. $0.
+// breeva_db.road_aqi = 1.39M per-road predictions (osm_way_id, lon, lat, aqi, pm25/no2 + traffic deltas).
+// These KQL queries power the demo + the "Breeva Cloud Health" dashboard panels. Geospatial + stats +
+// (once time-series accumulates) anomaly — most teams use Kusto for logs; we use it as a hyperlocal
+// environmental-analytics engine. Run in the ADX web UI Query tab on breeva_db, or via the SDK.
+
+// ── Q1 · GEOSPATIAL: dirtiest roads inside a polygon (a neighborhood) ─────────────────────────────
+// geo_point_in_polygon() windows 1.39M roads to an arbitrary area in milliseconds.
+let central_jkt = dynamic({"type":"Polygon","coordinates":[[
+  [106.80,-6.24],[106.86,-6.24],[106.86,-6.17],[106.80,-6.17],[106.80,-6.24]]]});
+road_aqi
+| where geo_point_in_polygon(lon, lat, central_jkt)
+| top 10 by no2_delta desc
+| project highway, no2_traffic=round(no2_delta,1), pm25_traffic=round(pm25_delta,2), aqi, lon, lat;
+
+// ── Q2 · GEOSPATIAL: dirtiest roads within 400 m of a point (a pedestrian's location) ─────────────
+let here_lon = 106.8230; let here_lat = -6.2015;
+road_aqi
+| extend dist_m = geo_distance_2points(lon, lat, here_lon, here_lat)
+| where dist_m <= 400
+| top 10 by no2_delta desc
+| project highway, dist_m=round(dist_m,0), no2_traffic=round(no2_delta,1), aqi;
+
+// ── Q3 · SPATIAL ANOMALY: pollution hotspots — roads >3σ above their ~1 km neighbourhood ──────────
+// A spatial outlier detector (works on a snapshot): bin to a ~1km grid, z-score each road vs its cell.
+let cells = road_aqi | where region=="jakarta"
+  | extend cell = strcat(bin(lat,0.01),"_",bin(lon,0.01))
+  | summarize cavg=avg(no2_delta), csd=stdev(no2_delta), n=count() by cell;
+road_aqi | where region=="jakarta"
+| extend cell = strcat(bin(lat,0.01),"_",bin(lon,0.01))
+| join kind=inner (cells | where n>=8) on cell
+| extend z = (no2_delta - cavg) / (csd + 1.0)
+| where z > 3 and no2_delta > 50
+| top 15 by z desc
+| project highway, no2_traffic=round(no2_delta,1), nbhd_avg=round(cavg,1), z=round(z,1), lon, lat;
+
+// ── Q4 · EDA: traffic pollution by region × road class (the "why NO2" story) ──────────────────────
+road_aqi
+| summarize roads=count(), avg_no2_traffic=round(avg(no2_delta),1),
+            avg_pm25_traffic=round(avg(pm25_delta),2), avg_pm25_total=round(avg(pm25),1) by region, highway
+| where roads > 50
+| order by avg_no2_traffic desc;
+
+// ── Q5 · HEATMAP: grid-binned avg traffic NO2 for the dashboard map (Jakarta) ─────────────────────
+road_aqi | where region=="jakarta"
+| summarize avg_no2=round(avg(no2_delta),1), roads=count()
+  by lat=bin(lat,0.005), lon=bin(lon,0.005)
+| where roads >= 2;
+
+// ── Q6 · ROUTE EXPOSURE: total traffic exposure of roads within 25 m of a route polyline ──────────
+// geo_distance_point_to_line() scores how much traffic pollution a given path passes through.
+let route = dynamic({"type":"LineString","coordinates":[
+  [106.7990,-6.2270],[106.7985,-6.2330],[106.7980,-6.2390]]});
+road_aqi | where region=="jakarta"
+| extend d = geo_distance_point_to_line(lon, lat, route)
+| where d <= 25
+| summarize roads_on_path=count(), traffic_no2_sum=round(sum(no2_delta),0), worst_no2=round(max(no2_delta),1);

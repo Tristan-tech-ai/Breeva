@@ -1,0 +1,45 @@
+// Breeva FLAGSHIP — Valhalla cloud-probe health. Azure Function `breeva-probe` (Consumption, $0)
+// probes breeva.site/api/route-score every 15 min + on startup and logs trace "valhalla_probe" to
+// Application Insights. SeverityLevel encodes health (the probe's ok-check includes engine=='valhalla',
+// so the now-honest meta.engine lets it catch a SILENT ORS fallback):
+//   1 Information = healthy (Valhalla served, fast, no error)
+//   2 Warning     = degraded (silent ORS fallback / slow / meta error)
+//   3 Error       = unreachable (probe could not reach breeva.site)
+// Run against the breeva-logs Log Analytics workspace (workspace-based App Insights -> AppTraces).
+
+// ── Panel 1 · health timeline (hourly) ───────────────────────────────────────────────────────────
+AppTraces
+| where TimeGenerated > ago(24h)
+| where Message startswith "valhalla_probe"
+| summarize probes=count(), healthy=countif(SeverityLevel == 1),
+            degraded=countif(SeverityLevel == 2), down=countif(SeverityLevel >= 3)
+  by bin(TimeGenerated, 1h)
+| order by TimeGenerated desc;
+
+// ── Panel 2 · current status ──────────────────────────────────────────────────────────────────────
+AppTraces
+| where Message startswith "valhalla_probe"
+| top 1 by TimeGenerated desc
+| project TimeGenerated,
+          status=case(SeverityLevel == 1, "healthy", SeverityLevel == 2, "degraded", "down");
+
+// ── ALERT condition · fires if any degraded/down probe in the last 20m OR no healthy probe at all ──
+//    (the latter catches "probe stopped / site down"). Returns a row => alert.
+AppTraces
+| where TimeGenerated > ago(20m)
+| where Message startswith "valhalla_probe"
+| summarize healthy=countif(SeverityLevel == 1), bad=countif(SeverityLevel >= 2)
+| where bad > 0 or healthy == 0;
+
+// Wire as an Azure Monitor scheduled-query alert (needs an action group for notification):
+//   az monitor scheduled-query create -g breeva-rg -n breeva-valhalla-down \
+//     --scopes <breeva-logs workspace resourceId> --evaluation-frequency 15m --window-size 20m \
+//     --severity 2 --description "Local Valhalla degraded/down (silent ORS fallback or outage)" \
+//     --condition "count 'AppTraces | where Message startswith \"valhalla_probe\" | where SeverityLevel >= 2' > 0" \
+//     --action <action-group-id>
+//
+// NOTE on the probe deploy: Linux Consumption + Python v2 model needs AzureWebJobsFeatureFlags=
+// EnableWorkerIndexing; deploy a READY package (deps bundled in .python_packages, SCM_DO_BUILD=false)
+// via a forward-slash zip (scripts/.../_zip_func.py) — Oryx remote build + Compress-Archive backslashes
+// both fail. Custom log dimensions (extra=) are NOT propagated by the built-in AI integration; encode
+// metrics in the MESSAGE (JSON) + parse in KQL, or rely on SeverityLevel (current working behavior).

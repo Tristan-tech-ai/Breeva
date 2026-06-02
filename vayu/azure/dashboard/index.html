@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Breeva Cloud Health — $0 Azure Free-Tier Intelligence</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root { --bg:#0b1020; --card:#141b33; --ink:#e7ecff; --mut:#8aa0c8; --acc:#22c55e; --warn:#f59e0b; --bad:#ef4444; --line:#26304f; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:linear-gradient(160deg,#0b1020,#0e1530); color:var(--ink); font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif; }
+  header { padding:22px 26px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:20px; margin:0; font-weight:800; letter-spacing:.2px; }
+  .badge { font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px; background:rgba(34,197,94,.14); color:var(--acc); border:1px solid rgba(34,197,94,.3); }
+  .sub { color:var(--mut); font-size:12px; margin-left:auto; }
+  main { padding:22px 26px; max-width:1280px; margin:0 auto; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 18px; }
+  .card .k { color:var(--mut); font-size:11px; text-transform:uppercase; letter-spacing:.6px; }
+  .card .v { font-size:26px; font-weight:800; margin-top:4px; }
+  .card .v small { font-size:13px; font-weight:600; color:var(--mut); }
+  .grid2 { display:grid; grid-template-columns:1.4fr 1fr; gap:18px; }
+  @media (max-width:880px){ .grid2 { grid-template-columns:1fr; } }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 18px; margin-bottom:18px; }
+  .panel h2 { font-size:13px; text-transform:uppercase; letter-spacing:.6px; color:var(--mut); margin:0 0 12px; font-weight:700; }
+  #map { height:420px; border-radius:12px; overflow:hidden; }
+  .bar { display:flex; align-items:center; gap:10px; margin:6px 0; font-size:13px; }
+  .bar .lbl { width:120px; color:var(--ink); }
+  .bar .track { flex:1; height:10px; background:#0c1228; border-radius:6px; overflow:hidden; }
+  .bar .fill { height:100%; background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444); }
+  .bar .num { width:54px; text-align:right; color:var(--mut); font-variant-numeric:tabular-nums; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:7px 6px; border-bottom:1px solid var(--line); }
+  th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; }
+  .z { color:var(--bad); font-weight:700; }
+  footer { color:var(--mut); font-size:12px; padding:18px 26px 40px; text-align:center; }
+  .ok{color:var(--acc)} .deg{color:var(--warn)} .dn{color:var(--bad)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🌬️ Breeva Cloud Health</h1>
+  <span class="badge">$0 · Azure free-tier</span>
+  <span class="sub" id="gen">loading…</span>
+</header>
+<main>
+  <div class="cards" id="cards"></div>
+  <div class="grid2">
+    <div class="panel">
+      <h2>Per-road traffic NO₂ — Jakarta (Azure Data Explorer geospatial, 1.39M roads)</h2>
+      <div id="map"></div>
+    </div>
+    <div class="panel">
+      <h2>Traffic pollution by road class — the routable signal</h2>
+      <div id="eda"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Pollution hotspots — spatial anomalies (>3σ vs ~1 km neighbourhood, KQL)</h2>
+    <table id="hotspots"><thead><tr><th>Road class</th><th class="n">Traffic NO₂</th><th class="n">Nbhd avg</th><th class="n">z-score</th></tr></thead><tbody></tbody></table>
+  </div>
+  <div class="panel">
+    <h2>Coverage — 17 Indonesian regions</h2>
+    <div id="regions"></div>
+  </div>
+</main>
+<footer>
+  Live from <b>Azure Data Explorer</b> (free cluster) + <b>Application Insights</b> · routing engine self-hosted (Valhalla-C) cloud-probed at $0 ·
+  <span id="probe">probe: …</span>
+</footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script>
+const card=(k,v,sub)=>`<div class="card"><div class="k">${k}</div><div class="v">${v}${sub?` <small>${sub}</small>`:''}</div></div>`;
+fetch('panels.json?_='+Date.now()).then(r=>r.json()).then(P=>{
+  const s=P.summary||{}; document.getElementById('gen').textContent='updated '+(s.generated_at||'');
+  const pr=P.probe||{};
+  let probeTxt='live → App Insights', probeCls='ok';
+  if (typeof pr.total==='number' && pr.total>0){ const bad=(pr.degraded||0)+(pr.down||0);
+    probeTxt = bad? `${pr.healthy}/${pr.total} healthy, ${bad} degraded/down` : `${pr.healthy}/${pr.total} healthy`;
+    probeCls = bad? 'deg':'ok'; }
+  document.getElementById('cards').innerHTML =
+    card('Roads scored', (s.roads||0).toLocaleString()) +
+    card('Regions', s.regions||0) +
+    card('Engine cost', '$0', 'free-tier') +
+    card('Valhalla probe', `<span class="${probeCls}">●</span>`, probeTxt);
+  document.getElementById('probe').innerHTML = `<span class="${probeCls}">${probeTxt}</span>`;
+
+  // EDA bars (road class)
+  const eda=(P.eda||[]).slice(0,12); const mx=Math.max(...eda.map(d=>d.avg_no2_traffic||0),1);
+  document.getElementById('eda').innerHTML = eda.map(d=>{
+    const w=Math.round(100*(d.avg_no2_traffic||0)/mx);
+    return `<div class="bar"><span class="lbl">${d.highway}</span><span class="track"><span class="fill" style="width:${w}%"></span></span><span class="num">${d.avg_no2_traffic}</span></div>`;
+  }).join('');
+
+  // Hotspots table
+  document.querySelector('#hotspots tbody').innerHTML = (P.hotspots||[]).map(h=>
+    `<tr><td>${h.name}</td><td class="n">${h.no2_traffic}</td><td class="n">${h.nbhd_avg}</td><td class="n z">${h.z}</td></tr>`).join('');
+
+  // Region coverage bars
+  const rt=(P.region_totals||[]); const rmx=Math.max(...rt.map(d=>d.roads||0),1);
+  document.getElementById('regions').innerHTML = rt.map(d=>{
+    const w=Math.round(100*(d.roads||0)/rmx);
+    return `<div class="bar"><span class="lbl">${d.region}</span><span class="track"><span class="fill" style="width:${w}%;background:#0ea5e9"></span></span><span class="num">${(d.roads||0).toLocaleString()}</span></div>`;
+  }).join('');
+
+  // Map + heatmap + hotspots
+  const map=L.map('map',{zoomControl:true}).setView([-6.2,106.83],11);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© OSM © CARTO',maxZoom:18}).addTo(map);
+  const hm=(P.heatmap||[]); const hmx=Math.max(...hm.map(d=>d.no2||0),1);
+  L.heatLayer(hm.map(d=>[d.lat,d.lon,Math.min(1,(d.no2||0)/hmx)]),{radius:9,blur:12,maxZoom:14,
+    gradient:{0.2:'#22c55e',0.5:'#f59e0b',0.8:'#ef4444'}}).addTo(map);
+  (P.hotspots||[]).forEach(h=>L.circleMarker([h.lat,h.lon],{radius:6,color:'#ef4444',weight:2,fillOpacity:.5})
+    .bindPopup(`<b>${h.name}</b><br>traffic NO₂ ${h.no2_traffic} (z=${h.z}, nbhd ${h.nbhd_avg})`).addTo(map));
+}).catch(e=>{document.getElementById('gen').textContent='failed to load panels.json: '+e;});
+</script>
+</body>
+</html>

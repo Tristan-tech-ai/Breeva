@@ -1,0 +1,7 @@
+# Azure Functions vendored dependencies — rebuilt via `pip install --target .python_packages`
+# for the READY deploy package; not source, not committed.
+probe_function/.python_packages/
+# build/deploy artifacts
+*.zip
+__pycache__/
+*.pyc

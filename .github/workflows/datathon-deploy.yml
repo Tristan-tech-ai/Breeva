@@ -1,0 +1,48 @@
+# Breeva Cloud Health — deploy the $0 public dashboard to Azure Static Web Apps (Free).
+#
+# This is the judge-facing CI/CD pipeline: on any push that touches the dashboard, GitHub
+# Actions uploads the pre-built static site (index.html + panels.json) to the SWA Free tier.
+# No build step (the site is plain HTML/JS), no Azure credentials beyond the SWA deploy token,
+# no ACR — $0 end to end.
+#
+# panels.json (the LIVE ADX free-cluster + App Insights data) is regenerated on the always-on
+# rig by scripts/azure/refresh_dashboard.ps1 (it needs local `az` auth to the ADX free cluster,
+# which has no service principal) and committed; this workflow ships whatever snapshot is in git.
+#
+# ONE-TIME SETUP (user — I never enter secrets):
+#   Settings > Secrets and variables > Actions > New repository secret
+#     name : AZURE_STATIC_WEB_APPS_API_TOKEN
+#     value: <`az staticwebapp secrets list -n breeva-health -g breeva-rg --query properties.apiKey -o tsv`>
+
+name: Deploy Breeva Cloud Health (Azure SWA Free)
+
+on:
+  push:
+    branches: [develop, valhalla-pivot-preview]
+    paths:
+      - 'vayu/azure/dashboard/**'
+      - '.github/workflows/datathon-deploy.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: swa-breeva-health
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Upload static dashboard to SWA
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: 'vayu/azure/dashboard'   # pre-built static folder
+          output_location: ''                     # nothing to build — upload app_location as-is
+          skip_app_build: true
+          skip_api_build: true
