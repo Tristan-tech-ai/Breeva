@@ -175,6 +175,7 @@ interface LeafletMapProps {
 // ── Inner map controller ─────────────────────────────────────────────
 
 function MapController({
+  isDarkMode,
   showAQIOverlay,
   showAQIStations,
   showPOIs,
@@ -187,7 +188,7 @@ function MapController({
   onRoadLayerMeta,
   onPlaceSelect,
   selectedPoiId,
-}: Pick<LeafletMapProps, 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId'>) {
+}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId'>) {
   const map = useMap();
   const {
     center,
@@ -238,6 +239,10 @@ function MapController({
   useMapEvents({
     click(e) {
       if (isCalculatingRoutes) return;
+      // Defer to a POI/cluster tap on the canvas layer before treating this as a
+      // "set destination" click (sibling map handlers can't be stopped via DomEvent).
+      const poiLayer = (map as unknown as { __poiCanvasLayer?: { tapAt(p: L.Point): boolean } }).__poiCanvasLayer;
+      if (poiLayer && poiLayer.tapAt(e.containerPoint)) return;
       setDestination({ lat: e.latlng.lat, lng: e.latlng.lng });
     },
     dragstart() {
@@ -505,6 +510,7 @@ function MapController({
       highlightGreen={highlightGreen}
       greenOnly={highlightGreen && !showPOIs}
       selectedPoiId={selectedPoiId}
+      isDark={!!isDarkMode}
     />
   ) : null;
 }
@@ -597,6 +603,7 @@ export default function LeafletMap({
       >
         <TileLayer key={tileUrl} url={tileUrl} attribution={tileConfig.attr} />
         <MapController
+          isDarkMode={isDarkMode}
           showAQIOverlay={showAQIOverlay}
           showAQIStations={showAQIStations}
           showPOIs={showPOIs}
