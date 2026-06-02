@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import ngeohash from 'ngeohash';
 import toast from 'react-hot-toast';
-import type { Coordinate, RoutePoint, WalkSession, ExposureResult } from '../types';
+import type { Coordinate, RoutePoint, WalkSession, ExposureResult, RouteSegmentAQI } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from './authStore';
 import { useSettingsStore } from './settingsStore';
@@ -334,6 +334,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
     let walkDose: ExposureDoseResult | null = null;
     let walkProfile: UserExposureProfile | null = null;
     let walkSegCount = 0;
+    let walkSegments: RouteSegmentAQI[] | null = null; // persisted to walks.route_segments for instant Paparan
     const polyline: [number, number][] = routePoints.map(p => [p.lat, p.lng]);
     if (polyline.length >= 2) {
       const vehicleType = getVayuVehicleType(get().activeTransportMode);
@@ -347,6 +348,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
           const dose = computeDose(score.segments, durationSeconds, walkProfile);
           walkDose = dose;
           walkSegCount = score.segments.length;
+          walkSegments = score.segments;
           set({ exposureResult: {
             total_dose_ug: dose.dose_ug,
             cigarette_equivalent: dose.cigarette_equiv,
@@ -430,6 +432,16 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
           saveExposureLedger(walkDose, walkProfile, {
             source: 'walk', walk_id: completedSession.id, durationSeconds, segmentCount: walkSegCount,
           }).catch(() => {});
+        }
+
+        // Best-effort: stash the v2 segments on the walk row so the Exposure (Paparan)
+        // page can dose this walk instantly later, with no route-score round-trip.
+        // Non-blocking; RLS "Users can update own walks" (auth.uid() = user_id).
+        if (!completionResult.queued && walkSegments && walkSegments.length > 0) {
+          void supabase.from('walks')
+            .update({ route_segments: walkSegments })
+            .eq('id', completedSession.id)
+            .then(() => {}, () => {});
         }
 
         localStorage.setItem('breeva_last_walk_date', formatLocalDateYYYYMMDD());

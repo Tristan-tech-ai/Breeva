@@ -20,6 +20,7 @@ export interface SelectedRouteData {
 interface WalkRow {
   id: string;
   route_polyline: string | null;
+  route_segments: RouteSegmentAQI[] | null;
   duration_seconds: number | null;
   distance_meters: number | null;
   completed_at: string | null;
@@ -106,7 +107,7 @@ export default function RouteSelector({
     if (!user) return;
     supabase
       .from('walks')
-      .select('id, route_polyline, duration_seconds, distance_meters, completed_at')
+      .select('id, route_polyline, route_segments, duration_seconds, distance_meters, completed_at')
       .eq('user_id', user.id)
       .not('route_polyline', 'is', null)
       .order('completed_at', { ascending: false })
@@ -131,9 +132,22 @@ export default function RouteSelector({
 
   const pickWalk = async (w: WalkRow) => {
     const key = `walk-${w.id}`;
+    setError(null);
+
+    // Fast path: segments captured at completion → dose instantly, no route-score call.
+    if (w.route_segments && w.route_segments.length > 0) {
+      onSelect({
+        key,
+        label: `Jalan ${w.completed_at ? new Date(w.completed_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : ''}`.trim(),
+        segments: w.route_segments,
+        durationSeconds: w.duration_seconds ?? 0,
+        distanceMeters: w.distance_meters ?? undefined,
+      });
+      return;
+    }
+
     const polyline = parsePolyline(w.route_polyline);
     if (polyline.length < 2) { setError('Jalan ini tidak punya jejak rute yang valid.'); return; }
-    setError(null);
     setLoadingKey(key);
     try {
       const score = await getRouteScoreSegments(polyline, w.duration_seconds ?? undefined);
