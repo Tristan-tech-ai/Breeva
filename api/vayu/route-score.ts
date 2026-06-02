@@ -1758,6 +1758,13 @@ export interface RouteScoreV2Result {
    * Drops the C^1.3 Haber exponent (unjustified for chronic PM2.5). 0 when no traffic data.
    */
   trap_exposure: number;
+  /**
+   * Length-weighted AVERAGE traffic concentration (µg-equiv) along the route — "how clean is the air
+   * on this path", time-independent. The cleaner route avoids high-traffic roads → lower average, so
+   * this shows a bigger, motivating reduction than the time-diluted dose (which a longer walk erodes).
+   * Honest-as-stated (it's the air quality, not the inhaled total — that's trap_exposure).
+   */
+  trap_conc_avg: number;
   segments: Array<{
     osm_way_id: number;
     highway: string;
@@ -1876,6 +1883,7 @@ export async function scorePolyline(
       pollution_index: avgAqi, // use absolute AQI as proxy when no traffic data
       length_weighted_aqi: Math.round(avgAqi),
       trap_exposure: 0, // no per-road traffic deltas here → cleanCost falls back to absolute dose
+      trap_conc_avg: 0,
 
       // B6 fallback: approximate Haber dose from sampled pm25 values, evenly distributed
       // along the polyline. Δ = polyLen × 0.72 s/m × mean(pm25^1.3).
@@ -1945,6 +1953,7 @@ export async function scorePolyline(
   let haberDosePm25 = 0;
   // TRAP: cumulative traffic-increment exposure Σ(trapConc · Δt) — the metric routing/rank/display share.
   let trapExposure = 0;
+  let sumTrapConcLen = 0; // Σ(trapConc · segLength) → length-weighted avg traffic concentration ("cleaner air")
   const PEDESTRIAN_SEC_PER_M = 0.72;
   const HABER_EXPONENT = 1.3;
 
@@ -1983,7 +1992,9 @@ export async function scorePolyline(
     // B6: Haber-rule dose. Time spent in segment × concentration^n.
     const segDurationS = segLength * PEDESTRIAN_SEC_PER_M;
     haberDosePm25 += Math.pow(Math.max(0, result.pm25), HABER_EXPONENT) * segDurationS;
-    trapExposure += trapConcentration(result.no2_delta, result.pm25_delta, result.pm10_delta) * segDurationS;
+    const tConc = trapConcentration(result.no2_delta, result.pm25_delta, result.pm10_delta);
+    trapExposure += tConc * segDurationS;
+    sumTrapConcLen += tConc * segLength;
     if (result.aqi > maxAqi) maxAqi = result.aqi;
     if (result.aqi < minAqi) minAqi = result.aqi;
     if (result.pm25_delta > maxPm25Delta) maxPm25Delta = result.pm25_delta;
@@ -2022,6 +2033,7 @@ export async function scorePolyline(
     length_weighted_aqi: lengthWeightedAqi,
     haber_dose_pm25: Math.round(haberDosePm25 * 100) / 100,
     trap_exposure: Math.round(trapExposure * 100) / 100,
+    trap_conc_avg: sumLength > 0 ? Math.round((sumTrapConcLen / sumLength) * 100) / 100 : 0,
     combined_score: Math.round((weights.aqi * aqiScore + weights.time * timeScore) * 1000) / 1000,
     vehicle_type: vehicleType,
     segment_count: segments.length,
@@ -3254,16 +3266,25 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       ? filteredCandidates.find((c) => c.index === primaryScoredIndex)
       : null;
     const fastestRoute = primaryCandidate ?? byDuration[0];
-    // Cleanest = lowest length-weighted AQI, full stop. If the cleanest IS
-    // also the fastest, that's fine — duplicate labels are deduped by geometry
-    // similarity later, and the UI can collapse identical entries.
-    const cleanestRoute = byClean[0];
+    // Cleanest = lowest TRAP dose — but only present it as a DISTINCT option when it's genuinely worth
+    // it: ≥5% lower inhaled dose OR ≥15% cleaner air (avg traffic concentration). A much-longer route
+    // for a trivial benefit (e.g. +30% time for −1% dose) is a bad option — collapse to fastest so the
+    // user honestly sees one route ("fastest is already clean enough"). If cleanest isn't worth it,
+    // the balanced (a less-aggressive middle) isn't either → collapse all three.
+    const fTrap = fastestRoute.score?.trap_exposure ?? 0;
+    const fConc = fastestRoute.score?.trap_conc_avg ?? 0;
+    const cDoseCut = fTrap > 0 ? 1 - (byClean[0].score?.trap_exposure ?? 0) / fTrap : 0;
+    const cConcCut = fConc > 0 ? 1 - (byClean[0].score?.trap_conc_avg ?? 0) / fConc : 0;
+    const meaningfulClean = byClean[0].index !== fastestRoute.index && (cDoseCut >= 0.05 || cConcCut >= 0.15);
+    const cleanestRoute = meaningfulClean ? byClean[0] : fastestRoute;
     const usedIndices = new Set([fastestRoute.index, cleanestRoute.index]);
-    const balancedRoute = [...filteredCandidates]
-      .filter((route) => !usedIndices.has(route.index))
-      .sort((a, b) => ((normalizeDuration(a) * 0.55) + (normalizeClean(a) * 0.45)) - ((normalizeDuration(b) * 0.55) + (normalizeClean(b) * 0.45)))[0]
-      || byDuration[1]
-      || filteredCandidates[0];
+    const balancedRoute = meaningfulClean
+      ? ([...filteredCandidates]
+          .filter((route) => !usedIndices.has(route.index))
+          .sort((a, b) => ((normalizeDuration(a) * 0.55) + (normalizeClean(a) * 0.45)) - ((normalizeDuration(b) * 0.55) + (normalizeClean(b) * 0.45)))[0]
+          || byDuration[1]
+          || filteredCandidates[0])
+      : fastestRoute;
 
     // Redundancy test for collapsing labels (used in the output dedup below): a candidate is
     // redundant vs a reference if it's a near-duplicate (within ~3% time AND ~5% dose) or
@@ -3342,8 +3363,11 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
     );
     stamp(`forecast (labeled=${labeled.length})`);
 
-    // TRAP: traffic-exposure reduction of each route vs the fastest (the headline "% cleaner").
-    const fastestTrapExposure = labeled.find((lr) => lr.label === 'fastest')?.score?.trap_exposure ?? 0;
+    // TRAP: each route's reduction vs the fastest — concentration ("cleaner air", the headline) +
+    // inhaled dose (the honest total, shown in detail).
+    const fastestScore = labeled.find((lr) => lr.label === 'fastest')?.score;
+    const fastestTrapExposure = fastestScore?.trap_exposure ?? 0;
+    const fastestTrapConc = fastestScore?.trap_conc_avg ?? 0;
     const routes = labeled.map((r, idx) => {
       const forecast = forecasts[idx];
       let forecastSummary: {
@@ -3369,6 +3393,9 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
         vayu_trap_exposure: r.score?.trap_exposure ?? 0,
         vayu_trap_reduction_pct: fastestTrapExposure > 0
           ? Math.max(0, Math.round((1 - (r.score?.trap_exposure ?? 0) / fastestTrapExposure) * 100))
+          : 0,
+        vayu_trap_conc_reduction_pct: fastestTrapConc > 0
+          ? Math.max(0, Math.round((1 - (r.score?.trap_conc_avg ?? 0) / fastestTrapConc) * 100))
           : 0,
         route_label: r.label, gemini_reasoning: r.reasoning,
         forecast_summary: forecastSummary,

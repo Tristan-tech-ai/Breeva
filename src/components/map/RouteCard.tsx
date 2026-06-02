@@ -68,7 +68,8 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
   const exposure = segs?.length ? computeDose(segs, route.duration_seconds, TEASER_PROFILE) : null;
   // The differentiator: dose of the AVOIDABLE traffic increment (NO₂-dominant). A cleaner route lowers this.
   const trapDose = segs?.length ? computeTrapDose(segs, route.duration_seconds, TEASER_PROFILE) : null;
-  const trapReduction = route.vayu_trap_reduction_pct;
+  const concReduction = route.vayu_trap_conc_reduction_pct; // "cleaner air" — avg traffic concentration cut (headline)
+  const trapReduction = route.vayu_trap_reduction_pct;      // inhaled-dose cut (honest total, shown in detail)
   // The 2 worst traffic (NO₂) segments — the busy roads this route does/doesn't take.
   const worstNo2 = [...(segs ?? [])]
     .filter((s) => (s.no2_delta ?? 0) > 0)
@@ -167,12 +168,13 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
         <div className="mt-2">
           <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
             <Wind className="w-3 h-3 text-sky-500" />
-            <span className="text-gray-600 dark:text-gray-300">
-              Paparan lalu lintas ≈ <b className="text-gray-800 dark:text-gray-200">{Math.round(trapDose.dose_ug)} µg</b>
-            </span>
-            {typeof trapReduction === 'number' && trapReduction >= 3 && (
-              <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-semibold">
-                −{trapReduction}% vs tercepat
+            {typeof concReduction === 'number' && concReduction >= 3 ? (
+              <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-bold">
+                🍃 Udara −{concReduction}% polusi lalu lintas
+              </span>
+            ) : (
+              <span className="text-gray-600 dark:text-gray-300">
+                Paparan lalu lintas ≈ <b className="text-gray-800 dark:text-gray-200">{Math.round(trapDose.dose_ug)} µg</b>
               </span>
             )}
             <span
@@ -188,6 +190,10 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
 
           {showDetail && (
             <div className="mt-2 space-y-1 text-[10px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/40 rounded-lg p-2">
+              <div>
+                <span className="font-semibold text-gray-600 dark:text-gray-300">Terhirup (lalu lintas): </span>
+                ≈ {Math.round(trapDose.dose_ug)} µg{typeof trapReduction === 'number' && trapReduction >= 1 ? ` · −${trapReduction}% vs tercepat` : ''}
+              </div>
               {worstNo2.length > 0 && (
                 <div>
                   <span className="font-semibold text-gray-600 dark:text-gray-300">Jalan tersibuk (NO₂): </span>
@@ -203,7 +209,7 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
                 </div>
               )}
               <div className="italic opacity-80">
-                Latar ~tak terhindarkan; yang bisa dihindari = paparan lalu lintas (angka atas).
+                "Udara" = rata-rata polusi lalu lintas di jalur. "Terhirup" = dosis total (× lama jalan). Latar ~sama di semua rute.
               </div>
             </div>
           )}
