@@ -14,12 +14,14 @@
 //
 // Titles/descriptions are kept identical to each page's <Seo/> call so the client and the static
 // HTML agree. Vercel serves these static files (with cleanUrls) before the SPA catch-all rewrite.
+//
+// Lives at the repo ROOT (not scripts/, which .vercelignore excludes from the Vercel build).
+// Runs from the build CWD (repo root) on both local and Vercel, so dist/ resolves via process.cwd().
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
-const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
+const DIST = join(process.cwd(), 'dist');
 const TEMPLATE_PATH = join(DIST, 'index.html');
 
 if (!existsSync(TEMPLATE_PATH)) {
