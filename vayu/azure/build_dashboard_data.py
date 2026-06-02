@@ -156,6 +156,51 @@ def fairness() -> dict:
     return {"bands": band_list, "regions": region_list, "meta": meta}
 
 
+def pipeline() -> dict:
+    """Live ingestion-SLA / freshness (ingest-watch): is data still flowing and are the pg_cron
+    jobs healthy? REAL + live ($0). Surfaces stale stages (e.g. ground-truth labeling) and silent
+    cron failures — the kind of gap that otherwise reads as 'fine' until a demo breaks."""
+    if not POOLER:
+        return {"error": "no SUPABASE_POOLER_URL"}
+    try:
+        import psycopg2
+        cn = psycopg2.connect(POOLER, connect_timeout=20)
+        cur = cn.cursor()
+        cur.execute(
+            "SELECT (SELECT count(*) FROM station_snapshots WHERE measured_at>now()-interval '24 hours'),"
+            " (SELECT round((extract(epoch FROM now()-max(measured_at))/60)::numeric,0) FROM station_snapshots),"
+            " (SELECT count(distinct station_uid) FROM station_snapshots WHERE measured_at>now()-interval '24 hours'),"
+            " (SELECT round((extract(epoch FROM now()-max(computed_at))/3600)::numeric,1) FROM road_aqi_precomputed),"
+            " (SELECT round((extract(epoch FROM now()-max(predicted_at))/86400)::numeric,1)"
+            "    FROM prediction_logs WHERE ground_truth_pm25 IS NOT NULL)")
+        stn_24h, stn_age_min, stn_active, road_age_h, label_age_d = cur.fetchone()
+        cur.execute(
+            "SELECT j.jobname, count(*) FILTER (WHERE d.status='succeeded'),"
+            " count(*) FILTER (WHERE d.status!='succeeded'),"
+            " round((extract(epoch FROM now()-max(d.start_time))/60)::numeric,0)"
+            " FROM cron.job_run_details d JOIN cron.job j ON j.jobid=d.jobid"
+            " WHERE d.start_time>now()-interval '24 hours'"
+            " GROUP BY j.jobname ORDER BY count(*) FILTER (WHERE d.status!='succeeded') DESC, 4 ASC")
+        jobs = [{"job": r[0], "ok": int(r[1]), "bad": int(r[2]), "last_min": int(r[3] or 0)} for r in cur.fetchall()]
+        cn.close()
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e)[:160]}
+    fnum = lambda v: float(v) if v is not None else 1e9  # noqa: E731
+    stages = [
+        {"name": "Station ingestion", "age_min": fnum(stn_age_min), "sla_min": 120,
+         "age_str": f"{int(fnum(stn_age_min))} min ago", "detail": f"{int(stn_24h or 0):,} obs/24h · {int(stn_active or 0)} sensors live"},
+        {"name": "Road-AQI precompute", "age_min": fnum(road_age_h) * 60, "sla_min": 390,
+         "age_str": f"{fnum(road_age_h):.1f} h ago", "detail": "1.39M roads refreshed (~6h cycle)"},
+        {"name": "Ground-truth labeling", "age_min": fnum(label_age_d) * 1440, "sla_min": 2880,
+         "age_str": f"{fnum(label_age_d):.1f} d ago", "detail": "last validation batch (labeling paused)"},
+    ]
+    for s in stages:
+        s["fresh"] = s["age_min"] <= s["sla_min"]
+    return {"stages": stages, "jobs_total": len(jobs),
+            "jobs_ok_24h": sum(j["ok"] for j in jobs), "jobs_bad_24h": sum(j["bad"] for j in jobs),
+            "failing": [j for j in jobs if j["bad"] > 0][:6]}
+
+
 def main() -> None:
     panels: dict = {}
     panels["summary"] = {
@@ -174,6 +219,7 @@ def main() -> None:
         "by lat=round(bin(lat,0.004),3), lon=round(bin(lon,0.004),3) | where n>=2 | project lat, lon, no2")
     panels["probe"] = probe_health()
     panels["fairness"] = fairness()
+    panels["pipeline"] = pipeline()
     panels["stations"] = rows("stations | where isnotnull(lat) and isnotnull(lon) | project lat, lon, region")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -185,6 +231,10 @@ def main() -> None:
           f"probe={panels['probe']}")
     print(f"  fairness bands: " + " | ".join(f"{b['band']}={b['pct']}%(refuse {b['refuse_pct']}%)" for b in fb)
           + f"  meta={panels['fairness']['meta']}")
+    pp = panels["pipeline"]
+    print(f"  pipeline: " + (pp.get("error") or
+          " | ".join(f"{s['name']}={'OK' if s['fresh'] else 'STALE'}({s['age_str']})" for s in pp.get("stages", []))
+          + f"  cron {pp.get('jobs_total')}jobs ok={pp.get('jobs_ok_24h')} bad={pp.get('jobs_bad_24h')}"))
 
 
 if __name__ == "__main__":

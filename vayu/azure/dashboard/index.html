@@ -44,6 +44,13 @@
   .flbl { font-size:12px; color:var(--mut); line-height:1.4; }
   .fair-note { font-size:12.5px; color:var(--mut); margin:12px 2px 0; line-height:1.55; }
   .fair-note b { color:var(--ink); }
+  .pipe-stages { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  @media (max-width:760px){ .pipe-stages { grid-template-columns:1fr; } }
+  .stage { background:#0c1228; border:1px solid var(--line); border-radius:12px; padding:12px 14px; display:flex; align-items:flex-start; gap:10px; }
+  .stage .dot { width:10px; height:10px; border-radius:50%; margin-top:4px; flex:none; }
+  .stage .sname { font-weight:700; font-size:13px; }
+  .stage .sdet { color:var(--mut); font-size:11.5px; line-height:1.4; margin:2px 0; }
+  .stage .sage { font-size:11px; font-weight:600; }
   code { background:#0c1228; border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:11.5px; color:#a7f3d0; }
   footer { color:var(--mut); font-size:12px; padding:18px 26px 40px; text-align:center; }
   .ok{color:var(--acc)} .deg{color:var(--warn)} .dn{color:var(--bad)}
@@ -67,6 +74,11 @@
       <h2>Traffic pollution by road class — the routable signal</h2>
       <div id="eda"></div>
     </div>
+  </div>
+  <div class="panel">
+    <h2>Pipeline health — live ingestion SLA &amp; pg_cron freshness ($0 ingest-watch)</h2>
+    <div class="pipe-stages" id="pipe-stages"></div>
+    <p class="fair-note" id="pipe-cron">…</p>
   </div>
   <div class="panel">
     <h2>Monitoring-desert equity — where the model is validated vs runs unchecked (AI accountability · environmental justice)</h2>
@@ -136,6 +148,18 @@ fetch('panels.json?_='+Date.now()).then(r=>r.json()).then(P=>{
   }).join('');
   const worst=(F.regions||[]).filter(r=>r.desert_pct>=99).slice(0,5).map(r=>r.region);
   if(worst.length) document.getElementById('f-worst').textContent=`Entire regions have effectively no usable coverage: ${worst.join(', ')} (100% desert).`;
+
+  // Pipeline health (ingest-watch)
+  const PL=P.pipeline||{};
+  if(PL.stages){
+    document.getElementById('pipe-stages').innerHTML=PL.stages.map(st=>{
+      const c=st.fresh?'var(--acc)':'var(--warn)';
+      return `<div class="stage"><span class="dot" style="background:${c}"></span><div><div class="sname">${st.name}</div><div class="sdet">${st.detail}</div><div class="sage" style="color:${c}">${st.fresh?'fresh':'STALE'} · ${st.age_str}</div></div></div>`;
+    }).join('');
+    const fail=(PL.failing||[]);
+    const ft=fail.length?` ${fail.length} job(s) with intermittent failures: ${fail.map(f=>`${f.job} (${f.bad})`).join(', ')}.`:' no failures.';
+    document.getElementById('pipe-cron').innerHTML=`<b>${PL.jobs_total||0}</b> pg_cron jobs · <b>${(PL.jobs_ok_24h||0).toLocaleString()}</b> successful runs / 24h · <b>${PL.jobs_bad_24h||0}</b> failed.${ft} Read live from Supabase each refresh — the down/slow/silent-failure alert pattern of the Valhalla cloud-probe, extended to the data plane.`;
+  } else { document.getElementById('pipe-cron').textContent='pipeline: '+(PL.error||'n/a'); }
 
   // Hotspots table
   document.querySelector('#hotspots tbody').innerHTML = (P.hotspots||[]).map(h=>
