@@ -335,10 +335,10 @@ These are embedded into the client build through Vite and must use the `VITE_` p
 - `VITE_GOOGLE_CLIENT_ID`
 - `VITE_OPENROUTESERVICE_API_KEY`
 - `VITE_GEMINI_API_KEY`
-- `VITE_GEOAPIFY_API_KEY`
 
 ### Server-Side Variables
 
+- `GEOAPIFY_API_KEY` (POI discovery — injected by the `api/searchapi?provider=geoapify` proxy)
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
@@ -353,7 +353,7 @@ These are embedded into the client build through Vite and must use the `VITE_` p
 
 ### Notes
 
-- `VITE_GEOAPIFY_API_KEY` is now expected from env rather than being hardcoded.
+- Geoapify POI discovery is **server-side only** — the key (`GEOAPIFY_API_KEY`) is injected by the `api/searchapi?provider=geoapify` proxy and never bundled in the client.
 - Some code paths support both `SUPABASE_URL` and `VITE_SUPABASE_URL`, but server-side code should prefer non-public server variables when available.
 - Open-Meteo does not require an API key.
 
@@ -414,7 +414,7 @@ At minimum, production usually needs:
 - `VITE_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `VITE_OPENROUTESERVICE_API_KEY`
-- `VITE_GEOAPIFY_API_KEY`
+- `GEOAPIFY_API_KEY`
 - `SEARCHAPI_KEY`
 - `RESEND_API_KEY`
 - `UPSTASH_REDIS_REST_URL`
