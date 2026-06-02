@@ -64,19 +64,13 @@ function setMapBearing(map: L.Map, deg: number): void {
   }
 }
 
-// Coarse, well-separated zoom levels so noisy GPS speed near walking pace can't
-// flip the zoom every tick. One stable level for the whole walking range; only
-// cycling/vehicle widen out. Combined with EMA-smoothed speed + ≥0.9 hysteresis,
-// the camera holds a steady zoom instead of pumping in/out.
-function zoomForSpeed(speed: number): number {
-  if (speed < 2.4) return 17;  // standing → brisk walk (0–~8.6 km/h)
-  if (speed < 5.5) return 16;  // jog / cycling
-  return 15;                    // vehicle
-}
-// Bias the camera ahead of the user so they see the road they're walking into.
-function lookAheadForSpeed(speed: number): number {
-  return Math.max(20, Math.min(120, 25 + speed * 12));
-}
+// Navigation camera tuning. ZOOM IS FIXED during a walk — any speed-driven zoom
+// thrashes because noisy GPS speed keeps crossing thresholds. The camera instead
+// glides via a per-frame eased follow (rAF), so it's smooth and never pumps in/out.
+const NAV_ZOOM = 17;          // stable walking zoom (user can still pinch)
+const LOOK_AHEAD_M = 28;      // bias the view slightly down the road ahead
+const CENTER_EASE = 0.14;     // per-frame lerp toward the target (lower = smoother/slower)
+const BEARING_EASE = 0.16;    // per-frame ease for heading-up rotation
 
 // ── CARTO / ESRI raster tile URLs ────────────────────────────────────
 
@@ -211,7 +205,6 @@ function MapController({
   const isTracking = useWalkStore((s) => s.isTracking);
   const walkPos = useWalkStore((s) => s.currentPosition);
   const heading = useWalkStore((s) => s.heading);
-  const currentSpeed = useWalkStore((s) => s.currentSpeed);
   const navFraction = useWalkStore((s) => s.navProgress?.fraction ?? 0);
 
   const prevCenterRef = useRef(center);
@@ -219,9 +212,11 @@ function MapController({
   const destMarkerRef = useRef<L.Marker | null>(null);
   const routeLayerRef = useRef(L.layerGroup());
   const traveledLayerRef = useRef(L.layerGroup());
-  const lastZoomRef = useRef<number | null>(null);
-  const speedEmaRef = useRef<number | null>(null);
   const followingRef = useRef(isFollowing);
+  const camTargetRef = useRef<Coordinate | null>(null); // point the camera eases toward (look-ahead)
+  const camBearingRef = useRef(0);                       // desired bearing: heading (heading-up) or 0 (north-up)
+  const rafRef = useRef(0);                              // smooth-follow animation frame id
+  const navZoomedRef = useRef(false);                    // did we snap to nav zoom this walk yet?
 
   const livePos = isTracking ? (walkPos ?? userLocation) : userLocation;
 
@@ -303,79 +298,81 @@ function MapController({
     }
   }, [livePos, heading, map]);
 
-  // Follow camera: chase the user with look-ahead + speed-zoom + heading-up
+  // Keep the follow flag in a ref for the drag handler + rAF loop.
   useEffect(() => {
     followingRef.current = isFollowing;
   }, [isFollowing]);
 
+  // Update the camera TARGET (a point a little ahead on the route) + desired
+  // bearing whenever position / heading / route changes. This only writes refs —
+  // the rAF loop below does the actual gliding, so there's no per-tick animation.
   useEffect(() => {
-    if (!isTracking || !isFollowing) return;
     const pos = walkPos ?? userLocation;
     if (!pos || !isFinite(pos.lat) || !isFinite(pos.lng)) return;
-    try {
-      const container = map.getContainer();
-      if (!container || !document.body.contains(container)) return;
-    } catch {
-      return;
-    }
-
-    // Smooth the noisy GPS speed before it drives zoom/look-ahead.
-    speedEmaRef.current = speedEmaRef.current == null
-      ? currentSpeed
-      : speedEmaRef.current * 0.7 + currentSpeed * 0.3;
-    const smSpeed = speedEmaRef.current;
-
-    // Look ahead along the route so the camera leads the puck.
     let target: Coordinate = pos;
     const wps = selectedRoute?.waypoints;
     if (wps && wps.length >= 2) {
       const prog = routeProgress(pos, wps, selectedRoute?.distance_meters);
-      if (prog) target = lookAheadPoint(wps, prog.snapped, prog.segIndex, lookAheadForSpeed(smSpeed));
+      if (prog) target = lookAheadPoint(wps, prog.snapped, prog.segIndex, LOOK_AHEAD_M);
     }
+    camTargetRef.current = target;
+    camBearingRef.current = navCameraMode === 'heading' && heading != null ? heading : 0;
+  }, [walkPos, userLocation, heading, navCameraMode, selectedRoute]);
 
-    if (navCameraMode === 'heading' && heading != null) setMapBearing(map, heading);
-    else setMapBearing(map, 0);
-
+  // Smooth follow: ONE rAF loop eases the map toward the target at a FIXED zoom.
+  // Zoom never changes automatically → it cannot pump in/out. Position is lerped
+  // every frame (not panTo per GPS tick) → buttery, jitter-free motion.
+  useEffect(() => {
+    if (!isTracking || !isFollowing) return;
+    let alive = true;
     const reduce = prefersReducedMotion();
-    try {
-      // Pan every tick (smooth), but change ZOOM only when the level genuinely
-      // shifts (≥0.9) — otherwise setView would re-animate the zoom each tick and
-      // the map visibly pumps in/out even when the user is barely moving.
-      const desiredZoom = zoomForSpeed(smSpeed);
-      if (lastZoomRef.current == null) {
-        lastZoomRef.current = desiredZoom;
-        map.setView([target.lat, target.lng], desiredZoom, { animate: !reduce, duration: reduce ? 0 : 0.6 });
-      } else {
-        if (Math.abs(desiredZoom - lastZoomRef.current) >= 0.9) {
-          lastZoomRef.current = desiredZoom;
-          map.setZoom(desiredZoom, { animate: !reduce });
-        }
-        map.panTo([target.lat, target.lng], {
-          animate: !reduce,
-          duration: reduce ? 0 : 0.7,
-          easeLinearity: 0.22,
-          noMoveStart: true,
-        });
-      }
-    } catch { /* map already removed */ }
-  }, [walkPos, userLocation, isTracking, isFollowing, navCameraMode, heading, currentSpeed, selectedRoute, map]);
 
-  // Recenter: snap back to the user when the FAB is tapped
+    const loop = () => {
+      if (!alive) return;
+      const t = camTargetRef.current;
+      if (t) {
+        try {
+          const container = map.getContainer();
+          if (container && document.body.contains(container)) {
+            if (!navZoomedRef.current) {
+              // First frame of the walk: snap into the nav zoom, centered on the user.
+              navZoomedRef.current = true;
+              map.setView([t.lat, t.lng], NAV_ZOOM, { animate: false });
+            } else {
+              const c = map.getCenter();
+              const dLat = t.lat - c.lat;
+              const dLng = t.lng - c.lng;
+              const ease = reduce ? 1 : CENTER_EASE;
+              // Glide toward the target at the CURRENT zoom (respects user pinch).
+              if (Math.abs(dLat) > 1e-6 || Math.abs(dLng) > 1e-6) {
+                map.setView([c.lat + dLat * ease, c.lng + dLng * ease], map.getZoom(), { animate: false });
+              }
+            }
+            // Heading-up: ease the bearing toward the desired one (no-op in north mode).
+            const cb = getMapBearing(map);
+            const db = ((camBearingRef.current - cb + 540) % 360) - 180;
+            if (Math.abs(db) > 0.5) setMapBearing(map, cb + db * (reduce ? 1 : BEARING_EASE));
+          }
+        } catch { /* map removed mid-frame */ }
+      }
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+    return () => { alive = false; cancelAnimationFrame(rafRef.current); };
+  }, [isTracking, isFollowing, map]);
+
+  // Recenter FAB: re-snap to the nav zoom + re-center (the loop does it next frame).
   useEffect(() => {
     if (recenterNonce === 0) return;
-    const pos = useWalkStore.getState().currentPosition ?? userLocation;
-    if (!pos) return;
-    try {
-      map.setView([pos.lat, pos.lng], lastZoomRef.current ?? map.getZoom(), { animate: true, duration: 0.5 });
-    } catch { /* ignore */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    navZoomedRef.current = false;
   }, [recenterNonce]);
 
-  // Reset bearing + cached zoom when a walk ends
+  // Reset camera state when a walk ends.
   useEffect(() => {
     if (!isTracking) {
-      lastZoomRef.current = null;
-      speedEmaRef.current = null;
+      navZoomedRef.current = false;
+      camTargetRef.current = null;
+      camBearingRef.current = 0;
       setMapBearing(map, 0);
     }
   }, [isTracking, map]);
