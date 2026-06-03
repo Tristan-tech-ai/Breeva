@@ -203,10 +203,10 @@ export default function ChatAssistant({ onClose }: { onClose: () => void }) {
 
             <div className="h-px bg-gradient-to-r from-transparent via-gray-200/70 dark:via-white/10 to-transparent" />
 
-            {/* Messages */}
-            <div ref={scrollRef} className="relative flex-1 overflow-y-auto overscroll-contain px-4 py-4 space-y-3 scrollbar-hide">
+            {/* Messages (anchored to the bottom so content sits next to the composer) */}
+            <div ref={scrollRef} className="relative flex-1 overflow-y-auto overscroll-contain px-4 py-4 scrollbar-hide flex flex-col">
               {messages.length === 0 && (
-                <div className="flex flex-col items-center text-center pt-7 pb-3">
+                <div className="mt-auto flex flex-col items-center text-center pb-2">
                   <div className="relative mb-4">
                     {!reduce && (
                       <motion.span aria-hidden className="absolute -inset-3 rounded-full blur-xl"
@@ -226,6 +226,8 @@ export default function ChatAssistant({ onClose }: { onClose: () => void }) {
                 </div>
               )}
 
+              {messages.length > 0 && (
+              <div className="mt-auto space-y-3">
               {messages.map((m, i) => (
                 <motion.div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}
                   initial={reduce ? false : { opacity: 0, y: 8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -262,6 +264,8 @@ export default function ChatAssistant({ onClose }: { onClose: () => void }) {
                   </div>
                 </motion.div>
               ))}
+              </div>
+              )}
             </div>
 
             {/* Suggested chips (empty state) */}
@@ -283,7 +287,7 @@ export default function ChatAssistant({ onClose }: { onClose: () => void }) {
 
             {/* Composer */}
             <div className="px-3 py-3 safe-area-bottom">
-              <div className="flex items-end gap-2 rounded-[20px] border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-gray-800/70 backdrop-blur px-3 py-2 transition-all focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400/25 focus-within:shadow-[0_0_0_4px_rgba(16,185,129,0.06)]">
+              <div className="flex items-end gap-2 rounded-[20px] border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-gray-800/70 backdrop-blur px-3 py-2 transition-colors focus-within:border-emerald-400/80">
                 <Wind className="w-4 h-4 text-teal-400 flex-shrink-0 mb-1.5" />
                 <textarea
                   value={input}
