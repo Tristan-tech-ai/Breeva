@@ -107,7 +107,7 @@ const shapeEarth: ShapeFn = (i, n, t, pos, col) => {
 
 /* 3 – Neural Network (Route Intelligence) */
 const shapeNeural: ShapeFn = (i, n, t, pos, col) => {
-  const D = 60, W = 30, spd = 2, syn = 0.2, layers = 5;
+  const D = 100, W = 55, spd = 2, syn = 0.2, layers = 5;
   const tt = t * spd;
   if (i < n * 0.4) {
     const li = Math.floor((i / (n * 0.4)) * layers);
