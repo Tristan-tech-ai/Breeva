@@ -7,6 +7,7 @@ import { useIsDark } from '../stores/settingsStore';
 import AQICard from '../components/features/AQICard';
 import SearchBar from '../components/map/SearchBar';
 import { CITIES } from '../lib/cities';
+import type { PollutantType, RoadDisplayMode } from '../types';
 
 // Lazy map (leaflet ~185KB) — progressive enhancement for real browsers; crawlers
 // read the prerendered text below. The whole map stack is auth-free.
@@ -20,6 +21,20 @@ const AQI_LEGEND = [
   { label: 'Sangat buruk (201+)', color: '#a855f7' },
 ];
 
+// Pollutant + road-resolution controls (mirrors the main map's layer menu).
+// Defined locally so this page does NOT statically import RoadPollutionLayer
+// (which pulls leaflet) — keeps the map chunk lazy.
+const POLLUTANTS: { id: PollutantType; label: string; unit: string }[] = [
+  { id: 'aqi', label: 'AQI', unit: '' },
+  { id: 'pm25', label: 'PM₂.₅', unit: 'µg/m³' },
+  { id: 'no2', label: 'NO₂', unit: 'µg/m³' },
+  { id: 'o3', label: 'O₃', unit: 'µg/m³' },
+  { id: 'pm10', label: 'PM₁₀', unit: 'µg/m³' },
+];
+const ROAD_MODES: [RoadDisplayMode, string][] = [['total', 'Absolut'], ['delta', 'Δ Jalan'], ['contrast', 'Kontras']];
+const CONCENTRATION = ['pm25', 'no2', 'pm10'];
+const RAMP = 'linear-gradient(90deg,#00E400,#FFFF00,#FF7E00,#FF0000,#8F3F97,#7E0023)';
+
 const HOW = [
   { Icon: Wind, title: 'AQI per ruas jalan', desc: 'Mesin VAYU mengkalibrasi kualitas udara untuk tiap segmen jalan — bukan satu angka untuk seluruh kota.' },
   { Icon: Route, title: 'Rute sadar-polusi', desc: 'Tiga pilihan rute — Bersih, Seimbang, Cepat — masing-masing diberi skor udara dan estimasi paparan.' },
@@ -31,6 +46,10 @@ export default function ExploreMapPage() {
   const isDark = useIsDark();
   const currentAQI = useMapStore((s) => s.currentAQI);
   const [located, setLocated] = useState(false);
+  const [pollutant, setPollutant] = useState<PollutantType>('aqi');
+  const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('total');
+  const activeP = POLLUTANTS.find((p) => p.id === pollutant) ?? POLLUTANTS[0];
+  const showRoadModes = CONCENTRATION.includes(pollutant);
 
   // Populate AQI for the default city (Jakarta) WITHOUT prompting for geolocation.
   useEffect(() => {
@@ -76,10 +95,55 @@ export default function ExploreMapPage() {
           </p>
         </header>
 
+        {/* Layer controls — pollutant type + road resolution (mirrors main map) */}
+        <div className="glass-card p-4 space-y-3">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Jenis polusi</p>
+            <div className="flex flex-wrap gap-2">
+              {POLLUTANTS.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => { setPollutant(p.id); if (!CONCENTRATION.includes(p.id)) setRoadDisplayMode('total'); }}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
+                    pollutant === p.id
+                      ? 'gradient-primary text-white shadow-sm'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {showRoadModes && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Resolusi jalan</p>
+              <div className="flex flex-wrap gap-2">
+                {ROAD_MODES.map(([m, label]) => (
+                  <button
+                    key={m}
+                    onClick={() => setRoadDisplayMode(m)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
+                      roadDisplayMode === m
+                        ? 'bg-sky-600 text-white shadow-sm'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10.5px] text-gray-400 dark:text-gray-500 mt-2 leading-relaxed">
+                <b>Absolut</b>: konsentrasi total vs ambang WHO/EPA. <b>Δ Jalan</b> &amp; <b>Kontras</b>: menonjolkan kontribusi lalu lintas per ruas jalan (dispersi CALINE).
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Interactive map (progressive enhancement) */}
         <div className="relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg" style={{ height: 'min(58vh, 480px)' }}>
           <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
-            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" />
+            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" pollutant={pollutant} roadDisplayMode={roadDisplayMode} />
           </Suspense>
 
           {/* Search overlay */}
@@ -102,17 +166,31 @@ export default function ExploreMapPage() {
           )}
         </div>
 
-        {/* AQI legend */}
+        {/* Legend — reflects the selected pollutant / road mode */}
         <div className="glass-card p-4">
-          <p className="text-xs font-semibold text-gray-900 dark:text-white mb-2.5">Arti warna jalan</p>
-          <div className="flex flex-wrap gap-x-4 gap-y-2">
-            {AQI_LEGEND.map((l) => (
-              <div key={l.label} className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded-full" style={{ background: l.color }} />
-                <span className="text-[11px] text-gray-600 dark:text-gray-300">{l.label}</span>
+          <p className="text-xs font-semibold text-gray-900 dark:text-white mb-2.5">
+            Arti warna jalan — {activeP.label}
+            {showRoadModes && roadDisplayMode !== 'total' && (roadDisplayMode === 'delta' ? ' · Δ jalan' : ' · kontras')}
+          </p>
+          {pollutant === 'aqi' ? (
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {AQI_LEGEND.map((l) => (
+                <div key={l.label} className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded-full" style={{ background: l.color }} />
+                  <span className="text-[11px] text-gray-600 dark:text-gray-300">{l.label}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div>
+              <div className="h-2.5 rounded-full" style={{ background: RAMP }} />
+              <div className="flex justify-between mt-1.5 text-[10px] text-gray-400 dark:text-gray-500">
+                <span>Rendah</span>
+                <span>{roadDisplayMode === 'total' ? `Konsentrasi ${activeP.unit}` : 'Kontribusi lalu lintas'}</span>
+                <span>Tinggi</span>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* How it works */}
