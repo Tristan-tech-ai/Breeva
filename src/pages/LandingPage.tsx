@@ -150,8 +150,8 @@ export default function LandingPage() {
                 <Leaf className="w-3.5 h-3.5" /> Navigasi udara bersih
               </div>
               <h1 className="text-[2.5rem] sm:text-5xl md:text-6xl font-extrabold leading-[1.05] tracking-tight mb-4">
-                Rute Terbersih,<br />
-                <span className="text-emerald-600">Napas Terjernih.</span>
+                Rute Bersih,<br />
+                <span className="text-emerald-600">Napas Jernih.</span>
               </h1>
               <p className="text-[15px] sm:text-base text-slate-500 mb-8 leading-relaxed">
                 Breeva memetakan kualitas udara di setiap ruas jalan, menemukan rute jalan kaki paling bersih,
