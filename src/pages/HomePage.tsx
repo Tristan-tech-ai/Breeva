@@ -36,6 +36,7 @@ import { useIsDark } from '../stores/settingsStore';
 import { requestDeviceHeadingPermission } from '../hooks/useDeviceHeading';
 // Lazy: defers leaflet (~122KB) + map layers out of the eager main-entry bundle.
 const LeafletMap = lazy(() => import('../components/map/LeafletMap'));
+const ChatAssistant = lazy(() => import('../components/map/ChatAssistant'));
 import SearchBar from '../components/map/SearchBar';
 import BottomSheet from '../components/map/BottomSheet';
 import RouteCard from '../components/map/RouteCard';
@@ -145,6 +146,7 @@ export default function HomePage() {
   const [mapStyle, setMapStyle] = useState<'voyager' | 'osm' | 'satellite'>('voyager');
   const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
   const [showLayersSheet, setShowLayersSheet] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
   useEffect(() => {
@@ -328,6 +330,16 @@ export default function HomePage() {
                 <Crosshair className="w-4.5 h-4.5" />
               </button>
             )}
+
+            {/* Vayu AI assistant button (3rd, always visible — bottom of the stack) */}
+            <button
+              onClick={() => setShowChat(true)}
+              className="w-10 h-10 rounded-xl glass-card flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all text-violet-600 dark:text-violet-400"
+              title="Tanya Vayu"
+              aria-label="Tanya Vayu — asisten udara"
+            >
+              <Sparkles className="w-4.5 h-4.5" />
+            </button>
           </div>
         </>
       )}
@@ -688,6 +700,12 @@ export default function HomePage() {
       />
 
       {/* Map Layers Sheet */}
+      {showChat && (
+        <Suspense fallback={null}>
+          <ChatAssistant onClose={() => setShowChat(false)} />
+        </Suspense>
+      )}
+
       <MapLayersSheet
         isOpen={showLayersSheet}
         onClose={() => setShowLayersSheet(false)}
