@@ -334,11 +334,12 @@ export default function HomePage() {
             {/* Vayu AI assistant button (3rd, always visible — bottom of the stack) */}
             <button
               onClick={() => setShowChat(true)}
-              className="w-10 h-10 rounded-xl glass-card flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all text-violet-600 dark:text-violet-400"
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-md ring-1 ring-white/50 hover:shadow-lg hover:scale-105 active:scale-95 transition-all"
+              style={{ background: 'linear-gradient(135deg,#10b981,#14b8a6,#06b6d4)', boxShadow: '0 4px 14px -2px rgba(20,184,166,0.5)' }}
               title="Tanya Vayu"
               aria-label="Tanya Vayu — asisten udara"
             >
-              <Sparkles className="w-4.5 h-4.5" />
+              <Sparkles className="w-4.5 h-4.5" strokeWidth={2.2} />
             </button>
           </div>
         </>

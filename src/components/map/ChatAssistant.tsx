@@ -2,11 +2,14 @@
 // bundle). Streams Gemini token-by-token via the Supabase Edge proxy, grounded in
 // live AQI/route/profile context, and ACTIONABLE via function-calling tools that
 // drive the real map (find clean route, check air, exposure, mode, stats).
+//
+// Visual direction: "aurora air" — a living, breathing assistant. Soft emerald→
+// teal→cyan aura, refined glassmorphism, atmospheric depth, staggered motion.
 
-import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useRef, useEffect, type ReactNode, type ComponentType } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { Sparkles, X, ArrowUp, Square, Trash2, Wind, Navigation, BarChart3 } from 'lucide-react';
+import { Sparkles, X, ArrowUp, Square, Trash2, Wind, Navigation, BarChart3, Footprints, Activity } from 'lucide-react';
 import { useMapStore } from '../../stores/mapStore';
 import { useI18nStore } from '../../stores/i18nStore';
 import { streamChat, type ChatMessage } from '../../lib/chat';
@@ -24,11 +27,11 @@ function renderLite(text: string): ReactNode {
     const bullet = /^\s*-\s+/.test(line);
     const content = line.replace(/^\s*-\s+/, '');
     const parts = content.split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
-      p.startsWith('**') && p.endsWith('**') ? <strong key={j}>{p.slice(2, -2)}</strong> : <span key={j}>{p}</span>,
+      p.startsWith('**') && p.endsWith('**') ? <strong key={j} className="font-bold">{p.slice(2, -2)}</strong> : <span key={j}>{p}</span>,
     );
     return (
       <span key={i} className={bullet ? 'flex gap-1.5' : 'block'}>
-        {bullet && <span className="text-primary-500">•</span>}
+        {bullet && <span className="text-emerald-500 select-none">•</span>}
         <span>{parts}</span>
       </span>
     );
@@ -126,107 +129,162 @@ export default function ChatAssistant({ onClose }: { onClose: () => void }) {
     else if (action.kind === 'openPaparan') { close(); navigate('/paparan'); }
   }
 
-  const suggestions = [
-    { key: 'safe', label: t('chat.suggest_safe') },
-    { key: 'route', label: t('chat.suggest_route') },
-    { key: 'aqi', label: t('chat.suggest_aqi') },
-    { key: 'exposure', label: t('chat.suggest_exposure') },
+  const suggestions: { key: string; icon: ComponentType<{ className?: string }>; label: string }[] = [
+    { key: 'safe', icon: Footprints, label: t('chat.suggest_safe') },
+    { key: 'route', icon: Navigation, label: t('chat.suggest_route') },
+    { key: 'aqi', icon: Wind, label: t('chat.suggest_aqi') },
+    { key: 'exposure', icon: Activity, label: t('chat.suggest_exposure') },
   ];
-
-  const aqiPill = currentAQI ? (
-    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: aqiColor(currentAQI.aqi) }}>
-      AQI {currentAQI.aqi}
-    </span>
-  ) : null;
 
   return (
     <AnimatePresence onExitComplete={onClose}>
       {open && (
         <>
-          <motion.div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px]"
+          <motion.div className="fixed inset-0 z-50 bg-gray-900/30 backdrop-blur-[3px]"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={close} />
+
           <motion.div
-            className="fixed bottom-0 left-0 right-0 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-md md:bottom-20 z-50 flex flex-col bg-white dark:bg-gray-900 rounded-t-3xl md:rounded-3xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.2)] md:shadow-2xl md:border border-gray-100 dark:border-gray-800 h-[80vh] md:h-[600px] max-h-[80vh] overflow-hidden"
+            className="fixed bottom-0 left-0 right-0 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-[26rem] md:bottom-20 z-50 flex flex-col overflow-hidden h-[82vh] md:h-[620px] max-h-[82vh]
+                       rounded-t-[28px] md:rounded-[28px] border border-white/60 dark:border-white/10
+                       bg-white/80 dark:bg-gray-900/85 backdrop-blur-2xl
+                       shadow-[0_-12px_50px_-12px_rgba(13,148,136,0.25)] md:shadow-[0_24px_70px_-20px_rgba(13,148,136,0.4)]"
             initial={reduce ? { opacity: 0 } : { y: '100%' }}
             animate={reduce ? { opacity: 1 } : { y: 0 }}
             exit={reduce ? { opacity: 0 } : { y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            transition={{ type: 'spring', damping: 32, stiffness: 320 }}
           >
+            {/* Atmospheric aurora wash (top) */}
+            <div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[120%] h-56 rounded-full blur-3xl opacity-70 dark:opacity-40"
+              style={{ background: 'radial-gradient(closest-side, rgba(16,185,129,0.35), rgba(20,184,166,0.22) 55%, transparent)' }} />
+            {/* Mobile drag handle */}
+            <div className="md:hidden relative pt-2.5 flex justify-center">
+              <span className="h-1 w-10 rounded-full bg-gray-300/80 dark:bg-gray-600/80" />
+            </div>
+
             {/* Header */}
-            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-              <div className="w-9 h-9 rounded-xl gradient-primary flex items-center justify-center flex-shrink-0 shadow-sm">
-                <Sparkles className="w-5 h-5 text-white" />
+            <div className="relative flex items-center gap-3 px-4 pt-3 pb-3">
+              <div className="relative flex-shrink-0">
+                {!reduce && (
+                  <motion.span aria-hidden className="absolute -inset-1.5 rounded-2xl blur-md"
+                    style={{ background: 'linear-gradient(135deg,#34d399,#2dd4bf,#22d3ee)' }}
+                    animate={{ opacity: [0.35, 0.6, 0.35], scale: [0.95, 1.05, 0.95] }}
+                    transition={{ repeat: Infinity, duration: 3.4, ease: 'easeInOut' }} />
+                )}
+                <div className="relative w-10 h-10 rounded-2xl flex items-center justify-center shadow-md"
+                  style={{ background: 'linear-gradient(135deg,#10b981,#14b8a6,#06b6d4)' }}>
+                  <Sparkles className="w-5 h-5 text-white" strokeWidth={2.2} />
+                </div>
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <h2 className="text-sm font-bold text-gray-900 dark:text-white">Vayu</h2>
-                  {aqiPill}
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[15px] font-extrabold tracking-tight text-gray-900 dark:text-white">Vayu</h2>
+                  {currentAQI && (
+                    <span className="inline-flex items-center gap-1 rounded-full pl-1.5 pr-2 py-0.5 text-[10px] font-bold text-white shadow-sm" style={{ background: aqiColor(currentAQI.aqi) }}>
+                      <span className="relative flex w-1.5 h-1.5">
+                        <span className="absolute inline-flex w-full h-full rounded-full bg-white opacity-70 animate-ping" />
+                        <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-white" />
+                      </span>
+                      AQI {currentAQI.aqi}
+                    </span>
+                  )}
                 </div>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500">{t('chat.tagline')}</p>
+                <p className="text-[10.5px] text-gray-400 dark:text-gray-500 -mt-0.5">{t('chat.tagline')}</p>
               </div>
               {messages.length > 0 && (
                 <button onClick={() => { localStorage.removeItem(HISTORY_KEY); setMessages([]); }}
-                  className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t('chat.clear')}>
+                  className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 dark:hover:bg-white/10 transition" aria-label={t('chat.clear')}>
                   <Trash2 className="w-4 h-4" />
                 </button>
               )}
-              <button onClick={close} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t('common.cancel')}>
+              <button onClick={close} className="p-2 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-gray-100/80 dark:hover:bg-white/10 transition" aria-label={t('common.cancel')}>
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            <div className="h-px bg-gradient-to-r from-transparent via-gray-200/70 dark:via-white/10 to-transparent" />
+
             {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-3">
+            <div ref={scrollRef} className="relative flex-1 overflow-y-auto overscroll-contain px-4 py-4 space-y-3 scrollbar-hide">
               {messages.length === 0 && (
-                <div className="flex flex-col items-center text-center pt-6 pb-2">
-                  <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center mb-3 shadow-md">
-                    <Sparkles className="w-7 h-7 text-white" />
+                <div className="flex flex-col items-center text-center pt-7 pb-3">
+                  <div className="relative mb-4">
+                    {!reduce && (
+                      <motion.span aria-hidden className="absolute -inset-3 rounded-full blur-xl"
+                        style={{ background: 'radial-gradient(closest-side, rgba(45,212,191,0.55), transparent)' }}
+                        animate={{ opacity: [0.4, 0.65, 0.4], scale: [1, 1.18, 1] }}
+                        transition={{ repeat: Infinity, duration: 3.6, ease: 'easeInOut' }} />
+                    )}
+                    <div className="relative w-[68px] h-[68px] rounded-[1.6rem] flex items-center justify-center shadow-xl"
+                      style={{ background: 'linear-gradient(135deg,#10b981,#14b8a6,#06b6d4)' }}>
+                      <Sparkles className="w-8 h-8 text-white" strokeWidth={2} />
+                    </div>
                   </div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{t('chat.greeting_title')}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-[260px]">
+                  <p className="text-base font-extrabold text-gray-900 dark:text-white">{t('chat.greeting_title')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 max-w-[270px] leading-relaxed">
                     {currentAQI ? t('chat.greeting_aqi', { aqi: currentAQI.aqi, level: currentAQI.level }) : t('chat.greeting_generic')}
                   </p>
                 </div>
               )}
+
               {messages.map((m, i) => (
-                <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-                  <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
+                <motion.div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}
+                  initial={reduce ? false : { opacity: 0, y: 8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ type: 'spring', damping: 26, stiffness: 320 }}>
+                  <div className={`max-w-[86%] px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm ${
                     m.role === 'user'
-                      ? 'bg-primary-500 text-white rounded-br-md'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-bl-md'
-                  }`}>
-                    <div className="space-y-1">
-                      {m.text ? renderLite(m.text) : null}
-                      {m.streaming && <span className="inline-block w-1.5 h-3.5 bg-current opacity-60 animate-pulse align-middle ml-0.5" />}
-                    </div>
+                      ? 'rounded-[18px] rounded-br-md text-white'
+                      : 'rounded-[18px] rounded-bl-md bg-white/90 dark:bg-gray-800/90 text-gray-800 dark:text-gray-100 border border-gray-100 dark:border-white/5 backdrop-blur-sm'
+                  }`}
+                    style={m.role === 'user' ? { background: 'linear-gradient(135deg,#10b981,#0d9488)' } : undefined}>
+                    {m.text ? (
+                      <div className="space-y-1">
+                        {renderLite(m.text)}
+                        {m.streaming && <span className="inline-block w-[3px] h-3.5 rounded-full bg-current opacity-60 align-middle ml-0.5 animate-pulse" />}
+                      </div>
+                    ) : m.streaming ? (
+                      <span className="flex items-center gap-1 py-0.5">
+                        {[0, 1, 2].map((d) => (
+                          <motion.span key={d} className="w-1.5 h-1.5 rounded-full bg-teal-400"
+                            animate={reduce ? undefined : { opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
+                            transition={{ repeat: Infinity, duration: 0.9, delay: d * 0.15 }} />
+                        ))}
+                      </span>
+                    ) : null}
+
                     {m.action && !m.streaming && (
                       <button onClick={() => runAction(m.action!)}
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-white/15 dark:bg-white/10 hover:bg-white/25 text-[11px] font-bold px-2.5 py-1.5 text-primary-600 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30">
+                        className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl text-[11px] font-bold px-3 py-1.5 text-white shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-95 transition"
+                        style={{ background: 'linear-gradient(135deg,#10b981,#0891b2)' }}>
                         {m.action.kind === 'showRoute' ? <Navigation className="w-3.5 h-3.5" /> : <BarChart3 className="w-3.5 h-3.5" />}
                         {m.action.kind === 'showRoute' ? `${t('chat.action_route')}${m.action.label ? ` · ${m.action.label}` : ''}` : t('chat.action_paparan')}
                       </button>
                     )}
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
 
             {/* Suggested chips (empty state) */}
             {messages.length === 0 && (
-              <div className="px-4 pb-2 flex flex-wrap gap-2">
-                {suggestions.map((s) => (
-                  <button key={s.key} onClick={() => send(s.label)}
-                    className="text-[11px] font-medium px-2.5 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition">
-                    {s.label}
-                  </button>
+              <div className="px-4 pb-2.5 grid grid-cols-2 gap-2">
+                {suggestions.map((s, idx) => (
+                  <motion.button key={s.key} onClick={() => send(s.label)}
+                    initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: reduce ? 0 : 0.06 * idx + 0.1 }}
+                    className="group flex items-center gap-2 text-left text-[11.5px] font-semibold px-3 py-2.5 rounded-2xl border border-gray-200/80 dark:border-white/10 bg-white/70 dark:bg-white/5 text-gray-700 dark:text-gray-200 hover:border-emerald-300 hover:bg-emerald-50/80 dark:hover:bg-emerald-900/20 hover:shadow-sm transition">
+                    <span className="w-6 h-6 rounded-lg bg-emerald-100/80 dark:bg-emerald-900/40 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800/50 transition">
+                      <s.icon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    </span>
+                    <span className="leading-tight">{s.label}</span>
+                  </motion.button>
                 ))}
               </div>
             )}
 
             {/* Composer */}
-            <div className="px-3 py-3 border-t border-gray-100 dark:border-gray-800 safe-area-bottom">
-              <div className="flex items-end gap-2 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 focus-within:border-primary-400">
-                <Wind className="w-4 h-4 text-primary-400 flex-shrink-0 mb-1.5" />
+            <div className="px-3 py-3 safe-area-bottom">
+              <div className="flex items-end gap-2 rounded-[20px] border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-gray-800/70 backdrop-blur px-3 py-2 transition-all focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400/25 focus-within:shadow-[0_0_0_4px_rgba(16,185,129,0.06)]">
+                <Wind className="w-4 h-4 text-teal-400 flex-shrink-0 mb-1.5" />
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -236,13 +294,15 @@ export default function ChatAssistant({ onClose }: { onClose: () => void }) {
                   className="flex-1 resize-none bg-transparent text-[13px] text-gray-900 dark:text-white placeholder:text-gray-400 outline-none max-h-24 py-1"
                 />
                 {streaming ? (
-                  <button onClick={() => abortRef.current?.abort()} className="w-8 h-8 rounded-xl bg-gray-300 dark:bg-gray-600 flex items-center justify-center flex-shrink-0" aria-label={t('chat.stop')}>
-                    <Square className="w-3.5 h-3.5 text-white fill-white" />
+                  <button onClick={() => abortRef.current?.abort()}
+                    className="w-9 h-9 rounded-2xl bg-gray-200 dark:bg-gray-600 flex items-center justify-center flex-shrink-0 hover:bg-gray-300 dark:hover:bg-gray-500 active:scale-90 transition" aria-label={t('chat.stop')}>
+                    <Square className="w-3.5 h-3.5 text-gray-600 dark:text-gray-200 fill-current" />
                   </button>
                 ) : (
                   <button onClick={() => send(input)} disabled={!input.trim()}
-                    className="w-8 h-8 rounded-xl bg-primary-500 disabled:opacity-40 flex items-center justify-center flex-shrink-0 transition" aria-label={t('chat.send')}>
-                    <ArrowUp className="w-4 h-4 text-white" />
+                    className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 text-white shadow-md disabled:opacity-30 disabled:shadow-none enabled:hover:scale-105 active:scale-90 transition"
+                    style={{ background: 'linear-gradient(135deg,#10b981,#0d9488)' }} aria-label={t('chat.send')}>
+                    <ArrowUp className="w-4 h-4" strokeWidth={2.5} />
                   </button>
                 )}
               </div>
