@@ -104,6 +104,16 @@ export default function LoginPage() {
 
   return (
     <div className="gradient-mesh-bg min-h-screen flex flex-col overflow-hidden scrollbar-hide">
+      {/* Back to landing */}
+      <button
+        onClick={() => navigate('/')}
+        className="fixed left-4 z-30 inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white bg-white/70 dark:bg-gray-800/60 backdrop-blur border border-white/60 dark:border-white/10 rounded-full pl-2 pr-3.5 py-1.5 shadow-sm transition-colors"
+        style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
+        aria-label="Kembali ke beranda"
+      >
+        <ArrowLeft className="w-4 h-4" /> Kembali ke beranda
+      </button>
+
       {/* Desktop: Split layout / Mobile: Single column */}
       <div className="flex flex-1 flex-col lg:flex-row h-screen">
         {/* Left Panel - Branding (Desktop only, fixed position) */}
@@ -168,8 +178,13 @@ export default function LoginPage() {
             transition={{ duration: 0.5, ease: 'easeOut' }}
             className="w-full max-w-md"
           >
-            {/* Mobile Logo */}
-            <div className="lg:hidden flex items-center justify-center gap-2 mb-8">
+            {/* Mobile Logo (tap → landing) */}
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="lg:hidden w-full flex items-center justify-center gap-2 mb-8 hover:opacity-80 transition"
+              aria-label="Ke beranda Breeva"
+            >
               {logoBreeva ? (
                 <img src={logoBreeva} alt="Breeva" className="h-10 w-auto" />
               ) : (
@@ -178,7 +193,7 @@ export default function LoginPage() {
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
                 Breeva
               </h1>
-            </div>
+            </button>
 
             {/* Glass Login Card */}
             <div className="glass-card p-8 lg:p-10">
