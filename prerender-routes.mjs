@@ -45,11 +45,32 @@ const page = (h1, paras, links) => `
 
 const NAV = [
   { href: '/', label: 'Beranda' },
+  { href: '/peta', label: 'Peta Udara' },
   { href: '/paparan', label: 'Kalkulator Paparan' },
   { href: '/about', label: 'Tentang Breeva' },
   { href: '/eco-tips', label: 'Tips Udara Bersih' },
   { href: '/developers', label: 'Developer API' },
 ];
+
+// Public crawlable city pages (/udara/:slug). MUST mirror src/lib/cities.ts.
+const CITIES = [
+  { slug: 'jakarta',    name: 'Jakarta',    region: 'DKI Jakarta',             blurb: 'Ibu kota dengan lalu lintas padat — Breeva memetakan AQI per ruas jalan agar kamu bisa memilih jalur paling bersih.' },
+  { slug: 'bandung',    name: 'Bandung',    region: 'Jawa Barat',              blurb: 'Cekungan Bandung membuat polusi mudah terperangkap; lihat kualitas udara per jalan dan rute teduh.' },
+  { slug: 'surabaya',   name: 'Surabaya',   region: 'Jawa Timur',              blurb: 'Kota industri & pelabuhan — pantau PM2.5 dan NO₂ per ruas jalan secara real-time.' },
+  { slug: 'bali',       name: 'Bali',       region: 'Bali (Denpasar–Badung)',  blurb: 'Dari Denpasar hingga Canggu — udara relatif bersih, tapi jalan ramai tetap punya hotspot polusi.' },
+  { slug: 'semarang',   name: 'Semarang',   region: 'Jawa Tengah',             blurb: 'Pesisir utara Jawa — cek AQI per jalan sebelum berjalan kaki atau bersepeda.' },
+  { slug: 'yogyakarta', name: 'Yogyakarta', region: 'DI Yogyakarta',           blurb: 'Kota pelajar & wisata — temukan rute jalan kaki paling bersih di sekitar Malioboro dan kampus.' },
+  { slug: 'solo',       name: 'Solo',       region: 'Jawa Tengah (Surakarta)', blurb: 'Surakarta — pantau kualitas udara per ruas jalan dan paparan PM2.5 harianmu.' },
+  { slug: 'malang',     name: 'Malang',     region: 'Jawa Timur',              blurb: 'Kota sejuk di kaki gunung — bandingkan udara antar jalan dan pilih jalur tersehat.' },
+];
+
+const placeJsonLd = (c) => `<script type="application/ld+json">${JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'Place',
+  name: `Kualitas Udara ${c.name}`,
+  address: { '@type': 'PostalAddress', addressLocality: c.name, addressRegion: c.region, addressCountry: 'ID' },
+  url: `${SITE}/udara/${c.slug}`,
+})}</script>`;
 
 // 10 FAQ items (verbatim from src/pages/HelpPage.tsx) — used for /help body + FAQPage JSON-LD.
 const HELP_FAQS = [
@@ -104,6 +125,16 @@ const ROUTES = [
     ], NAV),
   },
   {
+    file: 'peta.html', path: '/peta',
+    title: 'Peta Udara Langsung — AQI per Jalan & Rute Bersih Indonesia | Breeva',
+    description: 'Peta kualitas udara (AQI) real-time per ruas jalan untuk Jakarta, Bali, Bandung, Surabaya & kota Indonesia. Temukan rute jalan kaki paling bersih dan hitung paparan PM2.5 — gratis, tanpa login.',
+    body: page('Kualitas udara per jalan, langsung di peta', [
+      'Breeva memetakan AQI (Indeks Kualitas Udara) untuk <b>tiap ruas jalan</b> di kota-kota Indonesia secara real-time — memakai mesin VAYU yang mengkalibrasi data sensor, satelit, dan dispersi lalu lintas. Bukan satu angka untuk seluruh kota, tapi warna polusi per segmen jalan.',
+      'Cara kerja: (1) lihat AQI per jalan di peta, (2) pilih satu dari tiga rute — Bersih, Seimbang, atau Cepat — yang masing-masing diberi skor udara, lalu (3) hitung dosis PM2.5 yang benar-benar kamu hirup lewat Kalkulator Paparan. Warna: hijau = baik (0–50), kuning = sedang (51–100), oranye/merah = tidak sehat (101–200), ungu = sangat buruk (201+).',
+      'Lihat udara per kota: <a href="/udara/jakarta" style="color:#059669">Jakarta</a>, <a href="/udara/bandung" style="color:#059669">Bandung</a>, <a href="/udara/surabaya" style="color:#059669">Surabaya</a>, <a href="/udara/bali" style="color:#059669">Bali</a>, <a href="/udara/semarang" style="color:#059669">Semarang</a>, <a href="/udara/yogyakarta" style="color:#059669">Yogyakarta</a>, <a href="/udara/solo" style="color:#059669">Solo</a>, <a href="/udara/malang" style="color:#059669">Malang</a>. Bebas dipakai tanpa akun.',
+    ], NAV),
+  },
+  {
     file: 'eco-tips.html', path: '/eco-tips',
     title: 'Tips Udara Bersih & Jalan Sehat — Breeva',
     description: 'Tips praktis mengurangi paparan polusi: pilih rute hijau, waktu terbaik berjalan, dan cara kurangi jejak karbon harian.',
@@ -150,6 +181,21 @@ const ROUTES = [
     ], NAV),
   },
 ];
+
+// Programmatic per-city AQI pages → udara-${slug}.html (real text content for crawlers;
+// the live AQI number is fetched client-side, so no build-time network call can fail the build).
+for (const c of CITIES) {
+  ROUTES.push({
+    file: `udara-${c.slug}.html`, path: `/udara/${c.slug}`,
+    title: `Kualitas Udara ${c.name} Hari Ini — AQI per Jalan | Breeva`,
+    description: `Pantau kualitas udara (AQI) dan PM2.5 per ruas jalan di ${c.name}, ${c.region}, real-time. ${c.blurb} Temukan rute jalan kaki paling bersih — gratis di Breeva.`,
+    extraJsonLd: placeJsonLd(c),
+    body: page(`Kualitas udara ${c.name} hari ini`, [
+      `${c.blurb} Breeva memetakan AQI (Indeks Kualitas Udara) dan PM2.5 untuk <b>tiap ruas jalan</b> di ${c.name} secara real-time lewat mesin VAYU, lalu mencarikan rute jalan kaki paling bersih.`,
+      `Geser peta untuk melihat warna polusi per jalan di ${c.name}: hijau = baik (0–50), kuning = sedang (51–100), oranye/merah = tidak sehat (101–200), ungu = sangat buruk (201+). Hitung juga dosis PM2.5 yang kamu hirup di Kalkulator Paparan. Bebas dipakai tanpa akun.`,
+    ], [{ href: '/peta', label: 'Peta Udara Langsung' }, ...NAV]),
+  });
+}
 
 // Replace the first match of `re` using a function replacer (avoids `$` pitfalls in values).
 const sub = (html, re, value) => {

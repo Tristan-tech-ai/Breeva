@@ -10,10 +10,14 @@ number, it estimates pollution for each road segment, routes you along the clean
 and rewards low-emission walking with EcoPoints. Site language: Indonesian (id). Price: free.
 
 ## Core pages
+- [Live Air Quality Map (Peta)](https://breeva.site/peta): Real-time per-road AQI map for Indonesian cities, the clean/balanced/fast routing explainer, and the AQI colour legend — no login required.
 - [About Breeva](https://breeva.site/about): What Breeva is, the mission, how it works, main features, and the tech stack.
 - [Exposure Calculator (Paparan)](https://breeva.site/paparan): Estimate the PM2.5 dose you inhale on a route — by age and activity, compared to the WHO 24-hour guideline, and expressed in cigarette-equivalents.
 - [Eco Tips](https://breeva.site/eco-tips): Practical tips to cut pollution exposure and carbon footprint while walking.
 - [Help / FAQ](https://breeva.site/help): How to start a walk, EcoPoints, route colours, where AQI data comes from, transport modes, and location privacy.
+
+## City air-quality pages (live, per-road AQI)
+- [Jakarta](https://breeva.site/udara/jakarta) · [Bandung](https://breeva.site/udara/bandung) · [Surabaya](https://breeva.site/udara/surabaya) · [Bali](https://breeva.site/udara/bali) · [Semarang](https://breeva.site/udara/semarang) · [Yogyakarta](https://breeva.site/udara/yogyakarta) · [Solo](https://breeva.site/udara/solo) · [Malang](https://breeva.site/udara/malang)
 
 ## Developers
 - [Breeva Developer API](https://breeva.site/developers): REST API for calibrated per-road AQI, pollution-aware routing, and PM2.5 exposure. Free tier: 1,000 requests/day.

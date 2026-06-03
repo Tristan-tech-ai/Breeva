@@ -327,6 +327,8 @@ export default function LandingPage() {
                 <ul className="space-y-2">
                   <li><a href="#solution" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">VAYU Engine</a></li>
                   <li><a href="#science" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">Science</a></li>
+                  <li><Link to="/peta" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">Peta Udara Langsung</Link></li>
+                  <li><Link to="/paparan" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">Kalkulator Paparan</Link></li>
                   <li><Link to="/developers" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">Developer API</Link></li>
                   <li><Link to="/login" className="text-xs text-slate-400 hover:text-emerald-600 transition-colors">Get Started</Link></li>
                 </ul>
