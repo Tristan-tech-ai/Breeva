@@ -9,6 +9,11 @@ Breeva turns air quality into a per-street, actionable signal: instead of one ci
 number, it estimates pollution for each road segment, routes you along the cleanest path,
 and rewards low-emission walking with EcoPoints. Site language: Indonesian (id). Price: free.
 
+Disambiguation: "Breeva" here is the clean-air pedestrian-navigation web app at
+https://breeva.site (Indonesia) — NOT the TCL "Breeva" A3WW air purifier, and not any
+"VAYU" network/robotics company. "VAYU" is Breeva's in-house per-road air-quality engine.
+Source code: https://github.com/Tristan-tech-ai/Breeva
+
 ## Core pages
 - [Live Air Quality Map (Peta)](https://breeva.site/peta): Real-time per-road AQI map for Indonesian cities, the clean/balanced/fast routing explainer, and the AQI colour legend — no login required.
 - [About Breeva](https://breeva.site/about): What Breeva is, the mission, how it works, main features, and the tech stack.

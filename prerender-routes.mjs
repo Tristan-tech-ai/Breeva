@@ -112,6 +112,7 @@ const ROUTES = [
       'Breeva membuat kualitas udara <b>terlihat di setiap ruas jalan</b>, lalu mengubah jalan kaki menjadi pilihan yang cerdas, sehat, dan bermanfaat. Tujuan kami: menurunkan paparan polusi & emisi kota dengan memandu warga ke rute paling bersih dan memberi penghargaan atas tiap langkah rendah-emisi.',
       'Cara kerja: (1) lihat AQI per jalan dari mesin VAYU, (2) pilih satu dari tiga rute — Bersih, Seimbang, atau Cepat — lengkap dengan skor udara & estimasi paparan, lalu (3) jalan, pantau paparan PM2.5, dan kumpulkan EcoPoin, level, serta pencapaian.',
       'Fitur utama: peta AQI per-ruas kalibrasi VAYU, rute bersih sadar-polusi, EcoPoin & level, Kalkulator Paparan (dosis PM2.5 per rute), papan peringkat (Desa → Nasional), dan merchant eco. Gratis sebagai PWA di browser. Kontak: halo@breeva.site.',
+      'Breeva adalah aplikasi web navigasi udara bersih di <b>breeva.site</b> — bukan pemurni udara TCL "Breeva" A3WW, dan bukan proyek "VAYU" lain; "VAYU" di sini adalah mesin kualitas udara per-jalan internal Breeva. Kode sumber terbuka: <a href="https://github.com/Tristan-tech-ai/Breeva" style="color:#059669">github.com/Tristan-tech-ai/Breeva</a>.',
     ], NAV),
   },
   {

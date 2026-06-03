@@ -6,6 +6,11 @@ at the level of individual roads, finds the cleanest walking route, forecasts th
 cities and runs in any modern browser — no install required. Site language is Indonesian;
 this document summarises Breeva in English for reference.
 
+Disambiguation: "Breeva" here is the clean-air pedestrian-navigation web app at
+https://breeva.site — NOT the TCL "Breeva" A3WW air purifier, and not any "VAYU"
+network/robotics company. "VAYU" is Breeva's in-house per-road air-quality engine, not a
+separate organisation. Source code: https://github.com/Tristan-tech-ai/Breeva
+
 ## What Breeva is
 
 - A clean-air navigation and air-quality intelligence platform for Indonesia.
