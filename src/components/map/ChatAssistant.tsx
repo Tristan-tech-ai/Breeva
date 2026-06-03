@@ -287,7 +287,7 @@ export default function ChatAssistant({ onClose }: { onClose: () => void }) {
 
             {/* Composer */}
             <div className="px-3 pt-2" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
-              <div className="flex items-end gap-2 rounded-[20px] border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-gray-800/70 backdrop-blur px-3 py-2">
+              <div className="flex items-end gap-2 rounded-[20px] border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-gray-800/70 backdrop-blur px-3 py-2 transition-colors focus-within:border-emerald-400/80">
                 <Wind className="w-4 h-4 text-teal-400 flex-shrink-0 mb-1.5" />
                 <textarea
                   value={input}
@@ -295,7 +295,7 @@ export default function ChatAssistant({ onClose }: { onClose: () => void }) {
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); } }}
                   rows={1}
                   placeholder={t('chat.placeholder')}
-                  className="flex-1 resize-none bg-transparent text-[13px] text-gray-900 dark:text-white placeholder:text-gray-400 outline-none max-h-24 py-1"
+                  className="flex-1 resize-none bg-transparent text-[13px] text-gray-900 dark:text-white placeholder:text-gray-400 outline-none focus:outline-none focus-visible:outline-none max-h-24 py-1"
                 />
                 {streaming ? (
                   <button onClick={() => abortRef.current?.abort()}
