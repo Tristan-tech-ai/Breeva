@@ -66,6 +66,36 @@ async function fetchCamsDaily(lat: number, lon: number): Promise<number> {
   return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : NaN;
 }
 
+// ── Stage 6: warm the public CDN for this region's viewport tiles after a refresh, so the
+// FIRST visitor never pays the cold tile build (road-mvt = s-maxage 900 + stale-while-revalidate
+// 7d; once requested it's served instantly from the edge). Hits production; opt out via --no-warm.
+const WARM_BASE = env.WARM_BASE_URL || 'https://breeva.site';
+function lonLatToTile(lon: number, lat: number, z: number): { x: number; y: number } {
+  const n = 2 ** z;
+  const x = Math.floor(((lon + 180) / 360) * n);
+  const latRad = (lat * Math.PI) / 180;
+  const y = Math.floor(((1 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2) * n);
+  return { x, y };
+}
+async function warmTiles(region: string, lat: number, lon: number): Promise<void> {
+  const plan: Array<[number, number]> = [[11, 1], [12, 2], [13, 2], [14, 3]]; // [zoom, grid radius]
+  const urls: string[] = [`${WARM_BASE}/api/vayu/aqi?lat=${lat}&lon=${lon}`];
+  for (const [z, r] of plan) {
+    const { x, y } = lonLatToTile(lon, lat, z);
+    for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) {
+      urls.push(`${WARM_BASE}/api/tiles/road-mvt/${z}/${x + dx}/${y + dy}`);
+    }
+  }
+  let ok = 0;
+  const CONC = 10;
+  const queues: string[][] = Array.from({ length: CONC }, () => []);
+  urls.forEach((u, i) => queues[i % CONC].push(u));
+  await Promise.all(queues.map(async (q) => {
+    for (const u of q) { try { if ((await fetch(u)).ok) ok++; } catch { /* ignore */ } }
+  }));
+  console.log(`[${region}] warmed ${ok}/${urls.length} CDN tiles around ${lat.toFixed(3)},${lon.toFixed(3)}`);
+}
+
 const ROAD_COLS = `osm_way_id, ST_AsGeoJSON(geom, 5) AS geojson, highway, lanes, width,
   canyon_ratio, landuse_proxy, traffic_base_estimate, traffic_calibration_factor,
   name, surface, elevation_avg, micro_class, ai_pollution_factor`;
@@ -130,6 +160,9 @@ async function main() {
       );
     }
     console.log(`[${REGION}] UPSERTED ${out.length} rows in ${((Date.now() - tW) / 1000).toFixed(1)}s`);
+    if (!process.argv.includes('--no-warm')) {
+      try { await warmTiles(REGION, cLat, cLon); } catch (e) { console.warn(`[${REGION}] warm failed:`, e); }
+    }
   } else {
     console.log(`[${REGION}] DRY RUN (no DB write). Add --write to persist.`);
   }

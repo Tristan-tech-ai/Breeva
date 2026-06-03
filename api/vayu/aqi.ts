@@ -298,16 +298,19 @@ async function findNearbyRoads(lat: number, lon: number): Promise<Array<{
   } catch { return []; }
 }
 
-// ─── v2 point AQI: nearest precomputed road (calibrated, consistent with the map) ───
+// ─── v2 point AQI: the MOST-CONFIDENT precomputed road within ~75 m (tie-break nearest),
+// falling back to plain nearest within 1500 m. Prefers a trustworthy calibrated reading over
+// the strict nearest segment, so the headline shows "Kasar" only when the spot is genuinely
+// low-confidence (e.g. uncalibrated/OOD regions) — not just because it snapped to a noisy road. ───
 async function computeV2(lat: number, lon: number): Promise<Omit<AQIResponse, 'tile_id'> | null> {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
   try {
-    const resp = await fetchWithTimeout(`${url}/rest/v1/rpc/nearest_precomputed_aqi`, {
+    const resp = await fetchWithTimeout(`${url}/rest/v1/rpc/best_precomputed_aqi`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ p_lat: lat, p_lon: lon, p_max_m: 1500 }),
+      body: JSON.stringify({ p_lat: lat, p_lon: lon, p_radius_m: 75, p_max_m: 1500 }),
     }, 4000);
     if (!resp.ok) return null;
     const rows = await resp.json();
