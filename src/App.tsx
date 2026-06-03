@@ -8,6 +8,7 @@ import { ContentPageSkeleton } from './components/ui/Skeleton';
 import OfflineBanner from './components/ui/OfflineBanner';
 import PWAStatusToast from './components/ui/PWAStatusToast';
 import PWAInstallBanner from './components/features/PWAInstallBanner';
+import DesktopNudge from './components/features/DesktopNudge';
 import CommandPalette from './components/features/CommandPalette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
@@ -108,6 +109,7 @@ function App() {
           <OfflineBanner />
           <PWAStatusToast />
           <PWAInstallBanner />
+          <DesktopNudge />
           <CommandPalette />
           <Toaster
             position="top-center"
