@@ -57,6 +57,15 @@ function getAQILabel(aqi: number): string {
   return 'Hazardous';
 }
 
+// A tiny-but-real traffic dose (the cleanest route's avoidable increment, e.g. ~0.1 µg) must NOT
+// round to a misleading "0 µg". Show 2 decimals under 1 µg, 1 decimal under 10, else round.
+function fmtUg(v: number): string {
+  if (v >= 10) return `${Math.round(v)}`;
+  if (v >= 1) return v.toFixed(1);
+  if (v >= 0.005) return v.toFixed(2);
+  return '0';
+}
+
 export default function RouteCard({ route, isSelected, onSelect, isRecommended }: RouteCardProps) {
   const info = routeLabels[route.route_type] || routeLabels.balanced;
   const { Icon } = info;
@@ -174,7 +183,7 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
               </span>
             ) : (
               <span className="text-gray-600 dark:text-gray-300">
-                Paparan lalu lintas ≈ <b className="text-gray-800 dark:text-gray-200">{Math.round(trapDose.dose_ug)} µg</b>
+                Paparan lalu lintas ≈ <b className="text-gray-800 dark:text-gray-200">{fmtUg(trapDose.dose_ug)} µg</b>
               </span>
             )}
             <span
@@ -192,7 +201,7 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
             <div className="mt-2 space-y-1 text-[10px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/40 rounded-lg p-2">
               <div>
                 <span className="font-semibold text-gray-600 dark:text-gray-300">Terhirup (lalu lintas): </span>
-                ≈ {Math.round(trapDose.dose_ug)} µg{typeof trapReduction === 'number' && trapReduction >= 1 ? ` · −${trapReduction}% vs tercepat` : ''}
+                ≈ {fmtUg(trapDose.dose_ug)} µg{typeof trapReduction === 'number' && trapReduction >= 1 ? ` · −${trapReduction}% vs tercepat` : ''}
               </div>
               {worstNo2.length > 0 && (
                 <div>

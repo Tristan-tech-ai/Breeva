@@ -1474,32 +1474,50 @@ interface RouteForecastSegment {
   segment_length_m: number;
 }
 
-async function forecastRouteExposure(
-  polyline: [number, number][],     // [lng, lat]
+// NOTE: the forecast_route_exposure SQL RPC is no longer called — superseded by localRouteForecast
+// (below), which forecasts from the route's REAL measured pm2.5 instead of the RPC's hardcoded-18-µg/m³
+// background + walking-speed fallback (it over-predicted ~2x in clean regions). The DB function still
+// exists but is dead; re-enable only once the aqi_forecast (LSTM) table is actually populated.
+
+// Relative diurnal PM2.5 multiplier (Indonesian urban rush-hour pattern). Applied as a RATIO
+// (arrival-hour vs now-hour) so the REAL measured pm2.5 is projected forward, never replaced by an
+// absolute background constant.
+function diurnalFactor(hour: number): number {
+  if (hour >= 7 && hour <= 9) return 1.45;
+  if (hour >= 16 && hour <= 19) return 1.40;
+  if (hour >= 22 && hour <= 23) return 1.10;
+  if (hour >= 0 && hour <= 4) return 0.75;
+  if (hour >= 12 && hour <= 14) return 1.15;
+  return 1.0;
+}
+
+// Honest per-route forecast computed from the route's OWN measured segments. Projects each segment's
+// real pm2.5 by the relative time-of-day pattern, timed by the route's ACTUAL duration (so it is
+// correct per travel mode). Replaces forecast_route_exposure(): its no-LSTM fallback hardcoded an
+// 18 µg/m³ Jakarta background + a fixed ~5 km/h (walking) arrival speed, so it over-predicted ~2x in
+// clean regions (Bali real pm2.5 ~11) and mis-timed motor/car. (aqi_forecast is empty -> that
+// fallback always fired -> "AQI naik ke 88" on a flat-AQI-40 Bali route.)
+function localRouteForecast(
+  segments: Array<{ pm25?: number; fraction_along?: number }>,
+  durationSeconds: number,
   startAt?: string,
-): Promise<RouteForecastSegment[]> {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key || polyline.length < 2) return [];
-  try {
-    const resp = await fetch(`${url}/rest/v1/rpc/forecast_route_exposure`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        polyline: polyline,
-        start_at: startAt ?? new Date().toISOString(),
-      }),
-    });
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
+): RouteForecastSegment[] {
+  if (!segments || segments.length === 0 || durationSeconds <= 0) return [];
+  const now = startAt ? new Date(startAt) : new Date();
+  const nowHour = (now.getUTCHours() + 7) % 24; // WIB (UTC+7)
+  const nowFactor = diurnalFactor(nowHour) || 1;
+  const n = segments.length;
+  return segments.map((s, i) => {
+    const frac = typeof s.fraction_along === 'number' && Number.isFinite(s.fraction_along)
+      ? s.fraction_along : (n > 1 ? i / (n - 1) : 0);
+    const offset = Math.max(0, frac) * durationSeconds;
+    const arrHour = Math.floor(nowHour + offset / 3600) % 24;
+    const projected = Math.max(0, s.pm25 ?? 0) * (diurnalFactor(arrHour) / nowFactor);
+    return {
+      segment_index: i, arrival_offset_s: offset, arrival_hour: arrHour,
+      segment_pm25: projected, segment_aqi: pm25ToAQI(projected), segment_length_m: 0,
+    };
+  });
 }
 
 // ─── Open-Meteo fallback for single point ───────────────────
@@ -3358,15 +3376,12 @@ async function handleCleanRoute(req: VercelRequest, res: VercelResponse) {
       if (!isDup && !isRedundantMiddle) labeled.push(r);
     }
 
-    // Tier 2 M2: per-route forecast at predicted arrival times. Done in parallel
-    // for each labeled candidate. Failure is non-fatal (returns empty forecast).
-    const forecastInputs = labeled.map((r) =>
-      r.polyline.map((p) => [p.lng, p.lat] as [number, number])
-    );
-    const forecasts = await Promise.all(
-      forecastInputs.map((poly) =>
-        forecastRouteExposure(poly, userStartAt).catch(() => [] as RouteForecastSegment[])
-      )
+    // Tier 2 M2: per-route forecast at predicted arrival times — computed LOCALLY from each route's
+    // OWN measured pm2.5 segments (see localRouteForecast). Replaces the forecast_route_exposure RPC
+    // whose empty-table fallback hardcoded an 18 µg/m³ background + walking-speed arrival (over-
+    // predicted ~2x in clean regions, mis-timed non-walking modes).
+    const forecasts: RouteForecastSegment[][] = labeled.map((r) =>
+      localRouteForecast(r.score?.segments ?? [], r.duration_seconds, userStartAt)
     );
     stamp(`forecast (labeled=${labeled.length})`);
 
