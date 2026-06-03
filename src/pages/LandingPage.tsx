@@ -165,9 +165,6 @@ export default function LandingPage() {
                   <MapIcon className="w-4 h-4" /> Lihat Peta Udara
                 </Link>
               </div>
-              <motion.p animate={{ y: [0, 8, 0] }} transition={{ repeat: Infinity, duration: 1.5 }} className="mt-10 text-xs text-slate-400">
-                Gulir untuk menjelajah ↓
-              </motion.p>
             </motion.div>
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }}
