@@ -19,6 +19,10 @@ const CAM: [number, number, number][] = [
   [0, 6, 55],     // Fire
 ];
 
+// Neural-network (Route section) size multiplier: 1.5× on desktop so it spills past the
+// card, but 1× on mobile (the card already fills a small screen — bigger would overflow).
+const NEURAL_SCALE = (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) ? 1 : 1.5;
+
 // ── Particle Shapes ─────────────────────────────────────────────────────────
 
 type ShapeFn = (
@@ -107,7 +111,7 @@ const shapeEarth: ShapeFn = (i, n, t, pos, col) => {
 
 /* 3 – Neural Network (Route Intelligence) */
 const shapeNeural: ShapeFn = (i, n, t, pos, col) => {
-  const D = 100, W = 55, spd = 2, syn = 0.2, layers = 5;
+  const D = 60 * NEURAL_SCALE, W = 30 * NEURAL_SCALE, spd = 2, syn = 0.2, layers = 5;
   const tt = t * spd;
   if (i < n * 0.4) {
     const li = Math.floor((i / (n * 0.4)) * layers);
