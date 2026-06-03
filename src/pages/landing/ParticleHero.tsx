@@ -19,9 +19,10 @@ const CAM: [number, number, number][] = [
   [0, 6, 55],     // Fire
 ];
 
-// Neural-network (Route section) size multiplier: 1.5× on desktop so it spills past the
-// card, but 1× on mobile (the card already fills a small screen — bigger would overflow).
-const NEURAL_SCALE = (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) ? 1 : 1.5;
+// Neural-network (Route section) size multiplier. The card sits centered over the network's
+// top half, so we oversize it on desktop (1.8×) to make the visible lower portion read large;
+// mobile stays 1× (the card already fills a small screen — bigger would overflow).
+const NEURAL_SCALE = (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) ? 1 : 1.8;
 
 // ── Particle Shapes ─────────────────────────────────────────────────────────
 
