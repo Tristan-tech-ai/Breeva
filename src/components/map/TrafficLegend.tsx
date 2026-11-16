@@ -1,6 +1,6 @@
 import { TRAFFIC_DEADBAND, TRAFFIC_GREY, TRAFFIC_STOPS, trafficPollutant } from '../../lib/roadColors';
 
-const NAME: Record<'pm25' | 'no2' | 'pm10', string> = { pm25: 'PM2.5', no2: 'NO₂', pm10: 'PM10' };
+const NAME: Record<'pm25' | 'no2' | 'pm10', string> = { pm25: 'PM2.5 knalpot', no2: 'NOx lalu lintas', pm10: 'PM10 lalu lintas' };
 
 /** Legend of the traffic view: fixed ug/m3 steps, grey dead band, and what the colours do and do not mean. */
 export default function TrafficLegend({ pollutant }: { pollutant: string }) {
@@ -22,9 +22,10 @@ export default function TrafficLegend({ pollutant }: { pollutant: string }) {
         <span className="text-[10.5px] text-gray-500 dark:text-gray-400">µg/m³ {NAME[p]}</span>
       </div>
       <p className="mt-1.5 text-[10.5px] leading-relaxed text-gray-500 dark:text-gray-400">
-        Bagian {NAME[p]} yang datang dari lalu lintas ruas sekitar (model dispersi). Skalanya tetap, tidak ikut
-        layar; abu-abu = selisih terlalu kecil untuk dibedakan. Ini perbandingan antar-jalan, bukan tingkat bahaya:
-        untuk itu pakai mode ISPU.
+        Asap kendaraan: gas buang dan jelaga dari kendaraan di ruas ini dan ruas sekitarnya, dihitung dari perkiraan
+        jumlah kendaraan jam ini, lebar jalan, dan angin. Makin gelap, makin banyak yang dihirup di ruas itu; abu-abu =
+        hampir tanpa asap kendaraan. Skalanya tetap, tidak ikut layar. Udara latar kota (PM2,5 dan ISPU) ada di mode
+        Udara total.
       </p>
     </div>
   );

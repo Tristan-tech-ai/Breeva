@@ -4,10 +4,17 @@ import type { WalkRoute } from './client';
 export interface RouteCard {
   index: number; label: string; color: string;
   km: string; minutes: number; no2: number; pm25: number;
+  /** Mean vehicle exhaust along the route (traffic NOx, ug/m3), 1 decimal; null when the worker did not report it. */
+  exh: number | null;
+  /** The first line of the card: the exhaust breathed on this route against the fastest route. */
+  headline: string;
   /** Motor routes: mean harga hirup along the route (the exposure imposed on others), 2 decimals. */
   harga: number | null;
-  /** Versus the fastest route: extra time (%) and NO2 change (%), rounded; null for the fastest itself. */
-  vsFastest: { extraTimePct: number; no2Pct: number } | null;
+  /**
+   * Versus the fastest route: extra time (% and minutes), NO2 change (%) and the change in the exhaust dose (%), i.e.
+   * mean exhaust x time on the route; rounded; null for the fastest itself. exhDosePct is null without exhaust data.
+   */
+  vsFastest: { extraTimePct: number; extraMin: number; no2Pct: number; exhDosePct: number | null } | null;
   /** Motor routes during school hours: what the school zone did to this route. */
   schoolNote: string | null;
 }
@@ -20,17 +27,38 @@ export const SCHOOL_NOTES = {
 /** Fastest orange, cleanest teal, the rest slate: none of them an ISPU colour (Sedang is blue), drawn on a white casing. */
 export const ROUTE_COLORS = { fastest: '#c2410c', cleanest: '#0f766e', other: '#475569' } as const;
 
+/** Below this mean (ug/m3 of traffic NOx) a route has practically no exhaust of its own to compare. */
+export const EXHAUST_FLOOR = 0.5;
+
+/**
+ * The first line of a route card. The dose is mean exhaust x minutes, so a longer but cleaner route is judged on
+ * what is actually breathed. Differences under 5 % are called "hampir sama": the model cannot tell them apart.
+ */
+export function exhaustHeadline(exh: number | null, dosePct: number | null, fastestExh: number | null): string {
+  if (exh == null) return 'Asap kendaraan: data belum tersedia untuk rute ini';
+  const mean = `${exh.toLocaleString('id-ID', { maximumFractionDigits: 1 })} µg/m³`;
+  if (dosePct == null) return exh < EXHAUST_FLOOR ? 'Hampir tanpa asap kendaraan di sepanjang rute' : `Asap kendaraan rata-rata ${mean} (patokan)`;
+  if (fastestExh != null && fastestExh < EXHAUST_FLOOR && exh < EXHAUST_FLOOR) return 'Hampir tanpa asap kendaraan, sama seperti rute tercepat';
+  if (dosePct <= -5) return `Asap kendaraan dihirup ${-dosePct}% lebih sedikit dari rute tercepat`;
+  if (dosePct >= 5) return `Asap kendaraan dihirup ${dosePct}% lebih banyak dari rute tercepat`;
+  return 'Asap kendaraan hampir sama dengan rute tercepat';
+}
+
 export function routeCards(routes: WalkRoute[]): RouteCard[] {
   if (!routes.length) return [];
   const f = routes[0];
+  const fExh = f.exhMean != null && Number.isFinite(f.exhMean) ? Math.round(f.exhMean * 10) / 10 : null;
   return routes.map((r, k) => {
     const last = k === routes.length - 1 && routes.length > 1;
-    let label = k === 0 ? 'Tercepat' : last ? 'Terbersih (NO₂)' : `Alternatif ${k}`;
+    let label = k === 0 ? 'Tercepat' : last ? 'Paling sedikit asap kendaraan' : `Alternatif ${k}`;
     let color: string = k === 0 ? ROUTE_COLORS.fastest : last ? ROUTE_COLORS.cleanest : ROUTE_COLORS.other;
     if (r.kind === 'darurat') { label = 'Darurat: tercepat, tanpa poin'; color = ROUTE_COLORS.fastest; }
     if (r.kind === 'dua-angka') { label = 'Dua angka (disarankan)'; color = ROUTE_COLORS.cleanest; }
+    const exh = r.exhMean != null && Number.isFinite(r.exhMean) ? Math.round(r.exhMean * 10) / 10 : null;
+    const exhDosePct = k === 0 || r.exhMean == null || f.exhMean == null || !(f.exhMean * f.timeS > 0) ? null
+      : Math.round(((r.exhMean * r.timeS) / (f.exhMean * f.timeS) - 1) * 100);
     return {
-      index: k, label, color,
+      index: k, label, color, exh, headline: exhaustHeadline(exh, exhDosePct, fExh),
       harga: r.hargaMean != null ? Math.round(r.hargaMean * 100) / 100 : null,
       schoolNote: r.school === 'kept' || r.school === 'lifted-near-ends' ? SCHOOL_NOTES[r.school] : null,
       km: (r.lengthM / 1000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -38,7 +66,9 @@ export function routeCards(routes: WalkRoute[]): RouteCard[] {
       no2: Math.round(r.no2Mean * 10) / 10, pm25: Math.round(r.pm25Mean * 10) / 10,
       vsFastest: k === 0 ? null : {
         extraTimePct: Math.round((r.timeS / f.timeS - 1) * 100),
+        extraMin: Math.round((r.timeS - f.timeS) / 60),
         no2Pct: Math.round((r.no2Mean / f.no2Mean - 1) * 100),
+        exhDosePct,
       },
     };
   });

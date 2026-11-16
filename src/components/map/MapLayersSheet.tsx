@@ -365,9 +365,9 @@ export default function MapLayersSheet({
                               : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                             }
                           `}
-                          title="Bagian dari lalu lintas ruas sekitar, skala tetap µg/m³; bukan tingkat bahaya"
+                          title="Gas buang dan jelaga kendaraan di ruas ini dan sekitarnya, skala tetap µg/m³"
                         >
-                          Lalu lintas
+                          Asap kendaraan
                         </button>
                         <button
                           onClick={() => onRoadDisplayModeChange?.('harga')}

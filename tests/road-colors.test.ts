@@ -10,15 +10,17 @@ describe('traffic view colours', () => {
   it('differences below the dead band are grey', () => {
     expect(trafficColor('pm25', 0.05)).toBe(TRAFFIC_GREY);  // median local street in Badung-Denpasar, 16 Nov
     expect(trafficColor('pm25', 0.7)).toBe(TRAFFIC_GREY);   // median big road
-    expect(trafficColor('no2', 4.9)).toBe(TRAFFIC_GREY);
+    expect(trafficColor('no2', 1.9)).toBe(TRAFFIC_GREY);    // a lane away from any busy road
     expect(trafficColor('pm25', Number.NaN)).toBe(TRAFFIC_GREY);
     expect(trafficColor('no2', TRAFFIC_DEADBAND.no2)).not.toBe(TRAFFIC_GREY);
   });
 
   it('the scale is fixed: the same value has the same colour, and stops are the top colour beyond the last step', () => {
     expect(trafficColor('no2', 10.5)).toBe(trafficColor('no2', 10.5));
-    expect(trafficColor('no2', 50)).toBe(TRAFFIC_STOPS.no2[3][1]);
-    expect(trafficColor('no2', 500)).toBe(TRAFFIC_STOPS.no2[3][1]);
+    expect(trafficColor('no2', 100)).toBe(TRAFFIC_STOPS.no2[4][1]);
+    expect(trafficColor('no2', 500)).toBe(TRAFFIC_STOPS.no2[4][1]);
+    // a lane, a collector and a trunk road at a busy hour get three different colours
+    expect(new Set([trafficColor('no2', 3.5), trafficColor('no2', 22), trafficColor('no2', 110)]).size).toBe(3);
     expect(trafficColor('pm25', 2)).toBe(TRAFFIC_STOPS.pm25[1][1]);
   });
 

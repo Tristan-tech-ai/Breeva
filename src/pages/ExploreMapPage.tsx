@@ -55,7 +55,7 @@ const POLLUTANTS: { id: PollutantType; label: string; unit: string }[] = [
   { id: 'o3', label: 'O₃', unit: 'µg/m³' },
   { id: 'pm10', label: 'PM₁₀', unit: 'µg/m³' },
 ];
-const ROAD_MODES: [RoadDisplayMode, string][] = [['total', 'Absolut'], ['traffic', 'Lalu lintas'], ['harga', 'Harga hirup']];
+const ROAD_MODES: [RoadDisplayMode, string][] = [['traffic', 'Asap kendaraan'], ['total', 'Udara total'], ['harga', 'Harga hirup']];
 const RAMP = 'linear-gradient(90deg,#00E400,#FFFF00,#FF7E00,#FF0000,#8F3F97,#7E0023)';
 
 const HOW = [
@@ -84,7 +84,8 @@ export default function ExploreMapPage() {
   const onViewChange = useCallback((c: Coordinate) => { void useMapStore.getState().fetchAreaReading(c); }, []);
   const [located, setLocated] = useState(false);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
-  const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('total');
+  // exhaust first: in the total view every road of a town has nearly the same colour (the background dominates)
+  const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('traffic');
   const [walkMode, setWalkMode] = useState(!!link || !!destParam);
   const [walkState, setWalkState] = useState<WalkRoutingState | null>(null);
   const [routeMode, setRouteMode] = useState<'walk' | 'motor'>(link?.mode ?? 'walk');
@@ -184,7 +185,7 @@ export default function ExploreMapPage() {
                 ))}
               </div>
               <p className="text-[10.5px] text-gray-400 dark:text-gray-500 mt-2 leading-relaxed">
-                <b>Absolut</b>: konsentrasi total vs ambang WHO/EPA. <b>Lalu lintas</b>: bagian yang datang dari kendaraan di ruas sekitar, skala tetap µg/m³ (abu-abu = selisih terlalu kecil untuk dibedakan); perbandingan antar-jalan, bukan tingkat bahaya. <b>Harga hirup</b>: seberapa banyak orang menghirup gas buang ruas itu.
+                <b>Asap kendaraan</b>: gas buang dan jelaga dari kendaraan di ruas itu dan sekitarnya; inilah yang berbeda antara jalan ramai dan gang, dan yang bisa dihindari lewat pilihan jalan. <b>Udara total</b>: PM2,5 dan ISPU, hampir sama di seluruh kota karena didominasi udara latar. <b>Harga hirup</b>: seberapa banyak orang menghirup gas buang ruas itu.
               </p>
             </div>
           )}
@@ -247,7 +248,7 @@ export default function ExploreMapPage() {
         <div className="glass-card p-4">
           <p className="text-xs font-semibold text-gray-900 dark:text-white mb-2.5">
             Arti warna jalan — {activeP.label}
-            {roadDisplayMode === 'traffic' ? ' · lalu lintas' : roadDisplayMode === 'harga' ? ' · harga hirup' : ''}
+            {roadDisplayMode === 'traffic' ? ' · asap kendaraan' : roadDisplayMode === 'harga' ? ' · harga hirup' : ''}
           </p>
           {roadDisplayMode === 'traffic' ? (
             <TrafficLegend pollutant={pollutant} />

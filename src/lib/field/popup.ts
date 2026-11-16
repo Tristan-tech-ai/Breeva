@@ -38,7 +38,7 @@ export function popupHtml(v: CellValue | undefined, name: string | undefined, sr
     `<span style="width:9px;height:9px;border-radius:50%;background:${band.color};display:inline-block;box-shadow:0 0 0 1px rgba(0,0,0,.15)"></span>` +
     `<span style="font-weight:700;font-size:13px;color:#111">PM2.5 ${v.pm25.toFixed(1)} µg/m³</span></div>` +
     `<div style="font-size:11px;color:#444">ISPU ${index} · ${band.name} · rentang 95%: ${lo.toFixed(0)}–${hi.toFixed(0)} µg/m³</div>` +
-    `<div style="font-size:11px;color:#444">dari lalu lintas ruas sekitar: PM2.5 +${v.pm25_delta.toFixed(2)} · NO₂ +${v.no2_delta.toFixed(1)} µg/m³ (NO₂ total ${v.no2.toFixed(0)})</div>` +
+    `<div style="font-size:11px;color:#444"><b>Asap kendaraan</b> (NOx lalu lintas): ${v.no2_delta.toFixed(1)} µg/m³ · PM2.5 dari knalpot +${v.pm25_delta.toFixed(2)}</div>` +
     hargaLine(src, c, i) +
     (v.ood ? `<div style="font-size:11px;color:#6b7280">di luar wilayah terkalibrasi</div>` : '') +
     (src.manifest?.indicative ? `<div style="font-size:11px;color:#b45309">Indikatif: belum ada stasiun ukur di wilayah ini</div>` : '') +

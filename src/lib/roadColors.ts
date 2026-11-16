@@ -8,17 +8,18 @@ export const TOTAL_STOPS: Record<string, [number, string][]> = {
   pm10: [[0, '#00E400'], [54, '#FFFF00'], [154, '#FF7E00'], [254, '#FF0000'], [354, '#8F3F97'], [424, '#7E0023']],
 };
 /**
- * Traffic view: the part of a road's value that comes from the traffic of the roads around it (pm25_delta, no2_delta), on a
- * FIXED ug/m3 scale. Differences below the dead band are drawn grey: a few tenths of a microgram are far below what the
- * field resolves (daily error about 8 ug/m3) and below anything a sensor could confirm. The scale never stretches to the
- * roads on screen, so one value has one colour everywhere. Violet, not the health colours, so the view is not read as a
- * health category.
+ * Exhaust view ("asap kendaraan"): the part of a road's value that comes from the traffic on it and around it
+ * (pm25_delta, no2_delta), on a FIXED ug/m3 scale. The default tracer is traffic NOx (the no2_delta column): it spans
+ * two orders of magnitude between a lane and a trunk road, so its steps are roughly geometric and its dead band is
+ * low. For PM2.5 mass the dead band stays at 1 ug/m3: a few tenths of a microgram are far below what the field
+ * resolves. The scale never stretches to the roads on screen, so one value has one colour everywhere. Violet, not the
+ * health colours, so the view is not read as a health category.
  */
-export const TRAFFIC_DEADBAND: Record<'pm25' | 'no2' | 'pm10', number> = { pm25: 1, no2: 5, pm10: 2 };
+export const TRAFFIC_DEADBAND: Record<'pm25' | 'no2' | 'pm10', number> = { pm25: 1, no2: 2, pm10: 2 };
 export const TRAFFIC_GREY = '#d1d5db';
 export const TRAFFIC_STOPS: Record<'pm25' | 'no2' | 'pm10', [number, string][]> = {
   pm25: [[1, '#e9d5ff'], [2, '#c084fc'], [4, '#9333ea'], [8, '#581c87']],
-  no2: [[5, '#e9d5ff'], [10, '#c084fc'], [25, '#9333ea'], [50, '#581c87']],
+  no2: [[2, '#ddd6fe'], [5, '#c4b5fd'], [15, '#8b5cf6'], [40, '#6d28d9'], [100, '#3b0764']],
   pm10: [[2, '#e9d5ff'], [4, '#c084fc'], [8, '#9333ea'], [16, '#581c87']],
 };
 

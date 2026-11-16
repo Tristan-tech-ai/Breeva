@@ -20,6 +20,7 @@ let graph: WalkGraph | null = null;
 let index: NodeIndex | null = null;
 let no2: Float64Array | null = null;
 let pm25: Float64Array | null = null;
+let exhaust: Float64Array | null = null;
 let harga: Float64Array | null = null;
 let run = '';
 let schoolFile: SchoolFile | null = null;
@@ -35,17 +36,18 @@ async function init(base: string, region: { name: string; geometry: string }) {
   let hi: HargaIndex | null = null;
   try { hi = new HargaIndex(await cachedBytes(`${base}/harga/${region.geometry}/${region.name}.bin`, { cacheFirst: true })); } catch { hi = null; }
   const n = new Float64Array(g.m).fill(Number.NaN), p = new Float64Array(g.m).fill(Number.NaN), h = new Float64Array(g.m).fill(Number.NaN);
+  const x = new Float64Array(g.m).fill(Number.NaN);
   for (let e = 0; e < g.m; e++) {
     const r = g.road(e);
     if (!r) continue;
     const v = cells.get(r.c)?.[r.i];
-    if (v) { n[e] = v.no2; p[e] = v.pm25; }
+    if (v) { n[e] = v.no2; p[e] = v.pm25; x[e] = v.no2_delta; }
     const hv = hi?.value(r.c, r.i);
     if (hv != null) h[e] = hv;
   }
   let sf: SchoolFile | null = null;
   try { sf = JSON.parse(new TextDecoder().decode(await cachedBytes(`${base}/graphs/${region.geometry}/${region.name}_schools.json`, { cacheFirst: false }))) as SchoolFile; } catch { sf = null; }
-  graph = g; index = new NodeIndex(g); no2 = n; pm25 = p; harga = hi ? h : null; run = manifest.run;
+  graph = g; index = new NodeIndex(g); no2 = n; pm25 = p; exhaust = x; harga = hi ? h : null; run = manifest.run;
   schoolFile = sf; schools = null;
   return { nodes: g.n, edges: g.m, run, harga: !!hi, schools: sf?.points.length ?? 0 };
 }
@@ -68,7 +70,7 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
   const keep = mode === 'motor' ? (u: number) => motorNode(g, u) : undefined;
   const s = index.nearest(from.lat, from.lng, 500, keep), t = index.nearest(to.lat, to.lng, 500, keep);
   if (s < 0 || t < 0) throw new Error('titik di luar jaringan jalan wilayah ini');
-  const nArr = no2, pArr = pm25, hArr = harga;
+  const nArr = no2, pArr = pm25, hArr = harga, xArr = exhaust;
   let routes: Array<RouteResult & { kind?: 'dua-angka' | 'darurat'; school?: 'off' | 'kept' | 'lifted-near-ends' }>;
   if (mode === 'motor') {
     const inp = { no2: nArr, harga: hArr ?? undefined };
@@ -85,19 +87,20 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
     routes = pareto(g, s, t, { speed: SPEED, exposureOf: (e) => (Number.isFinite(nArr[e]) ? nArr[e] / medN : 1) });
   }
   return routes.map((r) => {
-    let pmDose = 0, no2Dose = 0, hDose = 0, tSum = 0;
+    let pmDose = 0, no2Dose = 0, hDose = 0, xDose = 0, tSum = 0;
     const coords: Array<[number, number]> = [];
     r.edges.forEach((e, k) => {
       const tS = (g.lenDm[e] / 10) * (r.timeS / Math.max(1, r.lengthM)); // time share of the edge (route's own speeds)
       tSum += tS;
       pmDose += (Number.isFinite(pArr[e]) ? pArr[e] : 0) * tS;
       no2Dose += (Number.isFinite(nArr[e]) ? nArr[e] : 0) * tS;
+      xDose += (xArr && Number.isFinite(xArr[e]) ? xArr[e] : 0) * tS;
       hDose += (hArr && Number.isFinite(hArr[e]) ? hArr[e] : 1) * tS;
       const pts = g.edgeCoords(e, r.nodes[k]);
       coords.push(...(k === 0 ? pts : pts.slice(1)));
     });
     // mean concentration along the route (ug/m3), the honest number to compare routes by
-    const out = { lengthM: Math.round(r.lengthM), timeS: Math.round(r.timeS), pm25Mean: pmDose / tSum, no2Mean: no2Dose / tSum, coords, w: r.w };
+    const out = { lengthM: Math.round(r.lengthM), timeS: Math.round(r.timeS), pm25Mean: pmDose / tSum, no2Mean: no2Dose / tSum, exhMean: xDose / tSum, coords, w: r.w };
     return mode === 'motor' ? { ...out, kind: r.kind, hargaMean: hDose / tSum, school: r.school } : out;
   });
 }

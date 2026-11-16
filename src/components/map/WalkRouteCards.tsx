@@ -3,7 +3,7 @@ import type { WalkRoutingState } from './WalkRouteLayer';
 import { routeLink } from '../../lib/route/share';
 import { DEPART_CHOICES } from '../../lib/route/depart';
 
-/** Cards of the walking routes computed on the device: distance, time, mean NO2 and PM2.5 along each route. */
+/** Cards of the routes computed on the device: vehicle exhaust breathed against the fastest route, time, distance. */
 export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = null, onDepart }: {
   state: WalkRoutingState | null; mode?: 'walk' | 'motor'; onMode?: (m: 'walk' | 'motor') => void;
   depart?: string | null; onDepart?: (d: string | null) => void;
@@ -57,18 +57,19 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = 
                 <span className="h-2.5 w-6 rounded-full" style={{ background: c.color }} />
                 <span className="text-xs font-bold text-gray-900 dark:text-white">{c.label}</span>
               </div>
-              <p className="mt-1.5 text-[12px] text-gray-700 dark:text-gray-300">{c.km} km · {c.minutes} menit</p>
-              <p className="text-[12px] text-gray-700 dark:text-gray-300">Paparan diri: NO₂ rata-rata {c.no2} · PM2,5 {c.pm25} µg/m³</p>
+              <p className="mt-1.5 text-[13px] font-semibold leading-snug text-gray-900 dark:text-white">{c.headline}</p>
+              <p className="mt-0.5 text-[12px] text-gray-700 dark:text-gray-300">
+                {c.km} km · {c.minutes} menit
+                {c.vsFastest && c.vsFastest.extraMin !== 0 && ` (${c.vsFastest.extraMin > 0 ? '+' : ''}${c.vsFastest.extraMin} menit)`}
+              </p>
+              {c.exh != null && c.vsFastest && (
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">Asap kendaraan rata-rata {c.exh.toLocaleString('id-ID')} µg/m³ (NOx lalu lintas)</p>
+              )}
               {c.harga != null && (
                 <p className="text-[12px] text-gray-700 dark:text-gray-300">Ditimbulkan: harga hirup rata-rata {c.harga.toLocaleString('id-ID')}× median wilayah</p>
               )}
               {c.schoolNote && (
                 <p className="mt-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300">{c.schoolNote}</p>
-              )}
-              {c.vsFastest && (
-                <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
-                  {c.vsFastest.extraTimePct >= 0 ? '+' : ''}{c.vsFastest.extraTimePct}% waktu · NO₂ {c.vsFastest.no2Pct >= 0 ? '+' : ''}{c.vsFastest.no2Pct}% dibanding tercepat
-                </p>
               )}
             </div>
           ))}
@@ -77,8 +78,9 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = 
       <p className="mt-2 text-[10.5px] leading-relaxed text-gray-400 dark:text-gray-500">
         {mode === 'motor'
           ? 'Motor: biaya rute menghitung paparan diri dan paparan yang ditimbulkan bagi warga sekitar (harga hirup); gang dan jalan lingkungan hanya dipakai dekat titik berangkat dan tujuan (zona napas); pada jam masuk 06.30–07.30 dan pulang 12.00–13.30 jalan kecil di depan sekolah juga dihindari. Rute darurat paling cepat dan tidak memberi poin, tetapi tetap menjauhi gang. '
-          : 'Pilihan rute memakai NO₂ dari lalu lintas karena PM2,5 hampir sama di semua jalan. '}
-        Angka adalah rata-rata model sepanjang rute pada jam data peta, bukan pengukuran di tempat.
+          : 'Asap kendaraan (gas buang dan jelaga knalpot) paling pekat di jalan ramai dan cepat menipis begitu menjauh, jadi rute dipilih menurut asap kendaraan yang dihirup. '}
+        {state.cards.length > 0 && `Udara latar kota (PM2,5 sekitar ${Math.round(state.cards[0].pm25)} µg/m³, dari pembakaran dan asap jauh) sama di semua rute dan tidak bisa dihindari lewat pilihan jalan. `}
+        Angka adalah perkiraan model per ruas pada jam data peta, bukan pengukuran di tempat.
       </p>
     </div>
   );
