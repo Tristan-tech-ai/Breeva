@@ -3,6 +3,7 @@ import type { Coordinate } from '../types';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Wind, Gauge, Route, ArrowRight, MapPin } from 'lucide-react';
 import { Seo } from '../components/Seo';
+import OpenAppLink from '../components/auth/OpenAppLink';
 import { useMapStore } from '../stores/mapStore';
 import { useIsDark } from '../stores/settingsStore';
 import AQICard from '../components/features/AQICard';
@@ -43,7 +44,7 @@ export default function CityAirPage() {
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-base font-semibold text-gray-900 dark:text-white">Udara {city.name}</h1>
-        <Link to="/login" className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-full gradient-primary text-white shadow-sm">Buka aplikasi</Link>
+        <OpenAppLink className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-full gradient-primary text-white shadow-sm">Buka aplikasi</OpenAppLink>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 pt-4 space-y-5">

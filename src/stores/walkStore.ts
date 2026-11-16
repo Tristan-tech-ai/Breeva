@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import type { Coordinate, RoutePoint, WalkSession, ExposureResult, RouteSegmentAQI } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from './authStore';
+import { isGuest, useGuestStore } from './guestStore';
 import { useSettingsStore } from './settingsStore';
 import { completeWalkViaApi, getVayuVehicleType, submitVayuContribution, getRouteScoreSegments, pm25ToAQISimple } from '../lib/api';
 import { showNotification, isNotificationEnabled } from '../lib/notifications';
@@ -129,11 +130,12 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
 
   startWalk: (routeId, transportMode) => {
     const user = useAuthStore.getState().user;
-    if (!user) return;
+    // Guests walk too: the walk is recorded on the device (guestStore).
+    if (!user && !isGuest()) return;
 
     const session: WalkSession = {
       id: routeId || crypto.randomUUID(),
-      user_id: user.id,
+      user_id: user?.id ?? 'guest',
       start_time: new Date().toISOString(),
       route_points: [],
       distance_meters: 0,
@@ -336,6 +338,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
     let walkSegCount = 0;
     let walkSegments: RouteSegmentAQI[] | null = null; // persisted to walks.route_segments for instant Paparan
     const polyline: [number, number][] = routePoints.map(p => [p.lat, p.lng]);
+    const guest = isGuest();
     if (polyline.length >= 2) {
       const vehicleType = getVayuVehicleType(get().activeTransportMode);
       walkProfile = { age_bucket: 'adult', mode: transportToExposureMode(get().activeTransportMode), health_sensitive: false };
@@ -368,8 +371,9 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       // Consent gate: skip the passive trace (and its reward) if the user opted out
       // via Settings → Privacy → "VAYU Auto-trace". Read the unified settings store
       // (cloud-synced, mirrors breeva_anonymous_data); default = enabled.
+      // Guests send no trace: it is a server write that pays points to an account.
       const autoTraceEnabled = useSettingsStore.getState().anonymous_data;
-      if (autoTraceEnabled) {
+      if (autoTraceEnabled && !guest) {
         const midPoint = polyline[Math.floor(polyline.length / 2)];
         const geohash = ngeohash.encode(midPoint[0], midPoint[1], 7);
         submitVayuContribution(session.id, vehicleType, undefined, geohash).then(async (ok) => {
@@ -389,15 +393,52 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       }
     }
 
+    // Real route-mean AQI from the scored polyline (drives the AQI bonus).
+    const walkAvgAqi = walkDose && Number.isFinite(walkDose.mean_pm25) ? pm25ToAQISimple(walkDose.mean_pm25) : undefined;
+
+    // Guest: the walk is recorded on this device with the server's formula (guestStore); nothing is sent.
+    if (guest) {
+      const r = useGuestStore.getState().completeWalk({
+        id: completedSession.id,
+        started_at: completedSession.start_time,
+        distance_meters: distanceMeters,
+        duration_seconds: durationSeconds,
+        avg_aqi: walkAvgAqi ?? null,
+        transport_mode: get().activeTransportMode,
+        route_points: routePoints,
+      });
+      if (r.ok) {
+        points = r.walk.ecopoints_earned;
+        completedSession.eco_points_earned = points;
+        localStorage.setItem('breeva_last_walk_date', formatLocalDateYYYYMMDD());
+      } else {
+        completedSession.status = 'failed' as WalkSession['status'];
+        toast(r.reason === 'Speed too high for walking'
+          ? 'Kecepatan rata-rata di atas batas jalan kaki: perjalanan tidak diberi poin.'
+          : 'Perjalanan tidak lolos pemeriksaan (kecepatan atau lompatan GPS): tidak diberi poin.', { icon: '⚠️' });
+      }
+      set({
+        session: completedSession,
+        isTracking: false,
+        isPaused: false,
+        watchId: null,
+        timerInterval: null,
+        pointsEarned: completedSession.status === 'completed' ? points : 0,
+        heading: null,
+        navProgress: null,
+        offRoute: false,
+        arrived: false,
+      });
+      return completedSession;
+    }
+
     // Complete walk via API (with offline queue fallback)
     try {
       const user = useAuthStore.getState().user;
       if (user) {
         // Real route-mean AQI from the v2-scored polyline (drives the server AQI
         // bonus + the "clean air" quest). Omit when exposure couldn't be scored.
-        const avgAqi = walkDose && Number.isFinite(walkDose.mean_pm25)
-          ? pm25ToAQISimple(walkDose.mean_pm25)
-          : undefined;
+        const avgAqi = walkAvgAqi;
         const completionResult = await completeWalkViaApi({
           walk_id: completedSession.id,
           user_id: user.id,

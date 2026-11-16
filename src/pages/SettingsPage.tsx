@@ -14,6 +14,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useI18nStore } from '../stores/i18nStore';
 import { supabase } from '../lib/supabase';
+import { GUEST_NEEDS_ACCOUNT, isGuest } from '../stores/guestStore';
 import { requestNotificationPermission } from '../lib/notifications';
 
 type Tone = 'active' | 'off' | 'warn';
@@ -156,6 +157,7 @@ export default function SettingsPage() {
 
   // ── Account actions ──────────────────────────────────────────────
   const handleExport = async () => {
+    if (isGuest()) { toast(GUEST_NEEDS_ACCOUNT); return; }
     setBusy(true);
     try {
       const { data, error } = await supabase.rpc('export_my_data');
@@ -176,7 +178,7 @@ export default function SettingsPage() {
   };
 
   const handleSignOut = async () => {
-    await signOut();
+    await signOut(); // in guest mode this leaves guest mode (authStore)
     navigate('/login');
   };
 
@@ -210,6 +212,7 @@ export default function SettingsPage() {
   };
 
   const handleDeleteData = async () => {
+    if (isGuest()) { toast(GUEST_NEEDS_ACCOUNT); return; }
     setBusy(true);
     try {
       const { error } = await supabase.rpc('delete_my_data');

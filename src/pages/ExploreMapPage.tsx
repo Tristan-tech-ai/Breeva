@@ -3,6 +3,7 @@ import type { Coordinate } from '../types';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Wind, Route, Gauge, MapPin, Crosshair, ArrowRight, Sparkles } from 'lucide-react';
 import { Seo } from '../components/Seo';
+import OpenAppLink from '../components/auth/OpenAppLink';
 import { useMapStore } from '../stores/mapStore';
 import { useIsDark } from '../stores/settingsStore';
 import AQICard from '../components/features/AQICard';
@@ -126,7 +127,7 @@ export default function ExploreMapPage() {
         )}
         <h1 className="text-base font-semibold text-gray-900 dark:text-white">{isRoot ? 'Breeva · Peta Udara Langsung' : 'Peta Udara Langsung'}</h1>
         {isRoot && <Link to="/landing" className="ml-2 text-xs text-gray-500 dark:text-gray-400 underline-offset-2 hover:underline">Tentang</Link>}
-        <Link to="/login" className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-full gradient-primary text-white shadow-sm">Buka aplikasi</Link>
+        <OpenAppLink className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-full gradient-primary text-white shadow-sm">Buka aplikasi</OpenAppLink>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 pt-4 space-y-5">
@@ -315,11 +316,11 @@ export default function ExploreMapPage() {
             <span className="flex-1"><span className="block text-sm font-semibold text-gray-900 dark:text-white">Kalkulator Paparan</span><span className="block text-[11px] text-gray-500 dark:text-gray-400">Hitung dosis PM2.5 di sebuah rute</span></span>
             <ArrowRight className="w-4 h-4 text-gray-400" />
           </Link>
-          <Link to="/login" className="rounded-2xl p-4 flex items-center gap-3 gradient-primary text-white shadow-lg shadow-primary-500/20">
+          <OpenAppLink className="rounded-2xl p-4 flex items-center gap-3 gradient-primary text-white shadow-lg shadow-primary-500/20">
             <Route className="w-5 h-5 shrink-0" />
             <span className="flex-1"><span className="block text-sm font-semibold">Buka aplikasi penuh</span><span className="block text-[11px] text-white/85">Rute bersih, lacak jalan, EcoPoin</span></span>
             <ArrowRight className="w-4 h-4" />
-          </Link>
+          </OpenAppLink>
         </section>
 
         {/* Footer nav (internal links for crawlers) */}

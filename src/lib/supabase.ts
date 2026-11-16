@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { isGuest } from '../stores/guestStore';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -9,10 +10,18 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+/**
+ * Safety net for guest mode: no request reaches the account server while the app runs as a guest, even from a call
+ * site that forgot to check isGuest(). The call then fails like an offline request (supabase-js returns an error).
+ */
+const guardedFetch: typeof fetch = (input, init) =>
+  isGuest() ? Promise.reject(new TypeError('Guest mode: account server not used')) : fetch(input, init);
+
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'placeholder-key',
   {
+    global: { fetch: guardedFetch },
     auth: {
       autoRefreshToken: true,
       persistSession: true,

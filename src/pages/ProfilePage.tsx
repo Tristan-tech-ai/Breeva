@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, BarChart3, Trophy, Coins, Settings, HelpCircle, LogOut, Leaf, Flame, TreePine, Pencil, Info, Footprints, MapPin, Calendar } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import { useGuestStore, useIsGuest } from '../stores/guestStore';
 import { formatNumber } from '../lib/utils';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import AnimatedNumber from '../components/ui/AnimatedNumber';
@@ -18,7 +19,9 @@ import { co2KgFromGrams, treesFromCo2Kg, caloriesFromKm } from '../lib/metrics';
 import NextBadgeCard from '../components/features/NextBadgeCard';
 
 export default function ProfilePage() {
-  const { profile, user, signOut, isLoading } = useAuthStore();
+  const { profile, user, signOut, isLoading, leaveGuest } = useAuthStore();
+  const guest = useIsGuest();
+  const guestWalks = useGuestStore((s) => s.walks);
   const navigate = useNavigate();
   const [walkDays, setWalkDays] = useState<Record<string, number>>({});
   const [contributionDays, setContributionDays] = useState<Record<string, number>>({});
@@ -77,12 +80,21 @@ export default function ProfilePage() {
     return () => { cancelled = true; };
   }, [user]);
 
+  // A guest's heatmap comes from the walks recorded on this device (no server query).
+  const guestWalkDays: Record<string, number> = {};
+  if (guest) {
+    for (const w of guestWalks) {
+      const day = new Date(w.started_at).toISOString().split('T')[0];
+      guestWalkDays[day] = (guestWalkDays[day] || 0) + 1;
+    }
+  }
+
   const heatmapCategories: HeatmapCategory[] = [
     {
       key: 'walks',
       label: 'Walks',
       icon: Footprints,
-      data: walkDays,
+      data: guest ? guestWalkDays : walkDays,
       colors: [
         'bg-emerald-200 dark:bg-emerald-800',
         'bg-emerald-300 dark:bg-emerald-700',
@@ -100,7 +112,7 @@ export default function ProfilePage() {
       key: 'contributions',
       label: 'Contributions',
       icon: MapPin,
-      data: contributionDays,
+      data: guest ? {} : contributionDays,
       colors: [
         'bg-sky-200 dark:bg-sky-800',
         'bg-sky-300 dark:bg-sky-700',
@@ -117,7 +129,8 @@ export default function ProfilePage() {
   ];
 
   const handleSignOut = async () => {
-    await signOut();
+    if (guest) leaveGuest();
+    else await signOut();
     navigate('/login', { replace: true });
   };
 
@@ -290,7 +303,7 @@ export default function ProfilePage() {
               )}
             </div>
             <h1 className="mt-3 text-xl font-bold text-white">{profile?.full_name || 'Eco Walker'}</h1>
-            <p className="text-white/70 text-sm">@{profile?.email?.split('@')[0] || 'user'}</p>
+            <p className="text-white/70 text-sm">{guest ? 'Mode tamu · data di perangkat ini' : `@${profile?.email?.split('@')[0] || 'user'}`}</p>
             {/* Level + tier + XP progress (derived from xp/level; thresholds match _level_for_xp) */}
             {(() => {
               const xp = profile?.xp ?? 0;
@@ -316,13 +329,15 @@ export default function ProfilePage() {
                 </div>
               );
             })()}
-            <Link
-              to="/profile/edit"
-              className="mt-2 flex items-center gap-1 text-xs text-white/60 hover:text-white/90 transition"
-            >
-              <Pencil size={11} />
-              Edit Profile
-            </Link>
+            {!guest && (
+              <Link
+                to="/profile/edit"
+                className="mt-2 flex items-center gap-1 text-xs text-white/60 hover:text-white/90 transition"
+              >
+                <Pencil size={11} />
+                Edit Profile
+              </Link>
+            )}
           </motion.div>
         </div>
       </div>
@@ -419,7 +434,7 @@ export default function ProfilePage() {
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
               Activity
             </h3>
-            <StreakHeatmap categories={heatmapCategories} loading={heatmapLoading} />
+            <StreakHeatmap categories={heatmapCategories} loading={guest ? false : heatmapLoading} />
           </div>
         </motion.div>
 
@@ -501,7 +516,7 @@ export default function ProfilePage() {
             className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm w-full py-4 px-5 flex items-center justify-center gap-2 text-red-500 hover:bg-red-50/50 dark:hover:bg-red-900/10 transition-colors"
           >
             <LogOut size={18} />
-            <span className="text-sm font-medium">Sign Out</span>
+            <span className="text-sm font-medium">{guest ? 'Keluar dari mode tamu' : 'Sign Out'}</span>
           </button>
         </motion.div>
       </div>

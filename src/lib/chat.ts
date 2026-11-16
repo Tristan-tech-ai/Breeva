@@ -3,6 +3,8 @@
 // error / done). Uses a direct fetch (NOT supabase.functions.invoke(), which
 // buffers the whole body and cannot stream).
 
+import { isGuest } from '../stores/guestStore';
+
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 const CHAT_URL = `${(SUPA_URL || '').replace('.supabase.co', '.functions.supabase.co')}/chat`;
@@ -25,6 +27,8 @@ export interface StreamChatOpts {
 
 export async function streamChat(opts: StreamChatOpts): Promise<void> {
   const { messages, context, toolsEnabled = true, toolResult = null, signal } = opts;
+  // The assistant runs on the account server (an Edge Function): not called in guest mode.
+  if (isGuest()) { opts.onError('guest'); return; }
   let resp: Response;
   try {
     resp = await fetch(CHAT_URL, {

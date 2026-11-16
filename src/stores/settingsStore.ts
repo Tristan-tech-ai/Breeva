@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
+import { isGuest } from './guestStore';
 import { formatDistance, formatKm } from '../lib/utils';
 
 // Single source of truth for all app settings. Two persistence layers:
@@ -64,6 +65,7 @@ const dirty = new Set<keyof AppSettings>();
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function pushToCloud(s: AppSettings): Promise<void> {
+  if (isGuest()) return; // a guest's settings stay on the device
   try {
     const { data: sess } = await supabase.auth.getSession();
     const uid = sess.session?.user?.id;

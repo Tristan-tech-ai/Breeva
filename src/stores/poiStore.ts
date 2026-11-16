@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { POI } from '../lib/poi-api';
 import { getPOIsInRect } from '../lib/poi-api';
 import { db } from '../lib/supabase';
+import { isGuest } from './guestStore';
 import { diagStart, diagEnd, diagLog, diagFetchSummary } from '../lib/poi-diagnostics';
 
 // ── Tile math (slippy-map convention) ────────────────────────────────
@@ -339,7 +340,8 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
       Math.abs(centerLat - lastCenter.lat) > 0.004 ||
       Math.abs(centerLng - lastCenter.lng) > 0.004;
 
-    if (moved) {
+    // Merchants come from the account database: not fetched in guest mode.
+    if (moved && !isGuest()) {
       set({ _lastMerchantCenter: { lat: centerLat, lng: centerLng } });
       // Compute radius from viewport bounds (diagonal / 2 in km, min 2km)
       const latSpan = bounds.getNorth() - bounds.getSouth();
