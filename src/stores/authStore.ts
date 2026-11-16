@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { useSettingsStore } from './settingsStore';
+import { guestUserProfile, isGuest, useGuestStore } from './guestStore';
 
 // Claim the daily login/streak bonus at most once per app session.
 let dailyBonusClaimed = false;
@@ -83,6 +84,10 @@ interface AuthState {
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   initialize: () => Promise<void>;
   completeOnboarding: () => void;
+  /** Enter the app as a guest (no account; local profile, see guestStore). Ignored while signed in. */
+  enterGuest: () => void;
+  /** Leave guest mode ("Keluar dari mode tamu"); the local records stay on the device. */
+  leaveGuest: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -107,6 +112,7 @@ export const useAuthStore = create<AuthState>()(
 
       // Sign in with Google OAuth
       signInWithGoogle: async () => {
+        if (isGuest()) useGuestStore.getState().exit();
         try {
           set({ isLoading: true, error: null });
           const { error } = await supabase.auth.signInWithOAuth({
@@ -127,6 +133,7 @@ export const useAuthStore = create<AuthState>()(
 
       // Sign in with email/password
       signInWithEmail: async (email: string, password: string) => {
+        if (isGuest()) useGuestStore.getState().exit();
         try {
           set({ isLoading: true, error: null });
           const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -149,6 +156,7 @@ export const useAuthStore = create<AuthState>()(
 
       // Sign up with email/password — sends OTP verification first
       signUpWithEmail: async (email: string, password: string, fullName: string) => {
+        if (isGuest()) useGuestStore.getState().exit();
         try {
           set({ isLoading: true, error: null });
 
@@ -234,6 +242,7 @@ export const useAuthStore = create<AuthState>()(
 
       // Send reset password email
       sendResetPasswordEmail: async (email: string) => {
+        if (isGuest()) useGuestStore.getState().exit();
         try {
           set({ isLoading: true, error: null });
           const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -267,6 +276,10 @@ export const useAuthStore = create<AuthState>()(
 
       // Sign out
       signOut: async () => {
+        if (isGuest()) {
+          get().leaveGuest();
+          return;
+        }
         try {
           set({ isLoading: true, error: null });
           const { error } = await supabase.auth.signOut();
@@ -393,6 +406,11 @@ export const useAuthStore = create<AuthState>()(
 
       // Initialize auth state
       initialize: async () => {
+        // A guest has no session to check: no request to the account server.
+        if (isGuest()) {
+          set({ isLoading: false, isInitialized: true });
+          return;
+        }
         try {
           set({ isLoading: true });
 
@@ -435,13 +453,22 @@ export const useAuthStore = create<AuthState>()(
           set({ profile: { ...profile, onboarding_completed: true } });
         }
         localStorage.setItem('breeva_onboarding_completed', 'true');
-        if (user) {
+        if (user && !isGuest()) {
           supabase
             .from('users')
             .update({ onboarding_completed: true })
             .eq('id', user.id)
             .then(() => { /* non-blocking */ });
         }
+      },
+
+      enterGuest: () => {
+        if (get().user) return;
+        useGuestStore.getState().enter();
+      },
+
+      leaveGuest: () => {
+        useGuestStore.getState().exit();
       },
     }),
     {
@@ -464,3 +491,15 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
+
+// Guest mode mirrors the local guest profile into `profile`, so every page that reads the profile shows the local
+// numbers; leaving guest mode clears it.
+function syncGuestProfile(active: boolean, wasActive: boolean) {
+  if (active) {
+    useAuthStore.setState({ profile: guestUserProfile(useGuestStore.getState().profile), isLoading: false, isInitialized: true });
+  } else if (wasActive && !useAuthStore.getState().user) {
+    useAuthStore.setState({ profile: null });
+  }
+}
+useGuestStore.subscribe((s, prev) => syncGuestProfile(s.active, prev.active));
+syncGuestProfile(useGuestStore.getState().active, false);

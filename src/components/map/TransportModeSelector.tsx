@@ -81,17 +81,17 @@ export default function TransportModeSelector() {
         >
           <div className="flex items-center gap-1.5">
             <span className="text-primary-600 dark:text-primary-400 font-semibold">
-              {selectedModeInfo.co2PerKm === 0 ? '🌱 Zero emission!' : `${selectedModeInfo.co2PerKm}g CO₂/km`}
+              {selectedModeInfo.co2PerKm === 0 ? '🌱 Tanpa emisi' : `${selectedModeInfo.co2PerKm}g CO₂/km`}
             </span>
           </div>
           {co2Saved && Number(co2Saved) > 0 && (
             <span className="text-primary-500 font-medium">
-              Save {co2Saved}g CO₂ vs car
+              Hemat {co2Saved} g CO₂ dibanding mobil
             </span>
           )}
           <div className="flex items-center gap-1">
             <span className="text-amber-600 dark:text-amber-400 font-semibold">
-              ×{selectedModeInfo.ecoPointsMultiplier} pts
+              ×{selectedModeInfo.ecoPointsMultiplier} poin
             </span>
           </div>
         </motion.div>

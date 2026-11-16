@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../stores/authStore';
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, Check, X } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, Check, X, UserRound } from 'lucide-react';
 import logoBreeva from '../assets/logo-breeva.svg';
 
 type AuthView = 'login' | 'signup' | 'forgot-password' | 'reset-sent';
@@ -11,7 +11,7 @@ export default function LoginPage() {
   const {
     user, isLoading, signInWithGoogle, signInWithEmail, signUpWithEmail,
     sendResetPasswordEmail, pendingVerification,
-    error, setError,
+    error, setError, enterGuest,
   } = useAuthStore();
   const [view, setView] = useState<AuthView>('login');
   const [email, setEmail] = useState('');
@@ -95,6 +95,12 @@ export default function LoginPage() {
     const ok = await sendResetPasswordEmail(resetEmail.trim());
     setIsSubmitting(false);
     if (ok) setView('reset-sent');
+  };
+
+  // Guest mode (F1-17): the full app without an account, data kept on this device.
+  const handleGuest = () => {
+    enterGuest();
+    navigate(from, { replace: true });
   };
 
   const switchView = (v: AuthView) => {
@@ -182,7 +188,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="lg:hidden w-full flex items-center justify-center gap-2 mb-8 hover:opacity-80 transition"
+              className="lg:hidden w-full flex items-center justify-center gap-2 mt-10 mb-6 hover:opacity-80 transition"
               aria-label="Ke beranda Breeva"
             >
               {logoBreeva ? (
@@ -194,6 +200,23 @@ export default function LoginPage() {
                 Breeva
               </h1>
             </button>
+
+            {/* Account sign-in is down (database quota): say so and offer guest mode above the form */}
+            <div className="mb-4 rounded-2xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-900/20 p-4" role="status">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Masuk dengan akun sementara tidak tersedia</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-amber-800 dark:text-amber-300">
+                Server akun Breeva sedang dipulihkan. Kamu tetap bisa memakai aplikasi penuh sebagai tamu: peta, rute di perangkat,
+                dan catatan jalan tersimpan di perangkat ini.
+              </p>
+              <button
+                type="button"
+                onClick={handleGuest}
+                className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl gradient-primary py-3 text-sm font-semibold text-white shadow-lg shadow-primary-500/25"
+              >
+                <UserRound className="w-4 h-4" />
+                Masuk sebagai tamu
+              </button>
+            </div>
 
             {/* Glass Login Card */}
             <div className="glass-card p-8 lg:p-10">

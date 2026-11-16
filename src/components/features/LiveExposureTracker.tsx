@@ -88,7 +88,7 @@ export default function LiveExposureTracker({ currentAQI, isPaused }: LiveExposu
       <div className="mt-3 rounded-2xl border border-gray-200 dark:border-gray-700/30 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 flex items-center gap-2">
         <Wind size={12} className="text-gray-400 animate-pulse" />
         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-          Live Exposure
+          Paparan langsung
         </span>
         <span className="ml-auto text-[10px] text-gray-400">Sampling air quality…</span>
       </div>
@@ -111,7 +111,7 @@ export default function LiveExposureTracker({ currentAQI, isPaused }: LiveExposu
       >
         <Wind size={12} className={cfg.color} />
         <span className={`text-[10px] font-bold ${cfg.color} uppercase tracking-wider`}>
-          Live Exposure
+          Paparan langsung
         </span>
         <span className={`ml-auto text-xs font-bold tabular-nums ${cfg.color}`}>
           {displayCig < 0.01 ? '<0.01' : displayCig.toFixed(2)} 🚬

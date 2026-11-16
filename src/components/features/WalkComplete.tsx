@@ -9,6 +9,7 @@ import CelebrationBurst from '../ui/CelebrationBurst';
 import { submitAQCalibration } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import { useIsGuest } from '../../stores/guestStore';
 import { co2KgFromGrams, co2SavedGramsForKm, caloriesFromKm } from '../../lib/metrics';
 
 interface WalkCompleteProps {
@@ -23,6 +24,8 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
   const [rated, setRated] = useState(false);
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
   const isFailed = session.status === 'failed';
+  // A guest's walk is recorded on this device; the air-quality rating needs the account server.
+  const guest = useIsGuest();
 
   const km = session.distance_meters / 1000;
   const distKm = km.toFixed(2);
@@ -103,7 +106,9 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
             {isFailed ? 'Gagal Menyimpan' : 'Perjalanan Selesai!'}
           </h2>
           <p className="relative text-sm text-white/85 mt-1">
-            {isFailed ? 'Tersimpan lokal, gagal sinkron — akan dicoba lagi nanti.' : 'Kerja bagus, langkahmu berarti! 🌿'}
+            {isFailed
+              ? (guest ? 'Perjalanan tidak lolos pemeriksaan kecepatan, jadi tidak diberi poin.' : 'Tersimpan lokal, gagal sinkron — akan dicoba lagi nanti.')
+              : guest ? 'Tercatat di perangkat ini (mode tamu). 🌿' : 'Kerja bagus, langkahmu berarti! 🌿'}
           </p>
         </div>
 
@@ -139,7 +144,7 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
           >
             <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 flex items-center gap-2">
               <Wind size={14} className="text-blue-500" />
-              <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Air Exposure</span>
+              <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Paparan udara</span>
               <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                 exposureResult.health_risk_level === 'low' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
                 exposureResult.health_risk_level === 'moderate' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
@@ -202,7 +207,7 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
 
         {/* Actions */}
         <div className="flex flex-col gap-2">
-          {!rated && (
+          {!rated && !guest && (
             <button
               onClick={() => setShowRating(true)}
               className="flex items-center justify-center gap-2 rounded-xl border border-primary-200 dark:border-primary-800 bg-primary-50/50 dark:bg-primary-500/10 px-4 py-3 text-sm font-semibold text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-500/20 transition-colors"

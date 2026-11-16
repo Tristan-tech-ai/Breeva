@@ -16,6 +16,9 @@ import { streamChat, type ChatMessage } from '../../lib/chat';
 import { buildChatContext } from '../../lib/chat-context';
 import { CHAT_TOOL_EXECUTORS, type ToolUiAction } from '../../lib/chat-tools';
 
+// The assistant runs on the account server, which guest mode does not call.
+const GUEST_CHAT = 'Asisten Vayu berjalan di server akun Breeva yang sedang dipulihkan, jadi belum tersedia di mode tamu. Peta dan rute tetap berjalan di perangkat ini.';
+
 interface UiMsg { role: 'user' | 'assistant'; text: string; streaming?: boolean; action?: ToolUiAction; }
 
 const HISTORY_KEY = 'breeva_chat_history';
@@ -92,7 +95,10 @@ export default function ChatAssistant({ onClose }: { onClose: () => void }) {
       messages: apiMessages, context: buildChatContext(), toolsEnabled: true, signal: ac1.signal,
       onToken: (tk) => { assistantText += tk; patchLast(assistantText, { streaming: true }); },
       onToolCall: (tc) => { toolCall = tc; },
-      onError: () => { if (!assistantText) patchLast(t('chat.error'), { streaming: false }); },
+      onError: (code) => {
+        if (code === 'guest') { assistantText = GUEST_CHAT; patchLast(GUEST_CHAT, { streaming: false }); }
+        else if (!assistantText) patchLast(t('chat.error'), { streaming: false });
+      },
       onDone: () => { /* handled after await */ },
     });
 

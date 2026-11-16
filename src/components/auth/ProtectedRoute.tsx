@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
+import { useIsGuest } from '../../stores/guestStore';
 import { NoIndex } from '../Seo';
 
 interface ProtectedRouteProps {
@@ -9,6 +10,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, isLoading, isInitialized } = useAuthStore();
+  const guest = useIsGuest();
   const location = useLocation();
   const [timedOut, setTimedOut] = useState(false);
 
@@ -19,7 +21,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return () => clearTimeout(timer);
   }, [isInitialized, isLoading]);
 
-  const stillLoading = (!isInitialized || isLoading) && !timedOut;
+  // A guest session is local: nothing to wait for.
+  const stillLoading = !guest && (!isInitialized || isLoading) && !timedOut;
 
   // Show loading while checking session (max 5s)
   if (stillLoading) {
@@ -27,14 +30,14 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       <div className="gradient-mesh-bg min-h-screen flex items-center justify-center">
         <div className="glass-card p-8 flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Memuat…</p>
         </div>
       </div>
     );
   }
 
-  // Redirect to login if not authenticated
-  if (!user) {
+  // Redirect to login if neither signed in nor a guest
+  if (!user && !guest) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { SavedPlace, Coordinate } from '../types';
 import { supabase } from '../lib/supabase';
+import { isGuest } from './guestStore';
 
 interface SavedPlacesState {
   places: SavedPlace[];
@@ -39,6 +40,7 @@ export const useSavedPlacesStore = create<SavedPlacesState>()((set, get) => ({
   },
 
   fetchCloudPlaces: async (userId: string) => {
+    if (isGuest()) return;
     const { data } = await supabase
       .from('saved_places')
       .select('*')
@@ -94,7 +96,8 @@ export const useSavedPlacesStore = create<SavedPlacesState>()((set, get) => ({
     set({ places: updated });
     saveToStorage(updated);
 
-    // Sync to cloud (non-blocking)
+    // Sync to cloud (non-blocking); a guest's places stay on the device
+    if (isGuest()) return;
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         supabase.from('saved_places').insert({
@@ -116,6 +119,7 @@ export const useSavedPlacesStore = create<SavedPlacesState>()((set, get) => ({
     saveToStorage(updated);
 
     // Sync to cloud (non-blocking)
+    if (isGuest()) return;
     supabase.from('saved_places').delete().eq('id', id).then(() => {});
   },
 
@@ -128,7 +132,7 @@ export const useSavedPlacesStore = create<SavedPlacesState>()((set, get) => ({
 
     // Sync to cloud (non-blocking)
     const place = updated.find(p => p.id === id);
-    if (place) {
+    if (place && !isGuest()) {
       supabase.from('saved_places').update({
         name: place.name,
         address: place.address || null,

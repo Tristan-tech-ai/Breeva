@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { FIELD_REGIONS } from '../../lib/field/source';
-import { RouteClient } from '../../lib/route/client';
+import { RouteClient, type WalkRoute } from '../../lib/route/client';
 import { routeCards, type RouteCard } from '../../lib/route/summary';
 import type { RouteLink } from '../../lib/route/share';
-import { chooseDest, onTap, type TapState } from '../../lib/route/tapFlow';
+import { chooseDest, onTap, startFrom, type TapState } from '../../lib/route/tapFlow';
 
 /** A fixed destination chosen from a list ("Ke sekolah"): the next tap is the start. */
 export interface RouteDest { lat: number; lng: number; name: string }
@@ -13,6 +13,8 @@ export interface WalkRoutingState {
   status: string; cards: RouteCard[]; ms?: number;
   /** Start and destination of the routes shown, for the route link. */
   ends?: { from: { lat: number; lng: number }; to: { lat: number; lng: number } };
+  /** The routes behind the cards (same order): geometry, length, time and means, e.g. to start a walk along one. */
+  routes?: WalkRoute[];
 }
 
 /**
@@ -21,16 +23,23 @@ export interface WalkRoutingState {
  * Registered on the map as __walkTap so the map's click handler hands taps here while the mode is on. A route link
  * (?rute=, share.ts) is played as the two taps once, and the map fits both ends. With a fixed destination (dest, the
  * school picker) every tap is a start and the route goes to that destination. Switching walk/motor recomputes the
- * routes shown.
+ * routes shown. With a fixed destination, a start given by the app (start, e.g. the user's position) is used at once
+ * instead of waiting for a tap: when routing turns on, when the destination changes, and when a start first appears;
+ * taps still set a new start.
  */
 export function useWalkRouting(
   map: L.Map | null, enabled: boolean, onState?: (s: WalkRoutingState) => void, mode: 'walk' | 'motor' = 'walk',
-  link?: RouteLink | null, dest?: RouteDest | null, depart?: string | null,
+  link?: RouteLink | null, dest?: RouteDest | null, depart?: string | null, start?: { lat: number; lng: number } | null,
 ) {
   const departRef = useRef(depart ?? null);
   departRef.current = depart ?? null;
   const linkRef = useRef(link);
-  const apiRef = useRef<{ setDest: (d: RouteDest | null) => void; rerun: () => void } | null>(null);
+  const apiRef = useRef<{
+    setDest: (d: RouteDest | null) => void; rerun: () => void;
+    startAt: (p: { lat: number; lng: number }, onlyIfIdle?: boolean) => void;
+  } | null>(null);
+  const startRef = useRef(start ?? null);
+  startRef.current = start ?? null;
   const destRef = useRef(dest ?? null);
   destRef.current = dest ?? null;
   const onStateRef = useRef(onState);
@@ -47,6 +56,8 @@ export function useWalkRouting(
     let fixed: RouteDest | null = null;
     let lastEnds: { from: L.LatLng; to: L.LatLng } | null = null;
     let busy = false;
+    // a start given while a route is being computed runs when that one is done
+    let queued: { lat: number; lng: number } | null = null;
     const say = (s: WalkRoutingState) => onStateRef.current?.(s);
     const destMarker = () => {
       if (!fixed) return;
@@ -103,13 +114,30 @@ export function useWalkRouting(
           }
           const again = fixed ? `Ketuk titik berangkat lain untuk rute baru ke ${fixed.name}.` : 'Ketuk lagi untuk rute baru.';
           say({ status: routes.length ? `${routes.length} rute dihitung di perangkat dalam ${Math.round(ms)} ms. ${again}` : 'Tidak ada rute.', cards, ms,
-            ends: { from: { lat: from.lat, lng: from.lng }, to: { lat: to.lat, lng: to.lng } } });
+            ends: { from: { lat: from.lat, lng: from.lng }, to: { lat: to.lat, lng: to.lng } }, routes });
         })
         .catch((e: Error) => {
           ready.delete(region.name);
           say({ status: `Rute gagal: ${e.message}`, cards: [] });
         })
-        .finally(() => { busy = false; });
+        .finally(() => {
+          busy = false;
+          if (queued) { const q = queued; queued = null; startAt(q); }
+        });
+    };
+    // a start from the app: a tap on the start towards the fixed destination, with both ends in view
+    const startAt = (p: { lat: number; lng: number }, onlyIfIdle = false) => {
+      if (onlyIfIdle && (lastEnds || busy)) return;
+      if (!startFrom(tap, p) || !fixed) return;
+      if (busy) { queued = p; return; }
+      const ll = L.latLng(p.lat, p.lng);
+      // only the full-screen app map gives a start: keep both ends clear of its header and of the route sheet
+      // that covers the lower half
+      const h = map.getSize().y;
+      map.fitBounds(L.latLngBounds(ll, L.latLng(fixed.lat, fixed.lng)), {
+        paddingTopLeft: [40, 80], paddingBottomRight: [40, Math.round(h / 2) + 24], maxZoom: 16,
+      });
+      tapAt(ll);
     };
     const setDest = (d: RouteDest | null) => {
       const c = chooseDest(d);
@@ -132,9 +160,10 @@ export function useWalkRouting(
       else endMarker(to);
       compute(from, to);
     };
-    apiRef.current = { setDest, rerun };
+    apiRef.current = { setDest, rerun, startAt };
     (map as unknown as { __walkTap?: { tapAt: (ll: L.LatLng) => boolean } }).__walkTap = { tapAt };
     if (destRef.current) setDest(destRef.current);
+    if (destRef.current && startRef.current) startAt(startRef.current);
     const l = linkRef.current;
     if (l) {
       linkRef.current = null; // once
@@ -159,7 +188,16 @@ export function useWalkRouting(
     if (seenDest.current === destKey) return;
     seenDest.current = destKey;
     apiRef.current?.setDest(destRef.current);
+    if (destRef.current && startRef.current) apiRef.current?.startAt(startRef.current);
   }, [destKey]);
+  // a start that appears later (the first GPS fix) is used once, if no route was computed yet; later moves are not
+  const hasStart = !!start;
+  const seenStart = useRef(hasStart);
+  useEffect(() => {
+    if (seenStart.current === hasStart) return;
+    seenStart.current = hasStart;
+    if (startRef.current) apiRef.current?.startAt(startRef.current, true);
+  }, [hasStart]);
   useEffect(() => {
     if (seenMode.current === mode) return;
     seenMode.current = mode;

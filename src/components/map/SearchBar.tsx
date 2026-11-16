@@ -119,7 +119,7 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
         `}
       >
         <Search className="w-[18px] h-[18px] text-primary-500 dark:text-primary-400 flex-shrink-0" strokeWidth={2.2} />
-        <label htmlFor="search-input" className="sr-only">Search places</label>
+        <label htmlFor="search-input" className="sr-only">Cari tempat</label>
         <input
           id="search-input"
           ref={inputRef}
@@ -127,7 +127,7 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
           role="searchbox"
           aria-autocomplete="list"
           aria-controls="search-results-list"
-          placeholder="Search here"
+          placeholder="Cari di sini"
           value={searchQuery}
           onChange={(e) => handleInputChange(e.target.value)}
           onFocus={() => { setIsFocused(true); setFilterOpen(false); }}
@@ -316,8 +316,8 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
             {searchQuery && !isSearching && searchResults.length === 0 && (
               <div className="px-4 py-10 text-center">
                 <Search className="w-10 h-10 text-gray-200 dark:text-gray-700 mx-auto mb-3" />
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No places found</p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Try a different search term</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Tempat tidak ditemukan</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Coba kata pencarian lain</p>
               </div>
             )}
 
@@ -361,6 +361,6 @@ function getDistanceText(from: { lat: number; lng: number }, to: { lat: number; 
     Math.sin(dLat / 2) ** 2 +
     Math.cos((from.lat * Math.PI) / 180) * Math.cos((to.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
   const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  if (distance < 1000) return `${Math.round(distance)}m away`;
-  return `${(distance / 1000).toFixed(1)}km away`;
+  if (distance < 1000) return `${Math.round(distance)} m dari sini`;
+  return `${(distance / 1000).toFixed(1).replace('.', ',')} km dari sini`;
 }

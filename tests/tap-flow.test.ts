@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chooseDest, onTap, type TapState } from '../src/lib/route/tapFlow';
+import { chooseDest, onTap, startFrom, type TapState } from '../src/lib/route/tapFlow';
 
 const A = { lat: -8.66, lng: 115.21 }, B = { lat: -8.67, lng: 115.22 }, C = { lat: -8.65, lng: 115.2 };
 const school = { lat: -8.68, lng: 115.23, name: 'SMA Negeri 1 Denpasar' };
@@ -33,5 +33,20 @@ describe('tap flow of on-device routing', () => {
     const cleared = chooseDest(null);
     expect(cleared.state).toEqual({ start: null, fixed: null });
     expect(cleared.prompt).toBe('Ketuk titik berangkat di peta.');
+  });
+
+  it('a start given by the app (the user position) computes at once towards a fixed destination', () => {
+    const c = chooseDest(school);
+    const r = startFrom(c.state, A);
+    expect(r?.compute).toEqual({ from: A, to: { lat: school.lat, lng: school.lng } });
+    expect(r?.state).toEqual({ start: null, fixed: school }); // the destination stays fixed: taps still set new starts
+    expect(onTap(r!.state, B).compute).toEqual({ from: B, to: { lat: school.lat, lng: school.lng } });
+  });
+
+  it('without a fixed destination or without a start, the app start does nothing (the user taps)', () => {
+    expect(startFrom({ start: null, fixed: null }, A)).toBeNull();
+    expect(startFrom(chooseDest(school).state, null)).toBeNull();
+    const half = onTap({ start: null, fixed: null }, A).state;
+    expect(startFrom(half, B)).toBeNull(); // a half-set tap pair is left alone
   });
 });

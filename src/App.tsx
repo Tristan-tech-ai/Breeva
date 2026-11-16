@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './components/auth/AuthProvider';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { GuestGate } from './components/auth/GuestGate';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { ContentPageSkeleton } from './components/ui/Skeleton';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -58,6 +59,18 @@ const DeveloperDashboardPage = lazy(() => import('./pages/DeveloperDashboardPage
 // Page loading fallback — content-shaped skeleton (avoids the blank flash of a bare spinner).
 function PageLoader() {
   return <ContentPageSkeleton />;
+}
+
+// The in-app route cards copy links with this page's path (/home?rute=...): those open on the public map, which plays
+// them for anyone, signed in or not.
+function HomeRoute() {
+  const { search } = useLocation();
+  if (new URLSearchParams(search).has('rute')) return <Navigate to={`/peta${search}`} replace />;
+  return (
+    <ProtectedRoute>
+      <HomePage />
+    </ProtectedRoute>
+  );
 }
 
 function KeyboardShortcutsProvider({ children }: { children: React.ReactNode }) {
@@ -130,7 +143,9 @@ function App() {
             {/* Onboarding (requires auth but not full protection) */}
             <Route path="/onboarding/*" element={
               <ProtectedRoute>
-                <OnboardingPage />
+                <GuestGate title="Pengenalan">
+                  <OnboardingPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
 
@@ -142,27 +157,37 @@ function App() {
             } />
             <Route path="/profile/edit" element={
               <ProtectedRoute>
-                <EditProfilePage />
+                <GuestGate title="Ubah profil">
+                  <EditProfilePage />
+                </GuestGate>
               </ProtectedRoute>
             } />
             <Route path="/profile/history" element={
               <ProtectedRoute>
-                <WalkHistoryPage />
+                <GuestGate title="Riwayat jalan" walks>
+                  <WalkHistoryPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
             <Route path="/profile/history/:id" element={
               <ProtectedRoute>
-                <WalkDetailPage />
+                <GuestGate title="Detail jalan" walks>
+                  <WalkDetailPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
             <Route path="/profile/achievements" element={
               <ProtectedRoute>
-                <AchievementsPage />
+                <GuestGate title="Pencapaian">
+                  <AchievementsPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
             <Route path="/profile/transactions" element={
               <ProtectedRoute>
-                <TransactionsPage />
+                <GuestGate title="Transaksi poin">
+                  <TransactionsPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
             <Route path="/profile/settings" element={
@@ -174,29 +199,39 @@ function App() {
             {/* Merchants */}
             <Route path="/merchants" element={
               <ProtectedRoute>
-                <MerchantsPage />
+                <GuestGate title="Merchant">
+                  <MerchantsPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
             <Route path="/merchants/register" element={
               <ProtectedRoute>
-                <MerchantRegisterPage />
+                <GuestGate title="Daftar merchant">
+                  <MerchantRegisterPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
             <Route path="/merchants/:id" element={
               <ProtectedRoute>
-                <MerchantDetailPage />
+                <GuestGate title="Merchant">
+                  <MerchantDetailPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
             <Route path="/merchants/:id/manage" element={
               <ProtectedRoute>
-                <MerchantDashboardPage />
+                <GuestGate title="Kelola merchant">
+                  <MerchantDashboardPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
 
             {/* Rewards */}
             <Route path="/rewards" element={
               <ProtectedRoute>
-                <RewardsPage />
+                <GuestGate title="Hadiah">
+                  <RewardsPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
 
@@ -213,33 +248,43 @@ function App() {
             {/* Developer API — authed key management */}
             <Route path="/developers/keys" element={
               <ProtectedRoute>
-                <DevelopersPage />
+                <GuestGate title="Developer API">
+                  <DevelopersPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
 
             {/* Developer API — monitoring dashboard */}
             <Route path="/developers/dashboard" element={
               <ProtectedRoute>
-                <DeveloperDashboardPage />
+                <GuestGate title="Developer API">
+                  <DeveloperDashboardPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
 
             {/* Eco Impact / Timeline */}
             <Route path="/eco-impact" element={
               <ProtectedRoute>
-                <EcoImpactPage />
+                <GuestGate title="Dampak lingkungan">
+                  <EcoImpactPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
 
             {/* Contribute / Add Place */}
             <Route path="/contribute" element={
               <ProtectedRoute>
-                <ContributePage />
+                <GuestGate title="Kontribusi">
+                  <ContributePage />
+                </GuestGate>
               </ProtectedRoute>
             } />
             <Route path="/contribute/history" element={
               <ProtectedRoute>
-                <ContributionHistoryPage />
+                <GuestGate title="Riwayat kontribusi">
+                  <ContributionHistoryPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
 
@@ -253,21 +298,27 @@ function App() {
             {/* Quests */}
             <Route path="/quests" element={
               <ProtectedRoute>
-                <QuestsPage />
+                <GuestGate title="Misi">
+                  <QuestsPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
 
             {/* Leaderboard */}
             <Route path="/leaderboard" element={
               <ProtectedRoute>
-                <LeaderboardPage />
+                <GuestGate title="Papan peringkat">
+                  <LeaderboardPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
 
             {/* Year in Review */}
             <Route path="/year-in-review" element={
               <ProtectedRoute>
-                <YearInReviewPage />
+                <GuestGate title="Kilas balik tahun">
+                  <YearInReviewPage />
+                </GuestGate>
               </ProtectedRoute>
             } />
 
@@ -294,11 +345,7 @@ function App() {
             <Route path="/privacy" element={<PrivacyPage />} />
 
             {/* Home / Map — protected, requires auth */}
-            <Route path="/home" element={
-              <ProtectedRoute>
-                <HomePage />
-              </ProtectedRoute>
-            } />
+            <Route path="/home" element={<HomeRoute />} />
 
             {/* Root: map first. Guests see the live coloured map with its legend; signed-in users go to the app. */}
             <Route path="/" element={<RootRoute />} />

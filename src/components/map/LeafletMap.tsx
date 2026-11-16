@@ -156,6 +156,8 @@ interface LeafletMapProps {
   routeDest?: RouteDest | null;
   /** Departure as local "HH:MM" (null = now): decides whether the school zone applies to motor routes. */
   routeDepart?: string | null;
+  /** Start of the on-device routes given by the app (e.g. the user's position) instead of a tap; needs routeDest. */
+  routeStart?: Coordinate | null;
   /** Map inside a scrolling page: the wheel scrolls the page, Ctrl/Cmd + wheel zooms, +/- buttons shown. */
   wheelNeedsModifier?: boolean;
   /**
@@ -187,7 +189,8 @@ function MapController({
   routeLink,
   routeDest,
   routeDepart,
-}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId' | 'walkRouting' | 'onWalkRouting' | 'routeMode' | 'routeLink' | 'routeDest' | 'routeDepart'>) {
+  routeStart,
+}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId' | 'walkRouting' | 'onWalkRouting' | 'routeMode' | 'routeLink' | 'routeDest' | 'routeDepart' | 'routeStart'>) {
   const map = useMap();
   const {
     center,
@@ -526,7 +529,7 @@ function MapController({
     roadDisplayMode || 'total',
   );
   const roadMeta = useMvt ? (FIELD_STATIC ? fieldMeta : mvtMeta) : vectorMeta;
-  useWalkRouting(map, !!walkRouting, onWalkRouting, routeMode ?? 'walk', routeLink, routeDest, routeDepart);
+  useWalkRouting(map, !!walkRouting, onWalkRouting, routeMode ?? 'walk', routeLink, routeDest, routeDepart, routeStart);
 
   // Forward road layer meta to parent
   useEffect(() => {
@@ -620,6 +623,7 @@ export default function LeafletMap({
   routeLink = null,
   routeDest = null,
   routeDepart = null,
+  routeStart = null,
   wheelNeedsModifier = false,
   initialCenter,
 }: LeafletMapProps) {
@@ -687,6 +691,7 @@ export default function LeafletMap({
           routeLink={routeLink}
           routeDest={routeDest}
           routeDepart={routeDepart}
+          routeStart={routeStart}
         />
       </MapContainer>
       <NavControls />

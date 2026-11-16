@@ -9,6 +9,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { useSavedPlacesStore } from '../stores/savedPlacesStore';
 import { useAuthStore } from '../stores/authStore';
+import { useIsGuest } from '../stores/guestStore';
 import { useMapStore } from '../stores/mapStore';
 import { getAirQuality } from '../lib/api';
 import BottomNavigation from '../components/layout/BottomNavigation';
@@ -160,6 +161,7 @@ function CatEmblem({ category, size = 'md' }: { category: string; size?: 'md' | 
 export default function SavedPlacesPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const guest = useIsGuest();
   const { places, removePlace, addPlace, fetchCloudPlaces } = useSavedPlacesStore();
   const userLocation = useMapStore((s) => s.userLocation);
 
@@ -270,7 +272,7 @@ export default function SavedPlacesPage() {
                 <span className="text-4xl font-black leading-none tabular-nums">{places.length}</span>
                 <span className="text-sm text-white/80 font-semibold">tempat tersimpan</span>
               </div>
-              <div className="text-[11px] text-white/70 mt-1">{presentCats.length - 1} kategori · tersinkron ke cloud</div>
+              <div className="text-[11px] text-white/70 mt-1">{presentCats.length - 1} kategori · {guest ? 'tersimpan di perangkat ini' : 'tersinkron ke cloud'}</div>
             </div>
             <Sparkles className="w-9 h-9 text-white/30" />
           </div>

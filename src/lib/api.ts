@@ -10,11 +10,11 @@ const ORS_PROXY = '/api/searchapi?provider=ors';
 // 2026-05-24 PIVOT: added valhallaCosting per mode. orsProfile kept for rollback via ROUTING_ENGINE env var.
 // Motor moved from driving-car (ORS limitation) to motor_scooter (Valhalla native, Indonesia <=125cc fit).
 export const TRANSPORT_MODES: TransportModeInfo[] = [
-  { id: 'walking',    label: 'Walk',  icon: 'Footprints', orsProfile: 'foot-walking',     valhallaCosting: 'pedestrian',    co2PerKm: 0,   ecoPointsMultiplier: 1.5, speedFactor: 1,  color: '#10b981' },
-  { id: 'cycling',    label: 'Cycle', icon: 'Bike',       orsProfile: 'cycling-regular',  valhallaCosting: 'bicycle',       co2PerKm: 0,   ecoPointsMultiplier: 1.2, speedFactor: 3,  color: '#0ea5e9' },
-  { id: 'ebike',      label: 'E-Bike',icon: 'Zap',        orsProfile: 'cycling-electric', valhallaCosting: 'bicycle',       valhallaOptions: { bicycle_type: 'Hybrid', cycling_speed: 25 }, co2PerKm: 5,   ecoPointsMultiplier: 1.0, speedFactor: 4,  color: '#8b5cf6' },
+  { id: 'walking',    label: 'Jalan kaki',  icon: 'Footprints', orsProfile: 'foot-walking',     valhallaCosting: 'pedestrian',    co2PerKm: 0,   ecoPointsMultiplier: 1.5, speedFactor: 1,  color: '#10b981' },
+  { id: 'cycling',    label: 'Sepeda', icon: 'Bike',       orsProfile: 'cycling-regular',  valhallaCosting: 'bicycle',       co2PerKm: 0,   ecoPointsMultiplier: 1.2, speedFactor: 3,  color: '#0ea5e9' },
+  { id: 'ebike',      label: 'Sepeda listrik',icon: 'Zap',        orsProfile: 'cycling-electric', valhallaCosting: 'bicycle',       valhallaOptions: { bicycle_type: 'Hybrid', cycling_speed: 25 }, co2PerKm: 5,   ecoPointsMultiplier: 1.0, speedFactor: 4,  color: '#8b5cf6' },
   { id: 'motorcycle', label: 'Motor', icon: 'Bike',       orsProfile: 'driving-car',      valhallaCosting: 'motor_scooter', co2PerKm: 100, ecoPointsMultiplier: 0.3, speedFactor: 8,  color: '#f59e0b' },
-  { id: 'car',        label: 'Car',   icon: 'Car',        orsProfile: 'driving-car',      valhallaCosting: 'auto',          co2PerKm: 170, ecoPointsMultiplier: 0,   speedFactor: 10, color: '#ef4444' },
+  { id: 'car',        label: 'Mobil',   icon: 'Car',        orsProfile: 'driving-car',      valhallaCosting: 'auto',          co2PerKm: 170, ecoPointsMultiplier: 0,   speedFactor: 10, color: '#ef4444' },
 ];
 
 /**

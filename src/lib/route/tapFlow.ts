@@ -13,6 +13,15 @@ export function onTap(s: TapState, ll: P): TapResult {
   return { state: { start: null, fixed: null }, compute: { from: s.start, to: ll }, prompt: null };
 }
 
+/**
+ * A start given by the app instead of a tap (the user's position, task F1-18): with a fixed destination it acts as a
+ * tap on the start and the route is computed at once; without one, or without a start, nothing happens (the user taps).
+ */
+export function startFrom(s: TapState, start: P | null): TapResult | null {
+  if (!s.fixed || !start) return null;
+  return onTap(s, start);
+}
+
 /** Choosing (or clearing) a fixed destination forgets a half-set start. */
 export function chooseDest(d: (P & { name: string }) | null): { state: TapState; prompt: string } {
   return {

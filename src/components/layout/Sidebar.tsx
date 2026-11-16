@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useI18nStore } from '../../stores/i18nStore';
+import { useIsGuest } from '../../stores/guestStore';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -33,15 +34,15 @@ interface SidebarProps {
 const menuSections = [
   {
     items: [
-      { icon: Bookmark, label: 'Saved Places', path: '/saved', color: 'text-amber-500' },
-      { icon: Clock, label: 'Walk History', path: '/profile/history', color: 'text-blue-500' },
-      { icon: Leaf, label: 'Eco Impact', path: '/eco-impact', color: 'text-primary-500' },
-      { icon: Gift, label: 'Rewards', path: '/rewards', color: 'text-pink-500' },
-      { icon: Trophy, label: 'Achievements', path: '/profile/achievements', color: 'text-yellow-500' },
-      { icon: Swords, label: 'Quests', path: '/quests', color: 'text-indigo-500' },
-      { icon: BarChart3, label: 'Leaderboard', path: '/leaderboard', color: 'text-emerald-500' },
-      { icon: Store, label: 'Merchants', path: '/merchants', color: 'text-orange-500' },
-      { icon: Share2, label: 'Share Location', path: '#share', color: 'text-violet-500' },
+      { icon: Bookmark, label: 'Tempat tersimpan', path: '/saved', color: 'text-amber-500' },
+      { icon: Clock, label: 'Riwayat jalan', path: '/profile/history', color: 'text-blue-500' },
+      { icon: Leaf, label: 'Dampak lingkungan', path: '/eco-impact', color: 'text-primary-500' },
+      { icon: Gift, label: 'Hadiah', path: '/rewards', color: 'text-pink-500' },
+      { icon: Trophy, label: 'Pencapaian', path: '/profile/achievements', color: 'text-yellow-500' },
+      { icon: Swords, label: 'Misi', path: '/quests', color: 'text-indigo-500' },
+      { icon: BarChart3, label: 'Papan peringkat', path: '/leaderboard', color: 'text-emerald-500' },
+      { icon: Store, label: 'Merchant', path: '/merchants', color: 'text-orange-500' },
+      { icon: Share2, label: 'Bagikan lokasi', path: '#share', color: 'text-violet-500' },
     ],
   },
   {
@@ -57,24 +58,25 @@ const menuSections = [
     ],
   },
   {
-    title: 'Preferences',
+    title: 'Preferensi',
     items: [
-      { icon: Globe, label: 'Language', path: '#lang', color: 'text-cyan-500', badge: 'LANG' },
-      { icon: Settings, label: 'Settings', path: '/profile/settings', color: 'text-gray-500 dark:text-gray-400' },
+      { icon: Globe, label: 'Bahasa', path: '#lang', color: 'text-cyan-500', badge: 'LANG' },
+      { icon: Settings, label: 'Pengaturan', path: '/profile/settings', color: 'text-gray-500 dark:text-gray-400' },
     ],
   },
   {
-    title: 'Help',
+    title: 'Bantuan',
     items: [
-      { icon: Lightbulb, label: 'Eco Tips & Tricks', path: '/eco-tips', color: 'text-amber-500' },
-      { icon: HelpCircle, label: 'Help & Feedback', path: '/help', color: 'text-blue-500' },
-      { icon: Info, label: 'About Breeva', path: '/about', color: 'text-gray-500 dark:text-gray-400' },
+      { icon: Lightbulb, label: 'Tips udara bersih', path: '/eco-tips', color: 'text-amber-500' },
+      { icon: HelpCircle, label: 'Bantuan & masukan', path: '/help', color: 'text-blue-500' },
+      { icon: Info, label: 'Tentang Breeva', path: '/about', color: 'text-gray-500 dark:text-gray-400' },
     ],
   },
 ];
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
-  const { profile, signOut } = useAuthStore();
+  const { profile, signOut, leaveGuest } = useAuthStore();
+  const guest = useIsGuest();
   const { locale, setLocale } = useI18nStore();
 
   // Close on Escape key
@@ -105,12 +107,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       if (navigator.share) {
         await navigator.share({
           title: 'My Location - Breeva',
-          text: 'Check out my location on Breeva!',
+          text: 'Lihat lokasiku di Breeva!',
           url: window.location.href,
         });
       } else {
         await navigator.clipboard.writeText(window.location.href);
-        alert('Location link copied to clipboard!');
+        alert('Tautan lokasi disalin.');
       }
     } catch {
       // User cancelled share
@@ -119,7 +121,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   };
 
   const handleSignOut = async () => {
-    await signOut();
+    if (guest) leaveGuest();
+    else await signOut();
     onClose();
     window.location.href = '/login';
   };
@@ -170,7 +173,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-base font-bold text-white truncate">{profile?.full_name || 'Eco Walker'}</h3>
-                  <p className="text-white/60 text-xs truncate">{profile?.email || ''}</p>
+                  <p className="text-white/60 text-xs truncate">{guest ? 'Mode tamu · data di perangkat ini' : profile?.email || ''}</p>
                 </div>
               </div>
 
@@ -178,11 +181,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               <div className="flex items-center gap-4 text-white/80">
                 <div className="flex items-center gap-1">
                   <Leaf className="w-3 h-3" />
-                  <span className="text-xs font-medium">{profile?.ecopoints_balance || 0} pts</span>
+                  <span className="text-xs font-medium">{profile?.ecopoints_balance || 0} poin</span>
                 </div>
                 <div className="text-xs">·</div>
                 <div className="text-xs">
-                  {(profile?.total_distance_km || 0).toFixed(1)} km walked
+                  {(profile?.total_distance_km || 0).toFixed(1)} km berjalan
                 </div>
               </div>
             </div>
@@ -240,7 +243,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 className="flex items-center gap-3 w-full py-2.5 text-sm font-medium text-red-500 hover:text-red-600 transition-colors"
               >
                 <LogOut className="w-5 h-5" strokeWidth={1.5} />
-                Sign Out
+                {guest ? 'Keluar dari mode tamu' : 'Keluar'}
               </button>
             </div>
           </motion.div>
