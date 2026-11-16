@@ -25,6 +25,7 @@ function arg(name: string, def?: string): string {
 }
 
 function writeAtomic(path: string, data: string | Uint8Array) {
+  mkdirSync(dirname(path), { recursive: true }); // audit/ objects live outside the run folder
   const tmp = `${path}.tmp`;
   writeFileSync(tmp, data);
   renameSync(tmp, path);

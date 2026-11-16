@@ -65,6 +65,8 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = 
               {c.exh != null && c.vsFastest && (
                 <p className="text-[11px] text-gray-500 dark:text-gray-400">Asap kendaraan rata-rata {c.exh.toLocaleString('id-ID')} µg/m³ (NOx lalu lintas)</p>
               )}
+              {c.forecastNote && <p className="text-[11px] text-sky-700 dark:text-sky-300">{c.forecastNote}</p>}
+              {c.soonHint && <p className="mt-0.5 text-[11.5px] font-medium text-teal-700 dark:text-teal-300">{c.soonHint}</p>}
               {c.harga != null && (
                 <p className="text-[12px] text-gray-700 dark:text-gray-300">Ditimbulkan: harga hirup rata-rata {c.harga.toLocaleString('id-ID')}× median wilayah</p>
               )}

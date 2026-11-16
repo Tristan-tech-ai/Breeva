@@ -5,6 +5,10 @@ export interface WalkRoute {
   lengthM: number; timeS: number; pm25Mean: number; no2Mean: number; coords: Array<[number, number]>; w: number;
   /** Mean vehicle exhaust along the route: the traffic part as the NOx tracer, ug/m3 (absent from older workers). */
   exhMean?: number;
+  /** Local hour of the exhaust forecast the route was computed with; null = the field run's own hour. */
+  forecastHour?: number | null;
+  /** Last route of a departure now: its mean exhaust if leaving in the next hours instead. */
+  soon?: Array<{ local_hour: number; ahead: number; exhMean: number }>;
   /** Motor routes: 'dua-angka' (own + imposed exposure in the cost) or 'darurat' (fastest, no points). */
   kind?: 'dua-angka' | 'darurat';
   /** Mean harga hirup along the route (1 = the region's median road): the exposure the trip imposes. */

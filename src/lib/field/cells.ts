@@ -48,6 +48,10 @@ function dTail(code: number, col: TailColumn): number {
   return code <= KNEE ? code * STEP[col] : knee * Math.pow(TAIL_MAX[col] / knee, (code - KNEE) / (TOP - KNEE));
 }
 
+/** One value of a byte column on the long-tail scale (used by the exhaust forecast files as well). */
+export const encodeTailByte = (x: number, col: TailColumn) => qTail(x, col);
+export const decodeTailByte = (code: number, col: TailColumn) => dTail(code, col);
+
 /** scale 'tail' keeps values above the linear tops (see the header); 'linear' is the format of runs before it. */
 export function encodeCell(values: CellValue[], scale: 'linear' | 'tail' = 'linear'): Uint8Array {
   const n = values.length;

@@ -1,5 +1,6 @@
 /** Labels and comparisons for the walking route cards (pure, tested). */
 import type { WalkRoute } from './client';
+import { bestSoon } from './departForecast';
 
 export interface RouteCard {
   index: number; label: string; color: string;
@@ -8,6 +9,10 @@ export interface RouteCard {
   exh: number | null;
   /** The first line of the card: the exhaust breathed on this route against the fastest route. */
   headline: string;
+  /** Which hour the numbers are for when it is not the map's hour (a later departure). */
+  forecastNote: string | null;
+  /** Leaving a little later or earlier on the same route breathes clearly less exhaust. */
+  soonHint: string | null;
   /** Motor routes: mean harga hirup along the route (the exposure imposed on others), 2 decimals. */
   harga: number | null;
   /**
@@ -57,8 +62,12 @@ export function routeCards(routes: WalkRoute[]): RouteCard[] {
     const exh = r.exhMean != null && Number.isFinite(r.exhMean) ? Math.round(r.exhMean * 10) / 10 : null;
     const exhDosePct = k === 0 || r.exhMean == null || f.exhMean == null || !(f.exhMean * f.timeS > 0) ? null
       : Math.round(((r.exhMean * r.timeS) / (f.exhMean * f.timeS) - 1) * 100);
+    const hh = (h: number) => `${String(h).padStart(2, '0')}.00`;
+    const best = r.soon && r.exhMean != null ? bestSoon(r.exhMean, r.soon) : null;
     return {
       index: k, label, color, exh, headline: exhaustHeadline(exh, exhDosePct, fExh),
+      forecastNote: r.forecastHour != null ? `Perkiraan untuk sekitar jam ${hh(r.forecastHour)}: angin prakiraan dan pola lalu lintas jam itu` : null,
+      soonHint: best ? `Berangkat sekitar jam ${hh(best.hour.local_hour)} lewat rute ini: asap kendaraan ${best.pct}% lebih sedikit daripada berangkat sekarang` : null,
       harga: r.hargaMean != null ? Math.round(r.hargaMean * 100) / 100 : null,
       schoolNote: r.school === 'kept' || r.school === 'lifted-near-ends' ? SCHOOL_NOTES[r.school] : null,
       km: (r.lengthM / 1000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),

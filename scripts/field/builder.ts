@@ -7,7 +7,8 @@ import { fetchBaselineGrid } from '../../api/vayu/_baseline.js';
 import { HOURLY_TRAFFIC, fetchCamsDailyMean } from '../../api/vayu/road-aqi.js';
 import type { RoadPack } from './pack.js';
 import { encodeCell, saturated } from './cells.js';
-import { computeField, type FieldInputs } from './engine.js';
+import { computeField, exhaustForHour, type FieldInputs } from './engine.js';
+import { encodeExhaust, forecastOffsets, type ForecastEntry } from '../../src/lib/field/forecast.js';
 import { measureHour, type RegionMeasureParams } from './measure.js';
 import { hourlyRows, hourlyValidation } from './hourly-validation.js';
 
@@ -26,12 +27,16 @@ export interface BuildOptions {
   spacingMs?: number;
   /** Traffic part: 'iso1' (default) = direction-averaged urban exhaust kernel; 'legacy' = the service engine's sum. */
   exhaust?: 'iso1' | 'legacy';
+  /** Departure-time forecast files (BXF1) for the next hours and the school trip hours; default on with iso1. */
+  forecast?: boolean;
   now?: Date;
 }
 
 export interface BuiltRun {
   run: string;
   cells: Array<{ c: number; bytes: Uint8Array }>;
+  /** Exhaust forecast of later hours, one BXF1 file each (absent in runs without forecasts). */
+  forecasts?: Array<{ entry: ForecastEntry; bytes: Uint8Array }>;
   inputs: FieldInputs;
   report: Record<string, unknown>;
   manifest: Record<string, unknown>;
@@ -86,6 +91,33 @@ export async function buildFieldRun(pack: RoadPack, o: BuildOptions): Promise<Bu
   const results = computeField(pack, inputs);
   const t2 = Date.now();
 
+  // departure-time forecasts: same kernel, the forecast wind of that hour and its traffic curve; background unchanged
+  const forecasts: NonNullable<BuiltRun['forecasts']> = [];
+  if (iso && o.forecast !== false) {
+    const cellsOfK = pack.col<Uint16Array>('c');
+    for (const ahead of forecastOffsets(hourLocal)) {
+      const fg: FieldInputs['grids'] = [];
+      const fCache = new Map<string, Awaited<ReturnType<typeof fetchBaselineGrid>>>();
+      for (const [c, [x, y]] of pack.meta.cells.entries()) {
+        const b = tileBounds(x, y, pack.meta.cell_zoom);
+        const key = `${Math.round(((b.south + b.north) / 2) * 10)}:${Math.round(((b.west + b.east) / 2) * 10)}`;
+        let g = fCache.get(key);
+        if (!g) { g = await fetchBaselineGrid(b.south, b.west, b.north, b.east, ahead, noCache); fCache.set(key, g); }
+        fg.push({ cell: c, corners: g.corners, bounds: g.bounds });
+      }
+      const h = (hourLocal + ahead) % 24;
+      const nox = exhaustForHour(pack, fg, h, HOURLY_TRAFFIC[h] ?? 1.0);
+      const groups = new Map<number, number[]>();
+      for (let k = 0; k < pack.n; k++) { const c = cellsOfK[k]; const g = groups.get(c); if (g) g.push(nox[k]); else groups.set(c, [nox[k]]); }
+      const valid = runFor(new Date(validUtc.getTime() + ahead * 3600_000)).run;
+      forecasts.push({
+        entry: { ahead, valid, local_hour: h, key: `x${valid}.bin` },
+        bytes: encodeExhaust([...groups.keys()].sort((a, b) => a - b).map((c) => ({ c, values: groups.get(c)! }))),
+      });
+    }
+  }
+  const t3 = Date.now();
+
   const cellsCol = pack.col<Uint16Array>('c');
   const cells: BuiltRun['cells'] = [];
   let bytes = 0;
@@ -119,7 +151,8 @@ export async function buildFieldRun(pack: RoadPack, o: BuildOptions): Promise<Bu
     validation: hourlyValidation(measured),
     // per-sensor hidden guesses of that hour, for the daily EPA test (F5-10); the report stays in the private audit/
     validation_rows: hourlyRows(measured),
-    seconds: { inputs: (t1 - t0) / 1000, compute: (t2 - t1) / 1000, total: (Date.now() - t0) / 1000 },
+    forecast: forecasts.map((f) => ({ ...f.entry, bytes: f.bytes.byteLength })),
+    seconds: { inputs: (t1 - t0) / 1000, compute: (t2 - t1) / 1000, forecast: (t3 - t2) / 1000, total: (Date.now() - t0) / 1000 },
   };
   const median = (a: number[]) => { const q = [...a].sort((x, y) => x - y); return q.length ? q[Math.floor(q.length / 2)] : Number.NaN; };
   const cellStats: Record<string, { pm25_median: number; no2_median: number; roads: number }> = {};
@@ -129,7 +162,7 @@ export async function buildFieldRun(pack: RoadPack, o: BuildOptions): Promise<Bu
   }
   const manifest = {
     geometry: pack.meta.geometry, run, computed_at: new Date().toISOString(), valid_hour_local: hourLocal,
-    engine: iso ? 'v2.2' : 'v2.1', exhaust: iso ? 'iso1' : 'legacy', cells: cells.map((x) => x.c), forecast_runs: [], sensors_used: measured?.method === 'kriging' ? measured.sensors.length : 0,
+    engine: iso ? 'v2.2' : 'v2.1', exhaust: iso ? 'iso1' : 'legacy', cells: cells.map((x) => x.c), forecast_runs: forecasts.map((f) => f.entry), sensors_used: measured?.method === 'kriging' ? measured.sensors.length : 0,
     measurement: { method: measured?.method ?? 'off', hour_utc: measured?.hour_utc ?? null, sensor_hour_utc: measured?.sensor_hour_utc ?? null,
       metar: measured?.metar?.station ?? null },
     cell_tiles: pack.meta.cells, cell_stats: cellStats, indicative: o.indicative,
@@ -140,7 +173,7 @@ export async function buildFieldRun(pack: RoadPack, o: BuildOptions): Promise<Bu
         ? `ambient raised to the ${measured.metar?.station} visibility smoke estimate (${measured.koschmieder?.reason}) + ${iso ? 'urban exhaust kernel (direction-averaged)' : 'CALINE4 road increment'}`
         : `Open-Meteo background per z12 cell + CAMS daily mean + ${iso ? 'urban exhaust kernel (direction-averaged)' : 'CALINE4 road increment'}; no measurement this hour`,
   };
-  return { run, cells, inputs, report, manifest };
+  return { run, cells, inputs, report, manifest, ...(forecasts.length ? { forecasts } : {}) };
 }
 
 export const CACHE = {
@@ -154,8 +187,8 @@ export const RUN_TAG = 'kind=run';
 
 export interface RunObject { key: string; body: Uint8Array | string; cacheControl: string; contentType: string; tagging?: string }
 
-/** Value cells of a run (v/<name>/<run>/<c>.bin): stored gzip-encoded on S3, about 60 % smaller (F1-13). */
-export const isCellKey = (key: string) => /^v\/[^/]+\/\d{10}\/\d+\.bin$/.test(key);
+/** Value cells (v/<name>/<run>/<c>.bin) and exhaust forecasts (.../x<valid>.bin): stored gzip-encoded on S3 (F1-13). */
+export const isCellKey = (key: string) => /^v\/[^/]+\/\d{10}\/x?\d+\.bin$/.test(key);
 
 /**
  * Body and Content-Encoding for S3: cells gzip-compressed (browsers decode Content-Encoding: gzip by themselves),
@@ -178,6 +211,7 @@ export function runObjects(name: string, b: BuiltRun): RunObject[] {
     ({ key, body, cacheControl: CACHE.immutable, contentType, tagging: RUN_TAG });
   return [
     ...b.cells.map(({ c, bytes }) => run(`v/${name}/${b.run}/${c}.bin`, bytes, 'application/octet-stream')),
+    ...(b.forecasts ?? []).map(({ entry, bytes }) => run(`v/${name}/${b.run}/${entry.key}`, bytes, 'application/octet-stream')),
     run(`audit/${name}/${b.run}/inputs.json`, JSON.stringify(b.inputs), 'application/json'),
     run(reportKey(name, b.run), JSON.stringify(b.report, null, 1), 'application/json'),
     { key: `v/${name}/manifest.json`, body: JSON.stringify(b.manifest, null, 1), cacheControl: CACHE.manifest, contentType: 'application/json' },

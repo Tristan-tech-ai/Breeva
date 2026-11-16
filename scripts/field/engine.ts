@@ -109,6 +109,23 @@ export function roadRow(p: RoadPack, k: number): RoadRow {
   };
 }
 
+/**
+ * Traffic NOx per road (pack order) for another hour: the forecast wind of `grids` and that hour's traffic curve,
+ * with the kernel and sources of the run itself. Used for the departure-time forecast files (BXF1).
+ */
+export function exhaustForHour(p: RoadPack, grids: FieldInputs['grids'], hourLocal: number, diurnal: number): Float64Array {
+  const rows = Array.from({ length: p.n }, (_, k) => roadRow(p, k));
+  const interp = makeInterp(p, { grids } as FieldInputs);
+  const met = (lat: number, lon: number) => {
+    const b = interp(lat, lon);
+    const ws = Number.isFinite(b.wind_speed) ? b.wind_speed : 2.0;
+    return { wind: ws, stability: pasquillClass(ws, hourLocal, 0.5) };
+  };
+  const mids = rows.map((_, k) => { const c = p.coords(k); const m = c[Math.floor(c.length / 2)]; return { lat: m[1], lon: m[0] }; });
+  const r = exhaustAt(exhaustSources(rows, (k) => p.coords(k), diurnal), mids, met);
+  return Float64Array.from(r, (x) => x.nox);
+}
+
 /** Background interpolation: the grid of the z12 cell holding the point (nearest cell centre outside all cells). */
 export function makeInterp(p: RoadPack, inputs: FieldInputs): (lat: number, lon: number) => BaselineData {
   const z = p.meta.cell_zoom;

@@ -4,7 +4,8 @@
  *   { id, type: 'init', base, region: { name, geometry } }  loads graph + field (Cache API, so it also works offline)
  *   { id, type: 'route', from: {lat, lng}, to: {lat, lng}, mode?, departLocal? } Pareto walking routes (exposure = NO2
  *     of the field roads), or motor routes with the zona napas and, when the departure (local "HH:MM", default now)
- *     falls in school hours, the school zone
+ *     falls in school hours, the school zone; a departure later than now uses the exhaust forecast of that hour
+ *     (BXF1, src/lib/field/forecast.ts) and a departure now also reports the next hours of the cleanest route
  * Replies { id, ok: true, ... } or { id, ok: false, error }.
  */
 import { WalkGraph } from '../lib/route/walkGraph';
@@ -14,6 +15,8 @@ import { localTimeToMs, motorRouteAt, schoolEdges, type SchoolFile, type SchoolZ
 import { HargaIndex } from '../lib/field/harga';
 import { cachedBytes } from '../lib/route/assets';
 import { decodeCell } from '../lib/field/cells';
+import { decodeExhaust, pickForecast, SOON_HOURS, type ForecastEntry } from '../lib/field/forecast';
+import { edgeExhaust, meanAlong, no2AtHour, type SoonHour } from '../lib/route/departForecast';
 
 const SPEED = 1.3; // m/s
 let graph: WalkGraph | null = null;
@@ -25,10 +28,15 @@ let harga: Float64Array | null = null;
 let run = '';
 let schoolFile: SchoolFile | null = null;
 let schools: SchoolZone | null = null;
+let fieldRoot = '';
+let forecasts: ForecastEntry[] = [];
+let runLocalHour = -1;
+const forecastEdges = new Map<string, Promise<Float64Array>>();
 
 async function init(base: string, region: { name: string; geometry: string }) {
   const g = new WalkGraph(await cachedBytes(`${base}/graphs/${region.geometry}/${region.name}.bin`, { cacheFirst: true }));
-  const manifest = JSON.parse(new TextDecoder().decode(await cachedBytes(`${base}/v/${region.name}/manifest.json`, { cacheFirst: false }))) as { run: string; cells: number[] };
+  const manifest = JSON.parse(new TextDecoder().decode(await cachedBytes(`${base}/v/${region.name}/manifest.json`, { cacheFirst: false }))) as
+    { run: string; cells: number[]; valid_hour_local?: number; forecast_runs?: ForecastEntry[] };
   const cells = new Map<number, ReturnType<typeof decodeCell>>();
   await Promise.all(manifest.cells.map(async (c) => {
     cells.set(c, decodeCell(await cachedBytes(`${base}/v/${region.name}/${manifest.run}/${c}.bin`, { cacheFirst: true })));
@@ -49,7 +57,11 @@ async function init(base: string, region: { name: string; geometry: string }) {
   try { sf = JSON.parse(new TextDecoder().decode(await cachedBytes(`${base}/graphs/${region.geometry}/${region.name}_schools.json`, { cacheFirst: false }))) as SchoolFile; } catch { sf = null; }
   graph = g; index = new NodeIndex(g); no2 = n; pm25 = p; exhaust = x; harga = hi ? h : null; run = manifest.run;
   schoolFile = sf; schools = null;
-  return { nodes: g.n, edges: g.m, run, harga: !!hi, schools: sf?.points.length ?? 0 };
+  fieldRoot = `${base}/v/${region.name}/${manifest.run}`;
+  forecasts = Array.isArray(manifest.forecast_runs) ? manifest.forecast_runs : [];
+  runLocalHour = manifest.valid_hour_local ?? -1;
+  forecastEdges.clear();
+  return { nodes: g.n, edges: g.m, run, harga: !!hi, schools: sf?.points.length ?? 0, forecasts: forecasts.length };
 }
 
 function median(a: Float64Array): number {
@@ -64,13 +76,26 @@ function schoolZone(g: WalkGraph): SchoolZone | null {
   return schools;
 }
 
-function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor', at: number) {
+/** Exhaust per edge of one forecast hour, loaded once per run (Cache API, so it also works offline). */
+function exhaustOf(entry: ForecastEntry): Promise<Float64Array> {
+  let p = forecastEdges.get(entry.key);
+  if (!p) {
+    const g = graph!;
+    p = cachedBytes(`${fieldRoot}/${entry.key}`, { cacheFirst: true }).then((b) => edgeExhaust(g, decodeExhaust(b)));
+    p.catch(() => forecastEdges.delete(entry.key));
+    forecastEdges.set(entry.key, p);
+  }
+  return p;
+}
+
+function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor', at: number,
+  field?: { no2: Float64Array; exhaust: Float64Array; hour: number }) {
   if (!graph || !index || !no2 || !pm25) throw new Error('router not initialised');
   const g = graph;
   const keep = mode === 'motor' ? (u: number) => motorNode(g, u) : undefined;
   const s = index.nearest(from.lat, from.lng, 500, keep), t = index.nearest(to.lat, to.lng, 500, keep);
   if (s < 0 || t < 0) throw new Error('titik di luar jaringan jalan wilayah ini');
-  const nArr = no2, pArr = pm25, hArr = harga, xArr = exhaust;
+  const nArr = field?.no2 ?? no2, pArr = pm25, hArr = harga, xArr = field?.exhaust ?? exhaust;
   let routes: Array<RouteResult & { kind?: 'dua-angka' | 'darurat'; school?: 'off' | 'kept' | 'lifted-near-ends' }>;
   if (mode === 'motor') {
     const inp = { no2: nArr, harga: hArr ?? undefined };
@@ -86,7 +111,8 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
     const medN = median(nArr);
     routes = pareto(g, s, t, { speed: SPEED, exposureOf: (e) => (Number.isFinite(nArr[e]) ? nArr[e] / medN : 1) });
   }
-  return routes.map((r) => {
+  const raw = routes;
+  const out = routes.map((r) => {
     let pmDose = 0, no2Dose = 0, hDose = 0, xDose = 0, tSum = 0;
     const coords: Array<[number, number]> = [];
     r.edges.forEach((e, k) => {
@@ -100,9 +126,34 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
       coords.push(...(k === 0 ? pts : pts.slice(1)));
     });
     // mean concentration along the route (ug/m3), the honest number to compare routes by
-    const out = { lengthM: Math.round(r.lengthM), timeS: Math.round(r.timeS), pm25Mean: pmDose / tSum, no2Mean: no2Dose / tSum, exhMean: xDose / tSum, coords, w: r.w };
-    return mode === 'motor' ? { ...out, kind: r.kind, hargaMean: hDose / tSum, school: r.school } : out;
+    const o = { lengthM: Math.round(r.lengthM), timeS: Math.round(r.timeS), pm25Mean: pmDose / tSum, no2Mean: no2Dose / tSum, exhMean: xDose / tSum, coords, w: r.w,
+      forecastHour: field ? field.hour : null };
+    return mode === 'motor' ? { ...o, kind: r.kind, hargaMean: hDose / tSum, school: r.school } : o;
   });
+  return { routes: out, raw };
+}
+
+/** Route request: the field of the departure hour, the routes, and for a departure now the next hours of the last route. */
+async function routeAt(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor', departLocal: string | null | undefined) {
+  const at = schoolFile ? localTimeToMs(departLocal, schoolFile.tz, Date.now()) : Date.now();
+  const entry = pickForecast(forecasts, departLocal, runLocalHour);
+  let field: { no2: Float64Array; exhaust: Float64Array; hour: number } | undefined;
+  if (entry && no2 && exhaust) {
+    try {
+      const x = await exhaustOf(entry);
+      field = { no2: no2AtHour(no2, exhaust, x), exhaust: x, hour: entry.local_hour };
+    } catch { field = undefined; } // forecast file unavailable: the run's own hour, labelled as such by forecastHour null
+  }
+  const { routes, raw } = routeBetween(from, to, mode, at, field);
+  if (!field && routes.length && graph) {
+    const last = raw[raw.length - 1], g = graph;
+    const soon: SoonHour[] = [];
+    for (const e of forecasts.filter((f) => f.ahead <= SOON_HOURS)) {
+      try { soon.push({ local_hour: e.local_hour, ahead: e.ahead, exhMean: meanAlong(g, last.edges, last.timeS, last.lengthM, await exhaustOf(e)) }); } catch { /* skip that hour */ }
+    }
+    if (soon.length) (routes[routes.length - 1] as { soon?: SoonHour[] }).soon = soon;
+  }
+  return routes;
 }
 
 self.onmessage = async (ev: MessageEvent) => {
@@ -111,8 +162,7 @@ self.onmessage = async (ev: MessageEvent) => {
     if (type === 'init') self.postMessage({ id, ok: true, ...(await init(ev.data.base, ev.data.region)) });
     else if (type === 'route') {
       const t0 = performance.now();
-      const at = schoolFile ? localTimeToMs(ev.data.departLocal, schoolFile.tz, Date.now()) : Date.now();
-      const routes = routeBetween(ev.data.from, ev.data.to, ev.data.mode === 'motor' ? 'motor' : 'walk', at);
+      const routes = await routeAt(ev.data.from, ev.data.to, ev.data.mode === 'motor' ? 'motor' : 'walk', ev.data.departLocal);
       self.postMessage({ id, ok: true, routes, ms: performance.now() - t0, run });
     } else throw new Error(`unknown message ${type}`);
   } catch (e) {
