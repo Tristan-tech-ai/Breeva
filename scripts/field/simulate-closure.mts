@@ -23,7 +23,7 @@ const arg = (n: string, d: string) => { const i = process.argv.indexOf(`--${n}`)
 const name = arg('name', 'badung_denpasar');
 const root = arg('root', 'D:/breeva-ml-data/field');
 const outDir = arg('out', 'public/data/simulasi');
-const HOUR = 7, WIND = 1.5, GATE_M = 60;
+const HOUR = 7, WIND = 1.5, GATE_M = 120, MAX_DETOUR_M = 1000;
 const CLOSABLE = new Set(['tertiary', 'tertiary_link', 'unclassified', 'residential', 'living_street', 'service']);
 
 const pack = new RoadPack(new Uint8Array(readFileSync(join(root, 'packs', '2026-11', `${name}.bin`))));
@@ -88,7 +88,12 @@ function nearestRoad(lat: number, lon: number): { k: number; d: number } | null 
   }
   return best && best.d <= GATE_M ? best : null;
 }
-const roadName = (k: number) => pack.str('name', k) || `jalan ${pack.highway(k)}`;
+const KELAS_ID: Record<string, string> = {
+  residential: 'jalan lingkungan', living_street: 'gang', service: 'jalan layanan', unclassified: 'jalan kecil',
+  tertiary: 'jalan kolektor', tertiary_link: 'jalan kolektor', secondary: 'jalan sekunder', primary: 'jalan primer', trunk: 'jalan arteri',
+};
+const kelasId = (h: string) => KELAS_ID[h] ?? 'jalan';
+const roadName = (k: number) => pack.str('name', k) || `${kelasId(pack.highway(k))} tanpa nama`;
 const roadLen = (k: number) => { const c = pack.coords(k); let s = 0; for (let i = 1; i < c.length; i++) s += Math.hypot((c[i][0] - c[i - 1][0]) * 111320 * Math.cos((c[i][1] * Math.PI) / 180), (c[i][1] - c[i - 1][1]) * M_LAT); return s; };
 const mid = (k: number) => { const c = pack.coords(k); const m = c[Math.floor(c.length / 2)]; return { lat: m[1], lon: m[0] }; };
 
@@ -99,12 +104,12 @@ const dbg = { no_edges: 0, no_ends: 0, no_route: 0 };
 for (const f of list.fasilitas.filter((x) => x.kelas === 'pendidikan')) {
   counts.schools++;
   const nr = nearestRoad(f.lat, f.lon);
-  if (!nr) { counts.no_road++; out.push({ id: f.id, status: 'tanpa_jalan', teks: 'Tidak ada jalan dalam 60 m dari titik sekolah di peta.' }); continue; }
+  if (!nr) { counts.no_road++; out.push({ id: f.id, status: 'tanpa_jalan', teks: `Tidak ada jalan dalam ${GATE_M} m dari titik sekolah di peta.` }); continue; }
   const hw = pack.highway(nr.k);
   if (!CLOSABLE.has(hw)) {
     counts.major_gate++;
     out.push({ id: f.id, status: 'jalan_utama', gerbang: { nama: roadName(nr.k), kelas: hw, jarak_m: Math.round(nr.d) },
-      teks: `Sekolah ini menghadap ${roadName(nr.k)} (jalan ${hw}); menutup jalan utama tidak realistis. Pilihan lain: gerbang samping atau penyeberangan dan penghijauan.` });
+      teks: `Sekolah ini menghadap ${roadName(nr.k)} (${kelasId(hw)}); menutup jalan utama tidak realistis. Pilihan lain: gerbang samping, penyeberangan aman, dan tanaman penghalang.` });
     continue;
   }
   // gate in the motor graph: the nearest closable edge to the school (and its reverse); the detour joins its two ends
@@ -134,12 +139,14 @@ for (const f of list.fasilitas.filter((x) => x.kelas === 'pendidikan')) {
   const imp = imposedOnDetour(selfUnit, eff.moved, detour, (d) => harga.value(cellOf[d], idxInCell[d]) ?? 1);
   const maxName = imp.maxAt >= 0 ? roadName(imp.maxAt) : null;
   out.push({
-    id: f.id, status: detour.length ? 'ok' : 'tanpa_jalan_putar',
+    id: f.id, status: !detour.length ? 'tanpa_jalan_putar' : extra > MAX_DETOUR_M ? 'jalan_putar_jauh' : 'ok',
     gerbang: { nama: roadName(nr.k), kelas: hw, jarak_m: Math.round(nr.d), kendaraan_per_jam: Math.round(eff.moved) },
     asap_sebelum: Math.round(eff.before * 10) / 10, asap_sesudah: Math.round(eff.after * 10) / 10, perubahan_persen: eff.pct,
     jalan_putar_tambahan_m: Math.round(extra), kenaikan_terbesar: { jalan: maxName, asap: Math.round(imp.maxRise * 10) / 10 },
     ditimbulkan_tertimbang: Math.round(imp.weighted * 10) / 10,
-    teks: detour.length ? closureText(eff, extra, imp.maxRise, maxName) : 'Tidak ada jalan putar untuk kendaraan; penutupan akan memutus akses.',
+    teks: !detour.length ? 'Tidak ada jalan putar untuk kendaraan; penutupan akan memutus akses.'
+      : extra > MAX_DETOUR_M ? `${closureText(eff, extra, imp.maxRise, maxName)} Jalan putar lebih dari ${MAX_DETOUR_M} m: tidak disarankan.`
+      : closureText(eff, extra, imp.maxRise, maxName),
   });
 }
 const pcts = out.filter((r) => r.status === 'ok').map((r) => r.perubahan_persen as number).sort((a, b) => a - b);
@@ -147,7 +154,7 @@ const summary = { ...counts, median_perubahan_persen: pcts.length ? pcts[Math.fl
 mkdirSync(outDir, { recursive: true });
 writeFileSync(join(outDir, `${name}.json`), JSON.stringify({
   wilayah: name, dibuat: new Date().toISOString(),
-  kondisi: { jam_lokal: HOUR, angin_m_s: WIND, stabilitas: met.stability, catatan: 'Kondisi acuan yang sama untuk semua sekolah; angka adalah model (NOx lalu lintas, µg/m³), belum diukur.' },
+  kondisi: { jam_lokal: HOUR, angin_m_s: WIND, stabilitas: met.stability, catatan: 'Kondisi acuan yang sama untuk semua sekolah; angka adalah model (NOx lalu lintas, µg/m³), belum diukur. Kendaraan antar-jemput siswa di gerbang belum dimodelkan (volume jalan dari kelas jalan), jadi manfaat penutupan pada jam masuk kemungkinan lebih besar dari angka ini.' },
   ringkasan: summary, sekolah: out,
 }));
 console.log(JSON.stringify(summary), JSON.stringify(dbg));
