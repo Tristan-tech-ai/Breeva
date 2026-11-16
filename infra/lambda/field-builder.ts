@@ -3,7 +3,8 @@
  * scripts/field/regions.ts: skip when this hour's run already exists (runs are never overwritten), read the road pack
  * from S3 (cached in /tmp between invocations), build with scripts/field/builder.ts, write the run's cells, inputs and
  * report, then the manifest last. OPENAQ_API_KEY comes from SSM Parameter Store (SecureString) and is never logged.
- * A failure in one region does not stop the others; the function fails if every region failed.
+ * A failure in one region does not stop the others; the function fails if every region failed. After a kriged run the
+ * hidden-sensor statistics of the hour join v/<name>/validation_recent.json (task F5-09; statistics only, no readings).
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
@@ -13,6 +14,7 @@ import { RoadPack } from '../../scripts/field/pack';
 import { buildFieldRun, reportKey, runFor, runObjects } from '../../scripts/field/builder';
 import { BUILD_REGIONS, packKey } from '../../scripts/field/regions';
 import type { RegionMeasureParams } from '../../scripts/field/measure';
+import { mergeRecent, type RecentEntry, type RecentFile } from '../../src/lib/field/validationRecent';
 
 const s3 = new S3Client({});
 const ssm = new SSMClient({});
@@ -29,6 +31,13 @@ async function key(): Promise<string | undefined> {
 
 async function exists(bucket: string, k: string): Promise<boolean> {
   try { await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: k })); return true; } catch { return false; }
+}
+
+async function readJson<T>(bucket: string, k: string): Promise<T | null> {
+  try {
+    const r = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: k }));
+    return JSON.parse(await r.Body!.transformToString()) as T;
+  } catch { return null; }
 }
 
 async function pack(bucket: string, k: string): Promise<RoadPack> {
@@ -56,7 +65,13 @@ export const handler = async () => {
       for (const o of runObjects(r.name, built)) {
         await s3.send(new PutObjectCommand({ Bucket: bucket, Key: o.key, Body: o.body, CacheControl: o.cacheControl, ContentType: o.contentType, Tagging: o.tagging }));
       }
-      const rep = built.report as { roads: number; pm25: { median: number }; measurement: { method: string; note?: string }; validation: { n: number; rmse: number; nrmse: number } | null; seconds: { total: number } };
+      const rep = built.report as { roads: number; pm25: { median: number }; measurement: { method: string; note?: string }; validation: (Omit<RecentEntry, 'run'> & { scope: string }) | null; seconds: { total: number } };
+      if (rep.validation) {
+        const key = `v/${r.name}/validation_recent.json`;
+        const { n, rmse, nrmse, bias, r2, pi95_coverage, sensor_hour_utc } = rep.validation;
+        const next = mergeRecent(await readJson<RecentFile>(bucket, key), r.name, { run, sensor_hour_utc, n, rmse, nrmse, bias, r2, pi95_coverage }, new Date());
+        await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: JSON.stringify(next), CacheControl: 'public, max-age=60, stale-while-revalidate=600', ContentType: 'application/json' }));
+      }
       const val = rep.validation && { n: rep.validation.n, rmse: rep.validation.rmse, nrmse: rep.validation.nrmse };
       out.push({ name: r.name, run, roads: rep.roads, pm25_median: rep.pm25.median, measurement: rep.measurement.method, note: rep.measurement.note, validation: val, seconds: rep.seconds.total });
     } catch (e) {

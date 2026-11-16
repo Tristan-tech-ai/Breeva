@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { Seo } from '../components/Seo';
 import { epaFlags, num, pct, verdict, type Validasi } from '../lib/validasi';
+import RunningValidation from '../components/features/RunningValidation';
 
 const DATA_URL = '/data/validasi.json';
 
@@ -72,6 +73,8 @@ export default function ValidasiPage() {
                 </table>
               </div>
             </section>
+
+            <RunningValidation />
 
             <section className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 text-sm space-y-1">
