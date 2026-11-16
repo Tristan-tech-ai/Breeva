@@ -153,18 +153,14 @@ export default function ExploreMapPage() {
 
           {/* Use-my-location (opt-in) */}
           {!located && (
-            <button onClick={useMyLocation} className="absolute right-3 z-[500] flex items-center gap-1.5 rounded-full bg-white/95 dark:bg-gray-900/90 px-3 py-2 text-xs font-semibold text-primary-600 dark:text-primary-400 shadow-lg ring-1 ring-black/5" style={{ bottom: currentAQI ? '8.5rem' : '0.75rem' }}>
+            <button onClick={useMyLocation} className="absolute right-3 top-[4.25rem] z-[500] flex items-center gap-1.5 rounded-full bg-white/95 dark:bg-gray-900/90 px-3 py-2 text-xs font-semibold text-primary-600 dark:text-primary-400 shadow-lg ring-1 ring-black/5">
               <Crosshair className="w-3.5 h-3.5" /> Pakai lokasiku
             </button>
           )}
-
-          {/* Live AQI card */}
-          {currentAQI && (
-            <div className="absolute bottom-3 left-3 right-3 z-[500]">
-              <AQICard data={currentAQI} />
-            </div>
-          )}
         </div>
+
+        {/* Live AQI card, below the map so the map's data attribution stays visible */}
+        {currentAQI && <AQICard data={currentAQI} />}
 
         {/* Legend — reflects the selected pollutant / road mode */}
         <div className="glass-card p-4">

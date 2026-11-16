@@ -794,3 +794,16 @@
 .basemap-dark {
   filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
 }
+
+/* Data attribution (src/lib/attribution.ts) must stay visible on the map; keep it compact. */
+.leaflet-control-attribution {
+  font-size: 10px;
+  line-height: 1.3;
+}
+/* keep it clear of rounded map corners */
+.leaflet-bottom.leaflet-right .leaflet-control-attribution {
+  margin: 0 8px 8px 0;
+  max-width: calc(100% - 24px);
+  border-radius: 6px;
+  padding: 2px 6px;
+}

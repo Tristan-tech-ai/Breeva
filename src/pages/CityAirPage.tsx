@@ -62,12 +62,9 @@ export default function CityAirPage() {
           <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
             <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" />
           </Suspense>
-          {currentAQI && (
-            <div className="absolute bottom-3 left-3 right-3 z-[500]">
-              <AQICard data={currentAQI} />
-            </div>
-          )}
         </div>
+        {/* Below the map so the map's data attribution stays visible */}
+        {currentAQI && <AQICard data={currentAQI} />}
 
         {/* Quick facts */}
         <div className="grid grid-cols-3 gap-3">

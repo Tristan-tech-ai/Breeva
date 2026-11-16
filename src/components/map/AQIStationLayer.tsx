@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
+import { waqiCredit } from '../../lib/attribution';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -132,11 +133,7 @@ function popupHtml(d: WAQIFeedData): string {
   if (d.iaqi.h) wx.push(`💧 ${d.iaqi.h.v}%`);
   if (d.iaqi.w) wx.push(`🌬 ${d.iaqi.w.v} m/s`);
 
-  const src =
-    d.attributions
-      .filter((a) => a.name !== 'World Air Quality Index Project')
-      .map((a) => esc(a.name))
-      .join(', ') || 'WAQI';
+  const src = waqiCredit(d.attributions, esc);
 
   const ago = timeAgo(d.time.iso);
 

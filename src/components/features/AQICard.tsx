@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Wind, Droplets, CloudSun, Activity, Info, ShieldCheck, Clock } from 'lucide-react';
 import type { AirQualityData } from '../../types';
 import { getAQIColor, getAQILabel, getAQIEmoji } from '../map/mapColors';
+import { WAQI_NAME } from '../../lib/attribution';
 
 interface AQICardProps {
   data: AirQualityData;
@@ -157,11 +158,11 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
               <div className="mt-2.5 flex items-center text-[10.5px] text-gray-400 dark:text-gray-500">
                 <span className="inline-flex items-center gap-1">
                   <Info size={11} />
-                  {data.layer_source === 3 ? 'Sensor langsung'
+                  {data.layer_source === 3 ? `Sensor langsung (${WAQI_NAME} dan EPA asal)`
                     : data.layer_source === 2 ? 'Laporan warga'
                     : data.layer_source === 4 ? 'Prediksi ML'
                     : data.layer_source === 0 ? 'Model atmosfer global (Open-Meteo), tanpa koreksi Breeva'
-                    : 'Model Breeva (latar terkalibrasi + lalu lintas)'}
+                    : 'Model Breeva (latar CAMS lewat Open-Meteo, terkalibrasi, + lalu lintas)'}
                 </span>
               </div>
 

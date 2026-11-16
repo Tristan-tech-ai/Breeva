@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, School, Stethoscope, Search, Info, MapPin } from 'lucide-react';
 import { Seo } from '../components/Seo';
 import { fmt, JALAN, JENIS, rentangJam, saringUrut, type DaftarPrioritas, type Saring } from '../lib/prioritas';
+import { CAMS_NOTICE, OPEN_METEO_LINK } from '../lib/attribution';
 
 const DATA_URL = '/data/prioritas/badung_denpasar.json';
 
@@ -128,7 +129,13 @@ export default function PrioritasPage() {
             <li><b>Belum termasuk</b> pembakaran terbuka, sumber industri, dan arus lalu lintas terukur; arus memakai perkiraan per
               kelas jalan. Daftar fasilitas mengikuti data OpenStreetMap dalam kotak Badung–Denpasar dan bisa belum lengkap.</li>
           </ul>
-          {data && <p className="text-xs text-gray-400">Mesin: {data.mesin}. Geometri jalan versi {data.geometri}. Data fasilitas © kontributor OpenStreetMap.</p>}
+          {data && (
+            <p className="text-xs text-gray-400">
+              Mesin: {data.mesin}. Geometri jalan versi {data.geometri}. Data jalan dan fasilitas © kontributor OpenStreetMap (ODbL).
+              {' '}Data cuaca dan latar: <a className="underline" href={OPEN_METEO_LINK} target="_blank" rel="noreferrer">Open-Meteo.com</a> (CC BY 4.0).
+              {' '}{CAMS_NOTICE}.
+            </p>
+          )}
         </section>
       </main>
     </div>

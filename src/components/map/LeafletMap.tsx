@@ -23,6 +23,8 @@ import type { Coordinate } from '../../types';
 import type { PollutantType, RoadDisplayMode } from '../../types';
 import { getAQIColor, getRouteColor } from './mapColors';
 import { basemap } from '../../lib/basemap';
+import { useMapAttribution } from './useMapAttribution';
+import { ROAD_ATTRIBUTION, WAQI_ATTRIBUTION } from '../../lib/attribution';
 
 const toTuple = (wp: Coordinate): L.LatLngTuple => [wp.lat, wp.lng];
 
@@ -493,6 +495,8 @@ function MapController({
 
   // Interactive WAQI station markers (replaces raster tile overlay)
   useAQIStationLayer(map, !!showAQIStations);
+  useMapAttribution(map, ROAD_ATTRIBUTION, !!showAQIOverlay);
+  useMapAttribution(map, WAQI_ATTRIBUTION, !!showAQIStations);
 
   // Render the POI layer when Places OR Ruang Hijau is on. When only Ruang Hijau is on
   // (Places off), POILayer shows ONLY green spaces (still glowing). Both off → nothing.
