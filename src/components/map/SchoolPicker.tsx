@@ -10,19 +10,21 @@ import type { RouteDest } from './WalkRouteLayer';
  * destination; the next tap on the map is the start.
  */
 export default function SchoolPicker({ region, value, onChange }: { region: FieldRegion; value: RouteDest | null; onChange: (d: RouteDest | null) => void }) {
-  const [list, setList] = useState<SchoolEntry[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  // the loaded list remembers which region it belongs to, so a region switch shows "loading" without a reset in the effect
+  const key = `${region.geometry}/${region.name}`;
+  const [loaded, setLoaded] = useState<{ key: string; list: SchoolEntry[] | null; failed: boolean } | null>(null);
   const [q, setQ] = useState('');
+  const list = loaded?.key === key ? loaded.list : null;
+  const failed = loaded?.key === key && loaded.failed;
 
   useEffect(() => {
     let alive = true;
-    setList(null); setFailed(false);
-    fetch(`${fieldBase()}/graphs/${region.geometry}/${region.name}_schools.json`)
+    fetch(`${fieldBase()}/graphs/${key}_schools.json`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((f: SchoolFile) => alive && setList(schoolList(f)))
-      .catch(() => alive && setFailed(true));
+      .then((f: SchoolFile) => alive && setLoaded({ key, list: schoolList(f), failed: false }))
+      .catch(() => alive && setLoaded({ key, list: null, failed: true }));
     return () => { alive = false; };
-  }, [region.geometry, region.name]);
+  }, [key]);
 
   const hits = useMemo(() => (list ? searchSchools(list, q, 6) : []), [list, q]);
 
