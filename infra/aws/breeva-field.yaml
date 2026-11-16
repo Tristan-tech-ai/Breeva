@@ -1,0 +1,187 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Breeva field files (LAMPIRAN_TEKNIS L1): a private S3 bucket served through CloudFront (default domain, origin access
+  control), plus monthly budget alarms of USD 5 and USD 10 on the costs tagged project=breeva. Everything is named
+  breeva-* and tagged project=breeva; nothing else in the account is touched.
+
+Parameters:
+  AlarmEmail:
+    Type: String
+    Default: ''
+    Description: Optional e-mail subscribed to the alarm topic (confirm the subscription e-mail AWS sends).
+
+Conditions:
+  HasEmail: !Not [!Equals [!Ref AlarmEmail, '']]
+
+Resources:
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: breeva-alarms
+      Tags:
+        - { Key: project, Value: breeva }
+
+  AlarmTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics: [!Ref AlarmTopic]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowBudgetsPublish
+            Effect: Allow
+            Principal: { Service: budgets.amazonaws.com }
+            Action: sns:Publish
+            Resource: !Ref AlarmTopic
+            Condition:
+              StringEquals: { 'aws:SourceAccount': !Ref 'AWS::AccountId' }
+
+  AlarmEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasEmail
+    Properties:
+      TopicArn: !Ref AlarmTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+  # Budgets count the costs that carry the cost allocation tag project=breeva (the tag has to be activated once in the
+  # Billing console before tagged costs show up). Each alarms on actual spend and on the month's forecast.
+  BudgetUsd5:
+    Type: AWS::Budgets::Budget
+    DependsOn: AlarmTopicPolicy
+    Properties:
+      Budget:
+        BudgetName: breeva-monthly-usd5
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: { Amount: 5, Unit: USD }
+        CostFilters:
+          TagKeyValue: ['user:project$breeva']
+      NotificationsWithSubscribers:
+        - Notification: { NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE }
+          Subscribers: [{ SubscriptionType: SNS, Address: !Ref AlarmTopic }]
+        - Notification: { NotificationType: FORECASTED, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE }
+          Subscribers: [{ SubscriptionType: SNS, Address: !Ref AlarmTopic }]
+
+  BudgetUsd10:
+    Type: AWS::Budgets::Budget
+    DependsOn: AlarmTopicPolicy
+    Properties:
+      Budget:
+        BudgetName: breeva-monthly-usd10
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: { Amount: 10, Unit: USD }
+        CostFilters:
+          TagKeyValue: ['user:project$breeva']
+      NotificationsWithSubscribers:
+        - Notification: { NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE }
+          Subscribers: [{ SubscriptionType: SNS, Address: !Ref AlarmTopic }]
+        - Notification: { NotificationType: FORECASTED, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE }
+          Subscribers: [{ SubscriptionType: SNS, Address: !Ref AlarmTopic }]
+
+  FieldBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: [BudgetUsd5, BudgetUsd10]
+    Properties:
+      BucketName: !Sub 'breeva-field-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerEnforced }]
+      # Answers CORS preflights with 200 (the response headers policy below sets the headers on every response).
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins: ['*']
+            AllowedMethods: [GET, HEAD]
+            AllowedHeaders: ['*']
+            ExposedHeaders: [ETag, Content-Length, Content-Range, Accept-Ranges]
+            MaxAge: 86400
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      Tags:
+        - { Key: project, Value: breeva }
+
+  FieldOac:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: breeva-field-oac
+        Description: Breeva field bucket, signed requests only
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # The app (another origin) reads the files with fetch and HTTP Range (PMTiles), so CORS answers every origin and
+  # exposes the headers the PMTiles reader needs.
+  FieldCors:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: breeva-field-cors
+        CorsConfig:
+          AccessControlAllowCredentials: false
+          AccessControlAllowHeaders: { Items: ['*'] }
+          AccessControlAllowMethods: { Items: [GET, HEAD, OPTIONS] }
+          AccessControlAllowOrigins: { Items: ['*'] }
+          AccessControlExposeHeaders: { Items: [ETag, Content-Length, Content-Range, Accept-Ranges] }
+          AccessControlMaxAgeSec: 86400
+          OriginOverride: true
+
+  FieldDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: breeva-field
+        Enabled: true
+        HttpVersion: http2and3
+        PriceClass: PriceClass_All
+        Origins:
+          - Id: breeva-field-s3
+            DomainName: !GetAtt FieldBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt FieldOac.Id
+            S3OriginConfig: { OriginAccessIdentity: '' }
+        DefaultCacheBehavior:
+          TargetOriginId: breeva-field-s3
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          # Managed CachingOptimized: honours the Cache-Control set on each object (manifest 60 s, runs immutable).
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          # Managed CORS-S3Origin: forwards Origin and the preflight headers so S3 answers OPTIONS with 200.
+          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
+          ResponseHeadersPolicyId: !Ref FieldCors
+      Tags:
+        - { Key: project, Value: breeva }
+
+  FieldBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FieldBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipalReadOnly
+            Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: s3:GetObject
+            Resource: !Sub '${FieldBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${FieldDistribution}'
+
+Outputs:
+  BucketName:
+    Value: !Ref FieldBucket
+  FieldBaseUrl:
+    Description: VITE_FIELD_BASE for the app
+    Value: !Sub 'https://${FieldDistribution.DomainName}'
+  DistributionId:
+    Value: !Ref FieldDistribution
+  AlarmTopicArn:
+    Value: !Ref AlarmTopic
