@@ -5,6 +5,7 @@ import { pm25AqiToUg as pm25AQIToUg, no2AqiToUg as no2AQIToUg, o3AqiToUg as o3AQ
 // .js extension required by Node ESM under type:module). Lets route scoring use the SAME calibrated
 // ambient as the map (road-aqi), instead of raw CAMS — the validated 45%-LODO accuracy lever.
 import { backgroundPm25, gpResidual } from './_v2prior.js';
+import { fetchBaselineGrid as fetchBaselineGridShared, type BaselineData } from './_baseline.js';
 const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
 
 /**
@@ -38,6 +39,11 @@ async function redisSetEx(key: string, ttl: number, value: string): Promise<void
       headers: { Authorization: `Bearer ${token}` },
     });
   } catch { /* non-fatal */ }
+}
+
+// Background field (Open-Meteo, 5-point grid) shared with the other endpoint; see _baseline.ts.
+function fetchBaselineGrid(south: number, west: number, north: number, east: number, forecastHour = 0) {
+  return fetchBaselineGridShared(south, west, north, east, forecastHour, { redisGet, redisSetEx, ttlSec: 3600 });
 }
 
 // ─── Region detection (for Module B/C corrections) ──────────
@@ -857,11 +863,6 @@ interface RoadRow {
   fraction_along?: number | null;
 }
 
-interface BaselineData {
-  pm25: number; pm10: number; no2: number;
-  co: number; o3: number; wind_speed: number;
-}
-
 interface RoadAQIComputation {
   aqi: number;
   pm25: number;
@@ -1017,103 +1018,6 @@ function computeRoadAQI(
 }
 
 // ─── Baseline grid fetch (from road-aqi.ts) ─────────────────
-async function fetchBaselineBatch(
-  lats: number[], lons: number[], forecastHour = 0,
-): Promise<BaselineData[]> {
-  const latStr = lats.map(l => l.toFixed(4)).join(',');
-  const lonStr = lons.map(l => l.toFixed(4)).join(',');
-  const n = lats.length;
-
-  if (forecastHour <= 0) {
-    const [aqResp, wxResp] = await Promise.all([
-      fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latStr}&longitude=${lonStr}&current=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&timezone=auto`),
-      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latStr}&longitude=${lonStr}&current=wind_speed_10m&timezone=auto`),
-    ]);
-    const aqJson = aqResp.ok ? await aqResp.json() : null;
-    const wxJson = wxResp.ok ? await wxResp.json() : null;
-    const aqArr = n === 1 ? [aqJson?.current] : (Array.isArray(aqJson) ? aqJson.map((r: Record<string, unknown>) => (r as Record<string, unknown>)?.current) : []);
-    const wxArr = n === 1 ? [wxJson?.current] : (Array.isArray(wxJson) ? wxJson.map((r: Record<string, unknown>) => (r as Record<string, unknown>)?.current) : []);
-    return lats.map((_, i) => ({
-      pm25: (aqArr[i] as Record<string, number>)?.pm2_5 ?? 15,
-      pm10: (aqArr[i] as Record<string, number>)?.pm10 ?? 25,
-      no2: (aqArr[i] as Record<string, number>)?.nitrogen_dioxide ?? 10,
-      co: (aqArr[i] as Record<string, number>)?.carbon_monoxide ?? 200,
-      o3: (aqArr[i] as Record<string, number>)?.ozone ?? 30,
-      wind_speed: (wxArr[i] as Record<string, number>)?.wind_speed_10m ?? 2.0,
-    }));
-  }
-
-  const [aqResp, wxResp] = await Promise.all([
-    fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latStr}&longitude=${lonStr}&hourly=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&forecast_hours=${forecastHour + 1}&timezone=auto`),
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latStr}&longitude=${lonStr}&hourly=wind_speed_10m&forecast_hours=${forecastHour + 1}&timezone=auto`),
-  ]);
-  const aqJson = aqResp.ok ? await aqResp.json() : null;
-  const wxJson = wxResp.ok ? await wxResp.json() : null;
-  const aqArr = n === 1 ? [aqJson] : (Array.isArray(aqJson) ? aqJson : []);
-  const wxArr = n === 1 ? [wxJson] : (Array.isArray(wxJson) ? wxJson : []);
-  const idx = forecastHour;
-  return lats.map((_, i) => ({
-    pm25: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.pm2_5?.[idx] ?? 15,
-    pm10: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.pm10?.[idx] ?? 25,
-    no2: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.nitrogen_dioxide?.[idx] ?? 10,
-    co: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.carbon_monoxide?.[idx] ?? 200,
-    o3: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.ozone?.[idx] ?? 30,
-    wind_speed: (wxArr[i] as Record<string, Record<string, number[]>>)?.hourly?.wind_speed_10m?.[idx] ?? 2.0,
-  }));
-}
-
-function buildInterpolator(
-  south: number, west: number, north: number, east: number,
-  center: BaselineData, nw: BaselineData, ne: BaselineData,
-  sw: BaselineData, se: BaselineData,
-) {
-  return (lat: number, lon: number): BaselineData => {
-    const latSpan = north - south || 0.001;
-    const lonSpan = east - west || 0.001;
-    const ty = Math.max(0, Math.min(1, (lat - south) / latSpan));
-    const tx = Math.max(0, Math.min(1, (lon - west) / lonSpan));
-
-    const keys = ['pm25', 'pm10', 'no2', 'co', 'o3', 'wind_speed'] as const;
-    const result = {} as Record<string, number>;
-    for (const k of keys) {
-      const topVal = nw[k] * (1 - tx) + ne[k] * tx;
-      const botVal = sw[k] * (1 - tx) + se[k] * tx;
-      const bilinear = botVal * (1 - ty) + topVal * ty;
-      result[k] = bilinear * 0.6 + center[k] * 0.4;
-    }
-    return result as unknown as BaselineData;
-  };
-}
-
-async function fetchBaselineGrid(south: number, west: number, north: number, east: number, forecastHour = 0) {
-  const cLat = (south + north) / 2;
-  const cLon = (west + east) / 2;
-  const qLat = Math.round(cLat * 10) / 10;
-  const qLon = Math.round(cLon * 10) / 10;
-  const OFFSET = 0.1;
-  const baselineCacheKey = `vayu:bl:${qLat.toFixed(2)}:${qLon.toFixed(2)}:fh${forecastHour}`;
-  const gS = qLat - OFFSET, gN = qLat + OFFSET;
-  const gW = qLon - OFFSET, gE = qLon + OFFSET;
-
-  const cachedBaseline = await redisGet(baselineCacheKey);
-  if (cachedBaseline) {
-    try {
-      const { center, nw, ne, sw, se } = JSON.parse(cachedBaseline);
-      const interpolate = buildInterpolator(gS, gW, gN, gE, center, nw, ne, sw, se);
-      return { center, interpolate };
-    } catch { /* fall through */ }
-  }
-
-  const lats = [qLat, gN, gN, gS, gS];
-  const lons = [qLon, gW, gE, gW, gE];
-  const results = await fetchBaselineBatch(lats, lons, forecastHour);
-  const [center, nw, ne, sw, se] = results;
-  // Baseline (Open-Meteo) changes slowly; 1h TTL turns most route requests into warm hits.
-  await redisSetEx(baselineCacheKey, 3600, JSON.stringify({ center, nw, ne, sw, se }));
-  const interpolate = buildInterpolator(gS, gW, gN, gE, center, nw, ne, sw, se);
-  return { center, interpolate };
-}
-
 // ─── WAQI bias correction (from road-aqi.ts) ────────────────
 interface WAQIBias { pm25: number; pm10: number; no2: number; o3: number; stationName: string | null; }
 

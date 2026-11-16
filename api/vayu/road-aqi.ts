@@ -17,6 +17,7 @@ import {
 // uses a static Leaflet TileLayer (no per-request coordinate math / vector render).
 // Underscore module → inlined into this bundle (no new serverless function).
 import { renderRoadTile, tileBBox, type TileRoad } from './_tilepng.js';
+import { fetchBaselineGrid as fetchBaselineGridShared, type BaselineData } from './_baseline.js';
 
 // ─── v2 engine wiring (Phase 3a) — feature-flagged, DEFAULT OFF (prod stays v1 until verified+flipped) ───
 const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
@@ -297,6 +298,11 @@ async function redisSetEx(key: string, ttl: number, value: string): Promise<void
       headers: { Authorization: `Bearer ${token}` },
     });
   } catch { /* non-fatal */ }
+}
+
+// Background field (Open-Meteo, 5-point grid) shared with the other endpoint; see _baseline.ts.
+function fetchBaselineGrid(south: number, west: number, north: number, east: number, forecastHour = 0) {
+  return fetchBaselineGridShared(south, west, north, east, forecastHour, { redisGet, redisSetEx, ttlSec: 900 });
 }
 
 // ─── Gaussian dispersion (same as aqi.ts, inlined for Vercel) ───
@@ -721,65 +727,6 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-// ─── Open-Meteo BATCH fetch (5 points in 2 HTTP calls) ─────
-// Uses Open-Meteo's multi-coordinate support: latitude=l1,l2,...&longitude=ln1,ln2,...
-// Reduces 10 HTTP requests → 2, saving ~300-400ms per viewport.
-
-export interface BaselineData {
-  pm25: number; pm10: number; no2: number;
-  co: number; o3: number; wind_speed: number;
-  wind_direction: number;   // v2: CALINE4 needs wind FROM direction (deg); v1 ignored it
-}
-
-async function fetchBaselineBatch(
-  lats: number[], lons: number[], forecastHour = 0,
-): Promise<BaselineData[]> {
-  const latStr = lats.map(l => l.toFixed(4)).join(',');
-  const lonStr = lons.map(l => l.toFixed(4)).join(',');
-  const n = lats.length;
-
-  if (forecastHour <= 0) {
-    const [aqResp, wxResp] = await Promise.all([
-      fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latStr}&longitude=${lonStr}&current=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&timezone=auto`),
-      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latStr}&longitude=${lonStr}&current=wind_speed_10m,wind_direction_10m&timezone=auto`),
-    ]);
-    const aqJson = aqResp.ok ? await aqResp.json() : null;
-    const wxJson = wxResp.ok ? await wxResp.json() : null;
-    // Multi-point returns array; single-point returns object
-    const aqArr = n === 1 ? [aqJson?.current] : (Array.isArray(aqJson) ? aqJson.map((r: Record<string, unknown>) => (r as Record<string, unknown>)?.current) : []);
-    const wxArr = n === 1 ? [wxJson?.current] : (Array.isArray(wxJson) ? wxJson.map((r: Record<string, unknown>) => (r as Record<string, unknown>)?.current) : []);
-    return lats.map((_, i) => ({
-      pm25: (aqArr[i] as Record<string, number>)?.pm2_5 ?? 15,
-      pm10: (aqArr[i] as Record<string, number>)?.pm10 ?? 25,
-      no2: (aqArr[i] as Record<string, number>)?.nitrogen_dioxide ?? 10,
-      co: (aqArr[i] as Record<string, number>)?.carbon_monoxide ?? 200,
-      o3: (aqArr[i] as Record<string, number>)?.ozone ?? 30,
-      wind_speed: (wxArr[i] as Record<string, number>)?.wind_speed_10m ?? 2.0,
-      wind_direction: (wxArr[i] as Record<string, number>)?.wind_direction_10m ?? 0,
-    }));
-  }
-
-  // Forecast mode
-  const [aqResp, wxResp] = await Promise.all([
-    fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latStr}&longitude=${lonStr}&hourly=pm2_5,pm10,nitrogen_dioxide,carbon_monoxide,ozone&forecast_hours=${forecastHour + 1}&timezone=auto`),
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latStr}&longitude=${lonStr}&hourly=wind_speed_10m,wind_direction_10m&forecast_hours=${forecastHour + 1}&timezone=auto`),
-  ]);
-  const aqJson = aqResp.ok ? await aqResp.json() : null;
-  const wxJson = wxResp.ok ? await wxResp.json() : null;
-  const aqArr = n === 1 ? [aqJson] : (Array.isArray(aqJson) ? aqJson : []);
-  const wxArr = n === 1 ? [wxJson] : (Array.isArray(wxJson) ? wxJson : []);
-  const idx = forecastHour;
-  return lats.map((_, i) => ({
-    pm25: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.pm2_5?.[idx] ?? 15,
-    pm10: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.pm10?.[idx] ?? 25,
-    no2: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.nitrogen_dioxide?.[idx] ?? 10,
-    co: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.carbon_monoxide?.[idx] ?? 200,
-    o3: (aqArr[i] as Record<string, Record<string, number[]>>)?.hourly?.ozone?.[idx] ?? 30,
-    wind_speed: (wxArr[i] as Record<string, Record<string, number[]>>)?.hourly?.wind_speed_10m?.[idx] ?? 2.0,
-    wind_direction: (wxArr[i] as Record<string, Record<string, number[]>>)?.hourly?.wind_direction_10m?.[idx] ?? 0,
-  }));
-}
-
 // v2 Background (Layer A): RAW CAMS daily-mean for the region center, cached per region/day.
 // Berrocal was fit on daily-mean CAMS → the slope/offset regions (e.g. jakarta β1=0.276) need the
 // daily mean, NOT the current hour, else CAMS's anti-phase diurnal leaks into the ambient. Identity
@@ -801,74 +748,6 @@ async function fetchCamsDailyMean(lat: number, lon: number, region: string, toda
     }
   } catch { /* fall through → NaN */ }
   return NaN;
-}
-
-// ─── Multi-point baseline grid with Redis cache ─────────────
-// Fetches 5 points (center + 4 corners) for spatial interpolation.
-// Cached in Redis for 15 min at coarse ~0.1° grid → most viewport moves = cache HIT.
-async function fetchBaselineGrid(south: number, west: number, north: number, east: number, forecastHour = 0) {
-  const cLat = (south + north) / 2;
-  const cLon = (west + east) / 2;
-
-  // Quantize center to 0.1° grid (~11km) so zoom changes + 15% padding
-  // don't shift the grid center, keeping colors stable across zoom transitions
-  const qLat = Math.round(cLat * 10) / 10;
-  const qLon = Math.round(cLon * 10) / 10;
-  const OFFSET = 0.1; // Fixed offset for corner sample points
-
-  const baselineCacheKey = `vayu:bl:${qLat.toFixed(2)}:${qLon.toFixed(2)}:fh${forecastHour}`;
-
-  // Fixed grid bounds for interpolation (zoom-independent)
-  const gS = qLat - OFFSET, gN = qLat + OFFSET;
-  const gW = qLon - OFFSET, gE = qLon + OFFSET;
-
-  // Check Redis cache first (15 min TTL)
-  const cachedBaseline = await redisGet(baselineCacheKey);
-  if (cachedBaseline) {
-    try {
-      const { center, nw, ne, sw, se } = JSON.parse(cachedBaseline) as {
-        center: BaselineData; nw: BaselineData; ne: BaselineData;
-        sw: BaselineData; se: BaselineData;
-      };
-      const interpolate = buildInterpolator(gS, gW, gN, gE, center, nw, ne, sw, se);
-      return { center, interpolate };
-    } catch { /* fall through to fetch */ }
-  }
-
-  // Batch fetch: 5 fixed points in 2 HTTP calls (instead of 10)
-  const lats = [qLat, gN, gN, gS, gS];
-  const lons = [qLon, gW, gE, gW, gE];
-  const results = await fetchBaselineBatch(lats, lons, forecastHour);
-  const [center, nw, ne, sw, se] = results;
-
-  // Cache for 15 min
-  await redisSetEx(baselineCacheKey, 900, JSON.stringify({ center, nw, ne, sw, se }));
-
-  const interpolate = buildInterpolator(gS, gW, gN, gE, center, nw, ne, sw, se);
-  return { center, interpolate };
-}
-
-function buildInterpolator(
-  south: number, west: number, north: number, east: number,
-  center: BaselineData, nw: BaselineData, ne: BaselineData,
-  sw: BaselineData, se: BaselineData,
-) {
-  return (lat: number, lon: number): BaselineData => {
-    const latSpan = north - south || 0.001;
-    const lonSpan = east - west || 0.001;
-    const ty = Math.max(0, Math.min(1, (lat - south) / latSpan));
-    const tx = Math.max(0, Math.min(1, (lon - west) / lonSpan));
-
-    const keys = ['pm25', 'pm10', 'no2', 'co', 'o3', 'wind_speed', 'wind_direction'] as const;
-    const result = {} as Record<string, number>;
-    for (const k of keys) {
-      const topVal = nw[k] * (1 - tx) + ne[k] * tx;
-      const botVal = sw[k] * (1 - tx) + se[k] * tx;
-      const bilinear = botVal * (1 - ty) + topVal * ty;
-      result[k] = bilinear * 0.6 + center[k] * 0.4;
-    }
-    return result as unknown as BaselineData;
-  };
 }
 
 // ─── Sentinel-5P satellite NO₂ correction ───────────────────
