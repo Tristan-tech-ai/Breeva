@@ -17,6 +17,11 @@ export const TOTAL_STOPS: Record<string, [number, string][]> = {
  */
 export const TRAFFIC_DEADBAND: Record<'pm25' | 'no2' | 'pm10', number> = { pm25: 1, no2: 2, pm10: 2 };
 export const TRAFFIC_GREY = '#d1d5db';
+/**
+ * Roads with practically no exhaust in the NOx view: a calm teal, so a clean lane reads as "clean" and not as a road
+ * whose value has not loaded (those are grey). Not a health colour either.
+ */
+export const TRAFFIC_CLEAN = '#5eead4';
 export const TRAFFIC_STOPS: Record<'pm25' | 'no2' | 'pm10', [number, string][]> = {
   pm25: [[1, '#e9d5ff'], [2, '#c084fc'], [4, '#9333ea'], [8, '#581c87']],
   no2: [[2, '#ddd6fe'], [5, '#c4b5fd'], [15, '#8b5cf6'], [40, '#6d28d9'], [100, '#3b0764']],
@@ -30,7 +35,8 @@ export function trafficPollutant(p: string): 'pm25' | 'no2' | 'pm10' {
 
 export function trafficColor(pollutant: string, delta: number): string {
   const p = trafficPollutant(pollutant);
-  if (!(delta >= TRAFFIC_DEADBAND[p])) return TRAFFIC_GREY;
+  if (!Number.isFinite(delta)) return TRAFFIC_GREY;
+  if (!(delta >= TRAFFIC_DEADBAND[p])) return p === 'no2' ? TRAFFIC_CLEAN : TRAFFIC_GREY;
   return lerpColor(TRAFFIC_STOPS[p], delta);
 }
 
