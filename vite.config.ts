@@ -59,10 +59,14 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          // Shared runtime used by both the app and @react-three: without its own chunk it was pulled into
+          // vendor-three, which made the entry import (and preload) all of three.js on every page.
+          if (/node_modules\/(\.pnpm\/[^/]+\/node_modules\/)?(react|react-dom|scheduler|use-sync-external-store|zustand)\//.test(id))
+            return 'vendor-react';
           if (id.includes('node_modules/leaflet') || id.includes('node_modules/react-leaflet'))
             return 'vendor-leaflet';
-          if (id.includes('node_modules/three') || id.includes('node_modules/@react-three'))
-            return 'vendor-three';   // ~320KB+ — kept out of the main entry; lazy-loaded by ParticleHero
+          if (/node_modules\/(\.pnpm\/[^/]+\/node_modules\/)?(three|@react-three\/[^/]+)\//.test(id))
+            return 'vendor-three';   // ~230KB gz — lazy-loaded by ParticleHero only
           if (id.includes('node_modules/framer-motion'))
             return 'vendor-motion';
           if (id.includes('node_modules/lucide-react'))
