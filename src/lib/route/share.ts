@@ -1,0 +1,31 @@
+/**
+ * Route links: ?rute=<lat>,<lng>~<lat>,<lng>&moda=motor opens the map with that on-device route computed (a teacher
+ * can send the route to school; the demo recording uses it too). Optional &berangkat=HH:MM sets the departure.
+ */
+export interface LatLng { lat: number; lng: number }
+export interface RouteLink { from: LatLng; to: LatLng; mode: 'walk' | 'motor' }
+
+const point = (s: string): LatLng | null => {
+  const m = /^(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)$/.exec(s.trim());
+  if (!m) return null;
+  const lat = Number(m[1]), lng = Number(m[2]);
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
+};
+
+export function parseRouteLink(search: string): RouteLink | null {
+  const q = new URLSearchParams(search);
+  const parts = (q.get('rute') ?? '').split('~');
+  if (parts.length !== 2) return null;
+  const from = point(parts[0]), to = point(parts[1]);
+  if (!from || !to) return null;
+  return { from, to, mode: q.get('moda') === 'motor' ? 'motor' : 'walk' };
+}
+
+/** Link to a route on the map page at origin + path (5 decimals, about 1 m). */
+export function routeLink(originPath: string, l: RouteLink, departLocal?: string | null): string {
+  const f = (p: LatLng) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+  const q = new URLSearchParams({ rute: `${f(l.from)}~${f(l.to)}` });
+  if (l.mode === 'motor') q.set('moda', 'motor');
+  if (departLocal) q.set('berangkat', departLocal);
+  return `${originPath}?${q.toString().replace(/%2C/g, ',').replace(/%7E/gi, '~').replace(/%3A/g, ':')}`;
+}

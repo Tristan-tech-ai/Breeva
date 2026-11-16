@@ -26,6 +26,7 @@ import { getAQIColor, getRouteColor } from './mapColors';
 import { basemap } from '../../lib/basemap';
 import { useMapAttribution } from './useMapAttribution';
 import { ROAD_ATTRIBUTION, WAQI_ATTRIBUTION } from '../../lib/attribution';
+import type { RouteLink } from '../../lib/route/share';
 
 const toTuple = (wp: Coordinate): L.LatLngTuple => [wp.lat, wp.lng];
 
@@ -146,6 +147,8 @@ interface LeafletMapProps {
   onWalkRouting?: (s: WalkRoutingState) => void;
   /** Mode of the on-device routes: walking (NO2 Pareto) or motor (own + imposed exposure, zona napas). */
   routeMode?: 'walk' | 'motor';
+  /** Route link (?rute=) played once when routing starts. */
+  routeLink?: RouteLink | null;
 }
 
 // ── Inner map controller ─────────────────────────────────────────────
@@ -167,7 +170,8 @@ function MapController({
   walkRouting,
   onWalkRouting,
   routeMode,
-}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId' | 'walkRouting' | 'onWalkRouting' | 'routeMode'>) {
+  routeLink,
+}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId' | 'walkRouting' | 'onWalkRouting' | 'routeMode' | 'routeLink'>) {
   const map = useMap();
   const {
     center,
@@ -506,7 +510,7 @@ function MapController({
     roadDisplayMode || 'total',
   );
   const roadMeta = useMvt ? (FIELD_STATIC ? fieldMeta : mvtMeta) : vectorMeta;
-  useWalkRouting(map, !!walkRouting, onWalkRouting, routeMode ?? 'walk');
+  useWalkRouting(map, !!walkRouting, onWalkRouting, routeMode ?? 'walk', routeLink);
 
   // Forward road layer meta to parent
   useEffect(() => {
@@ -597,6 +601,7 @@ export default function LeafletMap({
   walkRouting = false,
   onWalkRouting,
   routeMode = 'walk',
+  routeLink = null,
 }: LeafletMapProps) {
   const { center } = useMapStore();
   const base = basemap(mapStyle, isDarkMode);
@@ -646,6 +651,7 @@ export default function LeafletMap({
           walkRouting={walkRouting}
           onWalkRouting={onWalkRouting}
           routeMode={routeMode}
+          routeLink={routeLink}
         />
       </MapContainer>
       <NavControls />

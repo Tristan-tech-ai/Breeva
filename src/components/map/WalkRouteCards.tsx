@@ -1,8 +1,18 @@
+import { useState } from 'react';
 import type { WalkRoutingState } from './WalkRouteLayer';
+import { routeLink } from '../../lib/route/share';
 
 /** Cards of the walking routes computed on the device: distance, time, mean NO2 and PM2.5 along each route. */
 export default function WalkRouteCards({ state, mode = 'walk', onMode }: { state: WalkRoutingState | null; mode?: 'walk' | 'motor'; onMode?: (m: 'walk' | 'motor') => void }) {
+  const [copied, setCopied] = useState(false);
   if (!state) return null;
+  const ends = state.ends;
+  const copy = () => {
+    if (!ends) return;
+    const url = routeLink(`${window.location.origin}${window.location.pathname}`, { ...ends, mode },
+      new URLSearchParams(window.location.search).get('berangkat'));
+    navigator.clipboard?.writeText(url).then(() => setCopied(true), () => setCopied(false));
+  };
   return (
     <div className="glass-card p-4" aria-live="polite">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -18,7 +28,14 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode }: { state
           </div>
         )}
       </div>
-      <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">{state.status}</p>
+      <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+        {state.status}
+        {ends && state.cards.length > 0 && (
+          <button onClick={copy} className="ml-2 font-semibold text-teal-700 dark:text-teal-300 underline underline-offset-2">
+            {copied ? 'Tautan disalin' : 'Salin tautan rute'}
+          </button>
+        )}
+      </p>
       {state.cards.length > 0 && (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {state.cards.map((c) => (

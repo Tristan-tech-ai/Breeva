@@ -3,15 +3,22 @@ import L from 'leaflet';
 import { FIELD_REGIONS } from '../../lib/field/source';
 import { RouteClient } from '../../lib/route/client';
 import { routeCards, type RouteCard } from '../../lib/route/summary';
+import type { RouteLink } from '../../lib/route/share';
 
-export interface WalkRoutingState { status: string; cards: RouteCard[]; ms?: number }
+export interface WalkRoutingState {
+  status: string; cards: RouteCard[]; ms?: number;
+  /** Start and destination of the routes shown, for the route link. */
+  ends?: { from: { lat: number; lng: number }; to: { lat: number; lng: number } };
+}
 
 /**
  * Walking routes computed on the device: the first tap sets the start, the second the destination; the Web Worker
  * returns the Pareto routes (time vs NO2) and they are drawn, fastest orange, cleanest teal. A third tap starts again.
- * Registered on the map as __walkTap so the map's click handler hands taps here while the mode is on.
+ * Registered on the map as __walkTap so the map's click handler hands taps here while the mode is on. A route link
+ * (?rute=, share.ts) is played as the two taps once, and the map fits both ends.
  */
-export function useWalkRouting(map: L.Map | null, enabled: boolean, onState?: (s: WalkRoutingState) => void, mode: 'walk' | 'motor' = 'walk') {
+export function useWalkRouting(map: L.Map | null, enabled: boolean, onState?: (s: WalkRoutingState) => void, mode: 'walk' | 'motor' = 'walk', link?: RouteLink | null) {
+  const linkRef = useRef(link);
   const onStateRef = useRef(onState);
   onStateRef.current = onState;
   const modeRef = useRef(mode);
@@ -65,7 +72,8 @@ export function useWalkRouting(map: L.Map | null, enabled: boolean, onState?: (s
             L.polyline(ll, { color: '#ffffff', weight: w + 4, opacity: 0.95, interactive: false }).addTo(group);
             L.polyline(ll, { color: cards[k].color, weight: w, opacity: 1, interactive: false }).addTo(group);
           }
-          say({ status: routes.length ? `${routes.length} rute dihitung di perangkat dalam ${Math.round(ms)} ms. Ketuk lagi untuk rute baru.` : 'Tidak ada rute.', cards, ms });
+          say({ status: routes.length ? `${routes.length} rute dihitung di perangkat dalam ${Math.round(ms)} ms. Ketuk lagi untuk rute baru.` : 'Tidak ada rute.', cards, ms,
+            ends: { from: { lat: from.lat, lng: from.lng }, to: { lat: to.lat, lng: to.lng } } });
         })
         .catch((e: Error) => {
           ready.delete(region.name);
@@ -75,6 +83,13 @@ export function useWalkRouting(map: L.Map | null, enabled: boolean, onState?: (s
       return true;
     };
     (map as unknown as { __walkTap?: { tapAt: (ll: L.LatLng) => boolean } }).__walkTap = { tapAt };
+    const l = linkRef.current;
+    if (l) {
+      linkRef.current = null; // once
+      const a = L.latLng(l.from.lat, l.from.lng), b = L.latLng(l.to.lat, l.to.lng);
+      map.fitBounds(L.latLngBounds(a, b), { padding: [48, 48], maxZoom: 16 });
+      tapAt(a); tapAt(b);
+    }
     return () => {
       delete (map as unknown as { __walkTap?: unknown }).__walkTap;
       group.remove();

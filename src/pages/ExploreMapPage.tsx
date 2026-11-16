@@ -15,6 +15,7 @@ import type { WalkRoutingState } from '../components/map/WalkRouteLayer';
 import type { PollutantType, RoadDisplayMode } from '../types';
 import { ISPU_CATEGORIES } from '../lib/ispu';
 import { FIELD_REGIONS, pickRegion } from '../lib/field/source';
+import { parseRouteLink } from '../lib/route/share';
 
 const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
 
@@ -49,7 +50,11 @@ export default function ExploreMapPage() {
   const location = useLocation();
   const isRoot = location.pathname === '/';
   // ?wilayah=kota_bogor opens the map in that field region (for the demo in Bogor).
-  const startRegion = pickRegion(new URLSearchParams(location.search).get('wilayah'));
+  // ?rute=lat,lng~lat,lng[&moda=motor] opens with that on-device route (route links, share.ts).
+  const [link] = useState(() => parseRouteLink(location.search));
+  const startRegion = link
+    ? FIELD_REGIONS.find((r) => r.bounds[0][0] <= link.from.lat && link.from.lat <= r.bounds[1][0] && r.bounds[0][1] <= link.from.lng && link.from.lng <= r.bounds[1][1]) ?? pickRegion(null)
+    : pickRegion(new URLSearchParams(location.search).get('wilayah'));
   const [region, setRegion] = useState(startRegion.name);
   const isDark = useIsDark();
   const currentAQI = useMapStore((s) => s.currentAQI);
@@ -58,9 +63,9 @@ export default function ExploreMapPage() {
   const [located, setLocated] = useState(false);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('total');
-  const [walkMode, setWalkMode] = useState(false);
+  const [walkMode, setWalkMode] = useState(!!link);
   const [walkState, setWalkState] = useState<WalkRoutingState | null>(null);
-  const [routeMode, setRouteMode] = useState<'walk' | 'motor'>('walk');
+  const [routeMode, setRouteMode] = useState<'walk' | 'motor'>(link?.mode ?? 'walk');
   const activeP = POLLUTANTS.find((p) => p.id === pollutant) ?? POLLUTANTS[0];
   // The traffic view of the index shows NO2, and harga hirup does not depend on the pollutant: modes for every pollutant.
   const showRoadModes = true;
@@ -175,7 +180,7 @@ export default function ExploreMapPage() {
         {/* Interactive map (progressive enhancement) */}
         <div className="relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg" style={{ height: 'min(58vh, 480px)' }}>
           <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
-            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} walkRouting={walkMode} onWalkRouting={setWalkState} routeMode={routeMode} />
+            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} walkRouting={walkMode} onWalkRouting={setWalkState} routeMode={routeMode} routeLink={link} />
           </Suspense>
 
           {/* Search overlay */}
