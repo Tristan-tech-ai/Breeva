@@ -57,6 +57,26 @@ def load_rows(region: str, bbox: tuple[float, float, float, float]) -> tuple[lis
     return rows, skipped
 
 
+def load_parquet(path: str) -> tuple[list[dict], int]:
+    """Rows from extract_osm_region.py output (no backup row id: the OSM way id is used)."""
+    df = pd.read_parquet(path)
+    rows, skipped = [], 0
+    for rec in df.to_dict("records"):
+        co = shapely.get_coordinates(shapely.from_wkb(rec["wkb"]))
+        if len(co) < 2:
+            skipped += 1
+            continue
+        rows.append({
+            "row_id": int(rec["osm_way_id"]), "osm_way_id": int(rec["osm_way_id"]), "highway": rec["highway"], "coords": co,
+            "lanes": fnum(rec.get("lanes")), "width": fnum(rec.get("width")), "canyon_ratio": fnum(rec.get("canyon_ratio")),
+            "traffic_base_estimate": fnum(rec.get("traffic_base_estimate")),
+            "traffic_calibration_factor": fnum(rec.get("traffic_calibration_factor")),
+            "elevation_avg": None, "ai_pollution_factor": None,
+            "landuse_proxy": None, "surface": rec.get("surface") or None, "micro_class": None, "name": rec.get("name") or None,
+        })
+    return rows, skipped
+
+
 def verify(p: Pack, rows: list[dict]) -> int:
     """Read every road back and compare it with the source row; returns the number of mismatching roads."""
     by_id = {r["row_id"]: r for r in rows}
@@ -81,10 +101,11 @@ def main(argv=None):
     ap.add_argument("--name", required=True)
     ap.add_argument("--bbox", required=True, help="west,south,east,north")
     ap.add_argument("--geometry", default="2026-11")
+    ap.add_argument("--from-parquet", help="roads from extract_osm_region.py instead of the road_segments backup")
     a = ap.parse_args(argv)
     bbox = tuple(float(x) for x in a.bbox.split(","))
     t0 = time.time()
-    rows, skipped = load_rows(a.region, bbox)
+    rows, skipped = load_parquet(a.from_parquet) if a.from_parquet else load_rows(a.region, bbox)
     t1 = time.time()
     os.makedirs(os.path.join(OUT, a.geometry), exist_ok=True)
     path = os.path.join(OUT, a.geometry, a.name + ".bin")

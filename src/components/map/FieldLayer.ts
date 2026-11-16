@@ -32,6 +32,7 @@ function popupHtml(v: CellValue | undefined, name: string | undefined, src: Fiel
     `<div style="font-size:11px;color:#444">ISPU ${index} · ${band.name} · rentang 95%: ${lo.toFixed(0)}–${hi.toFixed(0)} µg/m³</div>` +
     `<div style="font-size:11px;color:#444">dari lalu lintas ruas sekitar: ${v.pm25_delta.toFixed(2)} µg/m³ · NO₂ ${v.no2.toFixed(0)}</div>` +
     (v.ood ? `<div style="font-size:11px;color:#6b7280">di luar wilayah terkalibrasi</div>` : '') +
+    (src.manifest?.indicative ? `<div style="font-size:11px;color:#b45309">Indikatif: belum ada stasiun ukur di wilayah ini</div>` : '') +
     `<div style="font-size:10px;color:#6b7280;margin-top:3px">dihitung ${age}${stale}</div></div>`;
 }
 

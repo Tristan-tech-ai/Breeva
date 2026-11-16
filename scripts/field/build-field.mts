@@ -43,6 +43,8 @@ const name = arg('name');
 const region = arg('region');
 const tz = Number(arg('tz'));
 const outRoot = arg('out', 'D:/breeva-ml-data/field');
+// --indicative: no measuring station inside the area; values are shown as indicative only.
+const indicative = process.argv.includes('--indicative');
 
 const pack = new RoadPack(new Uint8Array(readFileSync(packPath)));
 const now = new Date();
@@ -110,7 +112,7 @@ for (const c of cellIds) {
 const manifest = {
   geometry: pack.meta.geometry, run, computed_at: new Date().toISOString(), valid_hour_local: hourLocal,
   engine: 'v2.1', cells: cellIds, forecast_runs: [], sensors_used: 0,
-  cell_tiles: pack.meta.cells, cell_stats: cellStats,
+  cell_tiles: pack.meta.cells, cell_stats: cellStats, indicative,
   state: { background: [], met: [], diurnal: inputs.diurnal, oi_weights: [] },
   inputs_note: 'Open-Meteo background per z12 cell + CAMS daily mean; no station measurements yet',
 };

@@ -88,6 +88,7 @@ def build(pack_path: str, out_path: str) -> dict:
         size = WORLD / 2 ** z
         buf = size * BUFFER_PX / EXTENT
         tol = 0.0 if z == MAX_ZOOM else size / EXTENT * 0.5  # half a tile unit
+        unit = size / EXTENT
         n_tiles = n_feat = 0
         for tx in xs:
             for ty in ys:
@@ -103,6 +104,11 @@ def build(pack_path: str, out_path: str) -> dict:
                         continue
                     if tol:
                         g = shapely.simplify(g, tol, preserve_topology=False)
+                    elif shapely.length(g) < 1.5 * unit:
+                        # Shorter than a tile unit (about 0.6 m at z14): quantising would collapse it to a point and the
+                        # encoder would drop it. Draw it as a one-unit stub at its start so every road stays tappable.
+                        x0, y0 = shapely.get_coordinates(g)[0]
+                        g = shapely.linestrings([[x0, y0], [x0 + 1.5 * unit, y0]])
                     pr = {"c": props[k]["c"], "i": props[k]["i"], "h": props[k]["h"]}
                     if z >= 13 and props[k]["n"]:
                         pr["n"] = props[k]["n"]

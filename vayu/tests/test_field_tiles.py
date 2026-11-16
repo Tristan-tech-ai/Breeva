@@ -32,3 +32,15 @@ def test_zoom_filter_rules():
     assert keep_at(10, "secondary") and not keep_at(11, "tertiary")
     assert keep_at(12, "tertiary") and not keep_at(12, "residential")
     assert keep_at(13, "residential") and keep_at(14, "service")
+
+
+def test_a_road_shorter_than_a_tile_unit_still_reaches_the_top_zoom():
+    import numpy as np
+    rows = synthetic(20, seed=9)
+    rows[0]["coords"] = np.array([[115.2, -8.65], [115.2000032, -8.6500042]])  # about 0.6 m
+    with tempfile.TemporaryDirectory() as d:
+        pk = os.path.join(d, "p.bin")
+        out = os.path.join(d, "t.pmtiles")
+        write_pack(pk, rows, "test", "bali", (115.0, -9.0, 115.5, -8.5))
+        build(pk, out)
+        assert verify(out, pk)["unique_per_zoom"][14] == len(rows)

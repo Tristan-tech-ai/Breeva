@@ -12,6 +12,8 @@ export interface FieldManifest {
   cell_tiles?: Array<[number, number]>;
   /** Per cell: median of the roads' PM2.5 and NO2 (µg/m³) and road count. */
   cell_stats?: Record<string, { pm25_median: number; no2_median: number; roads: number }>;
+  /** True when no measuring station lies inside the area: values are indicative only. */
+  indicative?: boolean;
 }
 
 export interface FieldRegion { name: string; label: string; geometry: string; bounds: [[number, number], [number, number]]; home: { lat: number; lng: number } }
@@ -19,6 +21,8 @@ export interface FieldRegion { name: string; label: string; geometry: string; bo
 /** Regions with a published field. bounds = [[south, west], [north, east]]. */
 export const FIELD_REGIONS: FieldRegion[] = [
   { name: 'badung_denpasar', label: 'Badung–Denpasar', geometry: '2026-11', bounds: [[-8.82, 115.08], [-8.56, 115.3]], home: { lat: -8.6705, lng: 115.2126 } },
+  // Kota Bogor: the six kecamatan from OSM; no measuring station inside the city, so the manifest marks it indicative.
+  { name: 'kota_bogor', label: 'Kota Bogor', geometry: '2026-11', bounds: [[-6.6813, 106.7348], [-6.5143, 106.8486]], home: { lat: -6.595, lng: 106.797 } },
 ];
 
 export const STALE_HOURS = 3;

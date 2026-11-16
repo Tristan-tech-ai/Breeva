@@ -102,3 +102,31 @@ def test_neighbour_cap_applies():
     lat = np.full(60, -8.65)
     nb = neighbours(lon, lat)
     assert all(len(x) == 40 for x in nb)
+
+
+def test_pack_from_osm_extraction_parquet():
+    import pandas as pd
+    import shapely
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "field"))
+    from build_pack import load_parquet
+    df = pd.DataFrame({
+        "osm_way_id": [11, 12, 13], "highway": ["primary", "residential", "service"], "name": ["Jalan Pajajaran", None, None],
+        "lanes": [4.0, None, None], "surface": ["asphalt", None, None], "maxspeed": [None, None, None],
+        "width": [12.0, 5.0, 4.0], "canyon_ratio": [1.3, 1.25, 1.25], "traffic_base_estimate": [1500.0, 100.0, 50.0],
+        "traffic_calibration_factor": [1.0, 1.0, 1.0],
+        "wkb": [shapely.to_wkb(shapely.linestrings([[106.79, -6.59], [106.80, -6.60]])),
+                shapely.to_wkb(shapely.linestrings([[106.795, -6.595], [106.796, -6.596], [106.797, -6.597]])),
+                shapely.to_wkb(shapely.Point(106.8, -6.6))],
+    })
+    with tempfile.TemporaryDirectory() as d:
+        pq = os.path.join(d, "r.parquet")
+        df.to_parquet(pq, index=False)
+        rows, skipped = load_parquet(pq)
+        assert skipped == 1 and len(rows) == 2
+        path = os.path.join(d, "p.bin")
+        write_pack(path, rows, "test", "bogor", (106.7, -6.7, 106.9, -6.5))
+        p = Pack(path)
+        names = {p.string("name", k) for k in range(p.n)}
+        assert "Jalan Pajajaran" in names
+        k = [k for k in range(p.n) if p.string("name", k) == "Jalan Pajajaran"][0]
+        assert p.highway(k) == "primary" and float(p.cols["traffic_base_estimate"][k]) == 1500.0
