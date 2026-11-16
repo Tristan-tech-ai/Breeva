@@ -1,43 +1,63 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, School, Stethoscope, Search, Info, MapPin } from 'lucide-react';
 import { Seo } from '../components/Seo';
-import { fmt, JALAN, JENIS, rentangJam, saringUrut, type DaftarPrioritas, type Saring } from '../lib/prioritas';
+import { fmt, JALAN, JENIS, PAGE_SIZE, PRIORITAS_REGIONS, pickPrioritasRegion, rentangJam, saringUrut, type DaftarPrioritas, type Saring } from '../lib/prioritas';
 import { CAMS_NOTICE, OPEN_METEO_LINK } from '../lib/attribution';
 import { destLink } from '../lib/route/share';
 
-const DATA_URL = '/data/prioritas/badung_denpasar.json';
-
 export default function PrioritasPage() {
   const navigate = useNavigate();
-  const [data, setData] = useState<DaftarPrioritas | null>(null);
-  const [gagal, setGagal] = useState(false);
+  const location = useLocation();
+  const [region, setRegion] = useState(() => pickPrioritasRegion(location.search));
+  // the loaded list remembers its region, so switching shows "loading" without resetting state in the effect
+  const [loaded, setLoaded] = useState<{ region: string; data: DaftarPrioritas | null; failed: boolean } | null>(null);
   const [saring, setSaring] = useState<Saring>({ kelas: 'semua', cari: '', urutan: 'lalin' });
+  const [shown, setShown] = useState(PAGE_SIZE);
+  const data = loaded?.region === region.name ? loaded.data : null;
+  const gagal = loaded?.region === region.name && loaded.failed;
 
   useEffect(() => {
-    fetch(DATA_URL)
+    let alive = true;
+    fetch(`/data/prioritas/${region.name}.json`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((d: DaftarPrioritas) => setData(d))
-      .catch(() => setGagal(true));
-  }, []);
+      .then((d: DaftarPrioritas) => alive && setLoaded({ region: region.name, data: d, failed: false }))
+      .catch(() => alive && setLoaded({ region: region.name, data: null, failed: true }));
+    return () => { alive = false; };
+  }, [region.name]);
 
-  const list = useMemo(() => (data ? saringUrut(data.fasilitas, saring) : []), [data, saring]);
+  const all = useMemo(() => (data ? saringUrut(data.fasilitas, saring) : []), [data, saring]);
+  const list = all.slice(0, shown);
   const maxLalin = useMemo(() => Math.max(0.01, ...(data?.fasilitas.map((f) => f.pm25_lalin) ?? [0])), [data]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 pb-16">
-      <Seo title="Prioritas sekolah dan fasilitas kesehatan — Badung–Denpasar" description="Sekolah dan fasilitas kesehatan di Badung–Denpasar diurutkan menurut polusi lalu lintas yang diperkirakan mereka hirup pada jam kegiatan." path="/prioritas" />
+      <Seo title={`Prioritas sekolah dan fasilitas kesehatan — ${region.label}`} description={`Sekolah dan fasilitas kesehatan di ${region.label} diurutkan menurut polusi lalu lintas yang diperkirakan mereka hirup pada jam kegiatan.`} path="/prioritas" />
 
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-b border-gray-200 dark:border-gray-800">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
           <button onClick={() => navigate(-1)} aria-label="Kembali" className="p-1.5 -ml-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-base font-semibold">Prioritas fasilitas · Badung–Denpasar</h1>
+          <h1 className="text-base font-semibold">Prioritas fasilitas · {region.label}</h1>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 pt-5 space-y-5">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Wilayah">
+          {PRIORITAS_REGIONS.map((r) => (
+            <button key={r.name} aria-pressed={region.name === r.name} onClick={() => { setRegion(r); setShown(PAGE_SIZE); }}
+              className={`rounded-full px-3 py-1.5 text-xs font-bold ${region.name === r.name ? 'bg-sky-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+        {region.indicative && (
+          <p className="rounded-xl bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+            Indikatif: {region.label} belum punya titik ukur di dalam kota, jadi latar polusinya dari model global dan kalibrasi
+            Jabodetabek. Urutan antarfasilitas (bagian dari lalu lintas sekitar) tetap bisa dibandingkan; angka mutlaknya belum.
+          </p>
+        )}
         <section className="space-y-2">
           <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
             Sekolah, TK, penitipan anak, klinik, dan rumah sakit diurutkan menurut <b>PM2,5 dari lalu lintas jalan di sekitarnya</b> yang
@@ -114,7 +134,12 @@ export default function PrioritasPage() {
                 </li>
               );
             })}
-            {list.length === 0 && <p className="text-sm text-gray-500">Tidak ada fasilitas yang cocok.</p>}
+            {list.length === 0 && data && <p className="text-sm text-gray-500">Tidak ada fasilitas yang cocok.</p>}
+            {all.length > list.length && (
+              <button onClick={() => setShown((n) => n + PAGE_SIZE)} className="w-full rounded-xl border border-gray-200 dark:border-gray-800 py-2 text-sm font-semibold text-teal-700 dark:text-teal-300">
+                Tampilkan {Math.min(PAGE_SIZE, all.length - list.length)} lagi ({list.length} dari {all.length.toLocaleString('id-ID')})
+              </button>
+            )}
           </ol>
         )}
 

@@ -27,6 +27,22 @@ export type Urutan = 'lalin' | 'total' | 'jarak' | 'nama';
 
 export interface Saring { kelas: 'semua' | 'pendidikan' | 'kesehatan'; cari: string; urutan: Urutan }
 
+/** Regions with a priority list (F1-16). Kota Bogor has no measuring point inside the city: indicative. */
+export const PRIORITAS_REGIONS = [
+  { name: 'badung_denpasar', label: 'Badung–Denpasar', indicative: false },
+  { name: 'kota_bogor', label: 'Kota Bogor', indicative: true },
+] as const;
+export type PrioritasRegion = (typeof PRIORITAS_REGIONS)[number];
+
+/** Region from ?wilayah=, else Badung-Denpasar. */
+export function pickPrioritasRegion(search: string): PrioritasRegion {
+  const w = new URLSearchParams(search).get('wilayah');
+  return PRIORITAS_REGIONS.find((r) => r.name === w) ?? PRIORITAS_REGIONS[0];
+}
+
+/** Rows shown at once; the page offers more on request (the Bogor list has about 1,600 facilities). */
+export const PAGE_SIZE = 150;
+
 export function saringUrut(items: Fasilitas[], s: Saring): Fasilitas[] {
   const q = s.cari.trim().toLowerCase();
   const out = items.filter((f) => (s.kelas === 'semua' || f.kelas === s.kelas) && (!q || f.nama.toLowerCase().includes(q)));
