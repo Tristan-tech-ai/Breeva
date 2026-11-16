@@ -25,8 +25,10 @@ export interface WalkRoutingState {
  */
 export function useWalkRouting(
   map: L.Map | null, enabled: boolean, onState?: (s: WalkRoutingState) => void, mode: 'walk' | 'motor' = 'walk',
-  link?: RouteLink | null, dest?: RouteDest | null,
+  link?: RouteLink | null, dest?: RouteDest | null, depart?: string | null,
 ) {
+  const departRef = useRef(depart ?? null);
+  departRef.current = depart ?? null;
   const linkRef = useRef(link);
   const apiRef = useRef<{ setDest: (d: RouteDest | null) => void; rerun: () => void } | null>(null);
   const destRef = useRef(dest ?? null);
@@ -87,8 +89,7 @@ export function useWalkRouting(
       let init = ready.get(region.name);
       if (!init) { init = c.init({ name: region.name, geometry: region.geometry }); ready.set(region.name, init); }
       init
-        .then(() => c.route({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, modeRef.current,
-          new URLSearchParams(window.location.search).get('berangkat')))
+        .then(() => c.route({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, modeRef.current, departRef.current))
         .then(({ routes, ms }) => {
           const cards = routeCards(routes);
           // draw the alternatives first, then the fastest, the cleanest last (on top)
@@ -153,6 +154,7 @@ export function useWalkRouting(
   const destKey = dest ? `${dest.lat},${dest.lng},${dest.name}` : '';
   const seenDest = useRef(destKey);
   const seenMode = useRef(mode);
+  const seenDepart = useRef(depart ?? null);
   useEffect(() => {
     if (seenDest.current === destKey) return;
     seenDest.current = destKey;
@@ -163,4 +165,9 @@ export function useWalkRouting(
     seenMode.current = mode;
     apiRef.current?.rerun();
   }, [mode]);
+  useEffect(() => {
+    if (seenDepart.current === (depart ?? null)) return;
+    seenDepart.current = depart ?? null;
+    apiRef.current?.rerun();
+  }, [depart]);
 }

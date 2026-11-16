@@ -17,6 +17,7 @@ import type { PollutantType, RoadDisplayMode } from '../types';
 import { ISPU_CATEGORIES } from '../lib/ispu';
 import { FIELD_REGIONS, pickRegion } from '../lib/field/source';
 import { parseRouteLink } from '../lib/route/share';
+import { parseDepart } from '../lib/route/depart';
 
 const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
 
@@ -69,6 +70,8 @@ export default function ExploreMapPage() {
   const [routeMode, setRouteMode] = useState<'walk' | 'motor'>(link?.mode ?? 'walk');
   // "Ke sekolah": a school chosen from the list is the destination, the next tap the start (F1-12)
   const [schoolDest, setSchoolDest] = useState<RouteDest | null>(null);
+  // departure for the school zone: ?berangkat=HH:MM, or the choice on the route cards (F3-08)
+  const [depart, setDepart] = useState<string | null>(() => parseDepart(new URLSearchParams(location.search).get('berangkat')));
   const activeP = POLLUTANTS.find((p) => p.id === pollutant) ?? POLLUTANTS[0];
   // The traffic view of the index shows NO2, and harga hirup does not depend on the pollutant: modes for every pollutant.
   const showRoadModes = true;
@@ -183,7 +186,7 @@ export default function ExploreMapPage() {
         {/* Interactive map (progressive enhancement) */}
         <div className="relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg" style={{ height: 'min(58vh, 480px)' }}>
           <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
-            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} walkRouting={walkMode} onWalkRouting={setWalkState} routeMode={routeMode} routeLink={link} routeDest={schoolDest} wheelNeedsModifier />
+            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} walkRouting={walkMode} onWalkRouting={setWalkState} routeMode={routeMode} routeLink={link} routeDest={schoolDest} routeDepart={depart} wheelNeedsModifier />
           </Suspense>
 
           {/* Search overlay */}
@@ -213,7 +216,7 @@ export default function ExploreMapPage() {
         {walkMode && (
           <div className="space-y-2">
             <SchoolPicker region={pickRegion(region)} value={schoolDest} onChange={setSchoolDest} />
-            <WalkRouteCards state={walkState} mode={routeMode} onMode={setRouteMode} />
+            <WalkRouteCards state={walkState} mode={routeMode} onMode={setRouteMode} depart={depart} onDepart={setDepart} />
           </div>
         )}
 

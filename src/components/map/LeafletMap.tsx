@@ -153,6 +153,8 @@ interface LeafletMapProps {
   routeLink?: RouteLink | null;
   /** Fixed destination of the on-device routes (school picker); taps then set the start. */
   routeDest?: RouteDest | null;
+  /** Departure as local "HH:MM" (null = now): decides whether the school zone applies to motor routes. */
+  routeDepart?: string | null;
   /** Map inside a scrolling page: the wheel scrolls the page, Ctrl/Cmd + wheel zooms, +/- buttons shown. */
   wheelNeedsModifier?: boolean;
 }
@@ -178,7 +180,8 @@ function MapController({
   routeMode,
   routeLink,
   routeDest,
-}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId' | 'walkRouting' | 'onWalkRouting' | 'routeMode' | 'routeLink' | 'routeDest'>) {
+  routeDepart,
+}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId' | 'walkRouting' | 'onWalkRouting' | 'routeMode' | 'routeLink' | 'routeDest' | 'routeDepart'>) {
   const map = useMap();
   const {
     center,
@@ -517,7 +520,7 @@ function MapController({
     roadDisplayMode || 'total',
   );
   const roadMeta = useMvt ? (FIELD_STATIC ? fieldMeta : mvtMeta) : vectorMeta;
-  useWalkRouting(map, !!walkRouting, onWalkRouting, routeMode ?? 'walk', routeLink, routeDest);
+  useWalkRouting(map, !!walkRouting, onWalkRouting, routeMode ?? 'walk', routeLink, routeDest, routeDepart);
 
   // Forward road layer meta to parent
   useEffect(() => {
@@ -610,6 +613,7 @@ export default function LeafletMap({
   routeMode = 'walk',
   routeLink = null,
   routeDest = null,
+  routeDepart = null,
   wheelNeedsModifier = false,
 }: LeafletMapProps) {
   const { center } = useMapStore();
@@ -663,6 +667,7 @@ export default function LeafletMap({
           routeMode={routeMode}
           routeLink={routeLink}
           routeDest={routeDest}
+          routeDepart={routeDepart}
         />
       </MapContainer>
       <NavControls />

@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import type { WalkRoutingState } from './WalkRouteLayer';
 import { routeLink } from '../../lib/route/share';
+import { DEPART_CHOICES } from '../../lib/route/depart';
 
 /** Cards of the walking routes computed on the device: distance, time, mean NO2 and PM2.5 along each route. */
-export default function WalkRouteCards({ state, mode = 'walk', onMode }: { state: WalkRoutingState | null; mode?: 'walk' | 'motor'; onMode?: (m: 'walk' | 'motor') => void }) {
+export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = null, onDepart }: {
+  state: WalkRoutingState | null; mode?: 'walk' | 'motor'; onMode?: (m: 'walk' | 'motor') => void;
+  depart?: string | null; onDepart?: (d: string | null) => void;
+}) {
   const [copied, setCopied] = useState(false);
   if (!state) return null;
   const ends = state.ends;
   const copy = () => {
     if (!ends) return;
-    const url = routeLink(`${window.location.origin}${window.location.pathname}`, { ...ends, mode },
-      new URLSearchParams(window.location.search).get('berangkat'));
+    const url = routeLink(`${window.location.origin}${window.location.pathname}`, { ...ends, mode }, depart);
     navigator.clipboard?.writeText(url).then(() => setCopied(true), () => setCopied(false));
   };
   return (
@@ -28,6 +31,16 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode }: { state
           </div>
         )}
       </div>
+      {onDepart && (
+        <label className="mt-2 flex items-center gap-2 text-[11px] text-gray-600 dark:text-gray-300">
+          Berangkat
+          <select value={depart ?? ''} onChange={(e) => onDepart(e.target.value || null)} aria-label="Jam berangkat"
+            className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-[11px]">
+            {DEPART_CHOICES.map((c) => <option key={c.label} value={c.value ?? ''}>{c.label}</option>)}
+            {depart && !DEPART_CHOICES.some((c) => c.value === depart) && <option value={depart}>{depart.replace(':', '.')} (dari tautan)</option>}
+          </select>
+        </label>
+      )}
       <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
         {state.status}
         {ends && state.cards.length > 0 && (
