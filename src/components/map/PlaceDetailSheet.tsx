@@ -54,6 +54,7 @@ export default function PlaceDetailSheet({
 
   useEffect(() => {
     if (!poi) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resets and loading flags follow the open place and tab; one render each, no loop
       setDetails(null);
       setPhotos([]);
       setReviews([]);
@@ -106,6 +107,7 @@ export default function PlaceDetailSheet({
     if (activeTab !== 'photos' || photos.length > 0 || !poi) return;
     const gid = resolvedIdRef.current;
     if (!gid) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resets and loading flags follow the open place and tab; one render each, no loop
     setLoadingPhotos(true);
     getGooglePlacePhotos(gid).then(setPhotos).finally(() => setLoadingPhotos(false));
   }, [activeTab, poi?.id]);
@@ -115,6 +117,7 @@ export default function PlaceDetailSheet({
     if (activeTab !== 'reviews' || reviews.length > 0 || !poi) return;
     const gid = resolvedIdRef.current;
     if (!gid) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resets and loading flags follow the open place and tab; one render each, no loop
     setLoadingReviews(true);
     getGooglePlaceReviews(gid).then((data) => setReviews(data.reviews || [])).finally(() => setLoadingReviews(false));
   }, [activeTab, poi?.id]);

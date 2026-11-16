@@ -279,7 +279,7 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
           _sponsorTier: cycle.tier,
           _priorityBoost: cycle.boost,
           _vouchers: vouchers,
-        } as any;
+        } as POI;
       });
     };
 
@@ -381,7 +381,7 @@ export const usePoiStore = create<POIStoreState>((set, get) => ({
     }
   },
 
-  setFilter(filter, _filterCats) {
+  setFilter(filter) {
     const prev = get().activeFilter;
     if (filter === prev) return;
 

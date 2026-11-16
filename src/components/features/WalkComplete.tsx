@@ -35,7 +35,7 @@ export default function WalkComplete({ session, onClose, exposureResult }: WalkC
   const co2Saved = co2KgFromGrams(co2SavedGramsForKm(km)).toFixed(2);
   const calories = Math.round(caloriesFromKm(km));
 
-  const handleRatingSubmit = async (rating: number, _photo?: File) => {
+  const handleRatingSubmit = async (rating: number) => {
     if (ratingSubmitting || rated) return;
     setRatingSubmitting(true);
     const user = useAuthStore.getState().user;

@@ -48,7 +48,8 @@ const RISK_CONFIG = {
 export default function LiveExposureTracker({ currentAQI, isPaused }: LiveExposureTrackerProps) {
   const [expanded, setExpanded] = useState(false);
   const cumulativeDoseRef = useRef(0);
-  const lastTickRef = useRef(Date.now());
+  // set when a tick starts (not during render); the first tick of an interval counts from its start
+  const lastTickRef = useRef<number | null>(null);
   const [displayDose, setDisplayDose] = useState(0);
   const [displayCig, setDisplayCig] = useState(0);
 
@@ -56,9 +57,10 @@ export default function LiveExposureTracker({ currentAQI, isPaused }: LiveExposu
   useEffect(() => {
     if (isPaused || currentAQI === null) return;
 
+    lastTickRef.current ??= Date.now();
     const interval = setInterval(() => {
       const now = Date.now();
-      const dt = (now - lastTickRef.current) / 1000; // seconds elapsed
+      const dt = (now - (lastTickRef.current ?? now)) / 1000; // seconds elapsed
       lastTickRef.current = now;
 
       const pm25 = aqiToPM25(currentAQI);
