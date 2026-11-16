@@ -15,7 +15,7 @@ import { RoadPack } from '../../scripts/field/pack';
 import { buildFieldRun, reportKey, runFor, runObjects, uploadBody } from '../../scripts/field/builder';
 import { BUILD_REGIONS, packKey } from '../../scripts/field/regions';
 import type { RegionMeasureParams } from '../../scripts/field/measure';
-import { mergeRecent, type RecentEntry, type RecentFile } from '../../src/lib/field/validationRecent';
+import { dailyEpa, localDate, mergeDaily, mergeRecent, type HourRows, type RecentEntry, type RecentFile } from '../../src/lib/field/validationRecent';
 
 const s3 = new S3Client({});
 const ssm = new SSMClient({});
@@ -71,7 +71,18 @@ export const handler = async () => {
       if (rep.validation) {
         const key = `v/${r.name}/validation_recent.json`;
         const { n, rmse, nrmse, bias, r2, pi95_coverage, sensor_hour_utc } = rep.validation;
-        const next = mergeRecent(await readJson<RecentFile>(bucket, key), r.name, { run, sensor_hour_utc, n, rmse, nrmse, bias, r2, pi95_coverage }, new Date());
+        let next = mergeRecent(await readJson<RecentFile>(bucket, key), r.name, { run, sensor_hour_utc, n, rmse, nrmse, bias, r2, pi95_coverage }, new Date());
+        // F5-10: once a local day is over (the day before this run's sensor hour), its daily EPA test from the audit
+        // reports of the runs that can hold its hours (from local 00 to 03 of the next day, OpenAQ lags 1-2 h)
+        const day = localDate(Date.parse(sensor_hour_utc ?? new Date().toISOString()) - 24 * 3_600_000, r.tz);
+        if (sensor_hour_utc && !(next.daily ?? []).some((d) => d.date === day)) {
+          const dayStartUtc = Date.parse(`${day}T00:00:00Z`) - r.tz * 3_600_000;
+          const ids = Array.from({ length: 28 }, (_, h) => new Date(dayStartUtc + h * 3_600_000).toISOString().slice(0, 13).replace(/[-T]/g, ''));
+          const reps = await Promise.all(ids.map((id) => readJson<{ validation_rows?: HourRows | null }>(bucket, reportKey(r.name, id))));
+          const hours = reps.map((x) => x?.validation_rows).filter((x): x is HourRows => !!x);
+          const d = dailyEpa(hours, day, r.tz);
+          if (d) next = mergeDaily(next, d);
+        }
         await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: JSON.stringify(next), CacheControl: 'public, max-age=60, stale-while-revalidate=600', ContentType: 'application/json' }));
       }
       const val = rep.validation && { n: rep.validation.n, rmse: rep.validation.rmse, nrmse: rep.validation.nrmse };

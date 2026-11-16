@@ -39,6 +39,14 @@ export function looHour(sensors: SensorReading[], v: Variogram, piScale = 1): Ar
   return out;
 }
 
+/** The hidden-sensor guesses of the hour, for the daily test (task F5-10); private (audit report only). */
+export function hourlyRows(m: MeasuredInputs | undefined): { sensor_hour_utc: string; rows: Array<{ loc_id: number; obs: number; pred: number }> } | null {
+  if (!m || m.method !== 'kriging' || !m.variogram_log || !m.sensor_hour_utc) return null;
+  const rows = looHour(m.sensors, m.variogram_log, m.pi_scale ?? 1);
+  if (!rows.length) return null;
+  return { sensor_hour_utc: m.sensor_hour_utc, rows: rows.map((r, k) => ({ loc_id: m.sensors[k].loc_id, obs: r.obs, pred: Number(r.pred.toFixed(2)) })) };
+}
+
 export function hourlyValidation(m: MeasuredInputs | undefined): HourlyValidation | null {
   if (!m || m.method !== 'kriging' || !m.variogram_log) return null;
   const rows = looHour(m.sensors, m.variogram_log, m.pi_scale ?? 1);

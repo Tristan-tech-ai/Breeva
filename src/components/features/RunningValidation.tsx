@@ -34,6 +34,15 @@ export default function RunningValidation({ region = 'badung_denpasar', label = 
           <p className="text-[11px] text-amber-700 dark:text-amber-400">
             Angka per jam, belum dibandingkan dengan target EPA: target NRMSE ≤ 30% berlaku untuk rata-rata 24 jam.
           </p>
+          {f && f !== 'failed' && (f.daily?.length ?? 0) > 0 && (() => {
+            const d = f.daily![f.daily!.length - 1];
+            return (
+              <p>
+                Uji harian {d.date} (rata-rata 24 jam, sesuai target EPA): NRMSE {pct(d.nrmse)}, R² {num(d.r2)}, kemiringan {num(d.slope)},
+                titik potong {num(d.intercept, 1)} µg/m³, lolos <b>{d.passes} dari 4</b> target, dari {d.n} sensor dengan sedikitnya {d.hours_min} jam.
+              </p>
+            );
+          })()}
           <p className="text-[11px] text-gray-500">Sumber: v/{region}/validation_recent.json, run terakhir {s.last_run}.</p>
         </>
       )}
