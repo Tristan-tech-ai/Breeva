@@ -90,9 +90,12 @@ describe('router field at the departure hour', async () => {
   });
 
   it('suggests another hour only when it is at least 10% cleaner', () => {
-    expect(bestSoon(10, [{ local_hour: 23, ahead: 1, exhMean: 9.5 }])).toBeNull();
-    expect(bestSoon(10, [{ local_hour: 23, ahead: 1, exhMean: 9.5 }, { local_hour: 0, ahead: 2, exhMean: 6 }])).toEqual({ hour: { local_hour: 0, ahead: 2, exhMean: 6 }, pct: 40 });
+    expect(bestSoon(10, [{ local_hour: 9, ahead: 1, exhMean: 9.5 }])).toBeNull();
+    expect(bestSoon(10, [{ local_hour: 9, ahead: 1, exhMean: 9.5 }, { local_hour: 10, ahead: 2, exhMean: 6 }])).toEqual({ hour: { local_hour: 10, ahead: 2, exhMean: 6 }, pct: 40 });
     expect(bestSoon(0.2, [{ local_hour: 0, ahead: 2, exhMean: 0.01 }])).toBeNull();
+    // not in the night: 23.00 now, 02.00 would be cleaner but is no suggestion for a walk
+    expect(bestSoon(1.8, [{ local_hour: 0, ahead: 1, exhMean: 1 }, { local_hour: 2, ahead: 3, exhMean: 0.7 }])).toBeNull();
+    expect(bestSoon(10, [{ local_hour: 6, ahead: 1, exhMean: 9 }, { local_hour: 8, ahead: 3, exhMean: 5 }])?.hour.local_hour).toBe(8);
   });
 
   it('cards say which hour a later departure was computed for, and the better hour when leaving now', () => {
@@ -100,8 +103,8 @@ describe('router field at the departure hour', async () => {
     const later = routeCards([{ ...base, exhMean: 12, forecastHour: 7 }]);
     expect(later[0].forecastNote).toBe('Perkiraan untuk sekitar jam 07.00: angin prakiraan dan pola lalu lintas jam itu');
     expect(later[0].soonHint).toBeNull();
-    const now = routeCards([{ ...base, exhMean: 12, forecastHour: null, soon: [{ local_hour: 22, ahead: 1, exhMean: 7.2 }] }]);
+    const now = routeCards([{ ...base, exhMean: 12, forecastHour: null, soon: [{ local_hour: 20, ahead: 1, exhMean: 7.2 }] }]);
     expect(now[0].forecastNote).toBeNull();
-    expect(now[0].soonHint).toBe('Berangkat sekitar jam 22.00 lewat rute ini: asap kendaraan 40% lebih sedikit daripada berangkat sekarang');
+    expect(now[0].soonHint).toBe('Berangkat sekitar jam 20.00 lewat rute ini: asap kendaraan 40% lebih sedikit daripada berangkat sekarang');
   });
 });

@@ -40,13 +40,18 @@ export function meanAlong(g: Pick<WalkGraph, 'lenDm'>, edges: readonly number[],
 
 export interface SoonHour { local_hour: number; ahead: number; exhMean: number }
 
+/** Hours a trip is suggested for: 05.00 to 21.00 local (a quieter road at 02.00 is no advice for a walk to school). */
+export const SUGGEST_HOURS: readonly [number, number] = [5, 21];
+
 /**
- * The best of the next hours for the same route, when it breathes at least 10 % less exhaust than leaving now;
- * null otherwise (and when the route has practically no exhaust).
+ * The best of the next hours (within SUGGEST_HOURS) for the same route, when it breathes at least 10 % less exhaust
+ * than leaving now; null otherwise (and when the route has practically no exhaust).
  */
+
 export function bestSoon(nowMean: number, soon: readonly SoonHour[], minGain = 0.1, floor = 0.5): { hour: SoonHour; pct: number } | null {
-  if (!(nowMean >= floor) || !soon.length) return null;
-  const best = soon.reduce((a, b) => (b.exhMean < a.exhMean ? b : a));
+  const ok = soon.filter((h) => h.local_hour >= SUGGEST_HOURS[0] && h.local_hour <= SUGGEST_HOURS[1]);
+  if (!(nowMean >= floor) || !ok.length) return null;
+  const best = ok.reduce((a, b) => (b.exhMean < a.exhMean ? b : a));
   const pct = Math.round((1 - best.exhMean / nowMean) * 100);
   return best.exhMean <= nowMean * (1 - minGain) ? { hour: best, pct } : null;
 }
