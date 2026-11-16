@@ -6,6 +6,7 @@ import {
 import type { AirQualityData, PollutantType, RoadDisplayMode } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { POLLUTANT_OPTIONS, getColorStops } from './RoadPollutionLayer';
+import TrafficLegend from './TrafficLegend';
 
 interface MapLayersSheetProps {
   isOpen: boolean;
@@ -50,6 +51,11 @@ const mapTypes: { id: 'voyager' | 'osm' | 'satellite'; label: string; icon: type
     preview: 'linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 30%, #dce775 60%, #e8d5b7 100%)',
   },
 ];
+
+/** Wall-clock time `hours` from now, for the forecast slider label. */
+function clockIn(hours: number): string {
+  return new Date(Date.now() + hours * 3600000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 
 export default function MapLayersSheet({
   isOpen,
@@ -331,7 +337,7 @@ export default function MapLayersSheet({
                       ))}
                     </div>
 
-                    {/* Display mode toggle — Total (absolute) vs Delta (road contribution) */}
+                    {/* Display mode toggle: absolute level vs the traffic part on a fixed scale */}
                     {(pollutant === 'pm25' || pollutant === 'no2' || pollutant === 'pm10') && (
                       <div className="flex items-center gap-2 px-4 pt-3 pb-2">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mr-1">
@@ -351,34 +357,26 @@ export default function MapLayersSheet({
                           Total
                         </button>
                         <button
-                          onClick={() => onRoadDisplayModeChange?.('delta')}
+                          onClick={() => onRoadDisplayModeChange?.('traffic')}
                           className={`
                             px-2.5 py-1 text-[10px] font-bold rounded-md transition-all
-                            ${roadDisplayMode === 'delta'
-                              ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 ring-1 ring-amber-300 dark:ring-amber-700'
+                            ${roadDisplayMode === 'traffic'
+                              ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 ring-1 ring-violet-300 dark:ring-violet-700'
                               : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                             }
                           `}
-                          title="Road-only contribution above baseline (CALINE3 dispersion)"
+                          title="Bagian dari lalu lintas ruas sekitar, skala tetap µg/m³; bukan tingkat bahaya"
                         >
-                          Δ Road
-                        </button>
-                        <button
-                          onClick={() => onRoadDisplayModeChange?.('contrast')}
-                          className={`
-                            px-2.5 py-1 text-[10px] font-bold rounded-md transition-all
-                            ${roadDisplayMode === 'contrast'
-                              ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-300 dark:ring-rose-700'
-                              : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                            }
-                          `}
-                          title="Kontras relatif: kontribusi lalu lintas NYATA per-jalan, diskalakan ke area tampilan (hijau = terendah, merah = tertinggi)"
-                        >
-                          Kontras
+                          Lalu lintas
                         </button>
                         <span className="ml-auto text-[9px] text-gray-400 dark:text-gray-500">
-                          {roadDisplayMode === 'delta' ? 'Δ vs baseline' : roadDisplayMode === 'contrast' ? 'Kontras relatif' : 'Absolute'}
+                          {roadDisplayMode === 'traffic' ? 'Perbandingan antar-jalan' : 'Tingkat absolut'}
                         </span>
+                      </div>
+                    )}
+                    {roadDisplayMode === 'traffic' && (
+                      <div className="px-4 pb-1">
+                        <TrafficLegend pollutant={pollutant} />
                       </div>
                     )}
 
@@ -486,7 +484,7 @@ export default function MapLayersSheet({
                           <span className="text-xs font-bold text-sky-600 dark:text-sky-400">
                             {forecastHour === 0
                               ? 'Now'
-                              : `+${forecastHour}h — ${new Date(Date.now() + forecastHour * 3600000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                              : `+${forecastHour}h — ${clockIn(forecastHour)}`
                             }
                           </span>
                         </div>

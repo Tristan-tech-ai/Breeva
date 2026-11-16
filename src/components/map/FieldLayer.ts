@@ -30,7 +30,7 @@ function popupHtml(v: CellValue | undefined, name: string | undefined, src: Fiel
     `<span style="width:9px;height:9px;border-radius:50%;background:${band.color};display:inline-block;box-shadow:0 0 0 1px rgba(0,0,0,.15)"></span>` +
     `<span style="font-weight:700;font-size:13px;color:#111">PM2.5 ${v.pm25.toFixed(1)} µg/m³</span></div>` +
     `<div style="font-size:11px;color:#444">ISPU ${index} · ${band.name} · rentang 95%: ${lo.toFixed(0)}–${hi.toFixed(0)} µg/m³</div>` +
-    `<div style="font-size:11px;color:#444">dari lalu lintas ruas sekitar: ${v.pm25_delta.toFixed(2)} µg/m³ · NO₂ ${v.no2.toFixed(0)}</div>` +
+    `<div style="font-size:11px;color:#444">dari lalu lintas ruas sekitar: PM2.5 +${v.pm25_delta.toFixed(2)} · NO₂ +${v.no2_delta.toFixed(1)} µg/m³ (NO₂ total ${v.no2.toFixed(0)})</div>` +
     (v.ood ? `<div style="font-size:11px;color:#6b7280">di luar wilayah terkalibrasi</div>` : '') +
     (src.manifest?.indicative ? `<div style="font-size:11px;color:#b45309">Indikatif: belum ada stasiun ukur di wilayah ini</div>` : '') +
     `<div style="font-size:10px;color:#6b7280;margin-top:3px">dihitung ${age}${stale}</div></div>`;
@@ -46,7 +46,6 @@ export function useFieldLayer(
   const layersRef = useRef<any[]>([]);
   const modeRef = useRef({ pollutant, displayMode });
   modeRef.current = { pollutant, displayMode };
-  const contrastRef = useRef(0);
 
   useEffect(() => {
     if (!map || !enabled) return;
@@ -98,7 +97,7 @@ export function useFieldLayer(
                 if (!v) return { color: '#cbd5e1', weight: weightFor(highway, zoom), opacity: 0.35 };
                 const { pollutant: p, displayMode: m } = modeRef.current;
                 return {
-                  color: fieldColor(v, p, m, contrastRef.current), weight: weightFor(highway, zoom),
+                  color: fieldColor(v, p, m), weight: weightFor(highway, zoom),
                   opacity: v.ood ? 0.5 : src.isStale() ? 0.55 : 0.9, lineCap: 'round', lineJoin: 'round',
                 };
               },
@@ -129,7 +128,6 @@ export function useFieldLayer(
   }, [map, enabled]);
 
   useEffect(() => {
-    contrastRef.current = 0;
     for (const l of layersRef.current) l.redraw?.();
   }, [pollutant, displayMode]);
 

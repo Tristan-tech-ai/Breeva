@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Wind, Droplets, CloudSun, Activity, Info, ShieldCheck, Clock } from 'lucide-react';
 import type { AirQualityData } from '../../types';
-import { ispuRounded, pm25Category } from '../../lib/ispu';
+import { ispuRounded, pm25Category, sensitiveAdvice } from '../../lib/ispu';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { FIELD_LAYER_SOURCE } from '../../lib/field/areaReading';
 import { WAQI_NAME } from '../../lib/attribution';
 
@@ -22,6 +23,8 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
   const cat = pm25Category(data.pm25);
   const color = cat.color;
   const percentage = Math.min(index, 300) / 300;
+  const sensitive = useSettingsStore((s) => s.health_sensitive);
+  const personal = sensitive ? sensitiveAdvice(data.pm25) : null;
 
   const cycle = () => {
     setLevel((prev) => {
@@ -90,6 +93,9 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
             </span>
           </div>
           <p className="mt-0.5 text-[13px] leading-snug text-gray-600 dark:text-gray-400">{cat.advice}</p>
+          {personal && (
+            <p className="mt-1 text-[12px] font-medium leading-snug text-amber-700 dark:text-amber-400">{personal}</p>
+          )}
         </div>
 
         <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }} className="flex-shrink-0 text-gray-400 dark:text-gray-500">

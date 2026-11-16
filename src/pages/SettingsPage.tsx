@@ -325,6 +325,9 @@ export default function SettingsPage() {
           <Row icon={Contrast} label={t('settings.high_contrast')} desc={t('settings.high_contrast_desc')}
             onClick={() => setSetting('high_contrast', !s.high_contrast)}
             right={<Toggle on={s.high_contrast} onClick={() => setSetting('high_contrast', !s.high_contrast)} />} />
+          <Row icon={ShieldAlert} label={t('settings.health_sensitive')} desc={t('settings.health_sensitive_desc')}
+            onClick={() => setSetting('health_sensitive', !s.health_sensitive)}
+            right={<Toggle on={s.health_sensitive} onClick={() => setSetting('health_sensitive', !s.health_sensitive)} />} />
         </Section>
 
         {/* Language & Units */}

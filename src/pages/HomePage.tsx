@@ -139,8 +139,8 @@ export default function HomePage() {
   const [highlightGreen, setHighlightGreen] = useState(false);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [forecastHour, setForecastHour] = useState(0);
-  // 'total' = absolute pollutant level vs WHO/EPA bands (default); 'delta' = pure
-  //   per-road contribution above baseline (CALINE4 dispersion) — surfaces per-segment variance.
+  // 'total' = absolute pollutant level vs WHO/EPA bands (default); 'traffic' = the per-road traffic part
+  //   (CALINE4 dispersion) on a fixed scale with a dead band.
   const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('total');
   const [roadLayerMeta, setRoadLayerMeta] = useState<RoadLayerMeta | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);

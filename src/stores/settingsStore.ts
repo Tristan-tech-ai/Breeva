@@ -20,6 +20,8 @@ export interface AppSettings {
   profile_visible: boolean;
   distance_unit: DistanceUnit;
   language: Locale;
+  /** Sensitive profile (asthma, heart, pregnancy, older age): warnings start at the WHO guideline. Device only, not synced. */
+  health_sensitive: boolean;
 }
 
 const DEFAULTS: AppSettings = {
@@ -31,6 +33,7 @@ const DEFAULTS: AppSettings = {
   profile_visible: true,
   distance_unit: 'km',
   language: 'id',
+  health_sensitive: false,
 };
 
 const SETTING_KEYS = Object.keys(DEFAULTS) as (keyof AppSettings)[];

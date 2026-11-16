@@ -47,8 +47,8 @@ describe('ISPU (Permen LHK P.14/2020)', () => {
 describe('ISPU in the app', () => {
   it('Indonesian is the default language unless English was chosen', async () => {
     const { readFileSync } = await import('node:fs');
-    const s = readFileSync('src/stores/settingsStore.ts', 'utf8');
-    expect(s).toMatch(/language: 'id',\n\};/);
+    const s = readFileSync('src/stores/settingsStore.ts', 'utf8').replace(/\r\n/g, '\n'); // checkout may be CRLF
+    expect(s).toMatch(/language: 'id',\n {2}health_sensitive: false,\n\};/);
     expect(s).toMatch(/raw === 'en' \? 'en' : 'id'/);
   });
 

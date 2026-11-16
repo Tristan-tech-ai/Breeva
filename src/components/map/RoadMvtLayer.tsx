@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import type { PollutantType, RoadDisplayMode } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
-import { aqiBand, CONTRAST_FALLBACK, DELTA_STOPS, lerpColor, TOTAL_STOPS, weightFor } from '../../lib/roadColors';
+import { aqiBand, lerpColor, TOTAL_STOPS, trafficColor, trafficPollutant, weightFor } from '../../lib/roadColors';
 import { pm25Category } from '../../lib/ispu';
 
 // Road-color layer: PostGIS-generated Mapbox Vector Tiles (/api/tiles/road-mvt)
@@ -14,14 +14,13 @@ import { pm25Category } from '../../lib/ispu';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function colorFor(props: any, pollutant: PollutantType, mode: RoadDisplayMode): string {
-  if (pollutant === 'aqi' && mode === 'total') return pm25Category(Number(props?.pm25) || 0).color;
-  let key: string = pollutant;
-  let stops = TOTAL_STOPS[pollutant] || TOTAL_STOPS.aqi;
-  if (mode === 'delta' && DELTA_STOPS[pollutant]) {
-    key = `${pollutant}_delta`;
-    stops = DELTA_STOPS[pollutant];
+  if (mode === 'traffic') {
+    const p = trafficPollutant(pollutant);
+    return trafficColor(p, Number(props?.[`${p}_delta`]) || 0);
   }
-  return lerpColor(stops, Number(props?.[key]) || 0);
+  if (pollutant === 'aqi') return pm25Category(Number(props?.pm25) || 0).color;
+  const stops = TOTAL_STOPS[pollutant] || TOTAL_STOPS.aqi;
+  return lerpColor(stops, Number(props?.[pollutant]) || 0);
 }
 
 // Opacity by confidence (matches prior OPACITY_EXPR: 0.4→0.5 .. 0.7→0.92)
@@ -75,13 +74,6 @@ export function useRoadMvtLayer(
   // Keep the current mode readable by the (long-lived) style closure without recreating the layer
   const modeRef = useRef<{ pollutant: PollutantType; displayMode: RoadDisplayMode }>({ pollutant, displayMode });
   modeRef.current = { pollutant, displayMode };
-  // Contrast = viewport-RELATIVE: normalize each road's real dispersion delta to the
-  // viewport p90, mapped green→red (so genuine per-road differences pop). p90 is gathered
-  // from the deltas seen while styling, then applied on a redraw — 2-pass, self-converging.
-  const contrastMaxRef = useRef(0);
-  const deltaBufRef = useRef<number[]>([]);
-  const settleRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
   // Create / destroy the layer (mode changes are a redraw, not a recreate)
   useEffect(() => {
     if (!map || !enabled) {
@@ -90,23 +82,6 @@ export function useRoadMvtLayer(
       return;
     }
     let cancelled = false;
-    // Recompute the contrast p90 from the deltas gathered during the last style pass,
-    // then redraw to apply it (guarded so it converges instead of looping).
-    const scheduleSettle = () => {
-      if (settleRef.current) clearTimeout(settleRef.current);
-      settleRef.current = setTimeout(() => {
-        const arr = deltaBufRef.current;
-        deltaBufRef.current = [];
-        if (arr.length < 3) return;
-        arr.sort((a, b) => a - b);
-        const p90 = arr[Math.floor(arr.length * 0.9)] || 0.1;
-        const prev = contrastMaxRef.current;
-        if (prev === 0 || Math.abs(p90 - prev) / (prev || 1) > 0.08) {
-          contrastMaxRef.current = p90;
-          layerRef.current?.redraw?.();
-        }
-      }, 220);
-    };
     ensureVectorGrid()
       .then(() => {
         if (cancelled || !map) return;
@@ -127,14 +102,8 @@ export function useRoadMvtLayer(
               let color: string;
               if (ood) {
                 color = '#9ca3af'; // outside calibration support → neutral grey
-              } else if (m === 'contrast' && (p === 'pm25' || p === 'no2' || p === 'pm10')) {
-                const d = Number(props?.[`${p}_delta`]) || 0;
-                if (d > 0) { deltaBufRef.current.push(d); scheduleSettle(); }
-                const t = Math.max(0, Math.min(1, d / (contrastMaxRef.current || CONTRAST_FALLBACK[p] || 1)));
-                color = lerpColor(TOTAL_STOPS.aqi, t * 300); // relative green→red
               } else {
-                // total / delta (contrast on aqi/o3 has no delta → fall back to total)
-                color = colorFor(props, p, m === 'contrast' ? 'total' : m);
+                color = colorFor(props, p, m);
               }
               return {
                 color,
@@ -167,18 +136,14 @@ export function useRoadMvtLayer(
       .catch((err) => console.warn('[RoadMvtLayer]', err));
     return () => {
       cancelled = true;
-      if (settleRef.current) clearTimeout(settleRef.current);
       layerRef.current?.remove?.();
       layerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, enabled]);
 
-  // Switch color mode — reset the contrast scale (so it recomputes for the new pollutant/mode)
-  // and redraw, which re-runs the style closure (tiles are CDN/browser-cached, so cheap).
+  // Switch color mode: redraw, which re-runs the style closure (tiles are CDN/browser-cached, so cheap).
   useEffect(() => {
-    contrastMaxRef.current = 0;
-    deltaBufRef.current = [];
     const layer = layerRef.current;
     if (layer && typeof layer.redraw === 'function') layer.redraw();
   }, [pollutant, displayMode]);

@@ -8,6 +8,7 @@ import { useIsDark } from '../stores/settingsStore';
 import AQICard from '../components/features/AQICard';
 import SearchBar from '../components/map/SearchBar';
 import { CITIES } from '../lib/cities';
+import TrafficLegend from '../components/map/TrafficLegend';
 import type { PollutantType, RoadDisplayMode } from '../types';
 import { ISPU_CATEGORIES } from '../lib/ispu';
 import { FIELD_REGIONS } from '../lib/field/source';
@@ -31,7 +32,7 @@ const POLLUTANTS: { id: PollutantType; label: string; unit: string }[] = [
   { id: 'o3', label: 'O₃', unit: 'µg/m³' },
   { id: 'pm10', label: 'PM₁₀', unit: 'µg/m³' },
 ];
-const ROAD_MODES: [RoadDisplayMode, string][] = [['total', 'Absolut'], ['delta', 'Δ Jalan'], ['contrast', 'Kontras']];
+const ROAD_MODES: [RoadDisplayMode, string][] = [['total', 'Absolut'], ['traffic', 'Lalu lintas']];
 const CONCENTRATION = ['pm25', 'no2', 'pm10'];
 const RAMP = 'linear-gradient(90deg,#00E400,#FFFF00,#FF7E00,#FF0000,#8F3F97,#7E0023)';
 
@@ -142,7 +143,7 @@ export default function ExploreMapPage() {
                 ))}
               </div>
               <p className="text-[10.5px] text-gray-400 dark:text-gray-500 mt-2 leading-relaxed">
-                <b>Absolut</b>: konsentrasi total vs ambang WHO/EPA. <b>Δ Jalan</b> &amp; <b>Kontras</b>: menonjolkan kontribusi lalu lintas per ruas jalan (dispersi CALINE).
+                <b>Absolut</b>: konsentrasi total vs ambang WHO/EPA. <b>Lalu lintas</b>: bagian yang datang dari kendaraan di ruas sekitar, skala tetap µg/m³ (abu-abu = selisih terlalu kecil untuk dibedakan); perbandingan antar-jalan, bukan tingkat bahaya.
               </p>
             </div>
           )}
@@ -174,9 +175,11 @@ export default function ExploreMapPage() {
         <div className="glass-card p-4">
           <p className="text-xs font-semibold text-gray-900 dark:text-white mb-2.5">
             Arti warna jalan — {activeP.label}
-            {showRoadModes && roadDisplayMode !== 'total' && (roadDisplayMode === 'delta' ? ' · Δ jalan' : ' · kontras')}
+            {showRoadModes && roadDisplayMode === 'traffic' && ' · lalu lintas'}
           </p>
-          {pollutant === 'aqi' ? (
+          {showRoadModes && roadDisplayMode === 'traffic' ? (
+            <TrafficLegend pollutant={pollutant} />
+          ) : pollutant === 'aqi' ? (
             <div className="flex flex-wrap gap-x-4 gap-y-2">
               {AQI_LEGEND.map((l) => (
                 <div key={l.label} className="flex items-center gap-1.5">

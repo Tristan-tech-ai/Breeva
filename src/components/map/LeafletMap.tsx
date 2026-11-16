@@ -135,7 +135,7 @@ interface LeafletMapProps {
   pollutant?: PollutantType;
   forecastHour?: number;
   // 'total' = absolute pollutant vs EPA breakpoints (default)
-  // 'delta' = road-only contribution above baseline (highlights per-segment variance)
+  // 'traffic' = the traffic part of each road on a fixed scale (lib/roadColors.trafficColor)
   roadDisplayMode?: RoadDisplayMode;
   onRoadLayerMeta?: (meta: RoadLayerMeta | null) => void;
   onPlaceSelect?: (poi: POI) => void;

@@ -7,13 +7,31 @@ export const TOTAL_STOPS: Record<string, [number, string][]> = {
   o3:   [[0, '#00E400'], [60, '#FFFF00'], [100, '#FF7E00'], [140, '#FF0000'], [240, '#8F3F97'], [380, '#7E0023']],
   pm10: [[0, '#00E400'], [54, '#FFFF00'], [154, '#FF7E00'], [254, '#FF0000'], [354, '#8F3F97'], [424, '#7E0023']],
 };
-export const DELTA_STOPS: Record<string, [number, string][]> = {
-  pm25: [[0, '#00E400'], [0.5, '#FFFF00'], [2, '#FF7E00'], [5, '#FF0000'], [10, '#8F3F97'], [25, '#7E0023']],
-  no2:  [[0, '#00E400'], [2, '#FFFF00'], [10, '#FF7E00'], [25, '#FF0000'], [60, '#8F3F97'], [150, '#7E0023']],
-  pm10: [[0, '#00E400'], [1, '#FFFF00'], [4, '#FF7E00'], [10, '#FF0000'], [20, '#8F3F97'], [50, '#7E0023']],
+/**
+ * Traffic view: the part of a road's value that comes from the traffic of the roads around it (pm25_delta, no2_delta), on a
+ * FIXED ug/m3 scale. Differences below the dead band are drawn grey: a few tenths of a microgram are far below what the
+ * field resolves (daily error about 8 ug/m3) and below anything a sensor could confirm. The scale never stretches to the
+ * roads on screen, so one value has one colour everywhere. Violet, not the health colours, so the view is not read as a
+ * health category.
+ */
+export const TRAFFIC_DEADBAND: Record<'pm25' | 'no2' | 'pm10', number> = { pm25: 1, no2: 5, pm10: 2 };
+export const TRAFFIC_GREY = '#d1d5db';
+export const TRAFFIC_STOPS: Record<'pm25' | 'no2' | 'pm10', [number, string][]> = {
+  pm25: [[1, '#e9d5ff'], [2, '#c084fc'], [4, '#9333ea'], [8, '#581c87']],
+  no2: [[5, '#e9d5ff'], [10, '#c084fc'], [25, '#9333ea'], [50, '#581c87']],
+  pm10: [[2, '#e9d5ff'], [4, '#c084fc'], [8, '#9333ea'], [16, '#581c87']],
 };
-// Seed divisor for contrast's first paint (before the real viewport p90 is measured).
-export const CONTRAST_FALLBACK: Record<string, number> = { pm25: 6, no2: 25, pm10: 10 };
+
+/** Pollutant the traffic view shows: PM2.5, NO2 or PM10 as chosen; NO2 (the exhaust tracer) for the index and O3. */
+export function trafficPollutant(p: string): 'pm25' | 'no2' | 'pm10' {
+  return p === 'pm25' || p === 'pm10' ? p : 'no2';
+}
+
+export function trafficColor(pollutant: string, delta: number): string {
+  const p = trafficPollutant(pollutant);
+  if (!(delta >= TRAFFIC_DEADBAND[p])) return TRAFFIC_GREY;
+  return lerpColor(TRAFFIC_STOPS[p], delta);
+}
 
 function hexToRgb(h: string): [number, number, number] {
   const n = parseInt(h.slice(1), 16);

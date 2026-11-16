@@ -7,6 +7,7 @@ import type {
   RoadDisplayMode,
 } from '../../types';
 import { SpatialTileCache } from '../../lib/spatial-tile-cache';
+import { trafficColor, trafficPollutant } from '../../lib/roadColors';
 
 // Meta info exposed to UI
 export interface RoadLayerMeta {
@@ -50,45 +51,6 @@ function snapBboxToGrid(s: number, w: number, n: number, e: number) {
 // (Color dispatch lives in getRoadColor below — continuous ramp.
 // The step-based categorizer was replaced by rampRgb for smoother resolution.)
 
-// Delta-mode breakpoints (road contribution above baseline, µg/m³). Tighter
-// than absolute breakpoints because baseline (30-50 µg/m³ Jakarta PM2.5) has
-// been removed — most delta values cluster in 0-10 µg/m³ range.
-function getDeltaColorStops(pollutant: PollutantType): { v: number; c: string }[] {
-  switch (pollutant) {
-    case 'pm25':
-      return [
-        { v: 0,    c: '#00E400' },  // 0–0.5    Negligible (gang)
-        { v: 0.5,  c: '#FFFF00' },  // 0.5–2    Low (residential)
-        { v: 2,    c: '#FF7E00' },  // 2–5      Medium (collector)
-        { v: 5,    c: '#FF0000' },  // 5–10     High (primary)
-        { v: 10,   c: '#8F3F97' },  // 10–25    Very High (trunk/motorway)
-        { v: 25,   c: '#7E0023' },  // 25+      Extreme (jam at motorway)
-      ];
-    case 'no2':
-      return [
-        { v: 0,   c: '#00E400' },
-        { v: 2,   c: '#FFFF00' },
-        { v: 10,  c: '#FF7E00' },
-        { v: 25,  c: '#FF0000' },
-        { v: 60,  c: '#8F3F97' },
-        { v: 150, c: '#7E0023' },
-      ];
-    case 'pm10':
-      return [
-        { v: 0,   c: '#00E400' },
-        { v: 1,   c: '#FFFF00' },
-        { v: 4,   c: '#FF7E00' },
-        { v: 10,  c: '#FF0000' },
-        { v: 20,  c: '#8F3F97' },
-        { v: 50,  c: '#7E0023' },
-      ];
-    case 'o3':
-    default:
-      // O3 has no meaningful "delta" (titration only reduces O3 near roads).
-      // For AQI: fall back to absolute breakpoints scaled. Keep simple.
-      return getColorStops(pollutant);
-  }
-}
 
 function getColorStops(pollutant: PollutantType): { v: number; c: string }[] {
   // Stops define the LOWER bound of each category. A value v is colored stops[i].c
@@ -151,16 +113,12 @@ function getValue(
   pollutant: PollutantType,
   mode: RoadDisplayMode = 'total',
 ): number {
-  if (mode === 'delta') {
-    // O3 has no delta (only titration). AQI delta would require derived calc.
-    // ?? 0 protects against legacy cached responses (pre-D1 API) where
-    // pm25_delta/no2_delta/pm10_delta fields don't exist yet.
-    switch (pollutant) {
+  if (mode === 'traffic') {
+    // ?? 0 protects against legacy cached responses (pre-D1 API) without the *_delta fields.
+    switch (trafficPollutant(pollutant)) {
       case 'pm25': return road.pm25_delta ?? 0;
-      case 'no2': return road.no2_delta ?? 0;
       case 'pm10': return road.pm10_delta ?? 0;
-      case 'o3': return road.o3;       // no delta concept
-      default: return road.aqi;
+      default: return road.no2_delta ?? 0;
     }
   }
   switch (pollutant) {
@@ -198,27 +156,12 @@ function rampRgb(value: number, stops: { v: number; c: string }[]): { r: number;
   return hexToRgb(stops[stops.length - 1].c);
 }
 // ── Road color dispatcher ────────────────────────────────────
-// 'total'    = absolute health level (continuous WHO ramp).
-// 'delta'    = road-only contribution above baseline (continuous, tight µg/m³ ramp).
-// 'contrast' = ENHANCED view: the REAL per-road dispersion delta normalized to the area's
-//              p90 → green (lowest real contribution) → red (highest). Same factual physics
-//              data, but a RELATIVE per-view scale so genuine per-road differences pop. Clearly
-//              labeled as relative — it does NOT claim an absolute health level. contrastMax = p90.
-// total/delta scales are fixed to real values (no auto-stretch). OOD-refused → neutral grey.
-function getRoadColor(road: RoadAQIFeature, pollutant: PollutantType, mode: RoadDisplayMode, contrastMax = 0): string {
+// 'total'   = absolute level (continuous WHO/EPA ramp, ISPU colours for the index).
+// 'traffic' = the traffic part on a FIXED ug/m3 scale with a dead band (lib/roadColors.trafficColor);
+//             never stretched to the roads on screen. OOD-refused → neutral grey.
+function getRoadColor(road: RoadAQIFeature, pollutant: PollutantType, mode: RoadDisplayMode): string {
   if (road.ood_refused || road.confidence === 'refuse') return 'rgb(156,163,175)'; // grey: outside calibration support
-  if (mode === 'delta') {
-    const { r, g, b } = rampRgb(getValue(road, pollutant, 'delta'), getDeltaColorStops(pollutant));
-    return `rgb(${r},${g},${b})`;
-  }
-  if (mode === 'contrast' && (pollutant === 'pm25' || pollutant === 'no2' || pollutant === 'pm10')) {
-    // Real dispersion delta normalized to the viewport p90, mapped green→red — highlights the
-    // roads genuinely contributing the most traffic pollution in THIS area (relative scale).
-    const t = Math.max(0, Math.min(1, getValue(road, pollutant, 'delta') / (contrastMax || 1)));
-    const { r, g, b } = rampRgb(t * 300, getColorStops('aqi')); // green(0) → … → red/purple(300)
-    return `rgb(${r},${g},${b})`;
-  }
-  // 'total' (and aqi/o3 fallback): continuous absolute ramp
+  if (mode === 'traffic') return trafficColor(pollutant, getValue(road, pollutant, 'traffic'));
   const { r, g, b } = rampRgb(getValue(road, pollutant, 'total'), getColorStops(pollutant));
   return `rgb(${r},${g},${b})`;
 }
@@ -353,28 +296,13 @@ export function useRoadPollutionLayer(
       const group = L.layerGroup();
       const zoom = map?.getZoom() ?? 14;
 
-      // 'contrast' mode: normalize the REAL per-road delta to the viewport's p90 so the
-      // genuine (but small-in-absolute) per-road differences become perceptible. Computed
-      // once per render from the visible roads' deltas; 0 for other modes (unused there).
-      let contrastMax = 0;
-      if (currentMode === 'contrast') {
-        const deltas = data.roads
-          .map((r) => getValue(r, currentPollutant, 'delta'))
-          .filter((v) => Number.isFinite(v) && v > 0)
-          .sort((a, b) => a - b);
-        contrastMax = deltas.length ? deltas[Math.floor(deltas.length * 0.9)] : 0;
-        if (!(contrastMax > 0)) contrastMax = 0.1; // floor avoids div-by-0 in flat areas
-      }
-
       for (const road of data.roads) {
         const coords = road.geometry.coordinates.map(
           ([lng, lat]) => [lat, lng] as L.LatLngTuple,
         );
         if (coords.length < 2) continue;
 
-        // 'total' = absolute level vs EPA/WHO; 'delta' = road-only contribution; 'contrast' =
-        // relative per-view heatmap of the real delta (enhanced visibility, clearly labeled).
-        const color = getRoadColor(road, currentPollutant, currentMode, contrastMax);
+        const color = getRoadColor(road, currentPollutant, currentMode);
 
         const zoomScale = zoom >= 16 ? 1.6 : zoom >= 15 ? 1.3 : zoom >= 13 ? 1.0 : zoom >= 12 ? 0.7 : 0.5;
         const weight = road.weight * zoomScale;
@@ -638,8 +566,9 @@ export function useRoadPollutionLayer(
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       return;
     }
-    fetchData();
-    return () => { controllerRef.current?.abort(); };
+    // Next frame, not inside the effect body: fetchData may clear the layer meta (setState) synchronously.
+    const frame = requestAnimationFrame(() => { void fetchData(); });
+    return () => { cancelAnimationFrame(frame); controllerRef.current?.abort(); };
   }, [visible, forecastHour, fetchData]);
 
   // ── Separate zoom and pan handlers for clean transitions ──

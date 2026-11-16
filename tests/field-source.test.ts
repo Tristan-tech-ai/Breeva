@@ -72,8 +72,8 @@ describe('overzoom and colours', () => {
 
   it('colours by PM2.5, NO2 and the traffic part, grey outside calibration', () => {
     const v: CellValue = { pm25: 40, pm25_delta: 3, no2: 30, no2_delta: 12, confidence: 'high', ood: false, pi_half: 20 };
-    expect(fieldColor(v, 'aqi', 'total', 0)).not.toBe(fieldColor({ ...v, pm25: 5 }, 'aqi', 'total', 0));
-    expect(fieldColor(v, 'pm25', 'delta', 0)).not.toBe(fieldColor({ ...v, pm25_delta: 0 }, 'pm25', 'delta', 0));
-    expect(fieldColor({ ...v, ood: true }, 'pm25', 'total', 0)).toBe('#9ca3af');
+    expect(fieldColor(v, 'aqi', 'total')).not.toBe(fieldColor({ ...v, pm25: 5 }, 'aqi', 'total'));
+    expect(fieldColor(v, 'pm25', 'traffic')).not.toBe(fieldColor({ ...v, pm25_delta: 0 }, 'pm25', 'traffic'));
+    expect(fieldColor({ ...v, ood: true }, 'pm25', 'total')).toBe('#9ca3af');
   });
 });

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, lazy, Suspense } from 'react';
+import { useMemo, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import {
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
+import { useSettingsStore } from '../stores/settingsStore';
 import ProfileForm from '../components/exposure/ProfileForm';
 import RouteSelector, { type SelectedRouteData } from '../components/exposure/RouteSelector';
 import { useAuthStore } from '../stores/authStore';
@@ -161,9 +162,10 @@ const RECO_ICON: Record<RiskLevel, LucideIcon> = {
 export default function PaparanPage() {
   const navigate = useNavigate();
   const reduce = useReducedMotion() ?? false;
-  const [profile, setProfile] = useState<UserExposureProfile>({
-    age_bucket: 'adult', mode: 'walk_slow', health_sensitive: false,
-  });
+  const sensitiveSetting = useSettingsStore((s) => s.health_sensitive);
+  const [profile, setProfile] = useState<UserExposureProfile>(() => ({
+    age_bucket: 'adult', mode: 'walk_slow', health_sensitive: sensitiveSetting,
+  }));
   const [selected, setSelected] = useState<SelectedRouteData | null>(null);
   const user = useAuthStore((s) => s.user);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -178,8 +180,7 @@ export default function PaparanPage() {
     [selected, profile],
   );
 
-  // Re-arm Save whenever the inputs change (so a new calc isn't shown as already-saved).
-  useEffect(() => { setSaveState('idle'); }, [selected, profile]);
+  // Save is re-armed in the handlers that change the inputs, so a new calc is never shown as already saved.
 
   const handleSave = async () => {
     if (!result || !selected) return;
@@ -251,8 +252,16 @@ export default function PaparanPage() {
           </div>
         </motion.div>
 
-        <ProfileForm profile={profile} onChange={setProfile} />
-        <RouteSelector selectedKey={selected?.key ?? null} onSelect={setSelected} />
+        <ProfileForm
+          profile={profile}
+          onChange={(next) => {
+            setProfile(next);
+            setSaveState('idle');
+            // The sensitive switch here and in Settings are one setting (AQI card and map advice read it).
+            if (next.health_sensitive !== sensitiveSetting) useSettingsStore.getState().set('health_sensitive', next.health_sensitive);
+          }}
+        />
+        <RouteSelector selectedKey={selected?.key ?? null} onSelect={(r) => { setSelected(r); setSaveState('idle'); }} />
 
         {/* Results */}
         {result && selected && theme && (

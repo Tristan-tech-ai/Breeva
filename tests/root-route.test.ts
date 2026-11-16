@@ -15,7 +15,7 @@ describe('map first at /', () => {
   });
 
   it('road colours are on by default in the app map, and the PWA starts at /', () => {
-    expect(readFileSync('src/pages/HomePage.tsx', 'utf8')).toMatch(/useState\(true\);\n/);
+    expect(readFileSync('src/pages/HomePage.tsx', 'utf8')).toMatch(/useState\(true\);\r?\n/);
     expect(readFileSync('vite.config.ts', 'utf8')).toMatch(/start_url: '\/'/);
   });
 });

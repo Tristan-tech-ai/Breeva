@@ -1,3 +1,5 @@
+import { WHO_24H_PM25 } from './exposure';
+
 /**
  * Indeks Standar Pencemar Udara (ISPU), Peraturan Menteri LHK P.14/MENLHK/SETJEN/KUM.1/7/2020
  * (Berita Negara 2020 No. 774, https://peraturan.go.id/files/bn774-2020.pdf).
@@ -68,4 +70,18 @@ export function ispuCategory(value: number): IspuCategory {
 /** Category of a PM2.5 concentration, the usual critical parameter. */
 export function pm25Category(pm25: number): IspuCategory {
   return ispuCategory(ispu('pm25', pm25) ?? 0);
+}
+
+/**
+ * Advice for someone who marked themselves sensitive (asthma, heart or lung disease, pregnancy, older age). The colour
+ * stays the official ISPU category and the data do not change; only the point where a warning starts moves down to
+ * the WHO 2021 daily guideline for PM2.5. Null when the value is at or below the guideline.
+ */
+export function sensitiveAdvice(pm25: number): string | null {
+  if (!Number.isFinite(pm25) || pm25 <= WHO_24H_PM25) return null;
+  const v = pm25.toFixed(0);
+  if (pm25 <= 55.4) {
+    return `Untukmu (profil sensitif): PM2,5 ${v} µg/m³, di atas pedoman harian WHO ${WHO_24H_PM25}. Kurangi aktivitas berat di luar ruangan dan perpendek waktu di luar.`;
+  }
+  return `Untukmu (profil sensitif): PM2,5 ${v} µg/m³, jauh di atas pedoman harian WHO ${WHO_24H_PM25}. Hindari aktivitas di luar ruangan; bila harus keluar, pakai masker yang rapat (N95/KN95).`;
 }
