@@ -103,6 +103,17 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      # Hourly runs written by the builder carry the tag kind=run and expire after 7 days; manifests, packs, tiles,
+      # graphs and the runs uploaded by hand carry no tag and stay.
+      LifecycleConfiguration:
+        Rules:
+          - Id: breeva-expire-hourly-runs
+            Status: Enabled
+            TagFilters: [{ Key: kind, Value: run }]
+            ExpirationInDays: 7
+          - Id: breeva-abort-incomplete-uploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 }
       Tags:
         - { Key: project, Value: breeva }
 
@@ -170,7 +181,12 @@ Resources:
             Effect: Allow
             Principal: { Service: cloudfront.amazonaws.com }
             Action: s3:GetObject
-            Resource: !Sub '${FieldBucket.Arn}/*'
+            # Only what the app reads; packs/, lambda/ and audit/ (run inputs with sensor readings) stay private.
+            Resource:
+              - !Sub '${FieldBucket.Arn}/v/*'
+              - !Sub '${FieldBucket.Arn}/tiles/*'
+              - !Sub '${FieldBucket.Arn}/harga/*'
+              - !Sub '${FieldBucket.Arn}/graphs/*'
             Condition:
               StringEquals:
                 'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${FieldDistribution}'

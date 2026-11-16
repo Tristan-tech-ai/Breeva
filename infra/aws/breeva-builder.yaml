@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Breeva hourly field builder (LAMPIRAN_TEKNIS L2): a Lambda that builds the field of every region each hour at :20
+  (OpenAQ publishes an hour one to two hours late) and writes it to the breeva-field bucket, manifest last. Runs are
+  idempotent (an existing run is skipped) and are not retried, so one hour is written at most once. Named breeva-*,
+  tagged project=breeva.
+
+Parameters:
+  FieldBucket:
+    Type: String
+    Default: breeva-field-422509704741
+  CodeKey:
+    Type: String
+    Description: S3 key of the zipped bundle in FieldBucket (infra/lambda/deploy.mjs uploads it)
+  OpenaqParam:
+    Type: String
+    Default: /breeva/openaq_api_key
+
+Resources:
+  BuilderLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/breeva-field-builder
+      RetentionInDays: 14
+      Tags:
+        - { Key: project, Value: breeva }
+
+  BuilderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: breeva-field-builder-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - { Effect: Allow, Principal: { Service: lambda.amazonaws.com }, Action: sts:AssumeRole }
+      Policies:
+        - PolicyName: breeva-field-builder
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !GetAtt BuilderLogs.Arn
+              - Effect: Allow
+                Action: [s3:GetObject]
+                Resource: !Sub 'arn:aws:s3:::${FieldBucket}/packs/*'
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:PutObjectTagging]
+                Resource:
+                  - !Sub 'arn:aws:s3:::${FieldBucket}/v/*'
+                  - !Sub 'arn:aws:s3:::${FieldBucket}/audit/*'
+              # HeadObject on a missing key answers 404 (not 403) only with ListBucket
+              - Effect: Allow
+                Action: [s3:ListBucket]
+                Resource: !Sub 'arn:aws:s3:::${FieldBucket}'
+                Condition: { StringLike: { 's3:prefix': ['v/*', 'audit/*'] } }
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${OpenaqParam}'
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: '*'
+                Condition: { StringEquals: { 'kms:ViaService': !Sub 'ssm.${AWS::Region}.amazonaws.com' } }
+      Tags:
+        - { Key: project, Value: breeva }
+
+  Builder:
+    Type: AWS::Lambda::Function
+    DependsOn: BuilderLogs
+    Properties:
+      FunctionName: breeva-field-builder
+      Description: Breeva hourly field builder (all regions)
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Architectures: [arm64]
+      MemorySize: 1536
+      Timeout: 600
+      Role: !GetAtt BuilderRole.Arn
+      Code: { S3Bucket: !Ref FieldBucket, S3Key: !Ref CodeKey }
+      Environment:
+        Variables:
+          FIELD_BUCKET: !Ref FieldBucket
+          OPENAQ_PARAM: !Ref OpenaqParam
+      LoggingConfig: { LogGroup: !Ref BuilderLogs }
+      Tags:
+        - { Key: project, Value: breeva }
+
+  BuilderNoRetry:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref Builder
+      Qualifier: $LATEST
+      MaximumRetryAttempts: 0
+      MaximumEventAgeInSeconds: 900
+
+  HourlyRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: breeva-field-builder-hourly
+      Description: Build the Breeva field every hour at :20 UTC
+      ScheduleExpression: cron(20 * * * ? *)
+      State: ENABLED
+      Targets:
+        - { Id: breeva-field-builder, Arn: !GetAtt Builder.Arn }
+
+  HourlyPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Builder
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt HourlyRule.Arn
+
+Outputs:
+  FunctionName:
+    Value: !Ref Builder
+  RuleName:
+    Value: !Ref HourlyRule

@@ -3,10 +3,10 @@
  * on the same inputs (the run's inputs.json) to within half a quantisation step, for every column. Saturated values
  * (above the top of a column's range) are counted separately: there the cell stores the cap, by design.
  *
- *   pnpm exec tsx scripts/field/parity.mts --pack <pack.bin> --run-dir D:/breeva-ml-data/field/v/badung_denpasar/<run> [--n 1000]
+ *   pnpm exec tsx scripts/field/parity.mts --pack <pack.bin> --run-dir D:/breeva-ml-data/field/v/badung_denpasar/<run> [--inputs <inputs.json>] [--n 1000]
  * Exit 0 when every non-saturated comparison is within tolerance. Writes <field>/reports/parity_<name>_<run>.json.
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { RoadPack } from './pack.js';
 import { decodeCell, saturated, STEP } from './cells.js';
@@ -31,7 +31,10 @@ function sample(n: number, k: number, seed = 20261116): number[] {
 const pack = new RoadPack(new Uint8Array(readFileSync(arg('pack'))));
 const runDir = arg('run-dir');
 const n = Number(arg('n', '1000'));
-const inputs = JSON.parse(readFileSync(join(runDir, 'inputs.json'), 'utf8')) as FieldInputs;
+// inputs.json sits beside the cells in runs built before 16 Nov 18.00 WIB, under audit/<name>/<run>/ since then
+const auditInputs = join(dirname(dirname(dirname(runDir))), 'audit', basename(dirname(runDir)), basename(runDir), 'inputs.json');
+const inputsFile = arg('inputs', existsSync(join(runDir, 'inputs.json')) ? join(runDir, 'inputs.json') : auditInputs);
+const inputs = JSON.parse(readFileSync(inputsFile, 'utf8')) as FieldInputs;
 
 const cOf = pack.col<Uint16Array>('c');
 const iOf = pack.col<Uint32Array>('i');

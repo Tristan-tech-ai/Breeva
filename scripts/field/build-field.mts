@@ -1,26 +1,21 @@
 /**
- * Field builder (LAMPIRAN_TEKNIS L2), one region, one hour.
+ * Field builder, command line (LAMPIRAN_TEKNIS L2), one region, one hour, written to a local field folder.
  *
- *   pnpm exec tsx scripts/field/build-field.mts --pack D:/breeva-ml-data/field/packs/2026-11/badung_denpasar.bin \
- *        --name badung_denpasar --region bali --tz 8 --out D:/breeva-ml-data/field
+ *   pnpm exec tsx --env-file=<path to .env.local> scripts/field/build-field.mts --pack D:/breeva-ml-data/field/packs/2026-11/badung_denpasar.bin \
+ *        --name badung_denpasar --region bali --tz 8 --out D:/breeva-ml-data/field [--indicative] [--measure off]
  *
- * Writes v/<name>/<run>/<c>.bin (BVF1), v/<name>/<run>/inputs.json and report.json, then v/<name>/manifest.json last,
- * so a manifest never points at a cell that does not exist yet. run = valid hour in UTC, YYYYMMDDHH; never overwritten.
- * Inputs: Open-Meteo background per z12 cell, CAMS daily mean (region background), static diurnal traffic curve, CALINE4
- * multi-source dispersion over the whole region, and the measurement layer of the last complete hour
- * (scripts/field/measure.ts, parameters in scripts/field/params/measure.json): log-space kriging of the region's vetted
- * OpenAQ citizen sensors, else the Koschmieder smoke rule of its airport, else nothing. --measure off skips it.
- * OPENAQ_API_KEY comes from the environment (for example tsx --env-file=<path to .env.local>); it is never printed.
+ * The computation is scripts/field/builder.ts (shared with the hourly Lambda, infra/lambda/field-builder.ts). Writes
+ * v/<name>/<run>/<c>.bin (BVF1), audit/<name>/<run>/inputs.json and report.json, then v/<name>/manifest.json last. Runs are never
+ * overwritten. Inputs: Open-Meteo background per z12 cell, CAMS daily mean, static diurnal traffic curve, CALINE4
+ * multi-source dispersion, and the measurement layer of the last complete hour (scripts/field/measure.ts, parameters in
+ * scripts/field/params/measure.json). OPENAQ_API_KEY comes from the environment; it is never printed.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchBaselineGrid } from '../../api/vayu/_baseline.js';
-import { HOURLY_TRAFFIC, fetchCamsDailyMean } from '../../api/vayu/road-aqi.js';
 import { RoadPack } from './pack.js';
-import { encodeCell, saturated } from './cells.js';
-import { computeField, type FieldInputs } from './engine.js';
-import { measureHour, type RegionMeasureParams } from './measure.js';
+import { buildFieldRun, runFor, runObjects } from './builder.js';
+import type { RegionMeasureParams } from './measure.js';
 
 function arg(name: string, def?: string): string {
   const i = process.argv.indexOf(`--${name}`);
@@ -29,112 +24,27 @@ function arg(name: string, def?: string): string {
   throw new Error(`missing --${name}`);
 }
 
-function tileBounds(x: number, y: number, z: number) {
-  const n = 2 ** z;
-  const lon = (t: number) => (t / n) * 360 - 180;
-  const lat = (t: number) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * t) / n))) * 180) / Math.PI;
-  return { west: lon(x), east: lon(x + 1), north: lat(y), south: lat(y + 1) };
-}
-
 function writeAtomic(path: string, data: string | Uint8Array) {
   const tmp = `${path}.tmp`;
   writeFileSync(tmp, data);
   renameSync(tmp, path);
 }
 
-const t0 = Date.now();
-const packPath = arg('pack');
 const name = arg('name');
-const region = arg('region');
-const tz = Number(arg('tz'));
 const outRoot = arg('out', 'D:/breeva-ml-data/field');
-// --indicative: no measuring station inside the area; values are shown as indicative only.
-const indicative = process.argv.includes('--indicative');
-const measureMode = arg('measure', 'auto');
-if (measureMode !== 'auto' && measureMode !== 'off') throw new Error('--measure must be auto or off');
-
-const pack = new RoadPack(new Uint8Array(readFileSync(packPath)));
-const now = new Date();
-const validUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()));
-const run = validUtc.toISOString().slice(0, 13).replace(/[-T]/g, '');
-const local = new Date(validUtc.getTime() + tz * 3600_000);
-const hourLocal = local.getUTCHours();
-const monthLocal = local.getUTCMonth() + 1;
-const todayLocal = local.toISOString().slice(0, 10);
-
+const measure = arg('measure', 'auto');
+if (measure !== 'auto' && measure !== 'off') throw new Error('--measure must be auto or off');
+const { run } = runFor(new Date());
 const runDir = join(outRoot, 'v', name, run);
 if (existsSync(runDir)) throw new Error(`run ${run} already exists (runs are never overwritten): ${runDir}`);
 
-const noCache = { redisGet: async () => null, redisSetEx: async () => {}, ttlSec: 0 };
-const grids: FieldInputs['grids'] = [];
-const gridCache = new Map<string, Awaited<ReturnType<typeof fetchBaselineGrid>>>();
-for (const [c, [x, y]] of pack.meta.cells.entries()) {
-  const b = tileBounds(x, y, pack.meta.cell_zoom);
-  const key = `${Math.round(((b.south + b.north) / 2) * 10)}:${Math.round(((b.west + b.east) / 2) * 10)}`;
-  let g = gridCache.get(key);
-  if (!g) {
-    g = await fetchBaselineGrid(b.south, b.west, b.north, b.east, 0, noCache);
-    gridCache.set(key, g);
-  }
-  grids.push({ cell: c, corners: g.corners, bounds: g.bounds });
-}
-const [w, s, e, n] = pack.meta.bbox;
-const camsDaily = await fetchCamsDailyMean((s + n) / 2, (w + e) / 2, region, todayLocal);
 const paramsFile = join(dirname(fileURLToPath(import.meta.url)), 'params', 'measure.json');
 const measureParams = (JSON.parse(readFileSync(paramsFile, 'utf8')).regions ?? {})[name] as RegionMeasureParams | undefined;
-// The last complete hour: OpenAQ hourly values and METAR reports of the current hour are not in yet.
-const measured = measureMode === 'off' ? undefined
-  : await measureHour(measureParams, new Date(validUtc.getTime() - 3600_000), { openaqKey: process.env.OPENAQ_API_KEY }, { spacingMs: 1100 });
-const inputs: FieldInputs = { region, hourLocal, monthLocal, diurnal: HOURLY_TRAFFIC[hourLocal] ?? 1.0, camsDaily, grids, measured };
-const t1 = Date.now();
-
-const results = computeField(pack, inputs);
-const t2 = Date.now();
-
+const pack = new RoadPack(new Uint8Array(readFileSync(arg('pack'))));
+const built = await buildFieldRun(pack, {
+  name, region: arg('region'), tz: Number(arg('tz')), indicative: process.argv.includes('--indicative'),
+  measure, measureParams, openaqKey: process.env.OPENAQ_API_KEY,
+});
 mkdirSync(runDir, { recursive: true });
-const cellsCol = pack.col<Uint16Array>('c');
-const cellIds: number[] = [];
-let bytes = 0;
-const sat = { pm25_delta: 0, no2: 0, no2_delta: 0, pi_half: 0 };
-for (let c = 0; c < pack.meta.cells.length; c++) {
-  const vals = results.filter((r) => cellsCol[r.k] === c);
-  if (!vals.length) continue;
-  for (const r of vals) for (const col of Object.keys(sat) as Array<keyof typeof sat>) if (saturated(col, r[col])) sat[col]++;
-  const buf = encodeCell(vals);
-  writeAtomic(join(runDir, `${c}.bin`), buf);
-  bytes += buf.byteLength;
-  cellIds.push(c);
-}
-writeAtomic(join(runDir, 'inputs.json'), JSON.stringify(inputs));
-const pm = results.map((r) => r.pm25).sort((a, b) => a - b);
-const report = {
-  run, region, name, roads: results.length, cells: cellIds.length, bytes, saturated: sat,
-  pm25: { min: pm[0], median: pm[Math.floor(pm.length / 2)], p95: pm[Math.floor(pm.length * 0.95)], max: pm[pm.length - 1] },
-  inputs: { hourLocal, monthLocal, diurnal: inputs.diurnal, camsDaily, background_grids: gridCache.size },
-  measurement: measured ? { method: measured.method, hour_utc: measured.hour_utc, sensors: measured.sensors.length,
-    vetted: measured.sensors_vetted, koschmieder: measured.koschmieder ?? null, note: measured.note } : { method: 'off' },
-  seconds: { inputs: (t1 - t0) / 1000, compute: (t2 - t1) / 1000, total: (Date.now() - t0) / 1000 },
-};
-writeAtomic(join(runDir, 'report.json'), JSON.stringify(report, null, 1));
-
-const median = (a: number[]) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : Number.NaN; };
-const cellStats: Record<string, { pm25_median: number; no2_median: number; roads: number }> = {};
-for (const c of cellIds) {
-  const vals = results.filter((r) => cellsCol[r.k] === c);
-  cellStats[String(c)] = { pm25_median: median(vals.map((v) => v.pm25)), no2_median: median(vals.map((v) => v.no2)), roads: vals.length };
-}
-const manifest = {
-  geometry: pack.meta.geometry, run, computed_at: new Date().toISOString(), valid_hour_local: hourLocal,
-  engine: 'v2.1', cells: cellIds, forecast_runs: [], sensors_used: measured?.method === 'kriging' ? measured.sensors.length : 0,
-  measurement: { method: measured?.method ?? 'off', hour_utc: measured?.hour_utc ?? null, sensor_hour_utc: measured?.sensor_hour_utc ?? null,
-    metar: measured?.metar?.station ?? null },
-  cell_tiles: pack.meta.cells, cell_stats: cellStats, indicative,
-  state: { background: [], met: [], diurnal: inputs.diurnal, oi_weights: [] },
-  inputs_note: measured?.method === 'kriging'
-    ? `ambient from log-space kriging of ${measured.sensors.length} OpenAQ citizen sensors (hour ${measured.sensor_hour_utc}) + CALINE4 road increment`
-    : measured?.method === 'koschmieder'
-      ? `ambient raised to the ${measured.metar?.station} visibility smoke estimate (${measured.koschmieder?.reason}) + CALINE4 road increment`
-      : 'Open-Meteo background per z12 cell + CAMS daily mean + CALINE4 road increment; no measurement this hour',
-};
-writeAtomic(join(outRoot, 'v', name, 'manifest.json'), JSON.stringify(manifest, null, 1));
-console.log(JSON.stringify(report));
+for (const o of runObjects(name, built)) writeAtomic(join(outRoot, o.key), o.body);
+console.log(JSON.stringify(built.report));
