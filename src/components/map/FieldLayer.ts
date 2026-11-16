@@ -8,11 +8,15 @@ import { fieldColor } from '../../lib/field/color';
 import { FIELD_REGIONS, FieldSource, overzoomPoints } from '../../lib/field/source';
 import { HARGA_COLORS } from '../../lib/field/harga';
 import { popupHtml } from '../../lib/field/popup';
+import { nearestFeature, tileFraction, unitsPerPixel, type TileFeature } from '../../lib/field/tap';
 
 // Road colors from the static field (VITE_FIELD_STATIC): geometry from a PMTiles archive, values from BVF1 cells.
 // No call to /api/vayu/road-aqi or the database. Tiles exist for z10-14; z15-18 reuse the z14 tile, rescaled.
 
 const MAX_NATIVE = 14;
+/** How far from a road a tap still selects it, in screen pixels. */
+const TAP_PX = 10;
+const TILE_CACHE = 96;
 const FIELD_META: RoadLayerMeta = {
   wind_speed: 0, waqi_station: null, satellite_no2: false, iqair_aqi: null, iqair_city: null, iqair_validation: null, count: 0,
 };
@@ -32,6 +36,29 @@ export function useFieldLayer(
     if (!map || !enabled) return;
     let cancelled = false;
     const created: unknown[] = [];
+    // Decoded native tiles (z <= 14) per region, for tapping (see lib/field/tap.ts).
+    const tapSources: Array<{ src: FieldSource; bounds: L.LatLngBounds; tiles: Map<string, TileFeature[]> }> = [];
+    const tapAt = (latlng: L.LatLng): boolean => {
+      const zoom = map.getZoom();
+      const z = Math.min(MAX_NATIVE, Math.round(zoom));
+      for (const t of tapSources) {
+        if (!t.bounds.contains(latlng)) continue;
+        const f = tileFraction(latlng.lat, latlng.lng, z);
+        const tx = Math.floor(f.x), ty = Math.floor(f.y);
+        const feats = t.tiles.get(`${z}/${tx}/${ty}`);
+        if (!feats?.length) continue;
+        const extent = feats[0].extent ?? 4096;
+        const hit = nearestFeature(feats, (f.x - tx) * extent, (f.y - ty) * extent, TAP_PX * unitsPerPixel(extent, z, zoom));
+        if (!hit) continue;
+        const pr = hit.feature.properties;
+        const c = Number(pr.c), i = Number(pr.i);
+        L.popup({ closeButton: true, className: 'glass-popup', offset: [0, -2], autoPan: true })
+          .setLatLng(latlng).setContent(popupHtml(t.src.value(c, i), pr.n as string | undefined, t.src, c, i)).openOn(map);
+        return true;
+      }
+      return false;
+    };
+    (map as unknown as { __fieldTap?: { tapAt: (ll: L.LatLng) => boolean } }).__fieldTap = { tapAt };
     ensureVectorGrid()
       .then(async () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,6 +68,8 @@ export function useFieldLayer(
           const src = new FieldSource(region);
           try { await src.init(); } catch (e) { console.warn('[field]', region.name, e); continue; }
           if (cancelled) return;
+          const tiles = new Map<string, TileFeature[]>();
+          tapSources.push({ src, bounds: L.latLngBounds(region.bounds), tiles });
           const FieldGrid = Proto.extend({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             _getVectorTilePromise: async function (this: any, coords: { x: number; y: number; z: number }) {
@@ -59,6 +88,12 @@ export function useFieldLayer(
               let json;
               try { json = await Proto.prototype._getVectorTilePromise.call(this, coords); }
               finally { this._url = saved; URL.revokeObjectURL(url); }
+              const key = `${coords.z - dz}/${coords.x >> dz}/${coords.y >> dz}`;
+              if (!tiles.has(key)) {
+                // keep the native geometry (before any overzoom rescale) for tapping
+                tiles.set(key, (json.layers.roads?.features ?? []).map((f: TileFeature) => ({ geometry: f.geometry, properties: f.properties, extent: f.extent })));
+                if (tiles.size > TILE_CACHE) tiles.delete(tiles.keys().next().value as string);
+              }
               if (dz > 0) {
                 for (const name in json.layers) {
                   for (const f of json.layers[name].features) f.geometry = overzoomPoints(f.geometry, f.extent, coords, MAX_NATIVE);
@@ -68,7 +103,7 @@ export function useFieldLayer(
             },
           });
           const layer = new FieldGrid('', {
-            rendererFactory: LG.canvas.tile, interactive: true, minZoom: 10, maxZoom: 18, maxNativeZoom: 18,
+            rendererFactory: LG.canvas.tile, interactive: false, minZoom: 10, maxZoom: 18, maxNativeZoom: 18,
             bounds: L.latLngBounds(region.bounds), pane: 'overlayPane',
             vectorTileLayerStyles: {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,14 +128,6 @@ export function useFieldLayer(
           });
           let redrawTimer: ReturnType<typeof setTimeout> | undefined;
           src.onCell = () => { clearTimeout(redrawTimer); redrawTimer = setTimeout(() => layer.redraw(), 120); };
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          layer.on('click', (e: any) => {
-            const pr = (e.layer && e.layer.properties) || {};
-            const v = src.value(Number(pr.c), Number(pr.i));
-            L.popup({ closeButton: true, className: 'glass-popup', offset: [0, -2], autoPan: true })
-              .setLatLng(e.latlng).setContent(popupHtml(v, pr.n, src, Number(pr.c), Number(pr.i))).openOn(map);
-            L.DomEvent.stop(e);
-          });
           layer.addTo(map);
           created.push(layer);
           layersRef.current = [...layersRef.current, layer];
@@ -109,6 +136,7 @@ export function useFieldLayer(
       .catch((err) => console.warn('[FieldLayer]', err));
     return () => {
       cancelled = true;
+      delete (map as unknown as { __fieldTap?: unknown }).__fieldTap;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const l of created as any[]) l.remove?.();
       layersRef.current = [];

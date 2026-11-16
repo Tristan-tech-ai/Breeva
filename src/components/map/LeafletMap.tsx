@@ -221,6 +221,9 @@ function MapController({
       // "set destination" click (sibling map handlers can't be stopped via DomEvent).
       const poiLayer = (map as unknown as { __poiCanvasLayer?: { tapAt(p: L.Point): boolean } }).__poiCanvasLayer;
       if (poiLayer && poiLayer.tapAt(e.containerPoint)) return;
+      // Then to a road of the static field (opens its popup).
+      const fieldTap = (map as unknown as { __fieldTap?: { tapAt(ll: L.LatLng): boolean } }).__fieldTap;
+      if (fieldTap && fieldTap.tapAt(e.latlng)) return;
       setDestination({ lat: e.latlng.lat, lng: e.latlng.lng });
     },
     dragstart() {
