@@ -4,6 +4,8 @@
  */
 import { buildMultiSourceDeltas, computeRoadAQIv2, pm25ToAQI, type RoadRow } from '../../api/vayu/road-aqi.js';
 import { buildInterpolator, type BaselineCorners, type BaselineData } from '../../api/vayu/_baseline.js';
+import { caline4CanyonFactor, pasquillClass } from '../../api/vayu/_caline4.js';
+import { exhaustAt, isMajor, mixingHalfWidth, type ExhaustSource } from '../../src/lib/field/exhaust.js';
 import type { RoadPack } from './pack.js';
 import type { CellValue } from './cells.js';
 import { OrdinaryKriging } from './kriging.js';
@@ -20,6 +22,38 @@ export interface FieldInputs {
   grids: Array<{ cell: number; corners: BaselineCorners; bounds: { south: number; west: number; north: number; east: number } }>;
   /** Measurement layer of the hour (scripts/field/measure.ts); absent in runs built before task F2-07. */
   measured?: MeasuredInputs;
+  /**
+   * Traffic part: 'iso1' = direction-averaged urban kernel (src/lib/field/exhaust.ts); absent = the service engine's
+   * single-direction sum of the 40 nearest roads (runs built before 16 Nov 2026, and the parity check).
+   */
+  exhaust?: 'iso1';
+  /** Live congestion: multiplier on a road's vehicles per hour, by road index; roads not listed use 1. */
+  congestion?: Record<number, number>;
+}
+
+/**
+ * Road-class factor on traffic where a road has no classified factor: the median classified factor of that class in
+ * the Badung-Denpasar pack of 2026-11 (60,961 roads, all classified). One table for every region, no random spread.
+ */
+export const CLASS_FACTOR: Record<string, number> = {
+  motorway: 1.25, motorway_link: 1.2, trunk: 1.2, trunk_link: 1.15, primary: 1, primary_link: 0.71,
+  secondary: 0.75, secondary_link: 0.7, tertiary: 0.7, tertiary_link: 0.75, unclassified: 0.3,
+  residential: 0.25, living_street: 0.15, service: 0.15,
+};
+
+/** Exhaust sources of a pack at one hour: vehicles per hour = class estimate x hour curve x class factor x congestion. */
+export function exhaustSources(rows: RoadRow[], coordsOf: (k: number) => number[][], diurnal: number, congestion?: Record<number, number>): ExhaustSource[] {
+  return rows.map((r, k) => {
+    const highway = r.highway || 'residential';
+    const factor = r.ai_pollution_factor ?? CLASS_FACTOR[highway] ?? 0.25;
+    return {
+      coords: coordsOf(k),
+      vehPerHour: (r.traffic_base_estimate ?? 100) * (r.traffic_calibration_factor || 1) * diurnal * factor * (congestion?.[k] ?? 1),
+      mod: caline4CanyonFactor(r.canyon_ratio, r.micro_class),
+      halfW: mixingHalfWidth(r.width),
+      major: isMajor(highway),
+    };
+  });
 }
 
 /** Sensors closer than this to a road make its value 'high' confidence (hidden-sensor error by distance, stats_i.json). */
@@ -106,15 +140,27 @@ export interface RoadResult extends CellValue { k: number; aqi: number; pi95_lo:
 export function computeField(p: RoadPack, inputs: FieldInputs, only?: number[]): RoadResult[] {
   const rows = Array.from({ length: p.n }, (_, k) => roadRow(p, k));
   const interp = makeInterp(p, inputs);
-  const multi = buildMultiSourceDeltas(rows, interp, inputs.diurnal, inputs.hourLocal, inputs.monthLocal);
   const ks = only ?? rows.map((_, k) => k);
+  const mids = ks.map((k) => { const c = p.coords(k); return c[Math.floor(c.length / 2)]; });
+  let iso: Array<{ pm25: number; nox: number }> | null = null;
+  let multi: Map<number, { pm25: number; nox: number }> | null = null;
+  if (inputs.exhaust === 'iso1') {
+    const met = (lat: number, lon: number) => {
+      const b = interp(lat, lon);
+      const ws = Number.isFinite(b.wind_speed) ? b.wind_speed : 2.0;
+      return { wind: ws, stability: pasquillClass(ws, inputs.hourLocal, 0.5) };
+    };
+    iso = exhaustAt(exhaustSources(rows, (k) => p.coords(k), inputs.diurnal, inputs.congestion), mids.map((m) => ({ lat: m[1], lon: m[0] })), met);
+  } else {
+    multi = buildMultiSourceDeltas(rows, interp, inputs.diurnal, inputs.hourLocal, inputs.monthLocal);
+  }
   const adjust = makeMeasuredAdjust(inputs.measured);
-  return ks.map((k) => {
+  return ks.map((k, n) => {
     const coords = p.coords(k);
-    const mid = coords[Math.floor(coords.length / 2)];
+    const mid = mids[n];
     const baseline = interp(mid[1], mid[0]);
     const v = computeRoadAQIv2(rows[k], coords, mid[1], mid[0], baseline, inputs.diurnal, inputs.region,
-      inputs.hourLocal, inputs.monthLocal, inputs.camsDaily, multi.get(rows[k].osm_way_id));
+      inputs.hourLocal, inputs.monthLocal, inputs.camsDaily, iso ? iso[n] : multi!.get(rows[k].osm_way_id));
     const a = adjust ? adjust(mid[1], mid[0], v) : v;
     if (!Number.isFinite(a.pm25)) throw new Error(`non-finite pm25 for road ${k}`);
     return {

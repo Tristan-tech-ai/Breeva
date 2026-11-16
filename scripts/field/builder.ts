@@ -24,6 +24,8 @@ export interface BuildOptions {
   openaqKey?: string;
   /** Spacing between OpenAQ requests (rate limit 60 per minute). */
   spacingMs?: number;
+  /** Traffic part: 'iso1' (default) = direction-averaged urban exhaust kernel; 'legacy' = the service engine's sum. */
+  exhaust?: 'iso1' | 'legacy';
   now?: Date;
 }
 
@@ -74,7 +76,11 @@ export async function buildFieldRun(pack: RoadPack, o: BuildOptions): Promise<Bu
   // The last complete hour: OpenAQ hourly values and METAR reports of the current hour are not in yet.
   const measured = o.measure === 'off' ? undefined
     : await measureHour(o.measureParams, new Date(validUtc.getTime() - 3600_000), { openaqKey: o.openaqKey }, { spacingMs: o.spacingMs ?? 1100 });
-  const inputs: FieldInputs = { region: o.region, hourLocal, monthLocal, diurnal: HOURLY_TRAFFIC[hourLocal] ?? 1.0, camsDaily, grids, measured };
+  const iso = o.exhaust !== 'legacy';
+  const inputs: FieldInputs = { region: o.region, hourLocal, monthLocal, diurnal: HOURLY_TRAFFIC[hourLocal] ?? 1.0, camsDaily, grids, measured,
+    ...(iso ? { exhaust: 'iso1' as const } : {}) };
+  // the exhaust kernel reaches values above the linear tops of the byte columns, so its runs use the long-tail scale
+  const scale = iso ? 'tail' as const : 'linear' as const;
   const t1 = Date.now();
 
   const results = computeField(pack, inputs);
@@ -93,14 +99,18 @@ export async function buildFieldRun(pack: RoadPack, o: BuildOptions): Promise<Bu
   for (let c = 0; c < pack.meta.cells.length; c++) {
     const vals = byCell.get(c);
     if (!vals?.length) continue;
-    for (const r of vals) for (const col of Object.keys(sat) as Array<keyof typeof sat>) if (saturated(col, r[col])) sat[col]++;
-    const buf = encodeCell(vals);
+    for (const r of vals) for (const col of Object.keys(sat) as Array<keyof typeof sat>) if (saturated(col, r[col], scale)) sat[col]++;
+    const buf = encodeCell(vals, scale);
     cells.push({ c, bytes: buf });
     bytes += buf.byteLength;
   }
   const pm = results.map((r) => r.pm25).sort((a, b) => a - b);
+  const ex = results.map((r) => r.no2_delta).sort((a, b) => a - b);
+  const at = (a: number[], p: number) => Math.round(a[Math.floor(p * (a.length - 1))] * 100) / 100;
   const report = {
     run, region: o.region, name: o.name, roads: results.length, cells: cells.length, bytes, saturated: sat,
+    // traffic part as the NOx tracer, ug/m3: how different the roads are from each other this hour
+    exhaust: { kernel: iso ? 'iso1' : 'legacy', nox_p10: at(ex, 0.1), nox_median: at(ex, 0.5), nox_p90: at(ex, 0.9), nox_p99: at(ex, 0.99) },
     pm25: { min: pm[0], median: pm[Math.floor(pm.length / 2)], p95: pm[Math.floor(pm.length * 0.95)], max: pm[pm.length - 1] },
     inputs: { hourLocal, monthLocal, diurnal: inputs.diurnal, camsDaily, background_grids: gridCache.size },
     measurement: measured ? { method: measured.method, hour_utc: measured.hour_utc, sensors: measured.sensors.length,
@@ -119,16 +129,16 @@ export async function buildFieldRun(pack: RoadPack, o: BuildOptions): Promise<Bu
   }
   const manifest = {
     geometry: pack.meta.geometry, run, computed_at: new Date().toISOString(), valid_hour_local: hourLocal,
-    engine: 'v2.1', cells: cells.map((x) => x.c), forecast_runs: [], sensors_used: measured?.method === 'kriging' ? measured.sensors.length : 0,
+    engine: iso ? 'v2.2' : 'v2.1', exhaust: iso ? 'iso1' : 'legacy', cells: cells.map((x) => x.c), forecast_runs: [], sensors_used: measured?.method === 'kriging' ? measured.sensors.length : 0,
     measurement: { method: measured?.method ?? 'off', hour_utc: measured?.hour_utc ?? null, sensor_hour_utc: measured?.sensor_hour_utc ?? null,
       metar: measured?.metar?.station ?? null },
     cell_tiles: pack.meta.cells, cell_stats: cellStats, indicative: o.indicative,
     state: { background: [], met: [], diurnal: inputs.diurnal, oi_weights: [] },
     inputs_note: measured?.method === 'kriging'
-      ? `ambient from log-space kriging of ${measured.sensors.length} OpenAQ citizen sensors (hour ${measured.sensor_hour_utc}) + CALINE4 road increment`
+      ? `ambient from log-space kriging of ${measured.sensors.length} OpenAQ citizen sensors (hour ${measured.sensor_hour_utc}) + ${iso ? 'urban exhaust kernel (direction-averaged)' : 'CALINE4 road increment'}`
       : measured?.method === 'koschmieder'
-        ? `ambient raised to the ${measured.metar?.station} visibility smoke estimate (${measured.koschmieder?.reason}) + CALINE4 road increment`
-        : 'Open-Meteo background per z12 cell + CAMS daily mean + CALINE4 road increment; no measurement this hour',
+        ? `ambient raised to the ${measured.metar?.station} visibility smoke estimate (${measured.koschmieder?.reason}) + ${iso ? 'urban exhaust kernel (direction-averaged)' : 'CALINE4 road increment'}`
+        : `Open-Meteo background per z12 cell + CAMS daily mean + ${iso ? 'urban exhaust kernel (direction-averaged)' : 'CALINE4 road increment'}; no measurement this hour`,
   };
   return { run, cells, inputs, report, manifest };
 }

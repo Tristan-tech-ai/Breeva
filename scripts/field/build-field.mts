@@ -44,6 +44,7 @@ const pack = new RoadPack(new Uint8Array(readFileSync(arg('pack'))));
 const built = await buildFieldRun(pack, {
   name, region: arg('region'), tz: Number(arg('tz')), indicative: process.argv.includes('--indicative'),
   measure, measureParams, openaqKey: process.env.OPENAQ_API_KEY,
+  exhaust: process.argv.includes('--legacy-exhaust') ? 'legacy' : 'iso1',
 });
 mkdirSync(runDir, { recursive: true });
 for (const o of runObjects(name, built)) writeAtomic(join(outRoot, o.key), o.body);
