@@ -203,7 +203,7 @@ export default function ExploreMapPage() {
         {/* Interactive map (progressive enhancement) */}
         <div className="relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg" style={{ height: 'min(58vh, 480px)' }}>
           <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
-            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} walkRouting={walkMode} onWalkRouting={setWalkState} routeMode={routeMode} routeLink={link} routeDest={schoolDest} routeDepart={depart} wheelNeedsModifier />
+            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} walkRouting={walkMode} onWalkRouting={setWalkState} routeMode={routeMode} routeLink={link} routeDest={schoolDest} routeDepart={depart} wheelNeedsModifier initialCenter={FIELD_STATIC ? startRegion.home : undefined} />
           </Suspense>
 
           {/* Search overlay */}

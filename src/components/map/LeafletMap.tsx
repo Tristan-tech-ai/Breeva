@@ -158,6 +158,11 @@ interface LeafletMapProps {
   routeDepart?: string | null;
   /** Map inside a scrolling page: the wheel scrolls the page, Ctrl/Cmd + wheel zooms, +/- buttons shown. */
   wheelNeedsModifier?: boolean;
+  /**
+   * Where the map is created (default: the store's centre). Without it a page that sets the store's centre in an
+   * effect makes the map fly there from the old centre, loading tiles at every zoom on the way (F1-13).
+   */
+  initialCenter?: Coordinate;
 }
 
 // ── Inner map controller ─────────────────────────────────────────────
@@ -616,8 +621,10 @@ export default function LeafletMap({
   routeDest = null,
   routeDepart = null,
   wheelNeedsModifier = false,
+  initialCenter,
 }: LeafletMapProps) {
-  const { center } = useMapStore();
+  const { center: storeCenter } = useMapStore();
+  const [center] = useState<Coordinate>(() => initialCenter ?? storeCenter);
   const base = basemap(mapStyle, isDarkMode);
   // F1-13: over a static-field region the base map waits for the first colored roads (or 5 s), so its tiles do not
   // compete with the field for a slow connection; elsewhere it loads at once.
