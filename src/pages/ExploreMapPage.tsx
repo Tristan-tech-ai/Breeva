@@ -238,6 +238,11 @@ export default function ExploreMapPage() {
           )}
         </div>
 
+        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+          Seberapa akurat? <Link to="/validasi" className="font-semibold text-sky-700 dark:text-sky-300 underline">Cara kami menguji akurasi</Link> ·{' '}
+          <Link to="/prioritas" className="font-semibold text-sky-700 dark:text-sky-300 underline">Prioritas sekolah dan faskes</Link>
+        </p>
+
         {/* How it works */}
         <section>
           <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Cara kerja</h3>

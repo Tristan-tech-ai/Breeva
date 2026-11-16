@@ -46,6 +46,7 @@ const ContributionHistoryPage = lazy(() => import('./pages/ContributionHistoryPa
 const YearInReviewPage = lazy(() => import('./pages/YearInReviewPage'));
 const PaparanPage = lazy(() => import('./pages/PaparanPage'));
 const PrioritasPage = lazy(() => import('./pages/PrioritasPage'));
+const ValidasiPage = lazy(() => import('./pages/ValidasiPage'));
 const ExploreMapPage = lazy(() => import('./pages/ExploreMapPage'));
 const CityAirPage = lazy(() => import('./pages/CityAirPage'));
 const DevelopersPage = lazy(() => import('./pages/DevelopersPage'));
@@ -276,6 +277,7 @@ function App() {
 
             {/* Public priority list of schools and health facilities (no auth) */}
             <Route path="/prioritas" element={<PrioritasPage />} />
+            <Route path="/validasi" element={<ValidasiPage />} />
 
             {/* Public live-map showcase + per-city AQI pages (crawlable, no auth, prerendered) */}
             <Route path="/peta" element={<ExploreMapPage />} />

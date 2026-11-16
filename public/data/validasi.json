@@ -1,0 +1,127 @@
+{
+ "built_at": "2026-11-16T10:47:42.655Z",
+ "standard": {
+  "name": "EPA, target sensor untuk informasi publik, rata-rata 24 jam (EPA/600/R-20/280)",
+  "nrmse_pct": 30,
+  "r2": 0.7,
+  "slope": [
+   0.65,
+   1.35
+  ],
+  "intercept": 5
+ },
+ "rule": "Akurasi hanya diklaim dari uji di lokasi yang disembunyikan: lokasi yang dinilai tidak pernah dipakai untuk menebak dirinya sendiri.",
+ "daily": [
+  {
+   "id": "bali_hidden",
+   "label": "Bali, sensor warga disembunyikan satu per satu",
+   "source": "sensors_bali_loso.json daily",
+   "nrmse_pct": 22.9,
+   "r2": 0.668,
+   "slope": 0.732,
+   "intercept": 9.12,
+   "n": 1470,
+   "flags": {
+    "nrmse": true,
+    "r2": false,
+    "slope": true,
+    "intercept": false
+   },
+   "passed": 2
+  },
+  {
+   "id": "bali_campaign14",
+   "label": "Ditambah kalibrasi lokasi 14 hari",
+   "source": "stats_i.json kampanye.14.harian",
+   "nrmse_pct": 21,
+   "r2": 0.79,
+   "slope": 1.02,
+   "intercept": -0.5,
+   "n": 1064,
+   "flags": {
+    "nrmse": true,
+    "r2": true,
+    "slope": true,
+    "intercept": true
+   },
+   "passed": 4
+  },
+  {
+   "id": "bali_sep_oct",
+   "label": "Bali, bulan yang tidak dilatih (Sep–Okt)",
+   "source": "time_split.json kriging_bali.fit_may_aug",
+   "nrmse_pct": 19.8,
+   "r2": 0.748,
+   "slope": 0.797,
+   "intercept": 6.51,
+   "n": 1043,
+   "flags": {
+    "nrmse": true,
+    "r2": true,
+    "slope": true,
+    "intercept": false
+   },
+   "passed": 3
+  },
+  {
+   "id": "city_hidden",
+   "label": "Kota tanpa stasiun, kota disembunyikan",
+   "source": "stats_i.json kota_harian.kalibrasi_pandang_semua",
+   "nrmse_pct": 49.6,
+   "r2": 0.55,
+   "slope": null,
+   "intercept": null,
+   "n": null,
+   "flags": {
+    "nrmse": false,
+    "r2": false,
+    "slope": false,
+    "intercept": false
+   },
+   "passed": 0
+  }
+ ],
+ "hourly": {
+  "nrmse_pct": 45.3,
+  "rmse": 15.69,
+  "source": "sensors_bali_loso.json hourly",
+  "pi95_coverage_before": 0.844,
+  "pi95_coverage_calibrated": 0.949,
+  "pi95_median_width": 56.6
+ },
+ "city_hourly_rmse": {
+  "global_model": 43.46,
+  "calibrated_with_visibility": 31.58,
+  "source": "stats_f.json E2 (cams, lin_kosch)"
+ },
+ "time_split_calibration": {
+  "loco_sep_oct": 48.7,
+  "time_and_loco": 48.93,
+  "without_palembang": 22.32,
+  "cams_without_palembang": 40.59,
+  "source": "time_split.json calibration"
+ },
+ "rejected": [
+  {
+   "name": "Kepadatan jalan sebagai fitur",
+   "before": 15.92,
+   "after": 17.63,
+   "unit": "RMSE per jam µg/m³ (Bali, sensor disembunyikan)",
+   "source": "stats_g.json E_bali (idw, idw_x_waktu_jalan)"
+  },
+  {
+   "name": "Koreksi kelembapan AS (Barkjohn 2021)",
+   "before": 0.987,
+   "after": 0.519,
+   "unit": "kemiringan terhadap stasiun arsip (1 = sempurna)",
+   "source": "humidity_correction_bali.json B_network_vs_archive_daily"
+  },
+  {
+   "name": "Cuaca ERA5, cuaca terukur bandara, arah angin, CO/AOD model, jarak ke pantai, ketinggian",
+   "before": null,
+   "after": null,
+   "unit": "tidak menurunkan galat di uji lokasi disembunyikan",
+   "source": "proposal (analisis E, H, I)"
+  }
+ ]
+}
