@@ -211,7 +211,7 @@ export async function getPOIsInRect(
   }
 
   try {
-    const limit = 150;
+    const limit = 100; // the proxy accepts 1..100 (api/searchapi/_params.ts); 150 was refused with 400
     // Geoapify rect filter: lon1,lat1,lon2,lat2 (SW corner, NE corner)
     const url = `${POI_PROXY}&categories=${encodeURIComponent(cats)}&filter=rect:${bounds.west},${bounds.south},${bounds.east},${bounds.north}&limit=${limit}&lang=id`;
 
