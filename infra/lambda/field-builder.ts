@@ -56,8 +56,9 @@ export const handler = async () => {
       for (const o of runObjects(r.name, built)) {
         await s3.send(new PutObjectCommand({ Bucket: bucket, Key: o.key, Body: o.body, CacheControl: o.cacheControl, ContentType: o.contentType, Tagging: o.tagging }));
       }
-      const rep = built.report as { roads: number; pm25: { median: number }; measurement: { method: string; note?: string }; seconds: { total: number } };
-      out.push({ name: r.name, run, roads: rep.roads, pm25_median: rep.pm25.median, measurement: rep.measurement.method, note: rep.measurement.note, seconds: rep.seconds.total });
+      const rep = built.report as { roads: number; pm25: { median: number }; measurement: { method: string; note?: string }; validation: { n: number; rmse: number; nrmse: number } | null; seconds: { total: number } };
+      const val = rep.validation && { n: rep.validation.n, rmse: rep.validation.rmse, nrmse: rep.validation.nrmse };
+      out.push({ name: r.name, run, roads: rep.roads, pm25_median: rep.pm25.median, measurement: rep.measurement.method, note: rep.measurement.note, validation: val, seconds: rep.seconds.total });
     } catch (e) {
       failed++;
       out.push({ name: r.name, run, error: (e as Error).message });

@@ -9,6 +9,7 @@ import type { RoadPack } from './pack.js';
 import { encodeCell, saturated } from './cells.js';
 import { computeField, type FieldInputs } from './engine.js';
 import { measureHour, type RegionMeasureParams } from './measure.js';
+import { hourlyValidation } from './hourly-validation.js';
 
 export interface BuildOptions {
   name: string;
@@ -104,6 +105,8 @@ export async function buildFieldRun(pack: RoadPack, o: BuildOptions): Promise<Bu
     inputs: { hourLocal, monthLocal, diurnal: inputs.diurnal, camsDaily, background_grids: gridCache.size },
     measurement: measured ? { method: measured.method, hour_utc: measured.hour_utc, sensors: measured.sensors.length,
       vetted: measured.sensors_vetted, koschmieder: measured.koschmieder ?? null, note: measured.note } : { method: 'off' },
+    // running hidden-sensor test of the measurement layer for this hour (F5-07); null when nothing was kriged
+    validation: hourlyValidation(measured),
     seconds: { inputs: (t1 - t0) / 1000, compute: (t2 - t1) / 1000, total: (Date.now() - t0) / 1000 },
   };
   const median = (a: number[]) => { const q = [...a].sort((x, y) => x - y); return q.length ? q[Math.floor(q.length / 2)] : Number.NaN; };
