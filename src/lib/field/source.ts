@@ -15,6 +15,8 @@ export interface FieldManifest {
   cell_stats?: Record<string, { pm25_median: number; no2_median: number; roads: number }>;
   /** True when no measuring station lies inside the area: values are indicative only. */
   indicative?: boolean;
+  /** Measurement layer of the run: kriging (citizen sensors), koschmieder (airport smoke), none or off. */
+  measurement?: { method: string; hour_utc?: string | null; sensor_hour_utc?: string | null; metar?: string | null };
 }
 
 export interface FieldRegion { name: string; label: string; geometry: string; bounds: [[number, number], [number, number]]; home: { lat: number; lng: number } }

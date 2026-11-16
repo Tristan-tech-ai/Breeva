@@ -57,3 +57,16 @@ describe('road popup', () => {
     expect(popupHtml(v, undefined, { ...src, harga: null }, r.c, r.i)).not.toContain('harga hirup');
   });
 });
+
+describe('95 % interval in the popup', () => {
+  it('a kriged value has a log-symmetric interval around its ambient; other runs are symmetric', async () => {
+    const { interval95 } = await import('../src/lib/field/popup');
+    // ambient 24 (delta 1): kriging gives exp(mu +- 1.96 k sd) - 1, here hi_a = 3 * (1 + 24) - 1 = 74
+    const v = { pm25: 25, pm25_delta: 1, pi_half: 50 };
+    const [lo, hi] = interval95(v, 'kriging');
+    expect(hi).toBe(75);
+    expect(lo).toBeCloseTo((1 + 24) / 3 - 1 + 1, 6); // (1 + a)^2 / (1 + hi_a) - 1 + delta = 25/3 - 1 + 1
+    expect(interval95(v, 'none')).toEqual([0, 75]);
+    expect(interval95({ pm25: 40, pm25_delta: 0, pi_half: 10 }, undefined)).toEqual([30, 50]);
+  });
+});

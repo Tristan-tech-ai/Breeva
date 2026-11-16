@@ -6,6 +6,19 @@ import { ageLabel, type FieldSource } from './source';
 
 type PopupSource = Pick<FieldSource, 'ageHours' | 'isStale' | 'manifest' | 'harga'>;
 
+/**
+ * 95 % interval of a road value. Cells keep only the upper half-width. A kriged run (manifest measurement.method
+ * 'kriging') has an interval symmetric in log1p of the ambient, with the road's traffic part added on top, so the
+ * lower end follows from the upper one: lo_a = (1 + a)^2 / (1 + hi_a) - 1 with a = pm25 - delta; other runs are
+ * symmetric in ug/m3.
+ */
+export function interval95(v: Pick<CellValue, 'pm25' | 'pm25_delta' | 'pi_half'>, method: string | undefined): [number, number] {
+  const hi = v.pm25 + v.pi_half;
+  if (method !== 'kriging') return [Math.max(0, v.pm25 - v.pi_half), hi];
+  const a = Math.max(0, v.pm25 - v.pm25_delta), hiA = Math.max(a, hi - v.pm25_delta);
+  return [Math.max(0, (1 + a) ** 2 / (1 + hiA) - 1 + v.pm25_delta), hi];
+}
+
 export function hargaLine(src: PopupSource, c: number, i: number): string {
   const h = src.harga?.value(c, i);
   if (h == null || !src.harga) return '';
@@ -18,7 +31,7 @@ export function popupHtml(v: CellValue | undefined, name: string | undefined, sr
   if (!v) return `<div style="font-size:12px">Nilai ruas ini sedang dimuat.</div>`;
   const band = pm25Category(v.pm25);
   const index = ispuRounded('pm25', v.pm25) ?? 0;
-  const lo = Math.max(0, v.pm25 - v.pi_half), hi = v.pm25 + v.pi_half;
+  const [lo, hi] = interval95(v, src.manifest?.measurement?.method);
   const title = name ? `<div style="font-weight:600;font-size:12px;color:#111;margin-bottom:3px">${name.replace(/</g, '&lt;')}</div>` : '';
   return `<div style="min-width:180px">${title}` +
     `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">` +
