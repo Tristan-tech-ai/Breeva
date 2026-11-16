@@ -33,7 +33,7 @@ export function parseTime(s: string, tzHours: number): number | null {
 
 /** Sensor CSV with a header row; columns found by name (time/date, pm2.5/pm25, lat, lon/lng). */
 export function parseSensorCsv(text: string, tzHours: number): Sample[] {
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim());
+  const lines = text.replace(/^\s*/, '').split(/\r?\n/).filter((l) => l.trim()); // also strips a byte-order mark
   if (!lines.length) return [];
   const sep = (lines[0].match(/;/g)?.length ?? 0) > (lines[0].match(/,/g)?.length ?? 0) ? ';' : ',';
   const head = lines[0].split(sep).map((h) => h.trim().toLowerCase().replace(/["\s]/g, ''));

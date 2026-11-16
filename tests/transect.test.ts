@@ -28,6 +28,7 @@ describe('walking test against the model', () => {
     const rows = [...minutes(7, 0, 3, 30, HOME), ...minutes(7, 10, 4, 28, S), ...minutes(7, 20, 4, 31, P), ...minutes(7, 40, 3, 30, HOME)];
     const samples = parseSensorCsv(csv(rows), 8);
     expect(samples).toHaveLength(14);
+    expect(parseSensorCsv(String.fromCharCode(0xfeff) + csv(rows), 8)).toHaveLength(14); // export with a byte-order mark
     expect(samples[0].pm25).toBe(30);
     const kept = privacyTrim(samples);
     expect(kept).toHaveLength(8);
