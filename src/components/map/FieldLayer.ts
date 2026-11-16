@@ -93,7 +93,7 @@ export function useFieldLayer(
               // Leaflet can ask for tiles outside the world range (wrapping); pmtiles throws on those.
               if (coords.x < 0 || coords.y < 0 || coords.x >= n || coords.y >= n) return { layers: {} };
               let r;
-              try { r = await src.pm.getZxy(coords.z - dz, coords.x >> dz, coords.y >> dz); }
+              try { r = await src.tile(coords.z - dz, coords.x >> dz, coords.y >> dz); }
               catch (e) { console.warn('[field] tile', coords, e); return { layers: {} }; }
               if (!r) return { layers: {} };
               // Reuse the stock parser: point the URL template at a blob of this tile's bytes (template is read synchronously).
@@ -142,17 +142,14 @@ export function useFieldLayer(
             },
           });
           let redrawTimer: ReturnType<typeof setTimeout> | undefined;
-          src.onCell = () => {
-            clearTimeout(redrawTimer);
-            redrawTimer = setTimeout(() => {
-              layer.redraw();
-              if (!drawn) {
-                drawn = true;
-                // let the canvas paint, then tell the base map and the other regions they may load
-                setTimeout(() => { markDrawn(); window.dispatchEvent(new Event(FIELD_DRAWN_EVENT)); }, 50);
-              }
-            }, 120);
-          };
+          src.onCell = () => { clearTimeout(redrawTimer); redrawTimer = setTimeout(() => layer.redraw(), 120); };
+          // "drawn" = the visible tiles have loaded while values exist, so colored roads are on screen; only then may
+          // the base map, the other regions and the harga file use the connection (a cell alone arrived too early)
+          layer.on('load', () => {
+            if (drawn || !src.hasCells()) return;
+            drawn = true;
+            setTimeout(() => { markDrawn(); window.dispatchEvent(new Event(FIELD_DRAWN_EVENT)); }, 50);
+          });
           layer.addTo(map);
           created.push(layer);
           layersRef.current = [...layersRef.current, layer];

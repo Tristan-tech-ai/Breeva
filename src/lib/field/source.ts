@@ -74,6 +74,7 @@ export class FieldSource {
   private readonly cells = new Map<number, CellValue[]>();
   private readonly pending = new Map<number, Promise<void>>();
   private hargaLoad: Promise<void> | null = null;
+  private readonly tilePromises = new Map<string, Promise<{ data: ArrayBuffer } | undefined>>();
   /** Called whenever a cell arrives, so the layer can redraw. */
   onCell: (() => void) | null = null;
 
@@ -119,6 +120,26 @@ export class FieldSource {
     } catch {
       this.harga = null; // missing file (a dev server answers with index.html) or a broken one
     }
+  }
+
+  /** True once at least one value cell has arrived. */
+  hasCells(): boolean {
+    return this.cells.size > 0;
+  }
+
+  /**
+   * Native tile bytes (z <= 14), fetched once per tile and shared by its overzoomed children and by redraws: without
+   * this every z15 child and every redraw fetched the same range again (F1-13: 6 copies of one 42 KB range).
+   */
+  tile(z: number, x: number, y: number): Promise<{ data: ArrayBuffer } | undefined> {
+    const key = `${z}/${x}/${y}`;
+    let p = this.tilePromises.get(key);
+    if (!p) {
+      p = this.pm.getZxy(z, x, y).catch((e) => { this.tilePromises.delete(key); throw e; });
+      this.tilePromises.set(key, p);
+      if (this.tilePromises.size > 256) this.tilePromises.delete(this.tilePromises.keys().next().value as string);
+    }
+    return p;
   }
 
   /** Value of road (c, i), or undefined while its cell is loading (the load starts here). */

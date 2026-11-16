@@ -2,10 +2,12 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { cellsInView, FIELD_REGIONS, FieldSource, type Box } from '../src/lib/field/source';
 
+const tileCalls: string[] = [];
 vi.mock('pmtiles', () => ({
   PMTiles: class {
     constructor(public url: string) {}
     async getMetadata() { return { highway_codes: ['motorway'] }; }
+    async getZxy(z: number, x: number, y: number) { tileCalls.push(`${z}/${x}/${y}`); await new Promise((r) => setTimeout(r, 5)); return { data: new ArrayBuffer(8) }; }
   },
 }));
 
@@ -41,5 +43,16 @@ describe('first colored map (F1-13)', () => {
     await src.ensureHarga();
     await src.ensureHarga();
     expect(calls.filter((c) => c.includes('/harga/'))).toHaveLength(1);
+  });
+
+  it('fetches each native tile once for all its overzoomed children and later redraws', async () => {
+    const src = new FieldSource(FIELD_REGIONS[0], '/field', (async () => new Response('x', { status: 404 })) as unknown as typeof fetch);
+    tileCalls.length = 0;
+    // four z15 children of one z14 tile asked at the same time, then a redraw asking again
+    const first = await Promise.all([0, 1, 2, 3].map(() => src.tile(14, 13436, 8586)));
+    await src.tile(14, 13436, 8586);
+    await src.tile(14, 13437, 8586);
+    expect(first.every((r) => r?.data.byteLength === 8)).toBe(true);
+    expect(tileCalls).toEqual(['14/13436/8586', '14/13437/8586']);
   });
 });
