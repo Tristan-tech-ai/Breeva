@@ -46,6 +46,7 @@ const EcoTipsPage = lazy(() => import('./pages/EcoTipsPage'));
 const ContributionHistoryPage = lazy(() => import('./pages/ContributionHistoryPage'));
 const YearInReviewPage = lazy(() => import('./pages/YearInReviewPage'));
 const PaparanPage = lazy(() => import('./pages/PaparanPage'));
+const PrioritasPage = lazy(() => import('./pages/PrioritasPage'));
 const ExploreMapPage = lazy(() => import('./pages/ExploreMapPage'));
 const CityAirPage = lazy(() => import('./pages/CityAirPage'));
 const DevelopersPage = lazy(() => import('./pages/DevelopersPage'));
@@ -275,6 +276,9 @@ function App() {
 
             {/* Layer 3 — Exposure Risk Calculator (public; saved-walk source needs login) */}
             <Route path="/paparan" element={<PaparanPage />} />
+
+            {/* Public priority list of schools and health facilities (no auth) */}
+            <Route path="/prioritas" element={<PrioritasPage />} />
 
             {/* Public live-map showcase + per-city AQI pages (crawlable, no auth, prerendered) */}
             <Route path="/peta" element={<ExploreMapPage />} />

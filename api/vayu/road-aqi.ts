@@ -1440,13 +1440,10 @@ export function computeRoadAQIv2(
 // ─── #64: Multi-source dispersion — per receptor, Σ CALINE4 of every road within 500m ──────────
 // Matches the offline GATE-1 `d2_residual` 500m calibration (the live path previously summed only a
 // road's own line). Grid-bucketed (~275m cells), nearest 40 within 500m. ~35ms/600 roads (validated).
-export function buildMultiSourceDeltas(
-  roads: RoadRow[],
-  interp: (lat: number, lon: number) => BaselineData,
-  diurnal: number, hourLocal: number, monthLocal: number,
-): Map<number, { pm25: number; nox: number }> {
-  interface Src { wayId: number; poly: Array<[number, number]>; midLat: number; midLon: number; qPM25: number; qNOx: number; mod: number; }
-  const sources: Src[] = [];
+interface MultiSrc { wayId: number; poly: Array<[number, number]>; midLat: number; midLon: number; qPM25: number; qNOx: number; mod: number; }
+
+function multiSources(roads: RoadRow[], diurnal: number, monthLocal: number): MultiSrc[] {
+  const sources: MultiSrc[] = [];
   for (const road of roads) {
     let coords: number[][];
     try { coords = (JSON.parse(road.geojson) as { coordinates: number[][] }).coordinates; }
@@ -1467,28 +1464,50 @@ export function buildMultiSourceDeltas(
       mod,
     });
   }
+  return sources;
+}
+
+/**
+ * Σ CALINE4 of the nearest 40 road sources within 500 m at each receptor point (grid-bucketed, ~275 m cells).
+ * Receptors can be road midpoints (buildMultiSourceDeltas) or any point, e.g. a school.
+ */
+export function buildMultiSourceAt<K>(
+  roads: RoadRow[],
+  receptors: Array<{ key: K; lat: number; lon: number }>,
+  interp: (lat: number, lon: number) => BaselineData,
+  diurnal: number, hourLocal: number, monthLocal: number,
+): Map<K, { pm25: number; nox: number }> {
+  return sumAtReceptors(multiSources(roads, diurnal, monthLocal), receptors, interp, hourLocal);
+}
+
+function sumAtReceptors<K>(
+  sources: MultiSrc[],
+  receptors: Array<{ key: K; lat: number; lon: number }>,
+  interp: (lat: number, lon: number) => BaselineData,
+  hourLocal: number,
+): Map<K, { pm25: number; nox: number }> {
   const CELL = 0.0025; // ~275m grid cell
-  const buckets = new Map<string, Src[]>();
+  const buckets = new Map<string, MultiSrc[]>();
   for (const s of sources) {
     const k = `${Math.floor(s.midLat / CELL)}:${Math.floor(s.midLon / CELL)}`;
     const a = buckets.get(k); if (a) a.push(s); else buckets.set(k, [s]);
   }
-  const out = new Map<number, { pm25: number; nox: number }>();
+  const out = new Map<K, { pm25: number; nox: number }>();
   const CUTOFF = 500, CAP = 40;
-  for (const R of sources) {
-    const b = interp(R.midLat, R.midLon);
+  for (const R of receptors) {
+    const b = interp(R.lat, R.lon);
     const ws = Number.isFinite(b.wind_speed) ? b.wind_speed : 2.0;
     const wd = Number.isFinite(b.wind_direction) ? b.wind_direction : 0;
     const stab = pasquillClass(ws, hourLocal, 0.5);
     const wind = Math.max(ws, 0.5);
-    const mLon = 111320 * Math.cos((R.midLat * Math.PI) / 180);
-    const ci = Math.floor(R.midLat / CELL), cj = Math.floor(R.midLon / CELL);
-    const cand: Array<{ s: Src; dd: number }> = [];
+    const mLon = 111320 * Math.cos((R.lat * Math.PI) / 180);
+    const ci = Math.floor(R.lat / CELL), cj = Math.floor(R.lon / CELL);
+    const cand: Array<{ s: MultiSrc; dd: number }> = [];
     for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
       const cell = buckets.get(`${ci + di}:${cj + dj}`);
       if (!cell) continue;
       for (const s of cell) {
-        const dx = (s.midLon - R.midLon) * mLon, dy = (s.midLat - R.midLat) * 110574;
+        const dx = (s.midLon - R.lon) * mLon, dy = (s.midLat - R.lat) * 110574;
         const dd = Math.hypot(dx, dy);
         if (dd <= CUTOFF) cand.push({ s, dd });
       }
@@ -1497,12 +1516,21 @@ export function buildMultiSourceDeltas(
     let pm = 0, nx = 0;
     for (let i = 0; i < cand.length && i < CAP; i++) {
       const s = cand[i].s;
-      pm += caline4PolylineConc(s.poly, s.qPM25, R.midLat, R.midLon, wind, wd, stab) * s.mod;
-      nx += caline4PolylineConc(s.poly, s.qNOx, R.midLat, R.midLon, wind, wd, stab) * s.mod;
+      pm += caline4PolylineConc(s.poly, s.qPM25, R.lat, R.lon, wind, wd, stab) * s.mod;
+      nx += caline4PolylineConc(s.poly, s.qNOx, R.lat, R.lon, wind, wd, stab) * s.mod;
     }
-    out.set(R.wayId, { pm25: pm, nox: nx });
+    out.set(R.key, { pm25: pm, nox: nx });
   }
   return out;
+}
+
+export function buildMultiSourceDeltas(
+  roads: RoadRow[],
+  interp: (lat: number, lon: number) => BaselineData,
+  diurnal: number, hourLocal: number, monthLocal: number,
+): Map<number, { pm25: number; nox: number }> {
+  const sources = multiSources(roads, diurnal, monthLocal);
+  return sumAtReceptors(sources, sources.map((s) => ({ key: s.wayId, lat: s.midLat, lon: s.midLon })), interp, hourLocal);
 }
 
 // ─── Cache key from bbox (zoom-independent grid) ────────────
