@@ -15,6 +15,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 // Eager load: critical path pages
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
+import RootRoute from './components/auth/RootRoute';
 
 // Lazy load: all other pages for fast initial load
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
@@ -297,9 +298,9 @@ function App() {
               </ProtectedRoute>
             } />
 
-            {/* Landing Page — public root */}
-            <Route path="/" element={<LandingPage />} />
-            {/* Legacy /landing redirect */}
+            {/* Root: map first. Guests see the live coloured map with its legend; signed-in users go to the app. */}
+            <Route path="/" element={<RootRoute />} />
+            {/* Product story (former root) */}
             <Route path="/landing" element={<LandingPage />} />
           </Routes>
           </main>

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import type { Coordinate } from '../types';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Wind, Route, Gauge, MapPin, Crosshair, ArrowRight, Sparkles } from 'lucide-react';
 import { Seo } from '../components/Seo';
 import { useMapStore } from '../stores/mapStore';
@@ -10,6 +10,9 @@ import SearchBar from '../components/map/SearchBar';
 import { CITIES } from '../lib/cities';
 import type { PollutantType, RoadDisplayMode } from '../types';
 import { ISPU_CATEGORIES } from '../lib/ispu';
+import { FIELD_REGIONS } from '../lib/field/source';
+
+const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
 
 // Lazy map (leaflet ~185KB) — progressive enhancement for real browsers; crawlers
 // read the prerendered text below. The whole map stack is auth-free.
@@ -40,6 +43,7 @@ const HOW = [
 
 export default function ExploreMapPage() {
   const navigate = useNavigate();
+  const isRoot = useLocation().pathname === '/';
   const isDark = useIsDark();
   const currentAQI = useMapStore((s) => s.currentAQI);
   // The value card follows the map: field reading for the centre when the area has a field, else the API.
@@ -50,9 +54,12 @@ export default function ExploreMapPage() {
   const activeP = POLLUTANTS.find((p) => p.id === pollutant) ?? POLLUTANTS[0];
   const showRoadModes = CONCENTRATION.includes(pollutant);
 
-  // Populate AQI for the default city (Jakarta) WITHOUT prompting for geolocation.
+  // Start where coloured roads exist: with the static field, its first region (Badung-Denpasar); otherwise Jakarta.
+  // No geolocation prompt.
   useEffect(() => {
-    useMapStore.getState().fetchAreaReading({ lat: -6.2088, lng: 106.8456 });
+    const start = FIELD_STATIC ? FIELD_REGIONS[0].home : { lat: -6.2088, lng: 106.8456 };
+    useMapStore.getState().setCenter(start);
+    void useMapStore.getState().fetchAreaReading(start);
   }, []);
 
   const useMyLocation = () => {
@@ -70,10 +77,13 @@ export default function ExploreMapPage() {
 
       {/* Header */}
       <div className="sticky top-0 z-30 glass-nav px-4 py-3 flex items-center gap-2 safe-area-top">
-        <button onClick={() => navigate('/')} aria-label="Kembali" className="text-gray-600 dark:text-gray-300 p-1 -ml-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition">
-          <ChevronLeft className="w-6 h-6" />
-        </button>
-        <h1 className="text-base font-semibold text-gray-900 dark:text-white">Peta Udara Langsung</h1>
+        {!isRoot && (
+          <button onClick={() => navigate('/')} aria-label="Kembali" className="text-gray-600 dark:text-gray-300 p-1 -ml-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition">
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+        )}
+        <h1 className="text-base font-semibold text-gray-900 dark:text-white">{isRoot ? 'Breeva · Peta Udara Langsung' : 'Peta Udara Langsung'}</h1>
+        {isRoot && <Link to="/landing" className="ml-2 text-xs text-gray-500 dark:text-gray-400 underline-offset-2 hover:underline">Tentang</Link>}
         <Link to="/login" className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-full gradient-primary text-white shadow-sm">Buka aplikasi</Link>
       </div>
 
@@ -87,10 +97,9 @@ export default function ExploreMapPage() {
             Kualitas udara per jalan, langsung di peta
           </h2>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-            Breeva memetakan AQI (Indeks Kualitas Udara) untuk <b>tiap ruas jalan</b> di kota-kota Indonesia secara
-            real-time — memakai mesin VAYU yang mengkalibrasi data sensor, satelit, dan dispersi lalu lintas.
-            Jelajahi peta di bawah, lihat warna polusi per jalan, lalu temukan rute jalan kaki paling bersih.
-            Bebas dipakai tanpa akun.
+            Breeva memperkirakan polusi udara untuk <b>tiap ruas jalan</b>, dalam ISPU (Indeks Standar Pencemar Udara),
+            diperbarui per jam: latar atmosfer CAMS ditambah sebaran polusi dari lalu lintas di jalan sekitar. Nilainya
+            perkiraan model, lengkap dengan rentang ketidakpastian. Ketuk jalan untuk melihat angkanya. Bebas dipakai tanpa akun.
           </p>
         </header>
 

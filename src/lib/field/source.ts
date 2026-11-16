@@ -14,11 +14,11 @@ export interface FieldManifest {
   cell_stats?: Record<string, { pm25_median: number; no2_median: number; roads: number }>;
 }
 
-export interface FieldRegion { name: string; label: string; geometry: string; bounds: [[number, number], [number, number]] }
+export interface FieldRegion { name: string; label: string; geometry: string; bounds: [[number, number], [number, number]]; home: { lat: number; lng: number } }
 
 /** Regions with a published field. bounds = [[south, west], [north, east]]. */
 export const FIELD_REGIONS: FieldRegion[] = [
-  { name: 'badung_denpasar', label: 'Badung–Denpasar', geometry: '2026-11', bounds: [[-8.82, 115.08], [-8.56, 115.3]] },
+  { name: 'badung_denpasar', label: 'Badung–Denpasar', geometry: '2026-11', bounds: [[-8.82, 115.08], [-8.56, 115.3]], home: { lat: -8.6705, lng: 115.2126 } },
 ];
 
 export const STALE_HOURS = 3;

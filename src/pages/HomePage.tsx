@@ -132,7 +132,8 @@ export default function HomePage() {
   // the <html> class in lockstep, so no DOM polling is needed.
   const isDark = useIsDark();
   const [showWalkComplete, setShowWalkComplete] = useState(false);
-  const [showAQIOverlay, setShowAQIOverlay] = useState(false);
+  // Road colours are on by default: the map is the product (F1-02).
+  const [showAQIOverlay, setShowAQIOverlay] = useState(true);
   const [showAQIStations, setShowAQIStations] = useState(false);
   const [showPOIs, setShowPOIs] = useState(true);
   const [highlightGreen, setHighlightGreen] = useState(false);

@@ -186,7 +186,9 @@ function MapController({
   const deviceHeading = useDeviceHeading(isTracking);
   const puckHeading = deviceHeading ?? heading;
 
-  const prevCenterRef = useRef(center);
+  // Start from where the map really is, not from the store: the store centre can change between the map being
+  // created and this controller mounting (e.g. a page setting its start area), and that change must still move the map.
+  const prevCenterRef = useRef<Coordinate>((() => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng }; })());
   const userMarkerRef = useRef<L.Marker | null>(null);
   const destMarkerRef = useRef<L.Marker | null>(null);
   const routeLayerRef = useRef(L.layerGroup());
