@@ -5,6 +5,9 @@
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { basemap } from '../../lib/basemap';
+
+const PICKER_BASE = basemap('voyager', false);
 
 const PIN = L.divIcon({
   className: '',
@@ -34,9 +37,8 @@ export default function LocationPicker({
       zoom={16}
       style={{ height: 168, width: '100%', borderRadius: 14 }}
       scrollWheelZoom={false}
-      attributionControl={false}
     >
-      <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
+      <TileLayer url={PICKER_BASE.url} attribution={PICKER_BASE.attribution} {...(PICKER_BASE.subdomains ? { subdomains: PICKER_BASE.subdomains } : {})} />
       <ClickCapture onPick={onChange} />
       <Marker
         position={[lat, lng]}

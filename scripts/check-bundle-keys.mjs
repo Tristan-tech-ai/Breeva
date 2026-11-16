@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // Public by design: the Supabase URL and anon key are protected by row-level security; the OAuth client id is public.
-const PUBLIC = new Set(['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_GOOGLE_CLIENT_ID', 'VITE_APP_URL']);
+const PUBLIC = new Set(['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_GOOGLE_CLIENT_ID', 'VITE_APP_URL', 'VITE_CARTO_BASEMAP_KEY']);
 const SECRET = [
   'VITE_GEMINI_API_KEY', 'VITE_OPENROUTESERVICE_API_KEY', 'VITE_ORS_API_KEY', 'VITE_FOURSQUARE_API_KEY',
   'VITE_GEOAPIFY_API_KEY', 'VITE_WAQI_TOKEN', 'VITE_IQAIR_API_KEY', 'VITE_SEARCHAPI_KEY', 'VITE_TOMTOM_API_KEY',

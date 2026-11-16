@@ -789,3 +789,8 @@
 .dest-location-marker:hover svg {
   transform: scale(1.1);
 }
+
+/* OpenStreetMap has no dark style: darken the light basemap tiles in dark mode (src/lib/basemap.ts). */
+.basemap-dark {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
+}

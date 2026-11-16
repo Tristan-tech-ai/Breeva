@@ -9,6 +9,9 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { formatDistance, formatDuration, formatNumber } from '../lib/utils';
 import { useDistanceUnit } from '../stores/settingsStore';
+import { basemap } from '../lib/basemap';
+
+const WALK_BASE = basemap('voyager', false);
 
 interface WalkDetail {
   id: string;
@@ -348,8 +351,8 @@ ${points}
         {/* Map */}
         {routeCoords.length >= 2 && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700/30 h-56">
-            <MapContainer center={center} zoom={15} style={{ height: '100%', width: '100%' }} zoomControl={false} attributionControl={false}>
-              <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
+            <MapContainer center={center} zoom={15} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+              <TileLayer url={WALK_BASE.url} attribution={WALK_BASE.attribution} {...(WALK_BASE.subdomains ? { subdomains: WALK_BASE.subdomains } : {})} />
               <Polyline positions={routeCoords} pathOptions={{ color: '#6366f1', weight: 4, opacity: 0.4 }} />
               {isPlaying || replayIndex > 0 ? (
                 <>

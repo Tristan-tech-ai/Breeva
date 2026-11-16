@@ -22,6 +22,7 @@ import type { POI } from '../../lib/poi-api';
 import type { Coordinate } from '../../types';
 import type { PollutantType, RoadDisplayMode } from '../../types';
 import { getAQIColor, getRouteColor } from './mapColors';
+import { basemap } from '../../lib/basemap';
 
 const toTuple = (wp: Coordinate): L.LatLngTuple => [wp.lat, wp.lng];
 
@@ -61,25 +62,6 @@ const LOOK_AHEAD_M = 28;      // bias the view slightly down the road ahead
 const CENTER_EASE = 0.14;     // per-frame lerp toward the target (lower = smoother/slower)
 const BEARING_EASE = 0.16;    // per-frame ease for heading-up rotation
 
-// ── CARTO / ESRI raster tile URLs ────────────────────────────────────
-
-const TILE_URLS: Record<string, { light: string; dark: string; attr: string }> = {
-  voyager: {
-    light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attr: '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
-  },
-  osm: {
-    light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png',
-    dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attr: '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
-  },
-  satellite: {
-    light: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    dark: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attr: '&copy; Esri',
-  },
-};
 
 // ── Custom marker icons ──────────────────────────────────────────────
 
@@ -589,8 +571,7 @@ export default function LeafletMap({
   selectedPoiId = null,
 }: LeafletMapProps) {
   const { center } = useMapStore();
-  const tileConfig = TILE_URLS[mapStyle] || TILE_URLS.voyager;
-  const tileUrl = isDarkMode ? tileConfig.dark : tileConfig.light;
+  const base = basemap(mapStyle, isDarkMode);
   const [internalMeta, setInternalMeta] = useState<RoadLayerMeta | null>(null);
 
   return (
@@ -612,10 +593,10 @@ export default function LeafletMap({
         zoom={15}
         style={{ width: '100%', height: '100%', position: 'relative', zIndex: 0 }}
         zoomControl={false}
-        attributionControl={false}
+        attributionControl
         {...({ rotate: true, rotateControl: false, touchRotate: false, bearing: 0 } as Record<string, unknown>)}
       >
-        <TileLayer key={tileUrl} url={tileUrl} attribution={tileConfig.attr} />
+        <TileLayer key={base.url + (base.className ?? '')} url={base.url} attribution={base.attribution} className={base.className} {...(base.subdomains ? { subdomains: base.subdomains } : {})} />
         <MapController
           isDarkMode={isDarkMode}
           showAQIOverlay={showAQIOverlay}

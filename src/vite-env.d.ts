@@ -15,6 +15,8 @@ interface ImportMetaEnv {
   readonly VITE_FIELD_STATIC?: string;
   /** Base URL of the static field files; default /field (dev: public/field, staged by scripts/field/stage-dev.mjs). */
   readonly VITE_FIELD_BASE?: string;
+  /** Free CARTO basemap key (browser key, public by design); without it OpenStreetMap tiles are used. */
+  readonly VITE_CARTO_BASEMAP_KEY?: string;
 }
 
 interface ImportMeta {
