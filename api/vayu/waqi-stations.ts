@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { rateLimit, LIMITS } from './_guard.js';
 
 // 2026-05-24 SECURITY FIX: server-side WAQI proxy.
 // Replaces direct browser → WAQI calls (which leaked VITE_WAQI_TOKEN publicly via bundle).
@@ -51,6 +52,7 @@ function parseBbox(input: string | string[] | undefined): [number, number, numbe
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await rateLimit(req, res, 'waqi', LIMITS.waqi))) return;
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'GET only' });
   }

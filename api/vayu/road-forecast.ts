@@ -11,6 +11,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { rateLimit, LIMITS } from './_guard.js';
 
 interface ForecastRow {
   forecast_hour: number;
@@ -29,6 +30,7 @@ interface ForecastPoint {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await rateLimit(req, res, 'roadForecast', LIMITS.roadForecast))) return;
   const osmWayId = Number(req.query.osm_way_id);
   const horizon = Math.max(1, Math.min(24, Number(req.query.h ?? '24')));
 

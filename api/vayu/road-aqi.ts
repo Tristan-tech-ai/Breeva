@@ -18,6 +18,7 @@ import {
 // Underscore module → inlined into this bundle (no new serverless function).
 import { renderRoadTile, tileBBox, type TileRoad } from './_tilepng.js';
 import { fetchBaselineGrid as fetchBaselineGridShared, type BaselineData } from './_baseline.js';
+import { rateLimit, LIMITS, cronStatus } from './_guard.js';
 
 // ─── v2 engine wiring (Phase 3a) — feature-flagged, DEFAULT OFF (prod stays v1 until verified+flipped) ───
 const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
@@ -1524,6 +1525,7 @@ function bboxCacheKey(south: number, west: number, north: number, east: number, 
 
 // ─── Handler ────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await rateLimit(req, res, 'roadAqi', LIMITS.roadAqi))) return;
   // Developer-API surface (/api/v1/road-aqi -> ?v1=1): require + rate-limit an API key.
   if (req.query.v1) {
     const gate = await requireApiKey(req, res, 'road-aqi');
@@ -1534,12 +1536,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Cron auth guard (Migration 0012 — pg_cron → Vercel webhook).
-  // If header is present, it MUST match BREEVA_CRON_SECRET. Absent header
-  // means a normal user request — continue without auth.
-  // .trim() defends against env vars that ship with stray whitespace/newlines.
-  const cronSecret = (req.headers['x-breeva-cron-secret'] as string | undefined)?.trim();
-  const expectedSecret = process.env.BREEVA_CRON_SECRET?.trim();
-  if (cronSecret && cronSecret !== expectedSecret) {
+  // A wrong header is refused; no header is an ordinary request that never gets cron-only effects
+  // (see cronStatus in _guard.ts: without BREEVA_CRON_SECRET configured nothing is ever 'valid').
+  const cron = cronStatus(req);
+  if (cron === 'invalid') {
     return res.status(401).json({ error: 'Invalid cron secret' });
   }
 
@@ -1714,7 +1714,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ── WAQI History Save (feeds Module B temporal learning) ──
     // Fire-and-forget: save hourly WAQI readings so Gemini can learn traffic patterns
-    if (fh === 0 && bias.stationName) {
+    // Only an authenticated cron call may append to the learning history; public requests never write it.
+    if (fh === 0 && bias.stationName && cron === 'valid') {
       (async () => {
         try {
           const histKey = `vayu:waqi_history:${region}:${today}`;

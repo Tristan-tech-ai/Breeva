@@ -6,6 +6,7 @@ import { pm25AqiToUg as pm25AQIToUg, no2AqiToUg as no2AQIToUg, o3AqiToUg as o3AQ
 // ambient as the map (road-aqi), instead of raw CAMS — the validated 45%-LODO accuracy lever.
 import { backgroundPm25, gpResidual } from './_v2prior.js';
 import { fetchBaselineGrid as fetchBaselineGridShared, type BaselineData } from './_baseline.js';
+import { rateLimit, LIMITS } from './_guard.js';
 const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
 
 /**
@@ -1948,6 +1949,7 @@ export async function scorePolyline(
 
 // ─── Handler ────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await rateLimit(req, res, 'routeScore', LIMITS.routeScore))) return;
   // Developer-API surface (/api/v1/route-score -> ?v1=1): require + rate-limit an API key.
   if (req.query.v1) {
     const gate = await requireApiKey(req, res, 'route-score');

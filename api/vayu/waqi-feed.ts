@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { rateLimit, LIMITS } from './_guard.js';
 
 // 2026-05-24 SECURITY FIX: server-side WAQI feed proxy.
 // Frontend hits /api/vayu/waqi-feed?uid=N for per-station data.
@@ -40,6 +41,7 @@ function markFailed(token: string, seconds = 60) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await rateLimit(req, res, 'waqi', LIMITS.waqi))) return;
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'GET only' });
   }

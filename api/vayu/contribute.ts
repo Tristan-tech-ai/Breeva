@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { rateLimit, LIMITS } from './_guard.js';
 
 /**
  * VAYU Contribution Endpoint (consolidated — Vercel Hobby 12-function cap).
@@ -42,6 +43,7 @@ function isValidUUID(s: string): boolean {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await rateLimit(req, res, 'contribute', LIMITS.contribute))) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const body = (req.body || {}) as Record<string, unknown>;

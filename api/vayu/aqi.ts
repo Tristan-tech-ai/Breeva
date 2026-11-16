@@ -7,6 +7,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 // quota. Underscore module + .js extension so Node ESM resolves it in the bundle.
 import { forecast24 as gruForecast24 } from './_forecast24.js';
 import { pm25AqiToUg, no2AqiToUg, blendConcentrations, atLeastPm25, type BlendInput } from './_units.js';
+import { rateLimit, LIMITS, cronStatus } from './_guard.js';
 
 // v2 engine: serve the point/headline AQI from the nearest precomputed road (the same
 // calibrated v2 values as the road map) with a v1 Gaussian fallback. Same flag as road-aqi.
@@ -559,6 +560,7 @@ async function handleMlForecast(req: VercelRequest, res: VercelResponse) {
 
 // ─── Handler ────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await rateLimit(req, res, 'aqi', LIMITS.aqi))) return;
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -574,12 +576,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Cron auth guard (Migration 0012 — pg_cron → Vercel webhook).
-  // If header is present, it MUST match BREEVA_CRON_SECRET. Absent header
-  // means a normal user request — continue without auth.
-  // .trim() defends against env vars that ship with stray whitespace/newlines.
-  const cronSecret = (req.headers['x-breeva-cron-secret'] as string | undefined)?.trim();
-  const expectedSecret = process.env.BREEVA_CRON_SECRET?.trim();
-  if (cronSecret && cronSecret !== expectedSecret) {
+  // A wrong header is refused; no header is an ordinary request (cronStatus in _guard.ts).
+  if (cronStatus(req) === 'invalid') {
     return res.status(401).json({ error: 'Invalid cron secret' });
   }
 

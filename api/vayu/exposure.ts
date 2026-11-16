@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireApiKey } from './_apiauth.js';
+import { rateLimit, LIMITS } from './_guard.js';
 
 /**
  * VAYU Cumulative Exposure Calculator — Self-contained.
@@ -80,6 +81,7 @@ function samplePolyline(
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await rateLimit(req, res, 'exposure', LIMITS.exposure))) return;
   // Developer-API surface (/api/v1/exposure -> ?v1=1): require + rate-limit an API key.
   if (req.query.v1) {
     const gate = await requireApiKey(req, res, 'exposure');

@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHash } from 'crypto';
 import { buildOrsRequest, withOrsKey } from './_ors.js';
+import { geoapifyParams, searchApiParams } from './_params.js';
+import { rateLimit, LIMITS } from '../vayu/_guard.js';
 
 const SEARCHAPI_BASE = 'https://www.searchapi.io/api/v1/search';
 
@@ -24,14 +26,6 @@ const SEARCHAPI_KEYS: string[] = (() => {
 // re-probed on every request (each dead probe is a wasted round-trip). Optional:
 // if Redis is unavailable we just start at 0 and rotate in-request.
 const POINTER_KEY = 'searchapi:key_index';
-
-// Allowed engines to prevent abuse
-const ALLOWED_ENGINES = new Set([
-  'google_maps',
-  'google_maps_place',
-  'google_maps_reviews',
-  'google_maps_photos',
-]);
 
 // ─── Redis pointer helpers (Upstash REST) ───────────────────
 async function redisGetInt(key: string): Promise<number | null> {
@@ -120,6 +114,7 @@ async function fetchWithTimeout(target: string, ms: number): Promise<Response> {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await rateLimit(req, res, 'search', LIMITS.search))) return;
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -179,10 +174,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const gkey = process.env.GEOAPIFY_API_KEY || process.env.VITE_GEOAPIFY_API_KEY || '';
     if (!gkey) return res.status(500).json({ error: 'Geoapify key not configured' });
 
-    const fwd = new URLSearchParams();
-    for (const [k, v] of Object.entries(req.query)) {
-      if (typeof v === 'string' && k !== 'provider' && k !== 'apiKey') fwd.set(k, v);
-    }
+    const checked = geoapifyParams(req.query as Record<string, unknown>);
+    if (!checked.ok) return res.status(400).json({ error: checked.error });
+    const fwd = checked.params;
     // Cache key = sorted params WITHOUT the api key (stable across key rotation).
     const sortedParams = [...fwd.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => `${k}=${v}`).join('&');
     const gCacheKey = `geoapify:${createHash('sha1').update(sortedParams).digest('hex')}`;
@@ -216,20 +210,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'SearchAPI key not configured' });
   }
 
-  const { engine, ...params } = req.query;
+  const engine = typeof req.query.engine === 'string' ? req.query.engine : '';
+  const checked = searchApiParams(engine, req.query as Record<string, unknown>);
+  if (!checked.ok) return res.status(400).json({ error: checked.error });
 
-  if (!engine || typeof engine !== 'string' || !ALLOWED_ENGINES.has(engine)) {
-    return res.status(400).json({ error: 'Invalid or missing engine parameter' });
-  }
-
-  // Build the upstream URL once (api_key is injected per-attempt below).
+  // Build the upstream URL once (api_key is injected per-attempt below). Only whitelisted params (_params.ts).
   const baseUrl = new URL(SEARCHAPI_BASE);
   baseUrl.searchParams.set('engine', engine);
-  for (const [key, value] of Object.entries(params)) {
-    if (typeof value === 'string' && key !== 'api_key') {
-      baseUrl.searchParams.set(key, value);
-    }
-  }
+  for (const [key, value] of checked.params) baseUrl.searchParams.set(key, value);
 
   // ── Serve from cache if we have a recent identical response (skips the slow upstream + a credit) ──
   const cacheKey = `sapi:${engine}:${createHash('sha1').update(baseUrl.search).digest('hex')}`;
