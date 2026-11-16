@@ -27,6 +27,7 @@ import { basemap } from '../../lib/basemap';
 import { useMapAttribution } from './useMapAttribution';
 import { ROAD_ATTRIBUTION, WAQI_ATTRIBUTION } from '../../lib/attribution';
 import type { RouteLink } from '../../lib/route/share';
+import WheelGuard from './WheelGuard';
 
 const toTuple = (wp: Coordinate): L.LatLngTuple => [wp.lat, wp.lng];
 
@@ -149,6 +150,8 @@ interface LeafletMapProps {
   routeMode?: 'walk' | 'motor';
   /** Route link (?rute=) played once when routing starts. */
   routeLink?: RouteLink | null;
+  /** Map inside a scrolling page: the wheel scrolls the page, Ctrl/Cmd + wheel zooms, +/- buttons shown. */
+  wheelNeedsModifier?: boolean;
 }
 
 // ── Inner map controller ─────────────────────────────────────────────
@@ -602,6 +605,7 @@ export default function LeafletMap({
   onWalkRouting,
   routeMode = 'walk',
   routeLink = null,
+  wheelNeedsModifier = false,
 }: LeafletMapProps) {
   const { center } = useMapStore();
   const base = basemap(mapStyle, isDarkMode);
@@ -631,6 +635,7 @@ export default function LeafletMap({
       >
         <TileLayer key={base.url + (base.className ?? '')} url={base.url} attribution={base.attribution} className={base.className} {...(base.subdomains ? { subdomains: base.subdomains } : {})} />
         {onViewChange && <ViewReporter onViewChange={onViewChange} />}
+        {wheelNeedsModifier && <WheelGuard />}
         <MapController
           isDarkMode={isDarkMode}
           showAQIOverlay={showAQIOverlay}
