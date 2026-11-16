@@ -179,3 +179,17 @@ export function exhaustAt(
     return { nox: unit * EMISSION_G_PER_KM.nox * k, pm25: unit * EMISSION_G_PER_KM.pm25 * k };
   });
 }
+
+/**
+ * Exhaust (NOx, ug/m3) at the given distances from the centre line of a long straight road: the worked example shown
+ * to users, computed by the same kernel as the map.
+ */
+export function straightRoadProfile(vehPerHour: number, windMs: number, s: Stability, carriagewayM: number, distancesM: number[]): number[] {
+  const halfW = mixingHalfWidth(carriagewayM);
+  const q = (vehPerHour * EMISSION_G_PER_KM.nox * 1e6) / 3600 / 1000;
+  return distancesM.map((d) => {
+    const xy = new Float64Array(202);
+    for (let i = 0; i <= 100; i++) { xy[2 * i] = -d; xy[2 * i + 1] = -2000 + i * 40; }
+    return lineKernel(xy, windMs, s, halfW) * q;
+  });
+}

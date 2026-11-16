@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { Seo } from '../components/Seo';
 import { epaFlags, num, pct, verdict, type Validasi } from '../lib/validasi';
+import ExhaustExplainer from '../components/features/ExhaustExplainer';
 import RunningValidation from '../components/features/RunningValidation';
 
 const DATA_URL = '/data/validasi.json';
@@ -90,6 +91,8 @@ export default function ValidasiPage() {
                 <p className="text-[11px] text-gray-500">{v.city_hourly_rmse.source} · {v.time_split_calibration.source}</p>
               </div>
             </section>
+
+            <ExhaustExplainer />
 
             <section>
               <h2 className="text-sm font-semibold mb-2">Sumber data yang kami tolak</h2>

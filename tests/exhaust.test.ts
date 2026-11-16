@@ -141,3 +141,14 @@ describe('exhaust sources of a road pack', async () => {
     expect(primary.nox).toBeGreaterThan(service.nox * 5);
   });
 });
+
+describe('worked example shown on the validation page', async () => {
+  const { straightRoadProfile } = await import('../src/lib/field/exhaust');
+  it('falls from the road outward and matches the kernel', () => {
+    const p = straightRoadProfile(2250, 2, 'D', 14, [0, 25, 50, 100, 150]);
+    for (let i = 1; i < p.length; i++) expect(p[i]).toBeLessThan(p[i - 1]);
+    expect(p[0]).toBeGreaterThan(30);
+    expect(p[4] / p[0]).toBeLessThan(0.5);
+    expect(straightRoadProfile(4500, 2, 'D', 14, [25])[0]).toBeCloseTo(2 * p[1], 6);
+  });
+});
