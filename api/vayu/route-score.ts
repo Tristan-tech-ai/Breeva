@@ -7,6 +7,7 @@ import { pm25AqiToUg as pm25AQIToUg, no2AqiToUg as no2AQIToUg, o3AqiToUg as o3AQ
 import { backgroundPm25, gpResidual } from './_v2prior.js';
 import { fetchBaselineGrid as fetchBaselineGridShared, type BaselineData } from './_baseline.js';
 import { rateLimit, LIMITS } from './_guard.js';
+import { localClock } from './_localtime.js';
 const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
 
 /**
@@ -1587,7 +1588,7 @@ async function scoreCorridorRoads(
     } as BaselineData;
   };
 
-  const targetHour = (new Date().getHours() + forecastHour) % 24;
+  const targetHour = localClock(cLat, cLon, new Date(), forecastHour).hour; // server clock is UTC
   let diurnal = HOURLY_TRAFFIC[targetHour] ?? 1.0;
   if (forecastHour === 0) {
     const region = detectRegion(cLat, cLon);
@@ -1735,7 +1736,7 @@ export async function scorePolyline(
     } as BaselineData;
   };
 
-  const targetHour = (new Date().getHours() + forecastHour) % 24;
+  const targetHour = localClock(cLat, cLon, new Date(), forecastHour).hour; // server clock is UTC
   let diurnal = HOURLY_TRAFFIC[targetHour] ?? 1.0;
   const weights = VEHICLE_WEIGHTS[vehicleType] || VEHICLE_WEIGHTS.pedestrian;
 

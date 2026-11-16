@@ -8,6 +8,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { forecast24 as gruForecast24 } from './_forecast24.js';
 import { pm25AqiToUg, no2AqiToUg, blendConcentrations, atLeastPm25, type BlendInput } from './_units.js';
 import { rateLimit, LIMITS, cronStatus } from './_guard.js';
+import { localClock } from './_localtime.js';
 
 // v2 engine: serve the point/headline AQI from the nearest precomputed road (the same
 // calibrated v2 values as the road map) with a v1 Gaussian fallback. Same flag as road-aqi.
@@ -387,7 +388,7 @@ async function compute(lat: number, lon: number): Promise<Omit<AQIResponse, 'til
   const blendedNo2 = blend.no2 ?? baseline.no2;
 
   // Dispersion delta from nearby roads (added on top of blended baseline)
-  const diurnal = HOURLY_TRAFFIC[new Date().getHours()] ?? 1.0;
+  const diurnal = HOURLY_TRAFFIC[localClock(lat, lon).hour] ?? 1.0; // server clock is UTC
   let pm25Delta = 0, no2Delta = 0, coFraction = 0;
   for (const road of roads) {
     const traffic = (road.traffic_base_estimate || 100) * (road.traffic_calibration_factor || 1.0) * diurnal;

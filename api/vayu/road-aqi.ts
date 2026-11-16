@@ -19,6 +19,7 @@ import {
 import { renderRoadTile, tileBBox, type TileRoad } from './_tilepng.js';
 import { fetchBaselineGrid as fetchBaselineGridShared, type BaselineData } from './_baseline.js';
 import { rateLimit, LIMITS, cronStatus } from './_guard.js';
+import { localClock } from './_localtime.js';
 
 // ─── v2 engine wiring (Phase 3a) — feature-flagged, DEFAULT OFF (prod stays v1 until verified+flipped) ───
 const USE_V2_ENGINE = process.env.USE_V2_ENGINE === 'true';
@@ -555,15 +556,13 @@ async function getRegionParams(region: string): Promise<RegionCaline3Params> {
   }
 }
 
-function timeOfDayKey(): 'morning' | 'afternoon' | 'night' {
-  const h = new Date().getHours();
+function timeOfDayKey(h: number): 'morning' | 'afternoon' | 'night' {
   if (h >= 6 && h < 12) return 'morning';
   if (h >= 12 && h < 18) return 'afternoon';
   return 'night';
 }
 
-function currentSeason(): 'dry' | 'wet' {
-  const m = new Date().getMonth() + 1;
+function currentSeason(m: number): 'dry' | 'wet' {
   return m >= 5 && m <= 10 ? 'dry' : 'wet';
 }
 
@@ -572,14 +571,14 @@ function currentSeason(): 'dry' | 'wet' {
 // stability factor: Pasquill A(1)=very unstable, F(6)=very stable; higher = more
 //   concentration (less mixing) → multiplier scales linearly 0.7..1.4
 // inversion_height < road delta + baseline → trap, slight boost
-function regionDispersionMultiplier(p: RegionCaline3Params): number {
+function regionDispersionMultiplier(p: RegionCaline3Params, hourLocal: number, monthLocal: number): number {
   const roughnessFactor = 1.0 + 0.4 * (p.surface_roughness - 0.5);  // 0.4→0.96, 0.9→1.16
-  const tod = timeOfDayKey();
+  const tod = timeOfDayKey(hourLocal);
   const stab = tod === 'morning' ? p.stability_morning
     : tod === 'afternoon' ? p.stability_afternoon
     : p.stability_night;
   const stabilityFactor = 0.7 + 0.12 * (stab - 1.0);  // class 1→0.7, class 6→1.3
-  const season = currentSeason();
+  const season = currentSeason(monthLocal);
   const invH = season === 'dry' ? p.inversion_height_dry : p.inversion_height_wet;
   const inversionFactor = invH < 600 ? 1.15 : invH < 900 ? 1.05 : 1.0;
   return roughnessFactor * stabilityFactor * inversionFactor;
@@ -1696,7 +1695,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     // Use forecast hour for diurnal profile: shift current hour by forecast offset
-    const targetHour = (new Date().getHours() + fh) % 24;
+    // Local clock of the viewport (server clock is UTC); fh shifts it for forecasts.
+    const clockNow = localClock(cLat, cLon);
+    const clockTarget = localClock(cLat, cLon, new Date(), fh);
+    const targetHour = clockTarget.hour;
     let diurnal = HOURLY_TRAFFIC[targetHour] ?? 1.0;
 
     // ── Region detection (used for temporal AI, WAQI history, error corrections) ──
@@ -1706,11 +1708,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ── Phase 1.3/1.4: per-region CALINE3 priors + TomTom corrections (v1-only) ──
     // Both feed computeRoadAQI / XGB features; the v2 engine ignores them. Under v2 we
     // skip these two serial Supabase round-trips on the hot path (cold-load perf).
-    const nowJkt = new Date();
-    const regionMultiplier = USE_V2_ENGINE ? 1.0 : regionDispersionMultiplier(await getRegionParams(region));
+    const regionMultiplier = USE_V2_ENGINE ? 1.0 : regionDispersionMultiplier(await getRegionParams(region), clockNow.hour, clockNow.month);
     const trafficCorrections: Map<string, number> = USE_V2_ENGINE
       ? new Map<string, number>()
-      : await fetchTrafficCorrections(region, nowJkt.getHours(), nowJkt.getDay());
+      : await fetchTrafficCorrections(region, clockNow.hour, clockNow.dow);
 
     // ── WAQI History Save (feeds Module B temporal learning) ──
     // Fire-and-forget: save hourly WAQI readings so Gemini can learn traffic patterns
@@ -1794,7 +1795,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // falls back to self-only (multiDeltas=null) so it can NEVER break the live map endpoint.
     let multiDeltas: Map<number, { pm25: number; nox: number }> | null = null;
     if (USE_V2_ENGINE && USE_V2_MULTISOURCE) {
-      try { multiDeltas = buildMultiSourceDeltas(filtered, interpCorrected, diurnal, targetHour, nowJkt.getMonth() + 1); }
+      try { multiDeltas = buildMultiSourceDeltas(filtered, interpCorrected, diurnal, targetHour, clockTarget.month); }
       catch (e) { console.error('multi-source dispersion failed → self-only fallback:', e); multiDeltas = null; }
     }
     for (const road of filtered) {
@@ -1822,7 +1823,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Short-circuits the v1 XGBoost/GCN/error-correction stack. Any error → falls through to v1.
       if (USE_V2_ENGINE) {
         try {
-          const v2 = computeRoadAQIv2(road, coords, roadLat, roadLon, baseline, diurnal, region, targetHour, nowJkt.getMonth() + 1, camsDaily, multiDeltas?.get(road.osm_way_id));
+          const v2 = computeRoadAQIv2(road, coords, roadLat, roadLon, baseline, diurnal, region, targetHour, clockTarget.month, camsDaily, multiDeltas?.get(road.osm_way_id));
           // Guard: never serve/cache a non-finite v2 estimate — fall through to v1 (which has the
           // NaN-correction hotfix) so a transient bad input degrades gracefully instead of nulling.
           if (!Number.isFinite(v2.pm25)) throw new Error('v2 non-finite pm25');
@@ -1850,9 +1851,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // P1-1 fix: features must use the forecast-shifted hour/dow so
       // forecast_hour>0 requests don't apply current-hour residual correction
       // to a future-hour prediction.
-      const _targetMs = nowJkt.getTime() + fh * 3600 * 1000;
-      const _targetDate = new Date(_targetMs);
-      const _targetDow = _targetDate.getDay();
+      const _targetDow = clockTarget.dow;
       const mlFeatures = {
         canyon_ratio: road.canyon_ratio ?? 0,
         traffic_base_estimate: road.traffic_base_estimate ?? 100,
