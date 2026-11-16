@@ -13,7 +13,8 @@ import CommandPalette from './components/features/CommandPalette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 // Eager load: critical path pages
-import HomePage from './pages/HomePage';
+// The app map loads on demand: the front door (/) is the public map, so the full app is not in the entry bundle.
+const HomePage = lazy(() => import('./pages/HomePage'));
 import LoginPage from './pages/LoginPage';
 import RootRoute from './components/auth/RootRoute';
 
