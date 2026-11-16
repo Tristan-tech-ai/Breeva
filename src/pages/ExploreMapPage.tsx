@@ -16,7 +16,7 @@ import type { RouteDest, WalkRoutingState } from '../components/map/WalkRouteLay
 import type { PollutantType, RoadDisplayMode } from '../types';
 import { ISPU_CATEGORIES } from '../lib/ispu';
 import { FIELD_REGIONS, pickRegion } from '../lib/field/source';
-import { parseRouteLink } from '../lib/route/share';
+import { parseDestLink, parseRouteLink } from '../lib/route/share';
 import { parseDepart } from '../lib/route/depart';
 
 const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
@@ -71,8 +71,11 @@ export default function ExploreMapPage() {
   // ?wilayah=kota_bogor opens the map in that field region (for the demo in Bogor).
   // ?rute=lat,lng~lat,lng[&moda=motor] opens with that on-device route (route links, share.ts).
   const [link] = useState(() => parseRouteLink(location.search));
-  const startRegion = link
-    ? FIELD_REGIONS.find((r) => r.bounds[0][0] <= link.from.lat && link.from.lat <= r.bounds[1][0] && r.bounds[0][1] <= link.from.lng && link.from.lng <= r.bounds[1][1]) ?? pickRegion(null)
+  // ?sekolah=lat,lng,name (from /prioritas): routing on with that destination (F1-14)
+  const [destParam] = useState(() => parseDestLink(location.search));
+  const anchor = link ? link.from : destParam;
+  const startRegion = anchor
+    ? FIELD_REGIONS.find((r) => r.bounds[0][0] <= anchor.lat && anchor.lat <= r.bounds[1][0] && r.bounds[0][1] <= anchor.lng && anchor.lng <= r.bounds[1][1]) ?? pickRegion(null)
     : pickRegion(new URLSearchParams(location.search).get('wilayah'));
   const [region, setRegion] = useState(startRegion.name);
   const isDark = useIsDark();
@@ -82,11 +85,11 @@ export default function ExploreMapPage() {
   const [located, setLocated] = useState(false);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('total');
-  const [walkMode, setWalkMode] = useState(!!link);
+  const [walkMode, setWalkMode] = useState(!!link || !!destParam);
   const [walkState, setWalkState] = useState<WalkRoutingState | null>(null);
   const [routeMode, setRouteMode] = useState<'walk' | 'motor'>(link?.mode ?? 'walk');
   // "Ke sekolah": a school chosen from the list is the destination, the next tap the start (F1-12)
-  const [schoolDest, setSchoolDest] = useState<RouteDest | null>(null);
+  const [schoolDest, setSchoolDest] = useState<RouteDest | null>(() => destParam);
   // departure for the school zone: ?berangkat=HH:MM, or the choice on the route cards (F3-08)
   const [depart, setDepart] = useState<string | null>(() => parseDepart(new URLSearchParams(location.search).get('berangkat')));
   const activeP = POLLUTANTS.find((p) => p.id === pollutant) ?? POLLUTANTS[0];

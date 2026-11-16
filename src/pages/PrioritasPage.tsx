@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft, School, Stethoscope, Search, Info, MapPin } from 'lucide-react';
 import { Seo } from '../components/Seo';
 import { fmt, JALAN, JENIS, rentangJam, saringUrut, type DaftarPrioritas, type Saring } from '../lib/prioritas';
 import { CAMS_NOTICE, OPEN_METEO_LINK } from '../lib/attribution';
+import { destLink } from '../lib/route/share';
 
 const DATA_URL = '/data/prioritas/badung_denpasar.json';
 
@@ -101,6 +102,10 @@ export default function PrioritasPage() {
                         NO₂ dari lalu lintas {fmt(f.no2_lalin)} µg/m³ · PM2,5 total {fmt(f.pm25)} µg/m³ (rentang 95%: ±{fmt(f.pi95, 0)}) · puncak jam {String(f.jam_puncak).padStart(2, '0')}.00
                       </p>
                     </div>
+                    <Link to={destLink('/peta', { lat: f.lat, lng: f.lon, name: f.nama })} aria-label={`Rute ke ${f.nama}`}
+                      className="shrink-0 self-start rounded-lg px-2 py-1 text-[11px] font-semibold text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/30">
+                      Rute ke sini
+                    </Link>
                     <a href={`https://www.openstreetmap.org/${f.id}`} target="_blank" rel="noreferrer" aria-label={`Lokasi ${f.nama} di peta`}
                       className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-gray-100 dark:hover:bg-gray-800">
                       <MapPin className="w-4 h-4" />

@@ -21,6 +21,22 @@ export function parseRouteLink(search: string): RouteLink | null {
   return { from, to, mode: q.get('moda') === 'motor' ? 'motor' : 'walk' };
 }
 
+/** A destination link (?sekolah=lat,lng,name): the map opens with that school or facility as the destination. */
+export interface DestLink { lat: number; lng: number; name: string }
+
+export function destLink(originPath: string, d: DestLink): string {
+  const q = new URLSearchParams({ sekolah: `${d.lat.toFixed(5)},${d.lng.toFixed(5)},${d.name}` });
+  return `${originPath}?${q.toString().replace(/%2C/g, ',')}`;
+}
+
+export function parseDestLink(search: string): DestLink | null {
+  const v = new URLSearchParams(search).get('sekolah');
+  const m = /^(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?),(.+)$/.exec(v ?? '');
+  if (!m) return null;
+  const lat = Number(m[1]), lng = Number(m[2]), name = m[3].trim().slice(0, 120);
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && name ? { lat, lng, name } : null;
+}
+
 /** Link to a route on the map page at origin + path (5 decimals, about 1 m). */
 export function routeLink(originPath: string, l: RouteLink, departLocal?: string | null): string {
   const f = (p: LatLng) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;

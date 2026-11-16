@@ -16,3 +16,15 @@ describe('route links', () => {
       expect(parseRouteLink(bad)).toBeNull();
   });
 });
+
+describe('destination links from the priority list', () => {
+  it('round-trips a school with spaces and punctuation in its name', async () => {
+    const { destLink, parseDestLink } = await import('../src/lib/route/share');
+    const url = destLink('/peta', { lat: -8.65512, lng: 115.21987, name: 'SMA Negeri 1 Denpasar, Bali' });
+    expect(url.startsWith('/peta?sekolah=-8.65512,115.21987,')).toBe(true);
+    expect(parseDestLink(url.slice(url.indexOf('?')))).toEqual({ lat: -8.65512, lng: 115.21987, name: 'SMA Negeri 1 Denpasar, Bali' });
+    expect(parseDestLink('?sekolah=-8.6,115.2,')).toBeNull();
+    expect(parseDestLink('?sekolah=abc')).toBeNull();
+    expect(parseDestLink('')).toBeNull();
+  });
+});
