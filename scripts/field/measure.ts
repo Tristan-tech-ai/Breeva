@@ -34,7 +34,7 @@ export interface MeasuredInputs {
   note: string;
 }
 
-type Fetch = (url: string, init?: { headers?: Record<string, string> }) => Promise<{ status: number; ok: boolean; json(): Promise<any>; text(): Promise<string>; headers: { get(k: string): string | null } }>;
+type Fetch = (url: string, init?: { headers?: Record<string, string> }) => Promise<{ status: number; ok: boolean; json(): Promise<unknown>; text(): Promise<string>; headers: { get(k: string): string | null } }>;
 
 const OPENAQ = 'https://api.openaq.org/v3';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -64,10 +64,10 @@ export async function fetchOpenAqRecent(
       await sleep(1000 * Math.max(1, Number(res.headers.get('x-ratelimit-reset') ?? 5)));
     }
     if (!res || !res.ok) { failed.push(`${s.sensor_id}:${res?.status ?? 'none'}`); continue; }
-    const js = await res.json();
+    const js = (await res.json()) as { results?: Array<{ value?: number; period?: { datetimeFrom?: { utc?: string } } }> };
     const seen = new Set<string>();
     for (const q of js.results ?? []) {
-      const h = q?.period?.datetimeFrom?.utc as string | undefined;
+      const h = q?.period?.datetimeFrom?.utc;
       const v = Number(q?.value);
       if (!h || seen.has(h) || !(v >= 0 && v < 1000)) continue;
       seen.add(h);
