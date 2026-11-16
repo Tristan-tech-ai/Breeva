@@ -3,6 +3,7 @@ import L from 'leaflet';
 import type { PollutantType, RoadDisplayMode } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { aqiBand, CONTRAST_FALLBACK, DELTA_STOPS, lerpColor, TOTAL_STOPS, weightFor } from '../../lib/roadColors';
+import { pm25Category } from '../../lib/ispu';
 
 // Road-color layer: PostGIS-generated Mapbox Vector Tiles (/api/tiles/road-mvt)
 // rendered as a NATIVE Leaflet layer via Leaflet.VectorGrid (Canvas). Because the
@@ -13,6 +14,7 @@ import { aqiBand, CONTRAST_FALLBACK, DELTA_STOPS, lerpColor, TOTAL_STOPS, weight
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function colorFor(props: any, pollutant: PollutantType, mode: RoadDisplayMode): string {
+  if (pollutant === 'aqi' && mode === 'total') return pm25Category(Number(props?.pm25) || 0).color;
   let key: string = pollutant;
   let stops = TOTAL_STOPS[pollutant] || TOTAL_STOPS.aqi;
   if (mode === 'delta' && DELTA_STOPS[pollutant]) {

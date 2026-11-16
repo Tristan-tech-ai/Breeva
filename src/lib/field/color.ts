@@ -1,5 +1,6 @@
 import type { PollutantType, RoadDisplayMode } from '../../types';
-import { CONTRAST_FALLBACK, DELTA_STOPS, lerpColor, pm25ToAqi, TOTAL_STOPS } from '../roadColors';
+import { CONTRAST_FALLBACK, DELTA_STOPS, lerpColor, TOTAL_STOPS } from '../roadColors';
+import { pm25Category } from '../ispu';
 import type { CellValue } from './cells';
 
 /** Value used for coloring. The field has PM2.5 and NO2 (total and traffic part); other pollutants fall back to PM2.5. */
@@ -12,6 +13,7 @@ export function fieldColor(v: CellValue, pollutant: PollutantType, mode: RoadDis
     const t = Math.max(0, Math.min(1, d / (contrastMax || CONTRAST_FALLBACK[p] || 1)));
     return lerpColor(TOTAL_STOPS.aqi, t * 300);
   }
-  if (pollutant === 'aqi') return lerpColor(TOTAL_STOPS.aqi, pm25ToAqi(v.pm25));
+  // Index mode = ISPU (Permen LHK P.14/2020) from PM2.5, in its official category colours.
+  if (pollutant === 'aqi') return pm25Category(v.pm25).color;
   return lerpColor(TOTAL_STOPS[p], p === 'no2' ? v.no2 : v.pm25);
 }

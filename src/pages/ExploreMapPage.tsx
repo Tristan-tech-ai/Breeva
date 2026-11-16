@@ -8,24 +8,20 @@ import AQICard from '../components/features/AQICard';
 import SearchBar from '../components/map/SearchBar';
 import { CITIES } from '../lib/cities';
 import type { PollutantType, RoadDisplayMode } from '../types';
+import { ISPU_CATEGORIES } from '../lib/ispu';
 
 // Lazy map (leaflet ~185KB) — progressive enhancement for real browsers; crawlers
 // read the prerendered text below. The whole map stack is auth-free.
 const LeafletMap = lazy(() => import('../components/map/LeafletMap'));
 
-const AQI_LEGEND = [
-  { label: 'Baik (0–50)', color: '#22c55e' },
-  { label: 'Sedang (51–100)', color: '#eab308' },
-  { label: 'Tidak sehat (101–150)', color: '#f97316' },
-  { label: 'Buruk (151–200)', color: '#ef4444' },
-  { label: 'Sangat buruk (201+)', color: '#a855f7' },
-];
+// ISPU categories (Permen LHK P.14/2020, Lampiran II) for the index view.
+const AQI_LEGEND = ISPU_CATEGORIES.map((c) => ({ label: `${c.name} (${c.range})`, color: c.color }));
 
 // Pollutant + road-resolution controls (mirrors the main map's layer menu).
 // Defined locally so this page does NOT statically import RoadPollutionLayer
 // (which pulls leaflet) — keeps the map chunk lazy.
 const POLLUTANTS: { id: PollutantType; label: string; unit: string }[] = [
-  { id: 'aqi', label: 'AQI', unit: '' },
+  { id: 'aqi', label: 'ISPU', unit: '' },
   { id: 'pm25', label: 'PM₂.₅', unit: 'µg/m³' },
   { id: 'no2', label: 'NO₂', unit: 'µg/m³' },
   { id: 'o3', label: 'O₃', unit: 'µg/m³' },

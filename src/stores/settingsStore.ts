@@ -30,7 +30,7 @@ const DEFAULTS: AppSettings = {
   anonymous_data: true,
   profile_visible: true,
   distance_unit: 'km',
-  language: 'en',
+  language: 'id',
 };
 
 const SETTING_KEYS = Object.keys(DEFAULTS) as (keyof AppSettings)[];
@@ -43,7 +43,7 @@ function readLocal(): AppSettings {
     const raw = localStorage.getItem(lsKey(k));
     if (raw == null) continue;
     if (k === 'distance_unit') s.distance_unit = raw === 'miles' ? 'miles' : 'km';
-    else if (k === 'language') s.language = raw === 'id' ? 'id' : 'en';
+    else if (k === 'language') s.language = raw === 'en' ? 'en' : 'id';
     else (s as unknown as Record<string, unknown>)[k] = raw === 'true';
   }
   return s;
