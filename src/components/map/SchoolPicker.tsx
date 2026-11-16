@@ -19,7 +19,8 @@ export default function SchoolPicker({ region, value, onChange }: { region: Fiel
 
   useEffect(() => {
     let alive = true;
-    fetch(`${fieldBase()}/graphs/${key}_schools.json`)
+    // revalidate every time (ETag, a 304 when unchanged): the file is cached for a day and gained names in v2
+    fetch(`${fieldBase()}/graphs/${key}_schools.json`, { cache: 'no-cache' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((f: SchoolFile) => alive && setLoaded({ key, list: schoolList(f), failed: false }))
       .catch(() => alive && setLoaded({ key, list: null, failed: true }));

@@ -44,7 +44,7 @@ async function init(base: string, region: { name: string; geometry: string }) {
     if (hv != null) h[e] = hv;
   }
   let sf: SchoolFile | null = null;
-  try { sf = JSON.parse(new TextDecoder().decode(await cachedBytes(`${base}/graphs/${region.geometry}/${region.name}_schools.json`, { cacheFirst: true }))) as SchoolFile; } catch { sf = null; }
+  try { sf = JSON.parse(new TextDecoder().decode(await cachedBytes(`${base}/graphs/${region.geometry}/${region.name}_schools.json`, { cacheFirst: false }))) as SchoolFile; } catch { sf = null; }
   graph = g; index = new NodeIndex(g); no2 = n; pm25 = p; harga = hi ? h : null; run = manifest.run;
   schoolFile = sf; schools = null;
   return { nodes: g.n, edges: g.m, run, harga: !!hi, schools: sf?.points.length ?? 0 };
