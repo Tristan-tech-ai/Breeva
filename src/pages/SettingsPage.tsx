@@ -133,14 +133,14 @@ export default function SettingsPage() {
   // Delete-account OTP flow state
   const [otpSent, setOtpSent] = useState(false);
   const [otpInput, setOtpInput] = useState('');
-  const [otpExpected, setOtpExpected] = useState('');
+  const [otpChallenge, setOtpChallenge] = useState('');
   const [otpExpires, setOtpExpires] = useState(0);
   const [otpError, setOtpError] = useState('');
   const [scheduledFor, setScheduledFor] = useState<string | null>(null);
 
   const closeModalForce = () => {
     setModal(null);
-    setOtpSent(false); setOtpInput(''); setOtpExpected(''); setOtpError(''); setScheduledFor(null);
+    setOtpSent(false); setOtpInput(''); setOtpChallenge(''); setOtpError(''); setScheduledFor(null);
   };
   const closeModal = () => { if (!busy) closeModalForce(); };
 
@@ -224,20 +224,26 @@ export default function SettingsPage() {
     }
   };
 
-  // ── Delete account: client OTP (mirrors signup) → schedule 30-day grace ──
+  // ── Delete account: the server mails a code to the signed-in address and checks it → schedule 30-day grace ──
+  const authHeaders = async (): Promise<Record<string, string>> => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  };
+
   const sendDeleteOtp = async () => {
     if (!user?.email) { toast.error(t('common.error')); return; }
     setBusy(true); setOtpError('');
     try {
-      const code = String(Math.floor(100000 + Math.random() * 900000));
       const res = await fetch('/api/auth/email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'verification', email: user.email, name: profile?.full_name || 'there', otp: code }),
+        headers: await authHeaders(),
+        body: JSON.stringify({ action: 'start-delete', name: profile?.full_name || 'there' }),
       });
       if (!res.ok) throw new Error('send failed');
-      setOtpExpected(code);
-      setOtpExpires(Date.now() + 15 * 60 * 1000);
+      const json = (await res.json()) as { challenge: string; expiresAt: number };
+      setOtpChallenge(json.challenge);
+      setOtpExpires(json.expiresAt);
       setOtpSent(true);
     } catch {
       toast.error(t('account.code_fail'));
@@ -248,12 +254,18 @@ export default function SettingsPage() {
 
   const confirmDeleteAccount = async () => {
     if (Date.now() > otpExpires) { setOtpError(t('account.code_expired')); return; }
-    if (otpInput.trim() !== otpExpected) { setOtpError(t('account.code_invalid')); return; }
     setBusy(true); setOtpError('');
     try {
-      const { data, error } = await supabase.rpc('request_account_deletion');
-      if (error) throw error;
-      setScheduledFor(typeof data === 'string' ? data : null);
+      // The server checks the mailed code and runs request_account_deletion() as this user.
+      const res = await fetch('/api/auth/email', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({ action: 'confirm-delete', challenge: otpChallenge, code: otpInput.trim() }),
+      });
+      if (res.status === 400) { setOtpError(t('account.code_invalid')); return; }
+      if (!res.ok) throw new Error('delete failed');
+      const json = (await res.json()) as { scheduledFor: string | null };
+      setScheduledFor(json.scheduledFor);
     } catch {
       toast.error(t('common.error'));
     } finally {

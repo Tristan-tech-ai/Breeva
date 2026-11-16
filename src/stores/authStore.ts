@@ -29,7 +29,7 @@ export interface UserProfile {
   deletion_scheduled_at?: string | null;
 }
 
-// Helper to call our email API
+// Helper to call our email API. Codes are made and checked on the server; the browser only holds a signed challenge.
 async function sendEmailApi(body: Record<string, string>) {
   const res = await fetch('/api/auth/email', {
     method: 'POST',
@@ -47,7 +47,8 @@ interface PendingVerification {
   email: string;
   password: string;
   fullName: string;
-  otp: string;
+  /** Signed by the server; binds the email and expiry to the mailed code. Not the code itself. */
+  challenge: string;
   expiresAt: number;
 }
 
@@ -151,16 +152,11 @@ export const useAuthStore = create<AuthState>()(
         try {
           set({ isLoading: true, error: null });
 
-          // Generate 6-digit OTP
-          const otp = String(Math.floor(100000 + Math.random() * 900000));
-          const expiresAt = Date.now() + 15 * 60 * 1000; // 15 min
+          // The server mails a code and returns a signed challenge; the account is created only after the code is entered.
+          const { challenge, expiresAt } = await sendEmailApi({ action: 'start-signup', email, name: fullName });
 
-          // Send verification email
-          await sendEmailApi({ type: 'verification', email, name: fullName, otp });
-
-          // Store pending verification — don't create account yet
           set({
-            pendingVerification: { email, password, fullName, otp, expiresAt },
+            pendingVerification: { email, password, fullName, challenge, expiresAt },
             isLoading: false,
           });
           return true;
@@ -184,33 +180,23 @@ export const useAuthStore = create<AuthState>()(
           return false;
         }
 
-        if (code !== pendingVerification.otp) {
-          set({ error: 'Invalid verification code' });
-          return false;
-        }
-
         try {
           set({ isLoading: true, error: null });
-          const { email, password, fullName } = pendingVerification;
+          const { email, password, fullName, challenge } = pendingVerification;
 
-          // Now actually create the account
-          const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: { data: { full_name: fullName } },
-          });
+          // The server checks the code, creates the confirmed account and sends the welcome email.
+          await sendEmailApi({ action: 'complete-signup', email, name: fullName, password, challenge, code: code.trim() });
+
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
           if (error) throw error;
 
           if (data.user) {
             set({ user: data.user, session: data.session, pendingVerification: null });
             await get().fetchProfile();
-
-            // Send welcome email (fire-and-forget)
-            sendEmailApi({ type: 'welcome', email, name: fullName }).catch(console.error);
-
             set({ isLoading: false });
             return true;
           }
+          set({ isLoading: false });
           return false;
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to create account';
@@ -228,18 +214,14 @@ export const useAuthStore = create<AuthState>()(
         }
         try {
           set({ isLoading: true, error: null });
-          const otp = String(Math.floor(100000 + Math.random() * 900000));
-          const expiresAt = Date.now() + 15 * 60 * 1000;
-
-          await sendEmailApi({
-            type: 'verification',
+          const { challenge, expiresAt } = await sendEmailApi({
+            action: 'start-signup',
             email: pendingVerification.email,
             name: pendingVerification.fullName,
-            otp,
           });
 
           set({
-            pendingVerification: { ...pendingVerification, otp, expiresAt },
+            pendingVerification: { ...pendingVerification, challenge, expiresAt },
             isLoading: false,
           });
           return true;
@@ -258,10 +240,6 @@ export const useAuthStore = create<AuthState>()(
             redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
           });
           if (error) throw error;
-
-          // Also send our branded email
-          const resetLink = `${window.location.origin}/auth/callback?type=recovery`;
-          sendEmailApi({ type: 'reset', email, name: '', resetLink }).catch(console.error);
 
           set({ isLoading: false });
           return true;
@@ -472,7 +450,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         // Only persist minimal data — session is managed by Supabase
         profile: state.profile,
-        // Do NOT persist pendingVerification — contains password and OTP
+        // Do NOT persist pendingVerification — contains the password and the signup challenge
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
