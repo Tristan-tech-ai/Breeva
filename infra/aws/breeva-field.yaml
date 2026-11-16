@@ -35,6 +35,15 @@ Resources:
             Resource: !Ref AlarmTopic
             Condition:
               StringEquals: { 'aws:SourceAccount': !Ref 'AWS::AccountId' }
+          # the field builder's alarms (stack breeva-builder): a custom topic policy replaces the default one, so
+          # CloudWatch needs its own statement (found when the first test alarm failed to publish, 16 Nov)
+          - Sid: AllowBreevaAlarmsPublish
+            Effect: Allow
+            Principal: { Service: cloudwatch.amazonaws.com }
+            Action: sns:Publish
+            Resource: !Ref AlarmTopic
+            Condition:
+              ArnLike: { 'aws:SourceArn': !Sub 'arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:breeva-*' }
 
   AlarmEmailSubscription:
     Type: AWS::SNS::Subscription

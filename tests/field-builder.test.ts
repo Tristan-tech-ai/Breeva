@@ -3,8 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CACHE, RUN_TAG, reportKey, runFor, runObjects, type BuiltRun } from '../scripts/field/builder';
 import { BUILD_REGIONS, packKey } from '../scripts/field/regions';
-// @ts-expect-error plain ES module without types
-import { manifestStatus } from '../scripts/field/field-status.mjs';
+import { manifestStatus, statusText } from '../src/lib/field/status';
 // @ts-expect-error plain ES module without types
 import { zipFiles } from '../infra/lambda/zip.mjs';
 
@@ -57,6 +56,15 @@ describe('hourly field run objects', () => {
     expect(t).toContain('MaximumRetryAttempts: 0');
     expect(t).toContain('RetentionInDays: 14');
   });
+
+  it('alarms on builder errors and on two hours without a successful run, both to breeva-alarms', () => {
+    const t = readFileSync('infra/aws/breeva-builder.yaml', 'utf8');
+    expect(t).toMatch(/AlarmName: breeva-field-builder-errors[\s\S]*?MetricName: Errors[\s\S]*?Period: 3600[\s\S]*?Threshold: 1/);
+    expect(t).toMatch(/AlarmName: breeva-field-stale[\s\S]*?Expression: inv - FILL\(err, 0\)[\s\S]*?EvaluationPeriods: 2[\s\S]*?TreatMissingData: breaching/);
+    expect((t.match(/AlarmActions: \[!Sub 'arn:aws:sns:\$\{AWS::Region\}:\$\{AWS::AccountId\}:breeva-alarms'\]/g) ?? []).length).toBe(2);
+    // the topic policy lets those alarms publish (a custom policy replaces the default one)
+    expect(readFileSync('infra/aws/breeva-field.yaml', 'utf8')).toMatch(/Principal: \{ Service: cloudwatch.amazonaws.com \}[\s\S]*?alarm:breeva-\*/);
+  });
 });
 
 describe('field freshness', () => {
@@ -68,6 +76,13 @@ describe('field freshness', () => {
     expect(manifestStatus({ run: '2026111610', computed_at: '2026-11-16T10:16:00Z' }, now).ok).toBe(false);
     expect(manifestStatus({ run: '2026111612' }, now).ok).toBe(false);
     expect(manifestStatus(null, now).ok).toBe(false);
+  });
+  it('says in plain words how fresh the map is and what it rests on', () => {
+    expect(statusText(manifestStatus({ run: 'r', computed_at: '2026-11-16T12:21:30Z', sensors_used: 26, measurement: { method: 'kriging' } }, now)))
+      .toBe('Segar: dihitung 9 menit lalu · 26 sensor warga');
+    expect(statusText(manifestStatus({ run: 'r', computed_at: '2026-11-16T09:00:00Z', indicative: true, measurement: { method: 'none' } }, now)))
+      .toBe('Basi: dihitung 210 menit lalu · model tanpa sensor · indikatif');
+    expect(statusText({ ok: false, error: 'HTTP 403' })).toBe('Manifest tidak terbaca');
   });
 });
 

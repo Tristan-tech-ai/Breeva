@@ -111,6 +111,56 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt HourlyRule.Arn
 
+  # Alarms go to the breeva-alarms topic of stack breeva-field (subscribers: the alarm email once it is set there).
+  BuilderErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: breeva-field-builder-errors
+      AlarmDescription: The hourly field builder failed at least once in the last hour (every region failed).
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions: [{ Name: FunctionName, Value: !Ref Builder }]
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:breeva-alarms']
+      OKActions: [!Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:breeva-alarms']
+
+  BuilderStaleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: breeva-field-stale
+      AlarmDescription: >-
+        No successful run of the field builder for 2 hours, so the published field is getting stale (target: manifest
+        younger than 75 minutes). Missing data counts as breaching.
+      Metrics:
+        - Id: inv
+          ReturnData: false
+          MetricStat:
+            Metric: { Namespace: AWS/Lambda, MetricName: Invocations, Dimensions: [{ Name: FunctionName, Value: !Ref Builder }] }
+            Period: 3600
+            Stat: Sum
+        - Id: err
+          ReturnData: false
+          MetricStat:
+            Metric: { Namespace: AWS/Lambda, MetricName: Errors, Dimensions: [{ Name: FunctionName, Value: !Ref Builder }] }
+            Period: 3600
+            Stat: Sum
+        - Id: ok
+          Label: successful runs
+          ReturnData: true
+          Expression: inv - FILL(err, 0)
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:breeva-alarms']
+      OKActions: [!Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:breeva-alarms']
+
 Outputs:
   FunctionName:
     Value: !Ref Builder
