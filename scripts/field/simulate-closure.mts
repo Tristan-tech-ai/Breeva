@@ -52,6 +52,8 @@ for (let e = 0; e < g.m; e++) {
 const fromNode = (e: number) => { let lo = 0, hi = g.n - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (g.off[mid] <= e) lo = mid; else hi = mid - 1; } return lo; };
 
 const M_LAT = 110574;
+const NO_THROUGH = new Set(['living_street', 'service']);
+const gangEdge = (e: number) => NO_THROUGH.has(g.highway(e)) || (edgeRoad[e] >= 0 && (/\b(gg|gang)\b/i.test(pack.str('name', edgeRoad[e]) ?? '') || NO_THROUGH.has(pack.highway(edgeRoad[e]))));
 function nearestEdge(lat: number, lon: number): { e: number; d: number } | null {
   const mLon = 111320 * Math.cos((lat * Math.PI) / 180);
   let best: { e: number; d: number } | null = null;
@@ -121,7 +123,8 @@ for (const f of list.fasilitas.filter((x) => x.kelas === 'pendidikan')) {
     const u = fromNode(ge.e), v = g.target[ge.e];
     term.push(u, v);
     for (const [a, b] of [[u, v], [v, u]]) for (let e = g.off[a]; e < g.off[a + 1]; e++) if (g.target[e] === b) gateEdges.add(e);
-    const r = route(g, u, v, 0, { speed: 60 / 3.6, speedOf: (e) => motorSpeed(g, e), allowed: (e) => motorAllowedClass(g, e) && !gateEdges.has(e) });
+    // zona napas: the moved traffic may not be pushed into gangs (living streets, service lanes, roads named Gang ...)
+    const r = route(g, u, v, 0, { speed: 60 / 3.6, speedOf: (e) => motorSpeed(g, e), allowed: (e) => motorAllowedClass(g, e) && !gateEdges.has(e) && !gangEdge(e) });
     if (r) {
       const gateRoads = new Set([...gateEdges].map((e) => edgeRoad[e]));
       detour = [...new Set(r.edges.map((e) => edgeRoad[e]).filter((k) => k >= 0 && k !== nr.k && !gateRoads.has(k)))];
@@ -144,7 +147,7 @@ for (const f of list.fasilitas.filter((x) => x.kelas === 'pendidikan')) {
     asap_sebelum: Math.round(eff.before * 10) / 10, asap_sesudah: Math.round(eff.after * 10) / 10, perubahan_persen: eff.pct,
     jalan_putar_tambahan_m: Math.round(extra), kenaikan_terbesar: { jalan: maxName, asap: Math.round(imp.maxRise * 10) / 10 },
     ditimbulkan_tertimbang: Math.round(imp.weighted * 10) / 10,
-    teks: !detour.length ? 'Tidak ada jalan putar untuk kendaraan; penutupan akan memutus akses.'
+    teks: !detour.length ? 'Tanpa lewat gang tidak ada jalan putar: menutup jalan ini akan memindahkan kendaraan ke gang (zona napas), jadi tidak disarankan.'
       : extra > MAX_DETOUR_M ? `${closureText(eff, extra, imp.maxRise, maxName)} Jalan putar lebih dari ${MAX_DETOUR_M} m: tidak disarankan.`
       : closureText(eff, extra, imp.maxRise, maxName),
   });
