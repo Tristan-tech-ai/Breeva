@@ -7,6 +7,8 @@ export interface WalkRoute {
   kind?: 'dua-angka' | 'darurat';
   /** Mean harga hirup along the route (1 = the region's median road): the exposure the trip imposes. */
   hargaMean?: number;
+  /** Motor routes: school zone off (outside school hours or no school data), kept, or lifted near the trip's ends. */
+  school?: 'off' | 'kept' | 'lifted-near-ends';
 }
 
 export class RouteClient {
@@ -36,8 +38,12 @@ export class RouteClient {
     return this.call<{ nodes: number; edges: number; run: string }>({ type: 'init', base, region });
   }
 
-  route(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor' = 'walk') {
-    return this.call<{ routes: WalkRoute[]; ms: number; run: string }>({ type: 'route', from, to, mode });
+  /**
+   * departLocal: departure as local clock time "HH:MM" in the region (default now); it decides whether the school zone
+   * is active.
+   */
+  route(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor' = 'walk', departLocal?: string | null) {
+    return this.call<{ routes: WalkRoute[]; ms: number; run: string }>({ type: 'route', from, to, mode, departLocal });
   }
 
   terminate() { this.worker.terminate(); }

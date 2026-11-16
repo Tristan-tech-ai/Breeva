@@ -6,6 +6,7 @@
  *   v/{name}/manifest.json              public, max-age=60, stale-while-revalidate=600 (L1.4), uploaded LAST
  *   harga/{geometry}/{name}.bin         public, max-age=86400  (from harga/{geometry}/client/{name}.bin)
  *   graphs/{geometry}/{name}.bin        public, max-age=86400
+ *   graphs/{geometry}/{name}_schools.json  public, max-age=86400 (school zone points, F3-07)
  * inputs.json and report.json of a run stay local.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -37,6 +38,8 @@ export function planUploads(root, regions) {
     if (existsSync(harga)) out.push({ local: harga, key: `harga/${g}/${name}.bin`, cacheControl: DAILY, contentType: 'application/octet-stream' });
     const graph = join(root, 'graphs', g, `${name}.bin`);
     if (existsSync(graph)) out.push({ local: graph, key: `graphs/${g}/${name}.bin`, cacheControl: DAILY, contentType: 'application/octet-stream' });
+    const schools = join(root, 'graphs', g, `${name}_schools.json`);
+    if (existsSync(schools)) out.push({ local: schools, key: `graphs/${g}/${name}_schools.json`, cacheControl: DAILY, contentType: 'application/json' });
     last.push({ local: manPath, key: `v/${name}/manifest.json`, cacheControl: MANIFEST, contentType: 'application/json' });
   }
   return [...out, ...last];

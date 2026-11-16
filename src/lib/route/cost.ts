@@ -6,7 +6,8 @@
  * E_e own exposure of the edge (field NO2 over the region's median), H_e harga hirup (1 = the region's median road),
  * eps_m the mode's emission share (0 walking and cycling). Motor modes also keep the zona napas: no local street
  * (residential, living_street, service, unclassified gang) except inside the access zone around the start and the
- * destination, and never footways, paths or steps. The emergency option has no points and w = lambda = 0 (fastest),
+ * destination, and never footways, paths or steps; during school hours also no edge past a school that is not the trip's
+ * own (schoolZone.ts, passed as CostInputs.allow). The emergency option has no points and w = lambda = 0 (fastest),
  * and still keeps the zona napas.
  */
 import type { WalkGraph } from './walkGraph';
@@ -66,6 +67,8 @@ export interface CostInputs {
   no2: Float64Array;
   /** Harga hirup index of each edge (NaN where unknown). */
   harga?: Float64Array;
+  /** Further edge filter of this trip for motor modes (the school zone during school hours, schoolZone.ts). */
+  allow?: (e: number) => boolean;
 }
 
 function medianOf(a: Float64Array): number {
@@ -81,10 +84,11 @@ export function optionsFor(g: WalkGraph, mode: Mode, s: number, t: number, inp: 
   const zone = accessZone(g, s, t, accessM);
   const eps = EMISSION_SHARE[mode];
   const h = inp.harga;
+  const extra = inp.allow;
   return {
     speed: MOTOR_TOP_SPEED,
     speedOf: (e) => motorSpeed(g, e),
-    allowed: (e) => motorAllowedClass(g, e) && (!isLocal(g, e) || zone[e] === 1),
+    allowed: (e) => motorAllowedClass(g, e) && (!isLocal(g, e) || zone[e] === 1) && (!extra || extra(e)),
     exposureOf,
     imposedOf: (e) => eps * (h && Number.isFinite(h[e]) ? h[e] : 1),
     lambda: emergency ? 0 : LAMBDA,

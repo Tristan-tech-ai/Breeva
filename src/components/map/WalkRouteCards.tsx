@@ -32,6 +32,9 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode }: { state
               {c.harga != null && (
                 <p className="text-[12px] text-gray-700 dark:text-gray-300">Ditimbulkan: harga hirup rata-rata {c.harga.toLocaleString('id-ID')}× median wilayah</p>
               )}
+              {c.schoolNote && (
+                <p className="mt-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300">{c.schoolNote}</p>
+              )}
               {c.vsFastest && (
                 <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
                   {c.vsFastest.extraTimePct >= 0 ? '+' : ''}{c.vsFastest.extraTimePct}% waktu · NO₂ {c.vsFastest.no2Pct >= 0 ? '+' : ''}{c.vsFastest.no2Pct}% dibanding tercepat
@@ -43,7 +46,7 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode }: { state
       )}
       <p className="mt-2 text-[10.5px] leading-relaxed text-gray-400 dark:text-gray-500">
         {mode === 'motor'
-          ? 'Motor: biaya rute menghitung paparan diri dan paparan yang ditimbulkan bagi warga sekitar (harga hirup); gang dan jalan lingkungan hanya dipakai dekat titik berangkat dan tujuan (zona napas). Rute darurat paling cepat dan tidak memberi poin, tetapi tetap menjauhi gang. '
+          ? 'Motor: biaya rute menghitung paparan diri dan paparan yang ditimbulkan bagi warga sekitar (harga hirup); gang dan jalan lingkungan hanya dipakai dekat titik berangkat dan tujuan (zona napas); pada jam masuk 06.30–07.30 dan pulang 12.00–13.30 jalan kecil di depan sekolah juga dihindari. Rute darurat paling cepat dan tidak memberi poin, tetapi tetap menjauhi gang. '
           : 'Pilihan rute memakai NO₂ dari lalu lintas karena PM2,5 hampir sama di semua jalan. '}
         Angka adalah rata-rata model sepanjang rute pada jam data peta, bukan pengukuran di tempat.
       </p>

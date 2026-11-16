@@ -2,12 +2,15 @@
 /**
  * Routing off the main thread. Messages:
  *   { id, type: 'init', base, region: { name, geometry } }  loads graph + field (Cache API, so it also works offline)
- *   { id, type: 'route', from: {lat, lng}, to: {lat, lng} } Pareto walking routes, exposure = NO2 of the field roads
+ *   { id, type: 'route', from: {lat, lng}, to: {lat, lng}, mode?, departLocal? } Pareto walking routes (exposure = NO2
+ *     of the field roads), or motor routes with the zona napas and, when the departure (local "HH:MM", default now)
+ *     falls in school hours, the school zone
  * Replies { id, ok: true, ... } or { id, ok: false, error }.
  */
 import { WalkGraph } from '../lib/route/walkGraph';
 import { NodeIndex, pareto, route, type RouteResult } from '../lib/route/router';
-import { motorNode, motorRoute } from '../lib/route/cost';
+import { motorNode } from '../lib/route/cost';
+import { localTimeToMs, motorRouteAt, schoolEdges, type SchoolFile, type SchoolZone } from '../lib/route/schoolZone';
 import { HargaIndex } from '../lib/field/harga';
 import { cachedBytes } from '../lib/route/assets';
 import { decodeCell } from '../lib/field/cells';
@@ -19,6 +22,8 @@ let no2: Float64Array | null = null;
 let pm25: Float64Array | null = null;
 let harga: Float64Array | null = null;
 let run = '';
+let schoolFile: SchoolFile | null = null;
+let schools: SchoolZone | null = null;
 
 async function init(base: string, region: { name: string; geometry: string }) {
   const g = new WalkGraph(await cachedBytes(`${base}/graphs/${region.geometry}/${region.name}.bin`, { cacheFirst: true }));
@@ -38,8 +43,11 @@ async function init(base: string, region: { name: string; geometry: string }) {
     const hv = hi?.value(r.c, r.i);
     if (hv != null) h[e] = hv;
   }
+  let sf: SchoolFile | null = null;
+  try { sf = JSON.parse(new TextDecoder().decode(await cachedBytes(`${base}/graphs/${region.geometry}/${region.name}_schools.json`, { cacheFirst: true }))) as SchoolFile; } catch { sf = null; }
   graph = g; index = new NodeIndex(g); no2 = n; pm25 = p; harga = hi ? h : null; run = manifest.run;
-  return { nodes: g.n, edges: g.m, run, harga: !!hi };
+  schoolFile = sf; schools = null;
+  return { nodes: g.n, edges: g.m, run, harga: !!hi, schools: sf?.points.length ?? 0 };
 }
 
 function median(a: Float64Array): number {
@@ -47,23 +55,31 @@ function median(a: Float64Array): number {
   return s.length ? s[Math.floor(s.length / 2)] : 1;
 }
 
-function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor') {
+/** School of every edge, computed on the first motor route (a few hundred ms) so walking stays fast to start. */
+function schoolZone(g: WalkGraph): SchoolZone | null {
+  if (!schoolFile) return null;
+  if (!schools) schools = { file: schoolFile, edgeSchool: schoolEdges(g, schoolFile.points, schoolFile.radius_m) };
+  return schools;
+}
+
+function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor', at: number) {
   if (!graph || !index || !no2 || !pm25) throw new Error('router not initialised');
   const g = graph;
   const keep = mode === 'motor' ? (u: number) => motorNode(g, u) : undefined;
   const s = index.nearest(from.lat, from.lng, 500, keep), t = index.nearest(to.lat, to.lng, 500, keep);
   if (s < 0 || t < 0) throw new Error('titik di luar jaringan jalan wilayah ini');
   const nArr = no2, pArr = pm25, hArr = harga;
-  let routes: Array<RouteResult & { kind?: 'dua-angka' | 'darurat' }>;
+  let routes: Array<RouteResult & { kind?: 'dua-angka' | 'darurat'; school?: 'off' | 'kept' | 'lifted-near-ends' }>;
   if (mode === 'motor') {
     const inp = { no2: nArr, harga: hArr ?? undefined };
-    const two = motorRoute(route, g, 'motor', s, t, inp);
-    const emer = motorRoute(route, g, 'motor', s, t, inp, true);
+    const zone = schoolZone(g);
+    const two = motorRouteAt(route, g, 'motor', s, t, inp, zone, at);
+    const emer = motorRouteAt(route, g, 'motor', s, t, inp, zone, at, true);
     if (!two || !emer) throw new Error('tidak ada rute kendaraan yang menghormati zona napas');
     // fastest (emergency) first, like the walking list; the same route twice is shown once
     routes = emer.route.edges.join(',') === two.route.edges.join(',')
-      ? [{ ...two.route, kind: 'dua-angka' }]
-      : [{ ...emer.route, kind: 'darurat' }, { ...two.route, kind: 'dua-angka' }];
+      ? [{ ...two.route, kind: 'dua-angka', school: two.school }]
+      : [{ ...emer.route, kind: 'darurat', school: emer.school }, { ...two.route, kind: 'dua-angka', school: two.school }];
   } else {
     const medN = median(nArr);
     routes = pareto(g, s, t, { speed: SPEED, exposureOf: (e) => (Number.isFinite(nArr[e]) ? nArr[e] / medN : 1) });
@@ -82,7 +98,7 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
     });
     // mean concentration along the route (ug/m3), the honest number to compare routes by
     const out = { lengthM: Math.round(r.lengthM), timeS: Math.round(r.timeS), pm25Mean: pmDose / tSum, no2Mean: no2Dose / tSum, coords, w: r.w };
-    return mode === 'motor' ? { ...out, kind: r.kind, hargaMean: hDose / tSum } : out;
+    return mode === 'motor' ? { ...out, kind: r.kind, hargaMean: hDose / tSum, school: r.school } : out;
   });
 }
 
@@ -92,7 +108,8 @@ self.onmessage = async (ev: MessageEvent) => {
     if (type === 'init') self.postMessage({ id, ok: true, ...(await init(ev.data.base, ev.data.region)) });
     else if (type === 'route') {
       const t0 = performance.now();
-      const routes = routeBetween(ev.data.from, ev.data.to, ev.data.mode === 'motor' ? 'motor' : 'walk');
+      const at = schoolFile ? localTimeToMs(ev.data.departLocal, schoolFile.tz, Date.now()) : Date.now();
+      const routes = routeBetween(ev.data.from, ev.data.to, ev.data.mode === 'motor' ? 'motor' : 'walk', at);
       self.postMessage({ id, ok: true, routes, ms: performance.now() - t0, run });
     } else throw new Error(`unknown message ${type}`);
   } catch (e) {

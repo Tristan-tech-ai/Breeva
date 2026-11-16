@@ -31,6 +31,18 @@ describe('field upload plan', () => {
     expect(keys.some((k) => k.includes('inputs.json'))).toBe(false);
   });
 
+  it('publishes the walking graph and its school points with a daily cache', () => {
+    const root = fakeField([0]);
+    mkdirSync(join(root, 'graphs', '2026-11'), { recursive: true });
+    writeFileSync(join(root, 'graphs', '2026-11', 'r.bin'), 'g');
+    writeFileSync(join(root, 'graphs', '2026-11', 'r_schools.json'), '{}');
+    const plan = planUploads(root, ['r']) as Upload[];
+    const sch = plan.find((u) => u.key === 'graphs/2026-11/r_schools.json')!;
+    expect(sch).toMatchObject({ cacheControl: DAILY, contentType: 'application/json' });
+    expect(plan.find((u) => u.key === 'graphs/2026-11/r.bin')!.cacheControl).toBe(DAILY);
+    expect(plan.at(-1)!.key).toBe('v/r/manifest.json');
+  });
+
   it('refuses a run that does not match its manifest', () => {
     expect(() => planUploads(fakeField([0], true), ['r'])).toThrow(/does not list/);
   });
