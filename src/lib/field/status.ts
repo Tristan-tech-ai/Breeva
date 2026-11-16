@@ -40,3 +40,37 @@ export function statusText(s: FieldStatus): string {
   const src = s.method === 'kriging' ? `${s.sensors} sensor warga` : s.method === 'koschmieder' ? 'jarak pandang bandara' : 'model tanpa sensor';
   return `${s.ok ? 'Segar' : 'Basi'}: dihitung ${age} lalu · ${src}${s.indicative ? ' · indikatif' : ''}`;
 }
+
+export interface LayeredManifest extends ManifestLike {
+  valid_hour_local?: number;
+  measurement?: { method?: string | null; sensor_hour_utc?: string | null };
+}
+
+export interface LayerAges { exhaust: string; background: string; stale: boolean }
+
+const hh = (h: number) => `${String(((h % 24) + 24) % 24).padStart(2, '0')}.00`;
+
+/**
+ * Age of each layer of the field in plain words (task F5-15): the exhaust part is computed for the run's own hour
+ * (current wind, that hour's traffic curve); the background comes from the citizen sensors' last complete hour
+ * (OpenAQ gives hourly averages about an hour late) or from the global model.
+ */
+export function layerAges(m: LayeredManifest | null | undefined, now: Date): LayerAges | null {
+  const s = manifestStatus(m, now);
+  if (s.error || !m?.run || m.valid_hour_local == null) return null;
+  const tz = (m.valid_hour_local - Number(m.run.slice(8, 10)) + 24) % 24;
+  const stale = !s.ok;
+  const exhaust = `Asap kendaraan: jam ${hh(m.valid_hour_local)} (angin saat ini dan pola lalu lintas jam itu)`;
+  let background: string;
+  const sh = Date.parse(m.measurement?.sensor_hour_utc ?? '');
+  if (m.measurement?.method === 'kriging' && Number.isFinite(sh)) {
+    const startLocal = new Date(sh).getUTCHours() + tz;
+    const endedMin = Math.max(0, Math.round((now.getTime() - (sh + 3_600_000)) / 60000));
+    background = `Udara latar: ${s.sensors} sensor warga, rata-rata jam ${hh(startLocal)}–${hh(startLocal + 1)} (selesai ${endedMin} menit lalu)`;
+  } else if (m.measurement?.method === 'koschmieder') {
+    background = 'Udara latar: model global, dinaikkan menurut jarak pandang bandara';
+  } else {
+    background = 'Udara latar: model global (belum ada sensor di wilayah ini)';
+  }
+  return { exhaust: stale ? `Data lama. ${exhaust}` : exhaust, background, stale };
+}

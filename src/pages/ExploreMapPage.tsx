@@ -17,6 +17,7 @@ import type { RouteDest, WalkRoutingState } from '../components/map/WalkRouteLay
 import type { PollutantType, RoadDisplayMode } from '../types';
 import { ISPU_CATEGORIES } from '../lib/ispu';
 import { FIELD_REGIONS, pickRegion } from '../lib/field/source';
+import FieldAgeNote from '../components/map/FieldAgeNote';
 import { parseDestLink, parseRouteLink } from '../lib/route/share';
 import { parseDepart } from '../lib/route/depart';
 
@@ -247,6 +248,7 @@ export default function ExploreMapPage() {
 
         {/* Legend — reflects the selected pollutant / road mode */}
         <div className="glass-card p-4">
+          {FIELD_STATIC && <FieldAgeNote region={region} className="mb-2" />}
           <p className="text-xs font-semibold text-gray-900 dark:text-white mb-2.5">
             Arti warna jalan — {activeP.label}
             {roadDisplayMode === 'traffic' ? ' · asap kendaraan' : roadDisplayMode === 'harga' ? ' · harga hirup' : ''}

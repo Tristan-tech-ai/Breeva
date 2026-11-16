@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { WalkRoutingState } from './WalkRouteLayer';
 import { routeLink } from '../../lib/route/share';
 import { DEPART_CHOICES } from '../../lib/route/depart';
+import FieldAgeNote from './FieldAgeNote';
 
 /** Cards of the routes computed on the device: vehicle exhaust breathed against the fastest route, time, distance. */
 export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = null, onDepart }: {
@@ -84,6 +85,7 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = 
         {state.cards.length > 0 && `Udara latar kota (PM2,5 sekitar ${Math.round(state.cards[0].pm25)} µg/m³, dari pembakaran dan asap jauh) sama di semua rute dan tidak bisa dihindari lewat pilihan jalan. `}
         Angka adalah perkiraan model per ruas pada jam data peta, bukan pengukuran di tempat.
       </p>
+      {ends && <FieldAgeNote at={ends.from} className="mt-1" />}
     </div>
   );
 }
