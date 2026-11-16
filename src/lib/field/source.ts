@@ -28,6 +28,11 @@ export const FIELD_REGIONS: FieldRegion[] = [
   { name: 'kota_bogor', label: 'Kota Bogor', geometry: '2026-11', bounds: [[-6.6813, 106.7348], [-6.5143, 106.8486]], home: { lat: -6.595, lng: 106.797 } },
 ];
 
+/** Field region named in the URL (?wilayah=), else the first one (Badung-Denpasar). */
+export function pickRegion(name: string | null): FieldRegion {
+  return FIELD_REGIONS.find((r) => r.name === name) ?? FIELD_REGIONS[0];
+}
+
 export const STALE_HOURS = 3;
 
 export function fieldBase(): string {

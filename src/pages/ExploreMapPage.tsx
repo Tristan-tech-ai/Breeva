@@ -14,7 +14,7 @@ import WalkRouteCards from '../components/map/WalkRouteCards';
 import type { WalkRoutingState } from '../components/map/WalkRouteLayer';
 import type { PollutantType, RoadDisplayMode } from '../types';
 import { ISPU_CATEGORIES } from '../lib/ispu';
-import { FIELD_REGIONS } from '../lib/field/source';
+import { FIELD_REGIONS, pickRegion } from '../lib/field/source';
 
 const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
 
@@ -46,7 +46,11 @@ const HOW = [
 
 export default function ExploreMapPage() {
   const navigate = useNavigate();
-  const isRoot = useLocation().pathname === '/';
+  const location = useLocation();
+  const isRoot = location.pathname === '/';
+  // ?wilayah=kota_bogor opens the map in that field region (for the demo in Bogor).
+  const startRegion = pickRegion(new URLSearchParams(location.search).get('wilayah'));
+  const [region, setRegion] = useState(startRegion.name);
   const isDark = useIsDark();
   const currentAQI = useMapStore((s) => s.currentAQI);
   // The value card follows the map: field reading for the centre when the area has a field, else the API.
@@ -64,10 +68,10 @@ export default function ExploreMapPage() {
   // Start where coloured roads exist: with the static field, its first region (Badung-Denpasar); otherwise Jakarta.
   // No geolocation prompt.
   useEffect(() => {
-    const start = FIELD_STATIC ? FIELD_REGIONS[0].home : { lat: -6.2088, lng: 106.8456 };
+    const start = FIELD_STATIC ? startRegion.home : { lat: -6.2088, lng: 106.8456 };
     useMapStore.getState().setCenter(start);
     void useMapStore.getState().fetchAreaReading(start);
-  }, []);
+  }, [startRegion]);
 
   const useMyLocation = () => {
     setLocated(true);
@@ -154,6 +158,19 @@ export default function ExploreMapPage() {
             </div>
           )}
         </div>
+
+        {/* Field regions: jump to one */}
+        {FIELD_STATIC && (
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Wilayah">
+            {FIELD_REGIONS.map((r) => (
+              <button key={r.name} aria-pressed={region === r.name}
+                onClick={() => { setRegion(r.name); useMapStore.getState().setCenter(r.home); void useMapStore.getState().fetchAreaReading(r.home); }}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${region === r.name ? 'bg-sky-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
+                {r.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Interactive map (progressive enhancement) */}
         <div className="relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg" style={{ height: 'min(58vh, 480px)' }}>

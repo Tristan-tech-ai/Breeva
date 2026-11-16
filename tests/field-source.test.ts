@@ -77,3 +77,12 @@ describe('overzoom and colours', () => {
     expect(fieldColor({ ...v, ood: true }, 'pm25', 'total')).toBe('#9ca3af');
   });
 });
+
+describe('field region from the URL', () => {
+  it('?wilayah= picks a known region, anything else the first', async () => {
+    const { pickRegion, FIELD_REGIONS } = await import('../src/lib/field/source');
+    expect(pickRegion('kota_bogor').label).toBe('Kota Bogor');
+    expect(pickRegion(null)).toBe(FIELD_REGIONS[0]);
+    expect(pickRegion('jakarta')).toBe(FIELD_REGIONS[0]);
+  });
+});
