@@ -21,5 +21,10 @@ for (const region of regions) {
   if (!existsSync(tiles)) throw new Error(`missing ${tiles}`);
   mkdirSync(join(out, 'tiles', man.geometry), { recursive: true });
   copyFileSync(tiles, join(out, 'tiles', man.geometry, `${region}.pmtiles`));
-  console.log(`staged ${region}: run ${man.run}, ${man.cells.length} cells, tiles ${man.geometry}`);
+  const harga = join(root, 'harga', man.geometry, 'client', `${region}.bin`);
+  if (existsSync(harga)) {
+    mkdirSync(join(out, 'harga', man.geometry), { recursive: true });
+    copyFileSync(harga, join(out, 'harga', man.geometry, `${region}.bin`));
+  }
+  console.log(`staged ${region}: run ${man.run}, ${man.cells.length} cells, tiles ${man.geometry}, harga ${existsSync(harga) ? 'yes' : 'no'}`);
 }

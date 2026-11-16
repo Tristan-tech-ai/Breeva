@@ -246,8 +246,11 @@ export interface PaginatedResponse<T> {
 // VAYU Road-level pollution types
 export type PollutantType = 'aqi' | 'pm25' | 'no2' | 'o3' | 'pm10';
 
-/** 'total' = absolute level (ISPU / concentration); 'traffic' = the traffic part on a fixed scale (roadColors.trafficColor). */
-export type RoadDisplayMode = 'total' | 'traffic';
+/**
+ * 'total' = absolute level (ISPU / concentration); 'traffic' = the traffic part on a fixed scale (roadColors.trafficColor);
+ * 'harga' = harga hirup, how much breathing a road's exhaust reaches (lib/field/harga.ts; static field only).
+ */
+export type RoadDisplayMode = 'total' | 'traffic' | 'harga';
 
 export interface RoadAQIFeature {
   osm_way_id: number;

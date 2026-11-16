@@ -42,3 +42,18 @@ def test_correlation_puts_the_breathing_on_the_upwind_road():
     assert from_west > 0 and from_east < 1e-12 * from_west
     # the value equals area * kernel at that offset
     assert math.isclose(from_west, 500.0 * sector_kernel(6)[R, R + 10], rel_tol=1e-6)
+
+
+def test_client_file_round_trip_and_cell_offsets():
+    import tempfile
+    from harga_hirup import read_client, write_client
+    h = np.array([0.1, 0.5, 1.0, 2.0, 3.5, 0.0, 7.25])
+    c = np.array([0, 0, 0, 1, 1, 2, 2])
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "h.bin")
+        head = write_client(path, h, c, 3, {"geometry": "test", "name": "t"})
+        assert head["data_offset"] % 8 == 0
+        meta, back = read_client(path)
+        assert meta["cell_offsets"] == [0, 3, 5, 7]
+        np.testing.assert_allclose(back, h, atol=0.005)
+        assert meta["quintiles"] == sorted(meta["quintiles"]) and len(meta["quintiles"]) == 4

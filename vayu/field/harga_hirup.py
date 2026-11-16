@@ -169,6 +169,43 @@ def write(path: str, cols: dict[str, np.ndarray], header: dict):
             f.write(np.ascontiguousarray(cols[c["name"]], dtype="<f4").tobytes())
 
 
+CLIENT_MAGIC = b"BHI1"
+CLIENT_STEP = 0.01
+
+
+def write_client(path: str, h_index: np.ndarray, cell_col: np.ndarray, n_cells: int, meta: dict) -> dict:
+    """Small file for the map (BHI1): h_index per road in pack order as uint16 (step 0.01), the start of each cell in
+    that order (road (c, i) is at cell_offsets[c] + i), and the quintile edges used for the fixed colour classes.
+
+        0 4 magic b"BHI1" | 4 4 uint32 header length H | 8 H JSON header | then n uint16 at an 8-byte boundary
+    """
+    h = np.asarray(h_index, dtype=float)
+    counts = np.bincount(np.asarray(cell_col, dtype=int), minlength=n_cells)
+    offsets = np.concatenate([[0], np.cumsum(counts)]).astype(int)
+    q = np.quantile(h, [0.2, 0.4, 0.6, 0.8])
+    header = dict(meta)
+    header.update({"format": "BHI1", "n": int(len(h)), "step": CLIENT_STEP, "cell_offsets": offsets.tolist(),
+                   "quintiles": [round(float(x), 3) for x in q]})
+    head = json.dumps(header, separators=(",", ":")).encode()
+    start = (8 + len(head) + 7) // 8 * 8
+    data = np.round(np.clip(h, 0, 655.35) / CLIENT_STEP).astype("<u2")
+    with open(path, "wb") as f:
+        f.write(CLIENT_MAGIC + struct.pack("<I", len(head)) + head)
+        f.write(b"\0" * (start - f.tell()))
+        f.write(data.tobytes())
+    header["data_offset"] = start
+    return header
+
+
+def read_client(path: str) -> tuple[dict, np.ndarray]:
+    raw = open(path, "rb").read()
+    assert raw[:4] == CLIENT_MAGIC
+    hl = struct.unpack("<I", raw[4:8])[0]
+    meta = json.loads(raw[8:8 + hl])
+    start = (8 + hl + 7) // 8 * 8
+    return meta, np.frombuffer(raw, dtype="<u2", count=meta["n"], offset=start) * meta["step"]
+
+
 def read(path: str) -> tuple[dict, dict]:
     raw = open(path, "rb").read()
     assert raw[:4] == MAGIC
@@ -183,6 +220,7 @@ def main(argv=None):
     ap.add_argument("--buildings", required=True)
     ap.add_argument("--facilities")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--client-out", help="also write the small BHI1 file the map reads")
     a = ap.parse_args(argv)
     t0 = time.time()
     p = Pack(a.pack)
@@ -234,6 +272,11 @@ def main(argv=None):
     tmp = a.out + ".tmp"
     write(tmp, {"h_index": h_index, "h_iso": h_iso, "h_sector": h_sec.reshape(-1), "density_100m": dens}, header)
     os.replace(tmp, a.out)
+    if a.client_out:
+        os.makedirs(os.path.dirname(a.client_out), exist_ok=True)
+        write_client(a.client_out, h_index, p.cols["c"], len(p.meta["cells"]),
+                     {"geometry": p.meta["geometry"], "name": os.path.basename(a.client_out)[: -len(".bin")],
+                      "median_h_iso": med, "source": "vayu/field/harga_hirup.py"})
     rep = {"out": a.out, "bytes": os.path.getsize(a.out), "roads": p.n, "samples": int(len(own)),
            "raster": [rast.ny, rast.nx], "receptors": header["receptors"], "median_h_iso": med,
            "h_index_quantiles": [round(float(x), 3) for x in np.quantile(h_index, [0.05, 0.25, 0.5, 0.75, 0.95])],

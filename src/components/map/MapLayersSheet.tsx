@@ -7,6 +7,7 @@ import type { AirQualityData, PollutantType, RoadDisplayMode } from '../../types
 import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { POLLUTANT_OPTIONS, getColorStops } from './RoadPollutionLayer';
 import TrafficLegend from './TrafficLegend';
+import HargaLegend from './HargaLegend';
 
 interface MapLayersSheetProps {
   isOpen: boolean;
@@ -337,8 +338,7 @@ export default function MapLayersSheet({
                       ))}
                     </div>
 
-                    {/* Display mode toggle: absolute level vs the traffic part on a fixed scale */}
-                    {(pollutant === 'pm25' || pollutant === 'no2' || pollutant === 'pm10') && (
+                    {/* Display mode toggle: absolute level, the traffic part on a fixed scale, or harga hirup */}
                       <div className="flex items-center gap-2 px-4 pt-3 pb-2">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mr-1">
                           View
@@ -369,14 +369,31 @@ export default function MapLayersSheet({
                         >
                           Lalu lintas
                         </button>
+                        <button
+                          onClick={() => onRoadDisplayModeChange?.('harga')}
+                          className={`
+                            px-2.5 py-1 text-[10px] font-bold rounded-md transition-all
+                            ${roadDisplayMode === 'harga'
+                              ? 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 ring-1 ring-teal-300 dark:ring-teal-700'
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                            }
+                          `}
+                          title="Seberapa banyak orang menghirup gas buang ruas ini (bangunan, sekolah, faskes dalam 500 m)"
+                        >
+                          Harga hirup
+                        </button>
                         <span className="ml-auto text-[9px] text-gray-400 dark:text-gray-500">
-                          {roadDisplayMode === 'traffic' ? 'Perbandingan antar-jalan' : 'Tingkat absolut'}
+                          {roadDisplayMode === 'traffic' ? 'Perbandingan antar-jalan' : roadDisplayMode === 'harga' ? 'Siapa yang menghirup' : 'Tingkat absolut'}
                         </span>
                       </div>
-                    )}
                     {roadDisplayMode === 'traffic' && (
                       <div className="px-4 pb-1">
                         <TrafficLegend pollutant={pollutant} />
+                      </div>
+                    )}
+                    {roadDisplayMode === 'harga' && (
+                      <div className="px-4 pb-1">
+                        <HargaLegend />
                       </div>
                     )}
 

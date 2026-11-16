@@ -9,6 +9,7 @@ import AQICard from '../components/features/AQICard';
 import SearchBar from '../components/map/SearchBar';
 import { CITIES } from '../lib/cities';
 import TrafficLegend from '../components/map/TrafficLegend';
+import HargaLegend from '../components/map/HargaLegend';
 import type { PollutantType, RoadDisplayMode } from '../types';
 import { ISPU_CATEGORIES } from '../lib/ispu';
 import { FIELD_REGIONS } from '../lib/field/source';
@@ -32,8 +33,7 @@ const POLLUTANTS: { id: PollutantType; label: string; unit: string }[] = [
   { id: 'o3', label: 'O₃', unit: 'µg/m³' },
   { id: 'pm10', label: 'PM₁₀', unit: 'µg/m³' },
 ];
-const ROAD_MODES: [RoadDisplayMode, string][] = [['total', 'Absolut'], ['traffic', 'Lalu lintas']];
-const CONCENTRATION = ['pm25', 'no2', 'pm10'];
+const ROAD_MODES: [RoadDisplayMode, string][] = [['total', 'Absolut'], ['traffic', 'Lalu lintas'], ['harga', 'Harga hirup']];
 const RAMP = 'linear-gradient(90deg,#00E400,#FFFF00,#FF7E00,#FF0000,#8F3F97,#7E0023)';
 
 const HOW = [
@@ -53,7 +53,8 @@ export default function ExploreMapPage() {
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('total');
   const activeP = POLLUTANTS.find((p) => p.id === pollutant) ?? POLLUTANTS[0];
-  const showRoadModes = CONCENTRATION.includes(pollutant);
+  // The traffic view of the index shows NO2, and harga hirup does not depend on the pollutant: modes for every pollutant.
+  const showRoadModes = true;
 
   // Start where coloured roads exist: with the static field, its first region (Badung-Denpasar); otherwise Jakarta.
   // No geolocation prompt.
@@ -112,7 +113,7 @@ export default function ExploreMapPage() {
               {POLLUTANTS.map((p) => (
                 <button
                   key={p.id}
-                  onClick={() => { setPollutant(p.id); if (!CONCENTRATION.includes(p.id)) setRoadDisplayMode('total'); }}
+                  onClick={() => setPollutant(p.id)}
                   className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
                     pollutant === p.id
                       ? 'gradient-primary text-white shadow-sm'
@@ -143,7 +144,7 @@ export default function ExploreMapPage() {
                 ))}
               </div>
               <p className="text-[10.5px] text-gray-400 dark:text-gray-500 mt-2 leading-relaxed">
-                <b>Absolut</b>: konsentrasi total vs ambang WHO/EPA. <b>Lalu lintas</b>: bagian yang datang dari kendaraan di ruas sekitar, skala tetap µg/m³ (abu-abu = selisih terlalu kecil untuk dibedakan); perbandingan antar-jalan, bukan tingkat bahaya.
+                <b>Absolut</b>: konsentrasi total vs ambang WHO/EPA. <b>Lalu lintas</b>: bagian yang datang dari kendaraan di ruas sekitar, skala tetap µg/m³ (abu-abu = selisih terlalu kecil untuk dibedakan); perbandingan antar-jalan, bukan tingkat bahaya. <b>Harga hirup</b>: seberapa banyak orang menghirup gas buang ruas itu.
               </p>
             </div>
           )}
@@ -175,10 +176,12 @@ export default function ExploreMapPage() {
         <div className="glass-card p-4">
           <p className="text-xs font-semibold text-gray-900 dark:text-white mb-2.5">
             Arti warna jalan — {activeP.label}
-            {showRoadModes && roadDisplayMode === 'traffic' && ' · lalu lintas'}
+            {roadDisplayMode === 'traffic' ? ' · lalu lintas' : roadDisplayMode === 'harga' ? ' · harga hirup' : ''}
           </p>
-          {showRoadModes && roadDisplayMode === 'traffic' ? (
+          {roadDisplayMode === 'traffic' ? (
             <TrafficLegend pollutant={pollutant} />
+          ) : roadDisplayMode === 'harga' ? (
+            <HargaLegend />
           ) : pollutant === 'aqi' ? (
             <div className="flex flex-wrap gap-x-4 gap-y-2">
               {AQI_LEGEND.map((l) => (

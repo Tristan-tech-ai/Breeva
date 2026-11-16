@@ -4,6 +4,7 @@
  */
 import { PMTiles } from 'pmtiles';
 import { decodeCell, type CellValue } from './cells';
+import { HargaIndex } from './harga';
 
 export interface FieldManifest {
   geometry: string; run: string; computed_at: string; valid_hour_local: number; engine: string; cells: number[];
@@ -35,6 +36,8 @@ export class FieldSource {
   readonly pm: PMTiles;
   manifest: FieldManifest | null = null;
   highwayCodes: string[] = [];
+  /** Harga hirup per road (BHI1), null until loaded or when the region has none yet. */
+  harga: HargaIndex | null = null;
   private readonly cells = new Map<number, CellValue[]>();
   private readonly pending = new Map<number, Promise<void>>();
   /** Called whenever a cell arrives, so the layer can redraw. */
@@ -59,6 +62,19 @@ export class FieldSource {
     this.manifest = m;
     const meta = (await this.pm.getMetadata()) as { highway_codes?: string[] } | undefined;
     this.highwayCodes = meta?.highway_codes ?? [];
+    void this.loadHarga();
+  }
+
+  /** Loads the harga hirup file of the region; a region without one keeps harga = null. */
+  async loadHarga(): Promise<void> {
+    try {
+      const r = await this.fetchImpl(`${this.base}/harga/${this.region.geometry}/${this.region.name}.bin`);
+      if (!r.ok) return;
+      this.harga = new HargaIndex(new Uint8Array(await r.arrayBuffer()));
+      this.onCell?.();
+    } catch {
+      this.harga = null; // missing file (a dev server answers with index.html) or a broken one
+    }
   }
 
   /** Value of road (c, i), or undefined while its cell is loading (the load starts here). */
