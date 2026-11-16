@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './components/auth/AuthProvider';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
@@ -59,6 +59,18 @@ const DeveloperDashboardPage = lazy(() => import('./pages/DeveloperDashboardPage
 // Page loading fallback — content-shaped skeleton (avoids the blank flash of a bare spinner).
 function PageLoader() {
   return <ContentPageSkeleton />;
+}
+
+// The in-app route cards copy links with this page's path (/home?rute=...): those open on the public map, which plays
+// them for anyone, signed in or not.
+function HomeRoute() {
+  const { search } = useLocation();
+  if (new URLSearchParams(search).has('rute')) return <Navigate to={`/peta${search}`} replace />;
+  return (
+    <ProtectedRoute>
+      <HomePage />
+    </ProtectedRoute>
+  );
 }
 
 function KeyboardShortcutsProvider({ children }: { children: React.ReactNode }) {
@@ -333,11 +345,7 @@ function App() {
             <Route path="/privacy" element={<PrivacyPage />} />
 
             {/* Home / Map — protected, requires auth */}
-            <Route path="/home" element={
-              <ProtectedRoute>
-                <HomePage />
-              </ProtectedRoute>
-            } />
+            <Route path="/home" element={<HomeRoute />} />
 
             {/* Root: map first. Guests see the live coloured map with its legend; signed-in users go to the app. */}
             <Route path="/" element={<RootRoute />} />

@@ -53,6 +53,11 @@ interface WalkTrackingState {
   // VAYU exposure result
   exposureResult: ExposureResult | null;
   activeTransportMode: string;
+  /**
+   * Mean PM2.5 (µg/m³) of the on-device route the walk follows (static field model), or null. When set, the walk's
+   * exposure and AQI bonus come from it and no server route scoring is requested.
+   */
+  routePm25: number | null;
 
   // Live AQI refresh throttle — last time we asked mapStore to refetch AQI
   // for the user's current location during a walk.
@@ -66,7 +71,7 @@ interface WalkTrackingState {
   arrived: boolean;
 
   // Actions
-  startWalk: (routeId?: string, transportMode?: string) => void;
+  startWalk: (routeId?: string, transportMode?: string, opts?: { routePm25?: number | null }) => void;
   pauseWalk: () => void;
   resumeWalk: () => void;
   endWalk: () => Promise<WalkSession | null>;
@@ -122,13 +127,14 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
   stepCount: 0,
   exposureResult: null,
   activeTransportMode: 'walking',
+  routePm25: null,
   _lastAqiAt: 0,
   heading: null,
   navProgress: null,
   offRoute: false,
   arrived: false,
 
-  startWalk: (routeId, transportMode) => {
+  startWalk: (routeId, transportMode, opts) => {
     const user = useAuthStore.getState().user;
     // Guests walk too: the walk is recorded on the device (guestStore).
     if (!user && !isGuest()) return;
@@ -160,6 +166,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       pausedDuration: 0,
       exposureResult: null,
       activeTransportMode: transportMode || 'walking',
+      routePm25: opts?.routePm25 != null && Number.isFinite(opts.routePm25) ? opts.routePm25 : null,
       heading: null,
       navProgress: null,
       offRoute: false,
@@ -339,7 +346,24 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
     let walkSegments: RouteSegmentAQI[] | null = null; // persisted to walks.route_segments for instant Paparan
     const polyline: [number, number][] = routePoints.map(p => [p.lat, p.lng]);
     const guest = isGuest();
-    if (polyline.length >= 2) {
+    const routePm25 = get().routePm25;
+    if (polyline.length >= 2 && routePm25 != null) {
+      // Walk along an on-device route: the route's model mean PM2.5 (static field) gives the dose; no server call.
+      walkProfile = { age_bucket: 'adult', mode: transportToExposureMode(get().activeTransportMode), health_sensitive: false };
+      const dose = computeDose([{ pm25: routePm25, fraction_along: 0 }], durationSeconds, walkProfile);
+      walkDose = dose;
+      walkSegCount = 1;
+      set({ exposureResult: {
+        total_dose_ug: dose.dose_ug,
+        cigarette_equivalent: dose.cigarette_equiv,
+        health_risk_level: dose.risk_level,
+        avg_pm25: dose.mean_pm25,
+        vehicle_type: get().activeTransportMode,
+        vehicle_label: '',
+        duration_minutes: dose.duration_minutes,
+        sample_count: 1,
+      } });
+    } else if (polyline.length >= 2) {
       const vehicleType = getVayuVehicleType(get().activeTransportMode);
       walkProfile = { age_bucket: 'adult', mode: transportToExposureMode(get().activeTransportMode), health_sensitive: false };
 
@@ -393,7 +417,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       }
     }
 
-    // Real route-mean AQI from the scored polyline (drives the AQI bonus).
+    // Real route-mean AQI from the scored polyline or the on-device route (drives the AQI bonus).
     const walkAvgAqi = walkDose && Number.isFinite(walkDose.mean_pm25) ? pm25ToAQISimple(walkDose.mean_pm25) : undefined;
 
     // Guest: the walk is recorded on this device with the server's formula (guestStore); nothing is sent.
@@ -424,6 +448,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
         watchId: null,
         timerInterval: null,
         pointsEarned: completedSession.status === 'completed' ? points : 0,
+        routePm25: null,
         heading: null,
         navProgress: null,
         offRoute: false,
@@ -508,6 +533,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       watchId: null,
       timerInterval: null,
       pointsEarned: completedSession.status === 'completed' ? points : 0,
+      routePm25: null,
       heading: null,
       navProgress: null,
       offRoute: false,
@@ -535,6 +561,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       timerInterval: null,
       startTime: null,
       pausedDuration: 0,
+      routePm25: null,
       heading: null,
       navProgress: null,
       offRoute: false,

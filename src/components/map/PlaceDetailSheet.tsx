@@ -153,10 +153,10 @@ export default function PlaceDetailSheet({
   const isOpen = openState ? openState.toLowerCase().includes('open') : null;
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'overview', label: 'Overview' },
-    { key: 'reviews', label: 'Reviews' },
-    { key: 'photos', label: 'Photos' },
-    { key: 'about', label: 'About' },
+    { key: 'overview', label: 'Ringkasan' },
+    { key: 'reviews', label: 'Ulasan' },
+    { key: 'photos', label: 'Foto' },
+    { key: 'about', label: 'Tentang' },
   ];
 
   return (
@@ -271,7 +271,7 @@ export default function PlaceDetailSheet({
                       className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary-500 text-white text-sm font-semibold shadow-md shadow-primary-500/20 hover:bg-primary-600 active:scale-95 transition-all flex-shrink-0"
                     >
                       <Navigation className="w-4 h-4" />
-                      Directions
+                      Rute
                     </button>
                     {onSave && (
                       <button
@@ -283,7 +283,7 @@ export default function PlaceDetailSheet({
                         }`}
                       >
                         {isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-                        {isSaved ? 'Saved' : 'Save'}
+                        {isSaved ? 'Tersimpan' : 'Simpan'}
                       </button>
                     )}
                     {phone && (
@@ -292,7 +292,7 @@ export default function PlaceDetailSheet({
                         className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium border bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 transition-all flex-shrink-0"
                       >
                         <Phone className="w-4 h-4" />
-                        Call
+                        Telepon
                       </a>
                     )}
                     <button
@@ -303,7 +303,7 @@ export default function PlaceDetailSheet({
                       className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium border bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 transition-all flex-shrink-0"
                     >
                       <Share2 className="w-4 h-4" />
-                      Share
+                      Bagikan
                     </button>
                   </div>
 
