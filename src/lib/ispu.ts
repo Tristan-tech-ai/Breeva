@@ -42,15 +42,20 @@ export function ispuRounded(param: IspuParam, conc: number): number | null {
   return v === null ? null : Math.round(v);
 }
 
-export interface IspuCategory { name: string; color: string; colorName: string; range: string; min: number }
+export interface IspuCategory { name: string; color: string; colorName: string; range: string; min: number; advice: string }
 
-/** Lampiran II.A. Colours: green, blue, yellow, red, black as named in the regulation. */
+/** Lampiran II.A (colours: green, blue, yellow, red, black as named) and II.B (advice, shortened). */
 export const ISPU_CATEGORIES: readonly IspuCategory[] = [
-  { name: 'Baik', colorName: 'Hijau', color: '#16a34a', range: '1–50', min: 0 },
-  { name: 'Sedang', colorName: 'Biru', color: '#2563eb', range: '51–100', min: 51 },
-  { name: 'Tidak Sehat', colorName: 'Kuning', color: '#eab308', range: '101–200', min: 101 },
-  { name: 'Sangat Tidak Sehat', colorName: 'Merah', color: '#dc2626', range: '201–300', min: 201 },
-  { name: 'Berbahaya', colorName: 'Hitam', color: '#111827', range: '≥ 301', min: 301 },
+  { name: 'Baik', colorName: 'Hijau', color: '#16a34a', range: '1–50', min: 0,
+    advice: 'Sangat baik untuk kegiatan di luar.' },
+  { name: 'Sedang', colorName: 'Biru', color: '#2563eb', range: '51–100', min: 51,
+    advice: 'Kelompok sensitif: kurangi aktivitas fisik yang terlalu lama atau berat.' },
+  { name: 'Tidak Sehat', colorName: 'Kuning', color: '#eab308', range: '101–200', min: 101,
+    advice: 'Kelompok sensitif: rehat lebih sering dan amati gejala. Setiap orang: kurangi aktivitas lama di luar.' },
+  { name: 'Sangat Tidak Sehat', colorName: 'Merah', color: '#dc2626', range: '201–300', min: 201,
+    advice: 'Kelompok sensitif: hindari semua aktivitas di luar. Setiap orang: hindari aktivitas fisik lama di luar.' },
+  { name: 'Berbahaya', colorName: 'Hitam', color: '#111827', range: '≥ 301', min: 301,
+    advice: 'Kelompok sensitif: tetap di dalam ruangan. Setiap orang: hindari semua aktivitas di luar.' },
 ];
 
 export function ispuCategory(value: number): IspuCategory {

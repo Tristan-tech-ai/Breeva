@@ -8,6 +8,10 @@ import { decodeCell, type CellValue } from './cells';
 export interface FieldManifest {
   geometry: string; run: string; computed_at: string; valid_hour_local: number; engine: string; cells: number[];
   sensors_used?: number; inputs_note?: string;
+  /** z12 tile [x, y] of each cell index (pack order). */
+  cell_tiles?: Array<[number, number]>;
+  /** Per cell: median of the roads' PM2.5 and NO2 (µg/m³) and road count. */
+  cell_stats?: Record<string, { pm25_median: number; no2_median: number; roads: number }>;
 }
 
 export interface FieldRegion { name: string; label: string; geometry: string; bounds: [[number, number], [number, number]] }

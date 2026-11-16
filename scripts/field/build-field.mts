@@ -101,9 +101,16 @@ const report = {
 };
 writeAtomic(join(runDir, 'report.json'), JSON.stringify(report, null, 1));
 
+const median = (a: number[]) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : Number.NaN; };
+const cellStats: Record<string, { pm25_median: number; no2_median: number; roads: number }> = {};
+for (const c of cellIds) {
+  const vals = results.filter((r) => cellsCol[r.k] === c);
+  cellStats[String(c)] = { pm25_median: median(vals.map((v) => v.pm25)), no2_median: median(vals.map((v) => v.no2)), roads: vals.length };
+}
 const manifest = {
   geometry: pack.meta.geometry, run, computed_at: new Date().toISOString(), valid_hour_local: hourLocal,
   engine: 'v2.1', cells: cellIds, forecast_runs: [], sensors_used: 0,
+  cell_tiles: pack.meta.cells, cell_stats: cellStats,
   state: { background: [], met: [], diurnal: inputs.diurnal, oi_weights: [] },
   inputs_note: 'Open-Meteo background per z12 cell + CAMS daily mean; no station measurements yet',
 };

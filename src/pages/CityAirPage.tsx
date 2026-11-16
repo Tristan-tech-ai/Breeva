@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useCallback, useEffect } from 'react';
+import type { Coordinate } from '../types';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Wind, Gauge, Route, ArrowRight, MapPin } from 'lucide-react';
 import { Seo } from '../components/Seo';
@@ -14,12 +15,14 @@ export default function CityAirPage() {
   const navigate = useNavigate();
   const isDark = useIsDark();
   const currentAQI = useMapStore((s) => s.currentAQI);
+  // The value card follows the map: field reading for the centre when the area has a field, else the API.
+  const onViewChange = useCallback((c: Coordinate) => { void useMapStore.getState().fetchAreaReading(c); }, []);
   const city = slug ? CITY_BY_SLUG[slug] : undefined;
 
   useEffect(() => {
     if (!city) return;
     useMapStore.getState().setCenter({ lat: city.lat, lng: city.lng });
-    useMapStore.getState().fetchAirQuality({ lat: city.lat, lng: city.lng });
+    useMapStore.getState().fetchAreaReading({ lat: city.lat, lng: city.lng });
   }, [city]);
 
   if (!city) return <Navigate to="/peta" replace />;
@@ -60,7 +63,7 @@ export default function CityAirPage() {
         {/* Live map centered on the city */}
         <div className="relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg" style={{ height: 'min(54vh, 440px)' }}>
           <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
-            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" />
+            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} />
           </Suspense>
         </div>
         {/* Below the map so the map's data attribution stays visible */}

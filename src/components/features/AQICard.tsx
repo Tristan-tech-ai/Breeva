@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Wind, Droplets, CloudSun, Activity, Info, ShieldCheck, Clock } from 'lucide-react';
 import type { AirQualityData } from '../../types';
-import { getAQIColor, getAQILabel, getAQIEmoji } from '../map/mapColors';
+import { ispuRounded, pm25Category } from '../../lib/ispu';
+import { FIELD_LAYER_SOURCE } from '../../lib/field/areaReading';
 import { WAQI_NAME } from '../../lib/attribution';
 
 interface AQICardProps {
@@ -14,17 +15,13 @@ interface AQICardProps {
 
 type DetailLevel = 'glance' | 'detail' | 'expert';
 
-function recommendation(aqi: number): string {
-  if (aqi <= 50) return 'Udara bersih — nyaman untuk jalan kaki.';
-  if (aqi <= 100) return 'Cukup baik. Pilih rute teduh bila perlu.';
-  if (aqi <= 150) return 'Sensitif sebaiknya pakai rute lebih bersih.';
-  return 'Kurang sehat — utamakan rute paling bersih.';
-}
-
 export default function AQICard({ data, className = '', onExpandChange }: AQICardProps) {
   const [level, setLevel] = useState<DetailLevel>('glance');
-  const color = getAQIColor(data.aqi);
-  const percentage = Math.min(data.aqi, 300) / 300;
+  // Index shown is ISPU (Permen LHK P.14/2020) from PM2.5, the usual critical parameter.
+  const index = ispuRounded('pm25', data.pm25) ?? 0;
+  const cat = pm25Category(data.pm25);
+  const color = cat.color;
+  const percentage = Math.min(index, 300) / 300;
 
   const cycle = () => {
     setLevel((prev) => {
@@ -42,7 +39,7 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
       role="button"
       tabIndex={0}
       aria-expanded={expanded}
-      aria-label={`Kualitas udara AQI ${data.aqi}, ${getAQILabel(data.aqi)}. Ketuk untuk ${expanded ? 'tutup' : 'detail'}.`}
+      aria-label={`Kualitas udara ISPU ${index}, ${cat.name}. Ketuk untuk ${expanded ? 'tutup' : 'detail'}.`}
       onClick={cycle}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -65,7 +62,7 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
       <div className="relative flex items-center gap-3.5 p-4">
         {/* Circular gauge */}
         <div className="relative h-[60px] w-[60px] flex-shrink-0">
-          <svg className="h-[60px] w-[60px] -rotate-90" viewBox="0 0 60 60" role="img" aria-label={`AQI ${data.aqi}`}>
+          <svg className="h-[60px] w-[60px] -rotate-90" viewBox="0 0 60 60" role="img" aria-label={`ISPU ${index}`}>
             <circle cx="30" cy="30" r="25" fill="none" strokeWidth="5.5" className="stroke-gray-100 dark:stroke-gray-800" />
             <circle
               cx="30"
@@ -80,8 +77,8 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-base font-extrabold tabular-nums leading-none text-gray-900 dark:text-white">{data.aqi}</span>
-            <span className="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">AQI</span>
+            <span className="text-base font-extrabold tabular-nums leading-none text-gray-900 dark:text-white">{index}</span>
+            <span className="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">ISPU</span>
           </div>
         </div>
 
@@ -89,11 +86,10 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
           <div className="flex items-center gap-1.5">
             <Wind size={15} style={{ color }} strokeWidth={2.5} />
             <span className="text-[15px] font-bold leading-tight" style={{ color }}>
-              {getAQILabel(data.aqi)}
+              {cat.name}
             </span>
-            <span className="text-sm">{getAQIEmoji(data.aqi)}</span>
           </div>
-          <p className="mt-0.5 text-[13px] leading-snug text-gray-600 dark:text-gray-400">{recommendation(data.aqi)}</p>
+          <p className="mt-0.5 text-[13px] leading-snug text-gray-600 dark:text-gray-400">{cat.advice}</p>
         </div>
 
         <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }} className="flex-shrink-0 text-gray-400 dark:text-gray-500">
@@ -161,6 +157,7 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
                   {data.layer_source === 3 ? `Sensor langsung (${WAQI_NAME} dan EPA asal)`
                     : data.layer_source === 2 ? 'Laporan warga'
                     : data.layer_source === 4 ? 'Prediksi ML'
+                    : data.layer_source === FIELD_LAYER_SOURCE ? 'Medan Breeva: median ruas di sekitar titik tengah peta (model)'
                     : data.layer_source === 0 ? 'Model atmosfer global (Open-Meteo), tanpa koreksi Breeva'
                     : 'Model Breeva (latar CAMS lewat Open-Meteo, terkalibrasi, + lalu lintas)'}
                 </span>
@@ -197,7 +194,7 @@ function PollutantCard({
         <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{label}</p>
       </div>
       <p className="text-[15px] font-extrabold tabular-nums leading-none text-gray-900 dark:text-white">
-        {value != null ? value.toFixed(1) : '—'}
+        {value != null && Number.isFinite(value) ? value.toFixed(1) : '—'}
       </p>
       <p className="mt-0.5 text-[9.5px] text-gray-400 dark:text-gray-500">{unit}</p>
     </div>

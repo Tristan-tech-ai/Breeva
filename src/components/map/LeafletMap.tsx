@@ -129,6 +129,8 @@ interface LeafletMapProps {
   showMerchants?: boolean;
   highlightGreen?: boolean;
   mapStyle?: 'voyager' | 'osm' | 'satellite';
+  /** Called with the map centre after every pan or zoom (debounced by Leaflet's moveend). */
+  onViewChange?: (center: Coordinate) => void;
   activeFilter?: string | null;
   pollutant?: PollutantType;
   forecastHour?: number;
@@ -573,6 +575,7 @@ export default function LeafletMap({
   onRoadLayerMeta,
   onPlaceSelect,
   selectedPoiId = null,
+  onViewChange,
 }: LeafletMapProps) {
   const { center } = useMapStore();
   const base = basemap(mapStyle, isDarkMode);
@@ -601,6 +604,7 @@ export default function LeafletMap({
         {...({ rotate: true, rotateControl: false, touchRotate: false, bearing: 0 } as Record<string, unknown>)}
       >
         <TileLayer key={base.url + (base.className ?? '')} url={base.url} attribution={base.attribution} className={base.className} {...(base.subdomains ? { subdomains: base.subdomains } : {})} />
+        {onViewChange && <ViewReporter onViewChange={onViewChange} />}
         <MapController
           isDarkMode={isDarkMode}
           showAQIOverlay={showAQIOverlay}
@@ -642,3 +646,13 @@ export default function LeafletMap({
   );
 }
 
+function ViewReporter({ onViewChange }: { onViewChange: (center: Coordinate) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    const report = () => { const c = map.getCenter(); onViewChange({ lat: c.lat, lng: c.lng }); };
+    map.on('moveend', report);
+    report();
+    return () => { map.off('moveend', report); };
+  }, [map, onViewChange]);
+  return null;
+}

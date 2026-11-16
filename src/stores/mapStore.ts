@@ -18,6 +18,7 @@ import {
 } from '../lib/api';
 import { searchGoogleMaps } from '../lib/searchapi';
 import { relabelScoredRoutes } from '../lib/routeLabels';
+import { readFieldArea } from '../lib/field/areaClient';
 
 export interface SearchResult {
   name: string;
@@ -99,6 +100,8 @@ interface MapState {
   setTransportMode: (mode: TransportMode) => void;
   setRouteAqiWeight: (weight: number) => void;
   fetchAirQuality: (coord: Coordinate) => Promise<void>;
+  /** Reading for the map centre: static field when the area has one, otherwise the API (fetchAirQuality). */
+  fetchAreaReading: (coord: Coordinate) => Promise<void>;
   setBottomSheetState: (state: BottomSheetState) => void;
   addRecentSearch: (result: SearchResult) => void;
   setNavCameraMode: (mode: 'north' | 'heading') => void;
@@ -659,6 +662,15 @@ export const useMapStore = create<MapState>()((set, get) => ({
     if (data) {
       set({ currentAQI: data });
     }
+  },
+
+  fetchAreaReading: async (coord) => {
+    const fromField = await readFieldArea(coord);
+    if (fromField) {
+      set({ currentAQI: fromField });
+      return;
+    }
+    await get().fetchAirQuality(coord);
   },
 
   setBottomSheetState: (state) => set({ bottomSheetState: state }),

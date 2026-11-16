@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import type { Coordinate } from '../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Wind, Route, Gauge, MapPin, Crosshair, ArrowRight, Sparkles } from 'lucide-react';
 import { Seo } from '../components/Seo';
@@ -41,6 +42,8 @@ export default function ExploreMapPage() {
   const navigate = useNavigate();
   const isDark = useIsDark();
   const currentAQI = useMapStore((s) => s.currentAQI);
+  // The value card follows the map: field reading for the centre when the area has a field, else the API.
+  const onViewChange = useCallback((c: Coordinate) => { void useMapStore.getState().fetchAreaReading(c); }, []);
   const [located, setLocated] = useState(false);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('total');
@@ -49,7 +52,7 @@ export default function ExploreMapPage() {
 
   // Populate AQI for the default city (Jakarta) WITHOUT prompting for geolocation.
   useEffect(() => {
-    useMapStore.getState().fetchAirQuality({ lat: -6.2088, lng: 106.8456 });
+    useMapStore.getState().fetchAreaReading({ lat: -6.2088, lng: 106.8456 });
   }, []);
 
   const useMyLocation = () => {
@@ -139,7 +142,7 @@ export default function ExploreMapPage() {
         {/* Interactive map (progressive enhancement) */}
         <div className="relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg" style={{ height: 'min(58vh, 480px)' }}>
           <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
-            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" pollutant={pollutant} roadDisplayMode={roadDisplayMode} />
+            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} />
           </Suspense>
 
           {/* Search overlay */}
