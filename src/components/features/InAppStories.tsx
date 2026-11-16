@@ -19,7 +19,7 @@ const stories: Story[] = [
     slides: [
       { heading: 'Understanding AQI', body: 'Air Quality Index (AQI) measures how clean the air is. Lower is better!', emoji: '🌬️' },
       { heading: 'Best Time to Walk', body: 'Air is cleanest early morning (6-8 AM) and after rain. Avoid rush hours.', emoji: '🌅' },
-      { heading: 'Green Routes Help', body: 'Breeva finds routes with up to 60% less pollution using real-time data.', emoji: '🗺️' },
+      { heading: 'Green Routes Help', body: 'Breeva compares the air along each route and shows how sure the estimate is.', emoji: '🗺️' },
     ],
   },
   {

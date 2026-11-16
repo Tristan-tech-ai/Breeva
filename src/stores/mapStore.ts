@@ -17,6 +17,7 @@ import {
   fetchRouteReasoning,
 } from '../lib/api';
 import { searchGoogleMaps } from '../lib/searchapi';
+import { relabelScoredRoutes } from '../lib/routeLabels';
 
 export interface SearchResult {
   name: string;
@@ -360,7 +361,8 @@ export const useMapStore = create<MapState>()((set, get) => ({
           created_at: new Date().toISOString(),
           traffic_level: cr.traffic_level as Route['traffic_level'],
           green_score: cr.green_score,
-          aqi_confidence: cr.vayu_scored ? 90 : 60,
+          // No confidence number until a validated interval exists (F5); only whether the model scored it.
+          aqi_estimate: cr.vayu_scored ? 'model' : 'rough',
           road_summary: `VAYU-scored (${cr.vayu_segment_count} segments)`,
           aqi_factors: [`Avg AQI: ${cr.vayu_avg_aqi}`, `Max AQI: ${cr.vayu_max_aqi}`],
           vayu_score: {
@@ -583,8 +585,9 @@ export const useMapStore = create<MapState>()((set, get) => ({
 
       const finalRoutes: Route[] = await Promise.all(
         analyzed.map(async (r) => {
+          // Without a VAYU score the value is a heuristic from map features: shown as a rough estimate, no confidence number.
           let aqiForRoute = r.env.estimatedAQI;
-          let confidence = 60;
+          let estimate: 'model' | 'rough' = 'rough';
 
           // Try VAYU route-score for more accurate AQI
           const polyline: [number, number][] = r.route.waypoints.map(wp => [wp.lat, wp.lng]);
@@ -594,7 +597,7 @@ export const useMapStore = create<MapState>()((set, get) => ({
             );
             if (vayuScore) {
               aqiForRoute = vayuScore.avg_aqi;
-              confidence = 90;
+              estimate = 'model';
             }
           }
 
@@ -608,16 +611,19 @@ export const useMapStore = create<MapState>()((set, get) => ({
             ),
             traffic_level: r.env.trafficLevel,
             green_score: r.env.greenScore,
-            aqi_confidence: confidence,
+            aqi_estimate: estimate,
             road_summary: r.env.summary,
             aqi_factors: r.env.aqiFactors,
           };
         })
       );
 
+      // "Cleanest" only when every route was scored by the model; otherwise the labels came from a heuristic.
+      const labelled = relabelScoredRoutes(finalRoutes);
+
       set({
-        routes: finalRoutes,
-        selectedRoute: finalRoutes.find((r) => r.route_type === 'eco') || finalRoutes[0] || null,
+        routes: labelled,
+        selectedRoute: labelled.find((r) => r.route_type === 'eco') || labelled[0] || null,
         isCalculatingRoutes: false,
         bottomSheetState: 'half',
       });

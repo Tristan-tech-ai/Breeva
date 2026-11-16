@@ -33,6 +33,10 @@ export const co2KgFromGrams = (grams: number): number => Math.max(0, grams) / 10
 export const co2SavedGramsForKm = (km: number): number =>
   Math.round(Math.max(0, km) * CO2_GRAMS_PER_KM);
 
+/** COMPUTE-ONLY: grams a trip of `km` in a mode emitting `modeGramsPerKm` saves against the canonical rate. */
+export const co2SavedGramsForMode = (km: number, modeGramsPerKm: number): number =>
+  Math.round(Math.max(0, km) * Math.max(0, CO2_GRAMS_PER_KM - modeGramsPerKm));
+
 // ── Derived eco metrics (from kilometres) ─────────────────────────────────────
 export const treesFromCo2Kg = (kg: number): number => Math.max(0, kg) / TREE_KG_CO2_PER_YEAR;
 export const caloriesFromKm = (km: number): number => Math.round(Math.max(0, km) * CALORIES_PER_KM);

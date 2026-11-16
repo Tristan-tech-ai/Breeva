@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Footprints, Bike, Zap, Car } from 'lucide-react';
 import { useMapStore } from '../../stores/mapStore';
 import { TRANSPORT_MODES } from '../../lib/api';
+import { co2SavedGramsForMode } from '../../lib/metrics';
 import type { TransportMode } from '../../types';
 import VehicleNudgeModal, { isVehicleNudgeDismissed } from '../features/VehicleNudgeModal';
 
@@ -28,7 +29,8 @@ export default function TransportModeSelector() {
 
   const selectedModeInfo = TRANSPORT_MODES.find(m => m.id === transportMode);
   const co2Saved = selectedModeInfo && selectedRoute
-    ? ((170 - selectedModeInfo.co2PerKm) * selectedRoute.distance_meters / 1000).toFixed(0)
+    // Same baseline as stored walks (metrics.ts CO2_GRAMS_PER_KM).
+    ? String(co2SavedGramsForMode(selectedRoute.distance_meters / 1000, selectedModeInfo.co2PerKm))
     : null;
 
   return (

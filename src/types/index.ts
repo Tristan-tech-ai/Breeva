@@ -66,6 +66,8 @@ export interface Route {
   traffic_level?: 'low' | 'moderate' | 'high' | 'very-high';
   green_score?: number;        // 0-100: how green/pedestrian-friendly the route is
   aqi_confidence?: number;     // 0-100: confidence in estimated AQI
+  /** 'model' = scored by the VAYU engine; 'rough' = fallback heuristic from map features, not a measurement. */
+  aqi_estimate?: 'model' | 'rough';
   road_summary?: string;       // e.g. "Through parks and green areas"
   aqi_factors?: string[];      // e.g. ["Near major roads (+20%)", "Park area (-15%)"]
 

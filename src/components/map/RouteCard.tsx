@@ -68,6 +68,11 @@ function fmtUg(v: number): string {
 
 export default function RouteCard({ route, isSelected, onSelect, isRecommended }: RouteCardProps) {
   const info = routeLabels[route.route_type] || routeLabels.balanced;
+  // A fallback route ranked by map features only is not "cleanest"; say what it is.
+  const rough = route.aqi_estimate === 'rough';
+  const shown = rough && route.route_type === 'eco'
+    ? { ...info, label: 'Via green space', desc: 'rough estimate, not measured' }
+    : info;
   const { Icon } = info;
   const distanceUnit = useDistanceUnit();
   const traffic = route.traffic_level ? trafficConfig[route.traffic_level] : null;
@@ -99,7 +104,7 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
       `}
     >
       {/* Recommended badge */}
-      {isRecommended && (
+      {isRecommended && !rough && (
         <div className="absolute top-0 right-0">
           <div className={`bg-gradient-to-r ${info.gradient} text-white text-[9px] font-bold px-2.5 py-1 rounded-bl-xl uppercase tracking-wider`}>
             Recommended
@@ -113,8 +118,8 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
           <Icon className="w-4 h-4 text-white" />
         </div>
         <div className="flex-1">
-          <span className="text-sm font-bold text-gray-900 dark:text-white">{info.label}</span>
-          <span className="text-[11px] text-gray-400 dark:text-gray-500 ml-2">{info.desc}</span>
+          <span className="text-sm font-bold text-gray-900 dark:text-white">{shown.label}</span>
+          <span className="text-[11px] text-gray-400 dark:text-gray-500 ml-2">{shown.desc}</span>
         </div>
         {isSelected && (
           <div className="w-6 h-6 rounded-full bg-primary-500 flex items-center justify-center shadow-sm">
@@ -140,7 +145,7 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
         <div className="flex items-center gap-1.5">
           <Wind className="w-3.5 h-3.5" style={{ color: getAQIColor(route.vayu_avg_aqi ?? route.avg_aqi) }} />
           <span className="text-sm font-medium" style={{ color: getAQIColor(route.vayu_avg_aqi ?? route.avg_aqi) }}>
-            {getAQILabel(route.vayu_avg_aqi ?? route.avg_aqi)}
+            {getAQILabel(route.vayu_avg_aqi ?? route.avg_aqi)}{rough ? ' (rough estimate)' : ''}
           </span>
         </div>
         <div className="ml-auto flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 px-2.5 py-1 rounded-full border border-amber-200/50 dark:border-amber-700/30">
