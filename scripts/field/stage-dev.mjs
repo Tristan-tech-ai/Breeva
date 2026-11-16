@@ -26,5 +26,10 @@ for (const region of regions) {
     mkdirSync(join(out, 'harga', man.geometry), { recursive: true });
     copyFileSync(harga, join(out, 'harga', man.geometry, `${region}.bin`));
   }
+  const graph = join(root, 'graphs', man.geometry, `${region}.bin`);
+  if (existsSync(graph)) {
+    mkdirSync(join(out, 'graphs', man.geometry), { recursive: true });
+    copyFileSync(graph, join(out, 'graphs', man.geometry, `${region}.bin`));
+  }
   console.log(`staged ${region}: run ${man.run}, ${man.cells.length} cells, tiles ${man.geometry}, harga ${existsSync(harga) ? 'yes' : 'no'}`);
 }

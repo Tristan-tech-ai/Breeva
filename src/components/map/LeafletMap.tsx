@@ -11,6 +11,7 @@ import { lookAheadPoint, routeProgress, splitPathAtFraction } from '../../lib/ge
 import { useRoadPollutionLayer } from './RoadPollutionLayer';
 import { useRoadMvtLayer } from './RoadMvtLayer';
 import { useFieldLayer } from './FieldLayer';
+import { useWalkRouting, type WalkRoutingState } from './WalkRouteLayer';
 
 // Static field (PMTiles + value cells) instead of /api road tiles; see src/lib/field/source.ts.
 const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
@@ -140,6 +141,9 @@ interface LeafletMapProps {
   onRoadLayerMeta?: (meta: RoadLayerMeta | null) => void;
   onPlaceSelect?: (poi: POI) => void;
   selectedPoiId?: string | null;
+  /** Walking routes computed on the device: taps set start and destination (static field regions). */
+  walkRouting?: boolean;
+  onWalkRouting?: (s: WalkRoutingState) => void;
 }
 
 // ── Inner map controller ─────────────────────────────────────────────
@@ -158,7 +162,9 @@ function MapController({
   onRoadLayerMeta,
   onPlaceSelect,
   selectedPoiId,
-}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId'>) {
+  walkRouting,
+  onWalkRouting,
+}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId' | 'walkRouting' | 'onWalkRouting'>) {
   const map = useMap();
   const {
     center,
@@ -216,6 +222,9 @@ function MapController({
   // Click → set destination; drag → release the follow-cam during a walk
   useMapEvents({
     click(e) {
+      // Walking-route mode takes every tap (start, then destination).
+      const walkTap = (map as unknown as { __walkTap?: { tapAt(ll: L.LatLng): boolean } }).__walkTap;
+      if (walkTap && walkTap.tapAt(e.latlng)) return;
       if (isCalculatingRoutes) return;
       // Defer to a POI/cluster tap on the canvas layer before treating this as a
       // "set destination" click (sibling map handlers can't be stopped via DomEvent).
@@ -494,6 +503,7 @@ function MapController({
     roadDisplayMode || 'total',
   );
   const roadMeta = useMvt ? (FIELD_STATIC ? fieldMeta : mvtMeta) : vectorMeta;
+  useWalkRouting(map, !!walkRouting, onWalkRouting);
 
   // Forward road layer meta to parent
   useEffect(() => {
@@ -581,6 +591,8 @@ export default function LeafletMap({
   onPlaceSelect,
   selectedPoiId = null,
   onViewChange,
+  walkRouting = false,
+  onWalkRouting,
 }: LeafletMapProps) {
   const { center } = useMapStore();
   const base = basemap(mapStyle, isDarkMode);
@@ -627,6 +639,8 @@ export default function LeafletMap({
           }}
           onPlaceSelect={onPlaceSelect}
           selectedPoiId={selectedPoiId}
+          walkRouting={walkRouting}
+          onWalkRouting={onWalkRouting}
         />
       </MapContainer>
       <NavControls />

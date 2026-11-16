@@ -10,6 +10,8 @@ import SearchBar from '../components/map/SearchBar';
 import { CITIES } from '../lib/cities';
 import TrafficLegend from '../components/map/TrafficLegend';
 import HargaLegend from '../components/map/HargaLegend';
+import WalkRouteCards from '../components/map/WalkRouteCards';
+import type { WalkRoutingState } from '../components/map/WalkRouteLayer';
 import type { PollutantType, RoadDisplayMode } from '../types';
 import { ISPU_CATEGORIES } from '../lib/ispu';
 import { FIELD_REGIONS } from '../lib/field/source';
@@ -52,6 +54,8 @@ export default function ExploreMapPage() {
   const [located, setLocated] = useState(false);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('total');
+  const [walkMode, setWalkMode] = useState(false);
+  const [walkState, setWalkState] = useState<WalkRoutingState | null>(null);
   const activeP = POLLUTANTS.find((p) => p.id === pollutant) ?? POLLUTANTS[0];
   // The traffic view of the index shows NO2, and harga hirup does not depend on the pollutant: modes for every pollutant.
   const showRoadModes = true;
@@ -153,13 +157,24 @@ export default function ExploreMapPage() {
         {/* Interactive map (progressive enhancement) */}
         <div className="relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg" style={{ height: 'min(58vh, 480px)' }}>
           <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
-            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} />
+            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} walkRouting={walkMode} onWalkRouting={setWalkState} />
           </Suspense>
 
           {/* Search overlay */}
           <div className="absolute top-3 left-3 right-3 z-[500]">
             <SearchBar />
           </div>
+
+          {/* Walking routes computed on the device (static field regions) */}
+          {FIELD_STATIC && (
+            <button
+              onClick={() => { setWalkMode((m) => !m); setWalkState(null); }}
+              aria-pressed={walkMode}
+              className={`absolute left-3 bottom-3 z-[500] flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold shadow-lg ring-1 ring-black/5 ${walkMode ? 'bg-teal-700 text-white' : 'bg-white/95 dark:bg-gray-900/90 text-teal-700 dark:text-teal-300'}`}
+            >
+              <Route className="w-3.5 h-3.5" /> {walkMode ? 'Selesai rute' : 'Rute jalan kaki'}
+            </button>
+          )}
 
           {/* Use-my-location (opt-in) */}
           {!located && (
@@ -168,6 +183,8 @@ export default function ExploreMapPage() {
             </button>
           )}
         </div>
+
+        {walkMode && <WalkRouteCards state={walkState} />}
 
         {/* Live AQI card, below the map so the map's data attribution stays visible */}
         {currentAQI && <AQICard data={currentAQI} />}
