@@ -138,5 +138,6 @@ export async function fetchBaselineGrid(south: number, west: number, north: numb
     corners = { center, nw, ne, sw, se };
     await deps.redisSetEx(key, deps.ttlSec, JSON.stringify(corners));
   }
-  return { center: corners.center, interpolate: buildInterpolator(gS, gW, gN, gE, corners) };
+  const bounds = { south: gS, west: gW, north: gN, east: gE };
+  return { center: corners.center, interpolate: buildInterpolator(gS, gW, gN, gE, corners), corners, bounds };
 }

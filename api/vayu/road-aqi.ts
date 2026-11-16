@@ -732,7 +732,7 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 // Berrocal was fit on daily-mean CAMS → the slope/offset regions (e.g. jakarta β1=0.276) need the
 // daily mean, NOT the current hour, else CAMS's anti-phase diurnal leaks into the ambient. Identity
 // (bali) / climatology regions are insensitive to this. Returns NaN on failure → caller falls back.
-async function fetchCamsDailyMean(lat: number, lon: number, region: string, today: string): Promise<number> {
+export async function fetchCamsDailyMean(lat: number, lon: number, region: string, today: string): Promise<number> {
   const key = `vayu:camsdaily:${region}:${today}`;
   const cached = await redisGet(key);
   if (cached != null) { const v = parseFloat(cached); if (Number.isFinite(v)) return v; }
