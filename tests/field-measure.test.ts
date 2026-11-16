@@ -108,3 +108,31 @@ describe('measured ambient in the field', () => {
     expect(makeMeasuredAdjust({ method: 'none', hour_utc: '', sensors: [], sensors_vetted: 0, note: '' })).toBeNull();
   });
 });
+
+describe('interval calibration (F5-05)', () => {
+  it('the nested factor never uses a sensor for its own interval and reaches the stated share', async () => {
+    const { nestedIntervalScale } = await import('../scripts/field/kriging');
+    // three sensors: z of sensor 2 are large; its own factor comes from sensors 0 and 1 only
+    const z = [[0.1, -0.2, 0.3, 1.0], [0.5, -0.5, 0.2, -1.2], [5, -6, 7, -8]];
+    const s = nestedIntervalScale(z, 0.95);
+    expect(s.perSensor[2]).toBeLessThan(1);          // from the small z of 0 and 1
+    expect(s.perSensor[0]).toBeGreaterThan(2);        // includes sensor 2's large z
+    expect(s.all).toBeGreaterThan(s.perSensor[2]);
+    const many = Array.from({ length: 4 }, (_, i) => Array.from({ length: 400 }, (_, t) => Math.sin(t * 12.9898 + i) * 2.5));
+    const f = nestedIntervalScale(many).all * 1.96;
+    const share = many.flat().filter((x) => Math.abs(x) <= f).length / 1600;
+    expect(share).toBeGreaterThan(0.94);
+    expect(share).toBeLessThan(0.96);
+  });
+
+  it('the field widens the kriging interval by pi_scale and leaves the estimate alone', () => {
+    const sensors = [{ loc_id: 1, lat: -8.65, lon: 115.2, pm25: 30 }, { loc_id: 2, lat: -8.7, lon: 115.25, pm25: 40 }, { loc_id: 3, lat: -8.6, lon: 115.15, pm25: 35 }];
+    const base = { method: 'kriging' as const, hour_utc: '', sensors_vetted: 3, note: '', sensors, variogram_log: { nugget: 0.05, sill: 0.4, range_km: 20 } };
+    const ev = { pm25: 18, pm25_delta: 2, pi95_hi: 40, ood_refused: false, confidence: 'high' as const };
+    const a = makeMeasuredAdjust({ ...base, pi_scale: 1 })!(-8.66, 115.21, ev);
+    const b = makeMeasuredAdjust({ ...base, pi_scale: 1.735 })!(-8.66, 115.21, ev);
+    expect(b.pm25).toBe(a.pm25);
+    expect(b.pi95_hi - b.pi95_lo).toBeGreaterThan(a.pi95_hi - a.pi95_lo);
+    expect(makeMeasuredAdjust(base)!(-8.66, 115.21, ev).pi95_hi).toBe(a.pi95_hi); // absent = 1
+  });
+});

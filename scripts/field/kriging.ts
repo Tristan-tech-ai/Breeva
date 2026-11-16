@@ -196,3 +196,20 @@ export function looPredict(cols: ArrayLike<number>[], D: number[][], target: num
   }
   return { mean, variance };
 }
+
+/**
+ * Widening of the kriging interval so that it holds the stated share of hidden readings. z = (log1p(obs) - mean) / sd
+ * per hidden sensor; the factor for sensor i is the q-quantile of |z| over the OTHER sensors, divided by the normal
+ * 1.96 (nested: a sensor never calibrates its own interval). Returns those per-sensor factors and the factor from all
+ * sensors, which the field builder uses.
+ */
+export function nestedIntervalScale(zBySensor: number[][], q = 0.95): { perSensor: number[]; all: number } {
+  const quant = (a: number[]) => {
+    const s = a.filter(Number.isFinite).map(Math.abs).sort((x, y) => x - y);
+    if (!s.length) return Number.NaN;
+    const pos = q * (s.length - 1), lo = Math.floor(pos), hi = Math.ceil(pos);
+    return s[lo] + (s[hi] - s[lo]) * (pos - lo);
+  };
+  const perSensor = zBySensor.map((_, i) => quant(zBySensor.flatMap((z, j) => (j === i ? [] : z))) / 1.96);
+  return { perSensor, all: quant(zBySensor.flat()) / 1.96 };
+}

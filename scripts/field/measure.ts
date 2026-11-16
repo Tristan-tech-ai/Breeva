@@ -16,6 +16,8 @@ export interface RegionMeasureParams {
   network?: 'openaq';
   min_sensors?: number;
   variogram_log?: Variogram;
+  /** Widening of the kriging sd so the 95 % interval holds 95 % of hidden readings (validate-sensors.mts, F5-05). */
+  pi_scale?: number;
   sensors?: VettedSensor[];
   metar?: string;
   alpha_m2g?: number;
@@ -29,6 +31,7 @@ export interface MeasuredInputs {
   sensor_hour_utc?: string;
   sensors_vetted: number;
   variogram_log?: Variogram;
+  pi_scale?: number;
   metar?: MetarHour;
   koschmieder?: { pm25: number; reason: 'smoke' | 'low_visibility'; alpha_m2g: number };
   note: string;
@@ -114,7 +117,7 @@ export async function measureHour(
           const readings = byHour.get(hour)!;
           const lag = Math.round((hourUtc.getTime() - Date.parse(hour)) / 3600_000);
           notes.push(`${readings.length} of ${params.sensors.length} vetted sensors reported hour ${hour} (${lag} h before the field hour)${fail}`);
-          return { ...base, method: 'kriging', sensors: readings, sensor_hour_utc: hour, variogram_log: params.variogram_log, note: notes.join('; ') };
+          return { ...base, method: 'kriging', sensors: readings, sensor_hour_utc: hour, variogram_log: params.variogram_log, pi_scale: params.pi_scale ?? 1, note: notes.join('; ') };
         }
         notes.push(`fewer than ${need} vetted sensors reported in the last ${(opts.lookbackHours ?? 3) + 1} hours${fail}`);
       } catch (e) {

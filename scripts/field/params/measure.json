@@ -180,7 +180,7 @@
     {
      "loc_id": 6529526,
      "sensor_id": 17545845,
-     "name": "Tibubeneng \u00e2\u20ac\u201d Jl. Batan Celagi",
+     "name": "Tibubeneng — Jl. Batan Celagi",
      "lat": -8.6308,
      "lon": 115.15892
     },
@@ -216,7 +216,8 @@
    "metar": "WADD",
    "alpha_m2g": 6.18,
    "licence": "OpenAQ location records: CC BY 4.0 (checked 2026-11-16); attribution to OpenAQ and AirGradient",
-   "alpha_source": "sumber_proposal/data/stats_f.json alpha, fold bali (Koschmieder, estimated from the other cities)"
+   "alpha_source": "sumber_proposal/data/stats_f.json alpha, fold bali (Koschmieder, estimated from the other cities)",
+   "pi_scale": 1.735
   },
   "kota_bogor": {
    "metar": "WIHH",

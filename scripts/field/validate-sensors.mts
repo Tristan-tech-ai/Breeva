@@ -13,7 +13,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
-import { distanceMatrix, fitVariogram, looPredict, pairStats } from './kriging.js';
+import { distanceMatrix, fitVariogram, looPredict, nestedIntervalScale, pairStats } from './kriging.js';
 
 function arg(name: string, def?: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -66,6 +66,9 @@ const t0 = Date.now();
 const P = ids.map(() => new Float64Array(T).fill(Number.NaN));
 const LO = ids.map(() => new Float64Array(T).fill(Number.NaN));
 const HI = ids.map(() => new Float64Array(T).fill(Number.NaN));
+const MU = ids.map(() => new Float64Array(T).fill(Number.NaN));
+const SD = ids.map(() => new Float64Array(T).fill(Number.NaN));
+const Z: number[][] = ids.map(() => []);
 for (let i = 0; i < N; i++) {
   const v = fitVariogram(G, W, D, i);
   const { mean, variance } = looPredict(Y, D, i, v);
@@ -75,8 +78,23 @@ for (let i = 0; i < N; i++) {
     P[i][t] = Math.expm1(mean[t]);
     LO[i][t] = Math.expm1(mean[t] - 1.96 * s);
     HI[i][t] = Math.expm1(mean[t] + 1.96 * s);
+    MU[i][t] = mean[t]; SD[i][t] = s;
+    if (s > 0) Z[i].push((Y[i][t] - mean[t]) / s);
   }
 }
+// Interval calibration (task F5-05): nested per-sensor widening factor, then coverage and width with it.
+const scale = nestedIntervalScale(Z);
+let insideCal = 0, nCal = 0;
+const widths: number[] = [];
+for (let i = 0; i < N; i++) for (let t = 0; t < T; t++) {
+  if (!Number.isFinite(P[i][t]) || !Number.isFinite(SD[i][t])) continue;
+  const k = scale.perSensor[i];
+  const lo = Math.expm1(MU[i][t] - 1.96 * k * SD[i][t]), hi = Math.expm1(MU[i][t] + 1.96 * k * SD[i][t]);
+  nCal++;
+  if (V[i][t] >= lo && V[i][t] <= hi) insideCal++;
+  widths.push(hi - lo);
+}
+widths.sort((a, b) => a - b);
 
 function metrics(pred: number[], obs: number[]) {
   const n = pred.length;
@@ -130,6 +148,13 @@ const report = {
   reference: 'sumber_proposal/data/stats_h.json penduga.ok_log: harian nrmse 22.9 %, rmse 7.92, r 0.817, n 1470',
   hourly: hourlyM, daily, epa_daily_targets: epa, epa_passed: Object.values(epa).filter(Boolean).length,
   pi95_hourly_coverage: Number((inside / hp.length).toFixed(3)),
+  pi95_calibrated: {
+    method: 'nested: factor for each hidden sensor = 95th percentile of |z| over the other sensors / 1.96',
+    coverage_hourly: Number((insideCal / nCal).toFixed(3)), n: nCal,
+    median_width_ug_m3: Number(widths[Math.floor(widths.length / 2)].toFixed(1)),
+    factor_all_sensors: Number(scale.all.toFixed(3)),
+    factor_range: [Number(Math.min(...scale.perSensor).toFixed(3)), Number(Math.max(...scale.perSensor).toFixed(3))],
+  },
   variogram_all_sensors_log: all, seconds: (Date.now() - t0) / 1000,
 };
 mkdirSync(OUT, { recursive: true });
@@ -140,12 +165,12 @@ if (paramsPath) {
   const prev = (() => { try { return JSON.parse(readFileSync(paramsPath, 'utf8')); } catch { return { regions: {} }; } })();
   prev.regions ??= {};
   const net = {
-    network: 'openaq', min_sensors: 3, variogram_log: all,
+    network: 'openaq', min_sensors: 3, variogram_log: all, pi_scale: Number(scale.all.toFixed(3)),
     fitted: { from: hours[0], to: hours[T - 1], hours: T, sensors: N, script: 'scripts/field/validate-sensors.mts' },
     sensors: sensors.map((s) => ({ loc_id: Number(s.loc_id), sensor_id: Number(s.sensor_id), name: s.name, lat: Number(s.lat), lon: Number(s.lon) })),
   };
   prev.regions.badung_denpasar = { ...(prev.regions.badung_denpasar ?? {}), ...net };
   writeFileSync(paramsPath, JSON.stringify(prev, null, 1) + '\n');
 }
-console.log(JSON.stringify({ hourly: hourlyM, daily, epa_passed: report.epa_passed, pi95_hourly_coverage: report.pi95_hourly_coverage, variogram: all, seconds: report.seconds }));
+console.log(JSON.stringify({ hourly: hourlyM, daily, epa_passed: report.epa_passed, pi95_hourly_coverage: report.pi95_hourly_coverage, pi95_calibrated: report.pi95_calibrated, variogram: all, seconds: report.seconds }));
 if (!(daily.nrmse_pct <= 23)) { console.error(`daily NRMSE ${daily.nrmse_pct} % is above 23 %`); process.exit(1); }
