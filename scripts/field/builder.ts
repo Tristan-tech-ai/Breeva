@@ -142,6 +142,18 @@ export const RUN_TAG = 'kind=run';
 
 export interface RunObject { key: string; body: Uint8Array | string; cacheControl: string; contentType: string; tagging?: string }
 
+/** Value cells of a run (v/<name>/<run>/<c>.bin): stored gzip-encoded on S3, about 60 % smaller (F1-13). */
+export const isCellKey = (key: string) => /^v\/[^/]+\/\d{10}\/\d+\.bin$/.test(key);
+
+/**
+ * Body and Content-Encoding for S3: cells gzip-compressed (browsers decode Content-Encoding: gzip by themselves),
+ * everything else as it is. The local CLI writes plain files, so a dev server keeps working without headers.
+ */
+export function uploadBody(o: RunObject, gzip: (b: Uint8Array) => Uint8Array): { body: Uint8Array | string; contentEncoding?: 'gzip' } {
+  if (!isCellKey(o.key) || typeof o.body === 'string') return { body: o.body };
+  return { body: gzip(o.body), contentEncoding: 'gzip' };
+}
+
 /** Key of a run's report; its presence marks the run as built (the builder never rewrites a run). */
 export const reportKey = (name: string, run: string) => `audit/${name}/${run}/report.json`;
 

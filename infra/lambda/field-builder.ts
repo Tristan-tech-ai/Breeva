@@ -7,11 +7,12 @@
  * hidden-sensor statistics of the hour join v/<name>/validation_recent.json (task F5-09; statistics only, no readings).
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import params from '../../scripts/field/params/measure.json' with { type: 'json' };
 import { RoadPack } from '../../scripts/field/pack';
-import { buildFieldRun, reportKey, runFor, runObjects } from '../../scripts/field/builder';
+import { buildFieldRun, reportKey, runFor, runObjects, uploadBody } from '../../scripts/field/builder';
 import { BUILD_REGIONS, packKey } from '../../scripts/field/regions';
 import type { RegionMeasureParams } from '../../scripts/field/measure';
 import { mergeRecent, type RecentEntry, type RecentFile } from '../../src/lib/field/validationRecent';
@@ -63,7 +64,8 @@ export const handler = async () => {
         measureParams: (params.regions as Record<string, RegionMeasureParams>)[r.name], openaqKey: await key(),
       });
       for (const o of runObjects(r.name, built)) {
-        await s3.send(new PutObjectCommand({ Bucket: bucket, Key: o.key, Body: o.body, CacheControl: o.cacheControl, ContentType: o.contentType, Tagging: o.tagging }));
+        const up = uploadBody(o, (b) => gzipSync(b, { level: 9 }));
+        await s3.send(new PutObjectCommand({ Bucket: bucket, Key: o.key, Body: up.body, ContentEncoding: up.contentEncoding, CacheControl: o.cacheControl, ContentType: o.contentType, Tagging: o.tagging }));
       }
       const rep = built.report as { roads: number; pm25: { median: number }; measurement: { method: string; note?: string }; validation: (Omit<RecentEntry, 'run'> & { scope: string }) | null; seconds: { total: number } };
       if (rep.validation) {

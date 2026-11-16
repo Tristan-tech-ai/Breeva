@@ -1,7 +1,8 @@
 import { crc32, inflateRawSync } from 'node:zlib';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CACHE, RUN_TAG, reportKey, runFor, runObjects, type BuiltRun } from '../scripts/field/builder';
+import { CACHE, RUN_TAG, isCellKey, reportKey, runFor, runObjects, uploadBody, type BuiltRun } from '../scripts/field/builder';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { BUILD_REGIONS, packKey } from '../scripts/field/regions';
 import { manifestStatus, statusText } from '../src/lib/field/status';
 // @ts-expect-error plain ES module without types
@@ -64,6 +65,19 @@ describe('hourly field run objects', () => {
     expect((t.match(/AlarmActions: \[!Sub 'arn:aws:sns:\$\{AWS::Region\}:\$\{AWS::AccountId\}:breeva-alarms'\]/g) ?? []).length).toBe(2);
     // the topic policy lets those alarms publish (a custom policy replaces the default one)
     expect(readFileSync('infra/aws/breeva-field.yaml', 'utf8')).toMatch(/Principal: \{ Service: cloudwatch.amazonaws.com \}[\s\S]*?alarm:breeva-\*/);
+  });
+});
+
+describe('cell upload encoding', () => {
+  it('gzips the value cells only, and the bytes come back unchanged', () => {
+    const objs = runObjects('r', built('2026111611'));
+    const gz = (b: Uint8Array) => new Uint8Array(gzipSync(b));
+    const ups = objs.map((o) => ({ key: o.key, ...uploadBody(o, gz) }));
+    expect(ups.filter((u) => u.contentEncoding === 'gzip').map((u) => u.key)).toEqual(['v/r/2026111611/0.bin', 'v/r/2026111611/3.bin']);
+    expect([...gunzipSync(ups[0].body as Uint8Array)]).toEqual([1]);
+    expect(isCellKey('v/r/manifest.json')).toBe(false);
+    expect(isCellKey('graphs/2026-11/r.bin')).toBe(false);
+    expect(isCellKey('v/badung_denpasar/2026111612/10.bin')).toBe(true);
   });
 });
 
