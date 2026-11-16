@@ -5,8 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string;
   readonly VITE_SUPABASE_ANON_KEY: string;
   readonly VITE_GOOGLE_CLIENT_ID: string;
-  readonly VITE_OPENROUTESERVICE_API_KEY: string;
-  readonly VITE_GEMINI_API_KEY: string;
+  // VITE_OPENROUTESERVICE_API_KEY and VITE_GEMINI_API_KEY removed 2026-11-16 (ORS goes through /api/searchapi?provider=ors).
   // VITE_GEOAPIFY_API_KEY removed 2026-06-02 (security: key was bundled publicly).
   // POIs now fetch via the /api/searchapi?provider=geoapify proxy (server-side key).
   // VITE_WAQI_TOKEN removed 2026-05-24 (security: token was bundled publicly).

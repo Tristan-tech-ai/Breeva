@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHash } from 'crypto';
+import { buildOrsRequest, withOrsKey } from './_ors.js';
 
 const SEARCHAPI_BASE = 'https://www.searchapi.io/api/v1/search';
 
@@ -121,10 +122,52 @@ async function fetchWithTimeout(target: string, ms: number): Promise<Response> {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // ── OpenRouteService proxy ──────────────────────────────────────────────
+  // Directions and geocoding used to be called from the browser with the ORS key in the bundle.
+  // Only whitelisted operations and fields are forwarded (see _ors.ts); the key is added here.
+  if (req.query.provider === 'ors') {
+    const built = buildOrsRequest(req.method || 'GET', req.query as Record<string, unknown>, req.body);
+    if (!built.ok) return res.status(built.status).json({ error: built.error });
+    const okey = (process.env.ORS_API_KEY || process.env.VITE_OPENROUTESERVICE_API_KEY || '').trim();
+    if (!okey) return res.status(500).json({ error: 'ORS key not configured' });
+    const up = built.upstream;
+    const oCacheKey = up.cacheTtlSec > 0 ? `ors:${createHash('sha1').update(up.url).digest('hex')}` : '';
+    if (oCacheKey) {
+      const hit = await cacheGet(oCacheKey);
+      if (hit) {
+        res.setHeader('X-ORS-Cache', 'HIT');
+        return res.status(200).json(hit);
+      }
+    }
+    const { url, init } = withOrsKey(up, okey);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20_000);
+    let oResp: Response;
+    try {
+      oResp = await fetch(url, { ...init, signal: ctrl.signal });
+    } catch {
+      return res.status(504).json({ error: 'ORS upstream timeout' });
+    } finally {
+      clearTimeout(timer);
+    }
+    const text = await oResp.text();
+    if (!oResp.ok) return res.status(oResp.status).json({ error: `ORS error: ${oResp.status}`, details: text.slice(0, 300) });
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return res.status(502).json({ error: 'ORS returned invalid JSON' });
+    }
+    if (oCacheKey) await cacheSet(oCacheKey, data, up.cacheTtlSec);
+    res.setHeader('X-ORS-Cache', oCacheKey ? 'MISS' : 'BYPASS');
+    return res.status(200).json(data);
+  }
+
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   // ── Geoapify Places proxy ───────────────────────────────────────────────

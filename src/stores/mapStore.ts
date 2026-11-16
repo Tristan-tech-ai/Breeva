@@ -8,8 +8,6 @@ import {
   TRANSPORT_MODES,
   getAreaEnvironmentData,
   analyzeRouteEnvironment,
-  refineAQIWithGemini,
-  planRouteWaypoints,
   pickEcoWaypoint,
   getPerpendicularWaypoint,
   routeGeometrySimilar,
@@ -430,15 +428,7 @@ export const useMapStore = create<MapState>()((set, get) => ({
       const baseAQI = aqiResult.data?.aqi ?? 50;
       const { greenSpaces, roads, pollutionSources, waterBodies } = envData;
 
-      // ── Step 2: Ask Gemini to plan 3 different waypoint strategies ──
-      // Gemini analyzes the Overpass data (parks, roads, water, pollution)
-      // and picks specific waypoints that will pull each route in a
-      // genuinely different geographic direction.
-      const geminiPlan = await planRouteWaypoints(
-        userLocation, destination, envData, baseAQI
-      );
-
-      // ── Step 3: Build route requests from Gemini plan + fallbacks ──
+      // ── Step 2: Heuristic waypoint strategies (the client no longer calls an LLM) ──
       type RouteStrategy = {
         label: 'fast' | 'balanced' | 'eco';
         waypoints?: Coordinate[];
@@ -446,34 +436,24 @@ export const useMapStore = create<MapState>()((set, get) => ({
 
       const strategies: RouteStrategy[] = [];
 
-      if (geminiPlan) {
-        // Gemini provided waypoints — use them
-        strategies.push(
-          { label: 'fast', waypoints: geminiPlan.fastest.length > 0 ? geminiPlan.fastest : undefined },
-          { label: 'eco', waypoints: geminiPlan.cleanest.length > 0 ? geminiPlan.cleanest : undefined },
-          { label: 'balanced', waypoints: geminiPlan.balanced.length > 0 ? geminiPlan.balanced : undefined },
-        );
+      // Strategy 1: Direct (fastest)
+      strategies.push({ label: 'fast' });
+
+      // Strategy 2: Through a park/green space
+      const ecoWp = greenSpaces.length > 0
+        ? pickEcoWaypoint(userLocation, destination, greenSpaces)
+        : null;
+      if (ecoWp) {
+        strategies.push({ label: 'eco', waypoints: [ecoWp] });
       } else {
-        // Gemini unavailable — use heuristic waypoint strategies
-        // Strategy 1: Direct (fastest)
-        strategies.push({ label: 'fast' });
-
-        // Strategy 2: Through a park/green space (cleanest)
-        const ecoWp = greenSpaces.length > 0
-          ? pickEcoWaypoint(userLocation, destination, greenSpaces)
-          : null;
-        if (ecoWp) {
-          strategies.push({ label: 'eco', waypoints: [ecoWp] });
-        } else {
-          // Force different path via perpendicular offset
-          const perpWp = getPerpendicularWaypoint(userLocation, destination, 300);
-          strategies.push({ label: 'eco', waypoints: [perpWp] });
-        }
-
-        // Strategy 3: Opposite perpendicular direction (balanced)
-        const balancedWp = getPerpendicularWaypoint(userLocation, destination, -250);
-        strategies.push({ label: 'balanced', waypoints: [balancedWp] });
+        // Force different path via perpendicular offset
+        const perpWp = getPerpendicularWaypoint(userLocation, destination, 300);
+        strategies.push({ label: 'eco', waypoints: [perpWp] });
       }
+
+      // Strategy 3: Opposite perpendicular direction
+      const balancedWp = getPerpendicularWaypoint(userLocation, destination, -250);
+      strategies.push({ label: 'balanced', waypoints: [balancedWp] });
 
       // ── Step 4: Fetch all 3 routes from ORS in parallel ──
       const routeResults = await Promise.all(
@@ -595,20 +575,6 @@ export const useMapStore = create<MapState>()((set, get) => ({
         analyzed[0].label = 'balanced';
       }
 
-      // ── Step 6: Refine AQI with Gemini (optional) ──
-      let geminiAQIs: number[] | null = null;
-      try {
-        geminiAQIs = await refineAQIWithGemini(
-          analyzed.map((r) => ({
-            routeType: r.label,
-            environment: r.env,
-            distanceKm: r.route.distance_meters / 1000,
-          })),
-          baseAQI,
-          midpoint
-        );
-      } catch { /* heuristic used */ }
-
       // ── Step 7: Build final routes with VAYU route-score ──
       const labelOrder: Record<string, number> = { fast: 0, balanced: 1, eco: 2 };
       analyzed.sort((a, b) => (labelOrder[a.label] ?? 1) - (labelOrder[b.label] ?? 1));
@@ -616,9 +582,9 @@ export const useMapStore = create<MapState>()((set, get) => ({
       const vayuVehicle = getVayuVehicleType(transportMode);
 
       const finalRoutes: Route[] = await Promise.all(
-        analyzed.map(async (r, i) => {
-          let aqiForRoute = geminiAQIs?.[i] ?? r.env.estimatedAQI;
-          let confidence = geminiAQIs ? 85 : 60;
+        analyzed.map(async (r) => {
+          let aqiForRoute = r.env.estimatedAQI;
+          let confidence = 60;
 
           // Try VAYU route-score for more accurate AQI
           const polyline: [number, number][] = r.route.waypoints.map(wp => [wp.lat, wp.lng]);

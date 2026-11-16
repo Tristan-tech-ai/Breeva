@@ -3,12 +3,8 @@ import { supabase } from './supabase';
 import { getAqiCache, putAqiCache } from './offline-db';
 import { sendOrQueueMutation } from './offline-queue';
 
-// API Configuration
-const ORS_API_KEY = import.meta.env.VITE_OPENROUTESERVICE_API_KEY || '';
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
-const GEMINI_MODEL = 'gemini-2.5-flash-lite';
-
-const ORS_BASE_URL = 'https://api.openrouteservice.org';
+// OpenRouteService is reached through the server proxy so the key stays out of the bundle.
+const ORS_PROXY = '/api/searchapi?provider=ors';
 
 // Transport mode definitions
 // 2026-05-24 PIVOT: added valhallaCosting per mode. orsProfile kept for rollback via ROUTING_ENGINE env var.
@@ -22,7 +18,7 @@ export const TRANSPORT_MODES: TransportModeInfo[] = [
 ];
 
 /**
- * OpenRouteService API - Get directions for any transport mode
+ * OpenRouteService directions (through the server proxy) for any transport mode
  * Supports alternative_routes and avoid_features options.
  */
 export async function getDirections(
@@ -59,12 +55,9 @@ export async function getDirections(
       body.options = { avoid_features: options.avoid_features };
     }
 
-    const response = await fetch(`${ORS_BASE_URL}/v2/directions/${profile}/geojson`, {
+    const response = await fetch(`${ORS_PROXY}&op=directions&profile=${encodeURIComponent(profile)}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: ORS_API_KEY,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
 
@@ -143,21 +136,14 @@ export async function searchPlaces(
   focusPoint?: Coordinate
 ): Promise<{ places: Array<{ name: string; coordinate: Coordinate }>; error: string | null }> {
   try {
-    const params = new URLSearchParams({
-      api_key: ORS_API_KEY,
-      text: query,
-      size: '5',
-      layers: 'address,venue,street',
-    });
+    const params = new URLSearchParams({ op: 'geocode', text: query, size: '5' });
 
     if (focusPoint) {
-      params.append('focus.point.lat', focusPoint.lat.toString());
-      params.append('focus.point.lon', focusPoint.lng.toString());
+      params.append('lat', focusPoint.lat.toString());
+      params.append('lon', focusPoint.lng.toString());
     }
 
-    const response = await fetch(
-      `${ORS_BASE_URL}/geocode/search?${params.toString()}`
-    );
+    const response = await fetch(`${ORS_PROXY}&${params.toString()}`);
 
     if (!response.ok) {
       throw new Error(`Geocoding error: ${response.status}`);
@@ -190,15 +176,12 @@ export async function reverseGeocode(
 ): Promise<{ address: string | null; error: string | null }> {
   try {
     const params = new URLSearchParams({
-      api_key: ORS_API_KEY,
-      'point.lat': coordinate.lat.toString(),
-      'point.lon': coordinate.lng.toString(),
-      size: '1',
+      op: 'reverse',
+      lat: coordinate.lat.toString(),
+      lon: coordinate.lng.toString(),
     });
 
-    const response = await fetch(
-      `${ORS_BASE_URL}/geocode/reverse?${params.toString()}`
-    );
+    const response = await fetch(`${ORS_PROXY}&${params.toString()}`);
 
     if (!response.ok) {
       throw new Error(`Reverse geocoding error: ${response.status}`);
@@ -551,63 +534,6 @@ export async function verifyRedemption(qr_code: string, merchant_id: string): Pr
     return json as VerifyRedemptionResult;
   } catch {
     return { valid: false, error: 'Network error' };
-  }
-}
-
-/**
- * Gemini AI - Generate eco-friendly route suggestions
- */
-export async function getAIRouteSuggestion(
-  start: string,
-  destination: string,
-  currentAQI: number
-): Promise<{ suggestion: string | null; error: string | null }> {
-  if (!GEMINI_API_KEY) {
-    return { suggestion: null, error: 'Gemini API key not configured' };
-  }
-
-  try {
-    const prompt = `You are an eco-friendly route advisor for a walking app called Breeva. 
-    The user wants to walk from "${start}" to "${destination}".
-    Current Air Quality Index (AQI) in the area is ${currentAQI}.
-    
-    Provide a brief (2-3 sentences) suggestion about:
-    1. Whether it's a good time to walk based on AQI
-    2. Any tips for the route (stay near parks, avoid traffic areas, etc.)
-    
-    Be encouraging and eco-positive in tone.`;
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            maxOutputTokens: 256,
-            temperature: 0.7,
-          },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const suggestion = data.candidates?.[0]?.content?.parts?.[0]?.text || null;
-
-    return { suggestion, error: null };
-  } catch (error) {
-    console.error('Failed to get AI suggestion:', error);
-    return {
-      suggestion: null,
-      error: error instanceof Error ? error.message : 'AI suggestion failed',
-    };
   }
 }
 
@@ -1019,246 +945,6 @@ export function getPerpendicularWaypoint(
     lat: midLat + (perpLat / len) * offsetDeg,
     lng: midLng + (perpLng / len) * offsetDeg,
   };
-}
-
-/**
- * Use Gemini LLM to refine AQI estimates based on environmental context.
- * Falls back to null if unavailable (caller uses heuristic estimates).
- *
- * This predicts local micro-AQI variation that sensors can't capture:
- * - Vehicle density near major roads vs parks
- * - Time-of-day traffic patterns
- * - Vegetation filtering effects
- */
-export async function refineAQIWithGemini(
-  routes: Array<{
-    routeType: string;
-    environment: RouteEnvironment;
-    distanceKm: number;
-  }>,
-  baseAQI: number,
-  location: Coordinate
-): Promise<number[] | null> {
-  if (!GEMINI_API_KEY) return null;
-
-  try {
-    const hour = new Date().getHours();
-    const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
-
-    const routeLines = routes
-      .map((r, i) => {
-        const env = r.environment;
-        return `Route ${i + 1} (${r.routeType}, ${r.distanceKm.toFixed(1)}km):
-- Heavy traffic roads: ${env.roadBreakdown.heavy}, Medium: ${env.roadBreakdown.medium}, Light: ${env.roadBreakdown.light}, Pedestrian: ${env.roadBreakdown.pedestrian}
-- Parks within 300m: ${env.nearbyParks}
-- Traffic score: ${env.trafficScore}/100`;
-      })
-      .join('\n');
-
-    const prompt = `Estimate LOCAL AQI (US EPA scale) for ${routes.length} walking routes.
-
-Location: ${location.lat.toFixed(4)}\u00b0, ${location.lng.toFixed(4)}\u00b0
-Time: ${String(hour).padStart(2, '0')}:00, ${dayName}
-Regional sensor AQI: ${baseAQI}
-
-${routeLines}
-
-Scientific adjustment factors:
-- Primary/trunk roads: PM2.5 +20-50% within 100m of traffic
-- Parks/vegetation: 10-25% better air (leaf filtration)
-- Pedestrian zones: 10-20% lower NO2/PM2.5
-- Rush hours (7-9AM, 5-7PM weekday): +15-30% on main roads
-- Weekend: ~15% less traffic emissions
-
-Return ONLY a JSON array of ${routes.length} integers: [aqi1, aqi2${routes.length > 2 ? ', aqi3' : ''}]`;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 128, temperature: 0.1 },
-        }),
-        signal: controller.signal,
-      }
-    );
-    clearTimeout(timeoutId);
-
-    if (!response.ok) throw new Error(`Gemini ${response.status}`);
-
-    const data = await response.json();
-    const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    // Parse JSON array from response
-    const match = text.match(/\[\s*\d[\d\s,]*\]/);
-    if (match) {
-      const aqis: number[] = JSON.parse(match[0]);
-      if (Array.isArray(aqis) && aqis.length === routes.length && aqis.every((n) => typeof n === 'number' && n > 0 && n < 500)) {
-        return aqis;
-      }
-    }
-
-    return null;
-  } catch (error) {
-    console.warn('Gemini AQI refinement unavailable:', error);
-    return null;
-  }
-}
-
-/** Waypoint plan from Gemini for 3 different route strategies */
-export interface GeminiRoutePlan {
-  fastest: Coordinate[];   // waypoints along main roads for speed
-  cleanest: Coordinate[];  // waypoints through parks, water, pedestrian areas
-  balanced: Coordinate[];  // mix of both
-}
-
-/**
- * Ask Gemini to analyze the local area and plan 3 genuinely different route
- * waypoint strategies based on Overpass environment data.
- *
- * This is the key innovation: Gemini acts as a "local knowledge brain" that
- * picks specific streets/areas to route through, creating routes that are
- * truly different — not just the same path scored differently.
- */
-export async function planRouteWaypoints(
-  start: Coordinate,
-  end: Coordinate,
-  envData: AreaEnvironmentData,
-  baseAQI: number
-): Promise<GeminiRoutePlan | null> {
-  if (!GEMINI_API_KEY) return null;
-
-  const hour = new Date().getHours();
-  const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
-
-  // Format environment data for Gemini
-  const greenList = envData.greenSpaces.slice(0, 10)
-    .map((g, i) => `  G${i + 1}: ${g.lat.toFixed(5)}, ${g.lng.toFixed(5)}`)
-    .join('\n');
-  const waterList = envData.waterBodies.slice(0, 6)
-    .map((w, i) => `  W${i + 1}: ${w.lat.toFixed(5)}, ${w.lng.toFixed(5)}`)
-    .join('\n');
-  const pollutionList = envData.pollutionSources.slice(0, 6)
-    .map((p, i) => `  P${i + 1}: ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`)
-    .join('\n');
-
-  // Group roads by type for a compact summary
-  const roadsByType: Record<string, Array<{ name?: string; lat: string; lng: string }>> = {};
-  for (const road of envData.roads.slice(0, 40)) {
-    const type = road.highway;
-    if (!roadsByType[type]) roadsByType[type] = [];
-    roadsByType[type].push({
-      name: road.name,
-      lat: road.center.lat.toFixed(5),
-      lng: road.center.lng.toFixed(5),
-    });
-  }
-  const roadSummary = Object.entries(roadsByType)
-    .map(([type, segs]) => {
-      const named = segs.filter((s) => s.name).slice(0, 3);
-      const namedStr = named.length > 0
-        ? named.map((s) => `${s.name} (${s.lat},${s.lng})`).join('; ')
-        : segs.slice(0, 2).map((s) => `(${s.lat},${s.lng})`).join('; ');
-      return `  ${type} (${segs.length}x): ${namedStr}`;
-    })
-    .join('\n');
-
-  const prompt = `You are a routing expert. Given start/end coordinates and nearby environment data, suggest intermediate waypoints for 3 different walking route strategies.
-
-START: ${start.lat.toFixed(5)}, ${start.lng.toFixed(5)}
-END: ${end.lat.toFixed(5)}, ${end.lng.toFixed(5)}
-TIME: ${String(hour).padStart(2, '0')}:00 ${dayName}
-BASE AQI: ${baseAQI}
-
-NEARBY GREEN SPACES (parks, gardens):
-${greenList || '  (none found)'}
-
-WATER BODIES (rivers, lakes):
-${waterList || '  (none found)'}
-
-POLLUTION SOURCES (industrial/commercial):
-${pollutionList || '  (none found)'}
-
-ROAD NETWORK:
-${roadSummary || '  (limited data)'}
-
-TASK: Pick 1-2 intermediate waypoint coordinates for each strategy. Each waypoint must be near (within 500m of) the features listed above. The 3 strategies must produce NOTICEABLY DIFFERENT paths:
-
-1. FASTEST: Route via main/wide roads (primary, secondary, tertiary). Pick waypoints along the most direct major road corridor. Minimize distance.
-2. CLEANEST: Route AWAY from traffic. Pick waypoints near parks, green spaces, waterways, pedestrian streets. AVOID main roads and pollution sources. Maximize air quality.
-3. BALANCED: A middle ground. Some main roads but also passing green areas when convenient.
-
-IMPORTANT:
-- Each route's waypoints should pull the path in a DIFFERENT geographic direction
-- If no green spaces exist, use residential/pedestrian streets for cleanest
-- If no main roads exist, use the most direct path for fastest
-- Waypoints must be BETWEEN start and end, not beyond them
-- Return coordinates with 5 decimal places
-
-Return ONLY valid JSON, no other text:
-{"fastest":[[lat,lng]],"cleanest":[[lat,lng],[lat,lng]],"balanced":[[lat,lng]]}`;
-
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 512, temperature: 0.3 },
-        }),
-        signal: controller.signal,
-      }
-    );
-    clearTimeout(timeoutId);
-
-    if (!response.ok) throw new Error(`Gemini ${response.status}`);
-
-    const data = await response.json();
-    const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    // Extract JSON from response (handle markdown code blocks)
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-
-    const parsed = JSON.parse(jsonMatch[0]) as {
-      fastest?: number[][];
-      cleanest?: number[][];
-      balanced?: number[][];
-    };
-
-    const toCoords = (arr?: number[][]): Coordinate[] => {
-      if (!Array.isArray(arr)) return [];
-      return arr
-        .filter((p) => Array.isArray(p) && p.length >= 2 && typeof p[0] === 'number' && typeof p[1] === 'number')
-        .map((p) => ({ lat: p[0], lng: p[1] }));
-    };
-
-    const plan: GeminiRoutePlan = {
-      fastest: toCoords(parsed.fastest),
-      cleanest: toCoords(parsed.cleanest),
-      balanced: toCoords(parsed.balanced),
-    };
-
-    // Validate: at least one strategy should have waypoints
-    if (plan.fastest.length === 0 && plan.cleanest.length === 0 && plan.balanced.length === 0) {
-      return null;
-    }
-
-    return plan;
-  } catch (error) {
-    console.warn('Gemini route planning unavailable:', error);
-    return null;
-  }
 }
 
 // ── VAYU Engine API helpers ──

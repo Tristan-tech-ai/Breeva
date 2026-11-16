@@ -14,7 +14,8 @@
     "seed:merchants": "tsx supabase/seed/index.ts --only=merchants",
     "seed:walks": "tsx supabase/seed/index.ts --only=walks",
     "classify:backlog": "tsx scripts/classify-backlog.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:bundle": "node scripts/check-bundle-keys.mjs"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
