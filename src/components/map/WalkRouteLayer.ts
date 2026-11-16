@@ -11,9 +11,11 @@ export interface WalkRoutingState { status: string; cards: RouteCard[]; ms?: num
  * returns the Pareto routes (time vs NO2) and they are drawn, fastest orange, cleanest teal. A third tap starts again.
  * Registered on the map as __walkTap so the map's click handler hands taps here while the mode is on.
  */
-export function useWalkRouting(map: L.Map | null, enabled: boolean, onState?: (s: WalkRoutingState) => void) {
+export function useWalkRouting(map: L.Map | null, enabled: boolean, onState?: (s: WalkRoutingState) => void, mode: 'walk' | 'motor' = 'walk') {
   const onStateRef = useRef(onState);
   onStateRef.current = onState;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   useEffect(() => {
     if (!map || !enabled) return;
@@ -50,7 +52,7 @@ export function useWalkRouting(map: L.Map | null, enabled: boolean, onState?: (s
       let init = ready.get(region.name);
       if (!init) { init = c.init({ name: region.name, geometry: region.geometry }); ready.set(region.name, init); }
       init
-        .then(() => c.route({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }))
+        .then(() => c.route({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, modeRef.current))
         .then(({ routes, ms }) => {
           const cards = routeCards(routes);
           // draw the alternatives first, then the fastest, the cleanest last (on top)

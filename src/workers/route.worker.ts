@@ -6,7 +6,9 @@
  * Replies { id, ok: true, ... } or { id, ok: false, error }.
  */
 import { WalkGraph } from '../lib/route/walkGraph';
-import { NodeIndex, pareto } from '../lib/route/router';
+import { NodeIndex, pareto, route, type RouteResult } from '../lib/route/router';
+import { motorNode, motorRoute } from '../lib/route/cost';
+import { HargaIndex } from '../lib/field/harga';
 import { cachedBytes } from '../lib/route/assets';
 import { decodeCell } from '../lib/field/cells';
 
@@ -15,6 +17,7 @@ let graph: WalkGraph | null = null;
 let index: NodeIndex | null = null;
 let no2: Float64Array | null = null;
 let pm25: Float64Array | null = null;
+let harga: Float64Array | null = null;
 let run = '';
 
 async function init(base: string, region: { name: string; geometry: string }) {
@@ -24,14 +27,19 @@ async function init(base: string, region: { name: string; geometry: string }) {
   await Promise.all(manifest.cells.map(async (c) => {
     cells.set(c, decodeCell(await cachedBytes(`${base}/v/${region.name}/${manifest.run}/${c}.bin`, { cacheFirst: true })));
   }));
-  const n = new Float64Array(g.m).fill(Number.NaN), p = new Float64Array(g.m).fill(Number.NaN);
+  let hi: HargaIndex | null = null;
+  try { hi = new HargaIndex(await cachedBytes(`${base}/harga/${region.geometry}/${region.name}.bin`, { cacheFirst: true })); } catch { hi = null; }
+  const n = new Float64Array(g.m).fill(Number.NaN), p = new Float64Array(g.m).fill(Number.NaN), h = new Float64Array(g.m).fill(Number.NaN);
   for (let e = 0; e < g.m; e++) {
     const r = g.road(e);
-    const v = r ? cells.get(r.c)?.[r.i] : undefined;
+    if (!r) continue;
+    const v = cells.get(r.c)?.[r.i];
     if (v) { n[e] = v.no2; p[e] = v.pm25; }
+    const hv = hi?.value(r.c, r.i);
+    if (hv != null) h[e] = hv;
   }
-  graph = g; index = new NodeIndex(g); no2 = n; pm25 = p; run = manifest.run;
-  return { nodes: g.n, edges: g.m, run };
+  graph = g; index = new NodeIndex(g); no2 = n; pm25 = p; harga = hi ? h : null; run = manifest.run;
+  return { nodes: g.n, edges: g.m, run, harga: !!hi };
 }
 
 function median(a: Float64Array): number {
@@ -39,26 +47,42 @@ function median(a: Float64Array): number {
   return s.length ? s[Math.floor(s.length / 2)] : 1;
 }
 
-function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng: number }) {
+function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor') {
   if (!graph || !index || !no2 || !pm25) throw new Error('router not initialised');
   const g = graph;
-  const s = index.nearest(from.lat, from.lng), t = index.nearest(to.lat, to.lng);
+  const keep = mode === 'motor' ? (u: number) => motorNode(g, u) : undefined;
+  const s = index.nearest(from.lat, from.lng, 500, keep), t = index.nearest(to.lat, to.lng, 500, keep);
   if (s < 0 || t < 0) throw new Error('titik di luar jaringan jalan wilayah ini');
-  const medN = median(no2);
-  const nArr = no2, pArr = pm25;
-  const routes = pareto(g, s, t, { speed: SPEED, exposureOf: (e) => (Number.isFinite(nArr[e]) ? nArr[e] / medN : 1) });
+  const nArr = no2, pArr = pm25, hArr = harga;
+  let routes: Array<RouteResult & { kind?: 'dua-angka' | 'darurat' }>;
+  if (mode === 'motor') {
+    const inp = { no2: nArr, harga: hArr ?? undefined };
+    const two = motorRoute(route, g, 'motor', s, t, inp);
+    const emer = motorRoute(route, g, 'motor', s, t, inp, true);
+    if (!two || !emer) throw new Error('tidak ada rute kendaraan yang menghormati zona napas');
+    // fastest (emergency) first, like the walking list; the same route twice is shown once
+    routes = emer.route.edges.join(',') === two.route.edges.join(',')
+      ? [{ ...two.route, kind: 'dua-angka' }]
+      : [{ ...emer.route, kind: 'darurat' }, { ...two.route, kind: 'dua-angka' }];
+  } else {
+    const medN = median(nArr);
+    routes = pareto(g, s, t, { speed: SPEED, exposureOf: (e) => (Number.isFinite(nArr[e]) ? nArr[e] / medN : 1) });
+  }
   return routes.map((r) => {
-    let pmDose = 0, no2Dose = 0;
+    let pmDose = 0, no2Dose = 0, hDose = 0, tSum = 0;
     const coords: Array<[number, number]> = [];
     r.edges.forEach((e, k) => {
-      const tS = g.lenDm[e] / 10 / SPEED;
+      const tS = (g.lenDm[e] / 10) * (r.timeS / Math.max(1, r.lengthM)); // time share of the edge (route's own speeds)
+      tSum += tS;
       pmDose += (Number.isFinite(pArr[e]) ? pArr[e] : 0) * tS;
       no2Dose += (Number.isFinite(nArr[e]) ? nArr[e] : 0) * tS;
+      hDose += (hArr && Number.isFinite(hArr[e]) ? hArr[e] : 1) * tS;
       const pts = g.edgeCoords(e, r.nodes[k]);
       coords.push(...(k === 0 ? pts : pts.slice(1)));
     });
     // mean concentration along the route (ug/m3), the honest number to compare routes by
-    return { lengthM: Math.round(r.lengthM), timeS: Math.round(r.timeS), pm25Mean: pmDose / r.timeS, no2Mean: no2Dose / r.timeS, coords, w: r.w };
+    const out = { lengthM: Math.round(r.lengthM), timeS: Math.round(r.timeS), pm25Mean: pmDose / tSum, no2Mean: no2Dose / tSum, coords, w: r.w };
+    return mode === 'motor' ? { ...out, kind: r.kind, hargaMean: hDose / tSum } : out;
   });
 }
 
@@ -68,7 +92,7 @@ self.onmessage = async (ev: MessageEvent) => {
     if (type === 'init') self.postMessage({ id, ok: true, ...(await init(ev.data.base, ev.data.region)) });
     else if (type === 'route') {
       const t0 = performance.now();
-      const routes = routeBetween(ev.data.from, ev.data.to);
+      const routes = routeBetween(ev.data.from, ev.data.to, ev.data.mode === 'motor' ? 'motor' : 'walk');
       self.postMessage({ id, ok: true, routes, ms: performance.now() - t0, run });
     } else throw new Error(`unknown message ${type}`);
   } catch (e) {

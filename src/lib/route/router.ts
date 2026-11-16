@@ -17,7 +17,7 @@ export interface RouteResult {
   timeS: number;
   /** Sum of p_e * t_e (exposure-seconds, in the units of p). */
   exposure: number;
-  /** Sum of the optional imposed-exposure term (harga hirup * length) along the route. */
+  /** Sum of imposedOf(e) * t_e along the route (harga hirup times the mode's emission share, per second). */
   imposed: number;
   w: number;
 }
@@ -68,11 +68,15 @@ class Heap {
 }
 
 export interface SearchOptions {
-  /** Walking speed, m/s. */
+  /** Speed, m/s; with speedOf, the top speed (keeps the A* heuristic admissible). */
   speed: number;
+  /** Speed of edge e, m/s (at most speed); speed for every edge when omitted. */
+  speedOf?: (e: number) => number;
+  /** False for an edge the route may not use (mode access, zona napas); every edge allowed when omitted. */
+  allowed?: (e: number) => boolean;
   /** Normalised exposure of edge e (>= 0); 0 when omitted. */
   exposureOf?: (e: number) => number;
-  /** Imposed exposure per metre of edge e (harga hirup times the mode's emission share); 0 when omitted. */
+  /** Imposed exposure rate of edge e (harga hirup times the mode's emission share), per second; 0 when omitted. */
   imposedOf?: (e: number) => number;
   /** Weight of imposed exposure in the cost (lambda * epsilon_m); 0 for walking and cycling. */
   lambda?: number;
@@ -86,7 +90,7 @@ export function route(g: WalkGraph, s: number, t: number, w: number, o: SearchOp
   const done = new Uint8Array(n);
   const tLat = g.nodeLat(t), tLon = g.nodeLon(t);
   const hOf = (u: number) => distM(g.nodeLat(u), g.nodeLon(u), tLat, tLon) / o.speed;
-  const exp = o.exposureOf, imp = o.imposedOf, lam = o.lambda ?? 0;
+  const exp = o.exposureOf, imp = o.imposedOf, lam = o.lambda ?? 0, spd = o.speedOf, ok = o.allowed;
   const heap = new Heap();
   dist[s] = 0;
   heap.push(hOf(s), s);
@@ -98,11 +102,12 @@ export function route(g: WalkGraph, s: number, t: number, w: number, o: SearchOp
     const du = dist[u];
     for (let e = g.off[u], end = g.off[u + 1]; e < end; e++) {
       const v = g.target[e];
-      if (done[v]) continue;
+      if (done[v] || (ok && !ok(e))) continue;
       const len = g.lenDm[e] / 10;
-      const te = len / o.speed;
+      const te = len / (spd ? spd(e) : o.speed);
+      // c_e = t_e (1 + w E_e + lambda H_e): own exposure and the exposure the trip imposes, both per unit of time
       let c = te * (1 + (w > 0 && exp ? w * exp(e) : 0));
-      if (lam > 0 && imp) c += lam * imp(e) * len / o.speed;
+      if (lam > 0 && imp) c += lam * imp(e) * te;
       const nd = du + c;
       if (nd < dist[v]) {
         dist[v] = nd;
@@ -123,14 +128,15 @@ export function route(g: WalkGraph, s: number, t: number, w: number, o: SearchOp
     v = u;
   }
   edges.reverse(); nodes.reverse();
-  let lengthM = 0, exposure = 0, imposed = 0;
+  let lengthM = 0, exposure = 0, imposed = 0, timeS = 0;
   for (const e of edges) {
     const len = g.lenDm[e] / 10;
-    lengthM += len;
-    exposure += (exp ? exp(e) : 0) * (len / o.speed);
-    imposed += (imp ? imp(e) : 0) * len;
+    const te = len / (spd ? spd(e) : o.speed);
+    lengthM += len; timeS += te;
+    exposure += (exp ? exp(e) : 0) * te;
+    imposed += (imp ? imp(e) : 0) * te;
   }
-  return { nodes, edges, lengthM, timeS: lengthM / o.speed, exposure, imposed, w };
+  return { nodes, edges, lengthM, timeS, exposure, imposed, w };
 }
 
 /** Source node of directed edge e (binary search in the CSR offsets). */
@@ -189,8 +195,8 @@ export class NodeIndex {
 
   private key(i: number, j: number): number { return i * 1_000_003 + j; }
 
-  /** Nearest node within maxM metres (searching outward ring by ring), or -1. */
-  nearest(lat: number, lon: number, maxM = 500): number {
+  /** Nearest node within maxM metres (searching outward ring by ring) that passes keep, or -1. */
+  nearest(lat: number, lon: number, maxM = 500, keep?: (u: number) => boolean): number {
     const ci = Math.floor(lat / NodeIndex.CELL), cj = Math.floor(lon / NodeIndex.CELL);
     let best = -1, bestD = Infinity;
     const rings = Math.ceil(maxM / 100) + 1;
@@ -198,6 +204,7 @@ export class NodeIndex {
       for (let di = -r; di <= r; di++) for (let dj = -r; dj <= r; dj++) {
         if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
         for (const u of this.cells.get(this.key(ci + di, cj + dj)) ?? []) {
+          if (keep && !keep(u)) continue;
           const d = distM(lat, lon, this.g.nodeLat(u), this.g.nodeLon(u));
           if (d < bestD) { bestD = d; best = u; }
         }

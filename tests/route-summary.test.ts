@@ -21,3 +21,15 @@ describe('walking route cards', () => {
     expect(routeCards([])).toEqual([]);
   });
 });
+
+describe('motor route cards', () => {
+  it('label the emergency and the two-number route and show the imposed exposure', () => {
+    const cards = routeCards([
+      { lengthM: 3000, timeS: 400, no2Mean: 30, pm25Mean: 26, coords: [], w: 0, kind: 'darurat', hargaMean: 1.61 },
+      { lengthM: 3200, timeS: 430, no2Mean: 28, pm25Mean: 26, coords: [], w: 1, kind: 'dua-angka', hargaMean: 1.24 },
+    ]);
+    expect(cards.map((c) => c.label)).toEqual(['Darurat: tercepat, tanpa poin', 'Dua angka (disarankan)']);
+    expect(cards.map((c) => c.harga)).toEqual([1.61, 1.24]);
+    expect(routeCards([r(500, 385, 8, 20)])[0].harga).toBeNull();
+  });
+});

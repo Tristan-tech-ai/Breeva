@@ -1,7 +1,13 @@
 /** Promise API over the route worker (src/workers/route.worker.ts). */
 import { fieldBase } from '../field/source';
 
-export interface WalkRoute { lengthM: number; timeS: number; pm25Mean: number; no2Mean: number; coords: Array<[number, number]>; w: number }
+export interface WalkRoute {
+  lengthM: number; timeS: number; pm25Mean: number; no2Mean: number; coords: Array<[number, number]>; w: number;
+  /** Motor routes: 'dua-angka' (own + imposed exposure in the cost) or 'darurat' (fastest, no points). */
+  kind?: 'dua-angka' | 'darurat';
+  /** Mean harga hirup along the route (1 = the region's median road): the exposure the trip imposes. */
+  hargaMean?: number;
+}
 
 export class RouteClient {
   private readonly worker: Worker;
@@ -30,8 +36,8 @@ export class RouteClient {
     return this.call<{ nodes: number; edges: number; run: string }>({ type: 'init', base, region });
   }
 
-  route(from: { lat: number; lng: number }, to: { lat: number; lng: number }) {
-    return this.call<{ routes: WalkRoute[]; ms: number; run: string }>({ type: 'route', from, to });
+  route(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor' = 'walk') {
+    return this.call<{ routes: WalkRoute[]; ms: number; run: string }>({ type: 'route', from, to, mode });
   }
 
   terminate() { this.worker.terminate(); }

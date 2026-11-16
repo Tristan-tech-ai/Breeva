@@ -144,6 +144,8 @@ interface LeafletMapProps {
   /** Walking routes computed on the device: taps set start and destination (static field regions). */
   walkRouting?: boolean;
   onWalkRouting?: (s: WalkRoutingState) => void;
+  /** Mode of the on-device routes: walking (NO2 Pareto) or motor (own + imposed exposure, zona napas). */
+  routeMode?: 'walk' | 'motor';
 }
 
 // ── Inner map controller ─────────────────────────────────────────────
@@ -164,7 +166,8 @@ function MapController({
   selectedPoiId,
   walkRouting,
   onWalkRouting,
-}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId' | 'walkRouting' | 'onWalkRouting'>) {
+  routeMode,
+}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId' | 'walkRouting' | 'onWalkRouting' | 'routeMode'>) {
   const map = useMap();
   const {
     center,
@@ -503,7 +506,7 @@ function MapController({
     roadDisplayMode || 'total',
   );
   const roadMeta = useMvt ? (FIELD_STATIC ? fieldMeta : mvtMeta) : vectorMeta;
-  useWalkRouting(map, !!walkRouting, onWalkRouting);
+  useWalkRouting(map, !!walkRouting, onWalkRouting, routeMode ?? 'walk');
 
   // Forward road layer meta to parent
   useEffect(() => {
@@ -593,6 +596,7 @@ export default function LeafletMap({
   onViewChange,
   walkRouting = false,
   onWalkRouting,
+  routeMode = 'walk',
 }: LeafletMapProps) {
   const { center } = useMapStore();
   const base = basemap(mapStyle, isDarkMode);
@@ -641,6 +645,7 @@ export default function LeafletMap({
           selectedPoiId={selectedPoiId}
           walkRouting={walkRouting}
           onWalkRouting={onWalkRouting}
+          routeMode={routeMode}
         />
       </MapContainer>
       <NavControls />
