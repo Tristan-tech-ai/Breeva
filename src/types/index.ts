@@ -102,7 +102,8 @@ export interface AirQualityData {
   o3: number;
   no2: number;
   co: number;
-  so2: number;
+  /** null when no source measures SO2 (never shown as 0) */
+  so2: number | null;
   timestamp: string;
   location: Coordinate;
   // VAYU Engine fields

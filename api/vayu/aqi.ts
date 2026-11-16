@@ -6,7 +6,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 // 24h ML forecast (Jakarta GRUHead) folded in here (?ml_forecast) to stay within the Hobby 12-fn
 // quota. Underscore module + .js extension so Node ESM resolves it in the bundle.
 import { forecast24 as gruForecast24 } from './_forecast24.js';
-import { pm25AqiToUg, no2AqiToUg, blendConcentrations, type BlendInput } from './_units.js';
+import { pm25AqiToUg, no2AqiToUg, blendConcentrations, atLeastPm25, type BlendInput } from './_units.js';
 
 // v2 engine: serve the point/headline AQI from the nearest precomputed road (the same
 // calibrated v2 values as the road map) with a v1 Gaussian fallback. Same flag as road-aqi.
@@ -402,7 +402,7 @@ async function compute(lat: number, lon: number): Promise<Omit<AQIResponse, 'til
   }
 
   const pm25 = Math.max(0, blendedPm25 + pm25Delta);
-  const pm10 = Math.max(0, baseline.pm10 + pm25Delta * 1.5);
+  const pm10 = atLeastPm25(Math.max(0, baseline.pm10 + pm25Delta * 1.5), pm25);
   const no2 = Math.max(0, blendedNo2 + no2Delta);
   const co = Math.max(0, baseline.co + coFraction);
   const o3 = baseline.o3;

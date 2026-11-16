@@ -1,10 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Wind, Droplets, CloudSun, Activity, Info, ShieldCheck, Clock } from 'lucide-react';
 import type { AirQualityData } from '../../types';
 import { getAQIColor } from '../map/LeafletMap';
 import { getAQILabel, getAQIEmoji } from './AQIBadge';
-import MiniSparkline from '../ui/MiniSparkline';
 
 interface AQICardProps {
   data: AirQualityData;
@@ -26,16 +25,6 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
   const [level, setLevel] = useState<DetailLevel>('glance');
   const color = getAQIColor(data.aqi);
   const percentage = Math.min(data.aqi, 300) / 300;
-
-  // Deterministic 6-hour trend from the current AQI (stable across renders).
-  const trendData = useMemo(() => {
-    const base = data.aqi;
-    const hour = new Date().getHours();
-    return Array.from({ length: 7 }, (_, i) => {
-      const offset = Math.sin((hour + i) * 1.3) * 12 + Math.cos((hour + i) * 0.7) * 8;
-      return Math.max(1, Math.round(base + offset));
-    });
-  }, [data.aqi]);
 
   const cycle = () => {
     setLevel((prev) => {
@@ -105,10 +94,6 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
             <span className="text-sm">{getAQIEmoji(data.aqi)}</span>
           </div>
           <p className="mt-0.5 text-[13px] leading-snug text-gray-600 dark:text-gray-400">{recommendation(data.aqi)}</p>
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <MiniSparkline data={trendData} color={color} width={52} height={16} />
-            <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500">6 jam</span>
-          </div>
         </div>
 
         <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }} className="flex-shrink-0 text-gray-400 dark:text-gray-500">
@@ -133,12 +118,14 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
               <div className="grid grid-cols-3 gap-2">
                 <PollutantCard label="PM2.5" value={data.pm25} unit="µg/m³" icon={<Droplets size={13} />} accent={color} />
                 <PollutantCard label="PM10" value={data.pm10} unit="µg/m³" icon={<CloudSun size={13} />} accent={color} />
-                <PollutantCard label="O₃" value={data.o3} unit="ppb" icon={<Wind size={13} />} accent={color} />
+                <PollutantCard label="O₃" value={data.o3} unit="µg/m³" icon={<Wind size={13} />} accent={color} />
                 {level === 'expert' && (
                   <>
-                    <PollutantCard label="NO₂" value={data.no2} unit="ppb" icon={<Activity size={13} />} accent={color} />
-                    <PollutantCard label="CO" value={data.co} unit="ppm" icon={<Activity size={13} />} accent={color} />
-                    <PollutantCard label="SO₂" value={data.so2} unit="ppb" icon={<Activity size={13} />} accent={color} />
+                    <PollutantCard label="NO₂" value={data.no2} unit="µg/m³" icon={<Activity size={13} />} accent={color} />
+                    <PollutantCard label="CO" value={data.co} unit="µg/m³" icon={<Activity size={13} />} accent={color} />
+                    {data.so2 !== null && (
+                      <PollutantCard label="SO₂" value={data.so2} unit="µg/m³" icon={<Activity size={13} />} accent={color} />
+                    )}
                   </>
                 )}
               </div>
@@ -172,9 +159,10 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
                 <span className="inline-flex items-center gap-1">
                   <Info size={11} />
                   {data.layer_source === 3 ? 'Sensor langsung'
-                    : data.layer_source === 2 ? 'Crowdsource'
+                    : data.layer_source === 2 ? 'Laporan warga'
                     : data.layer_source === 4 ? 'Prediksi ML'
-                    : 'VAYU Dispersion Engine'}
+                    : data.layer_source === 0 ? 'Model atmosfer global (Open-Meteo), tanpa koreksi Breeva'
+                    : 'Model Breeva (latar terkalibrasi + lalu lintas)'}
                 </span>
               </div>
 

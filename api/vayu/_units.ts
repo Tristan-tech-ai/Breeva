@@ -97,3 +97,8 @@ export function blendConcentrations(inputs: readonly BlendInput[]): { pm25: numb
   }
   return { pm25: pmW > 0 ? pmSum / pmW : null, no2: noW > 0 ? noSum / noW : null };
 }
+
+/** PM10 includes PM2.5, so a PM10 value below PM2.5 is physically impossible; raise it to PM2.5. */
+export function atLeastPm25(pm10: number, pm25: number): number {
+  return Number.isFinite(pm25) && pm10 < pm25 ? pm25 : pm10;
+}

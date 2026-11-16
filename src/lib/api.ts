@@ -290,7 +290,7 @@ export async function getAirQuality(
       o3: d.o3 ?? 0,
       no2: d.no2 ?? 0,
       co: d.co ?? 0,
-      so2: 0,
+      so2: null,
       timestamp: d.computed_at || new Date().toISOString(),
       location: coordinate,
       confidence: d.confidence,
@@ -315,7 +315,8 @@ export async function getAirQuality(
       const fb = await fallbackResp.json();
       const c = fb.current;
 
-      const pm25 = c.pm2_5 ?? 15;
+      if (typeof c?.pm2_5 !== 'number') throw new Error('Open-Meteo returned no PM2.5');
+      const pm25: number = c.pm2_5;
       const aqi = pm25ToAQISimple(pm25);
 
       const data: AirQualityData = {
@@ -326,7 +327,7 @@ export async function getAirQuality(
         o3: c.ozone ?? 0,
         no2: c.nitrogen_dioxide ?? 0,
         co: c.carbon_monoxide ?? 0,
-        so2: 0,
+        so2: null,
         timestamp: new Date().toISOString(),
         location: coordinate,
         confidence: 0.15,

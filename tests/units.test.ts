@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  aqiToConcentration, blendConcentrations, no2AqiToUg, pm10AqiToUg, pm25AqiToUg,
+  aqiToConcentration, atLeastPm25, blendConcentrations, no2AqiToUg, pm10AqiToUg, pm25AqiToUg,
   PM25_BREAKPOINTS_2024, PM25_BREAKPOINTS_PRE2024,
 } from '../api/vayu/_units';
 
@@ -58,5 +58,12 @@ describe('blending', () => {
 
   it('returns null when nothing contributes', () => {
     expect(blendConcentrations([])).toEqual({ pm25: null, no2: null });
+  });
+});
+
+describe('physical guard', () => {
+  it('never lets PM10 fall below PM2.5', () => {
+    expect(atLeastPm25(49.7, 95.8)).toBe(95.8); // the live response of 14 Nov 2026
+    expect(atLeastPm25(60, 40)).toBe(60);
   });
 });
