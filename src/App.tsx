@@ -5,17 +5,14 @@ import { AuthProvider } from './components/auth/AuthProvider';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { ContentPageSkeleton } from './components/ui/Skeleton';
-import OfflineBanner from './components/ui/OfflineBanner';
-import PWAStatusToast from './components/ui/PWAStatusToast';
-import PWAInstallBanner from './components/features/PWAInstallBanner';
-import DesktopNudge from './components/features/DesktopNudge';
-import CommandPalette from './components/features/CommandPalette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 // Eager load: critical path pages
 // The app map loads on demand: the front door (/) is the public map, so the full app is not in the entry bundle.
 const HomePage = lazy(() => import('./pages/HomePage'));
-import LoginPage from './pages/LoginPage';
+// Overlays and the login page pull in framer-motion; loading them on demand keeps it out of the first download.
+const AppOverlays = lazy(() => import('./components/AppOverlays'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
 import RootRoute from './components/auth/RootRoute';
 
 // Lazy load: all other pages for fast initial load
@@ -109,11 +106,9 @@ function App() {
           <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-primary-500 focus:text-white focus:shadow-lg">
             Skip to main content
           </a>
-          <OfflineBanner />
-          <PWAStatusToast />
-          <PWAInstallBanner />
-          <DesktopNudge />
-          <CommandPalette />
+          <Suspense fallback={null}>
+            <AppOverlays />
+          </Suspense>
           <Toaster
             position="top-center"
             toastOptions={{

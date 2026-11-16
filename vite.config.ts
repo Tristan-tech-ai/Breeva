@@ -58,19 +58,21 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks(id) {
-          // Shared runtime used by both the app and @react-three: without its own chunk it was pulled into
-          // vendor-three, which made the entry import (and preload) all of three.js on every page.
-          if (/node_modules\/(\.pnpm\/[^/]+\/node_modules\/)?(react|react-dom|scheduler|use-sync-external-store|zustand)\//.test(id))
-            return 'vendor-react';
-          if (id.includes('node_modules/leaflet') || id.includes('node_modules/react-leaflet'))
-            return 'vendor-leaflet';
-          if (/node_modules\/(\.pnpm\/[^/]+\/node_modules\/)?(three|@react-three\/[^/]+)\//.test(id))
-            return 'vendor-three';   // ~230KB gz — lazy-loaded by ParticleHero only
-          if (id.includes('node_modules/framer-motion'))
-            return 'vendor-motion';
-          if (id.includes('node_modules/lucide-react'))
-            return 'vendor-ui';
+        // rolldown advancedChunks (rolldown 1.0.0-beta.50 types): a group also takes its modules' dependencies
+        // (includeDependenciesRecursively, default true), and the group with the higher priority is cut first, its
+        // modules removed from the other groups. With one manualChunks function every group had the same priority, so
+        // vendor-leaflet swallowed React through react-leaflet and the entry imported React from it. React goes first.
+        advancedChunks: {
+          groups: [
+            { name: 'vendor-react', priority: 30,
+              test: /node_modules[\\/](\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?(react|react-dom|scheduler|use-sync-external-store|zustand)[\\/]/ },
+            // ~230KB gz, lazy-loaded by ParticleHero only
+            { name: 'vendor-three', priority: 20,
+              test: /node_modules[\\/](\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?(three|@react-three[\\/][^\\/]+)[\\/]/ },
+            { name: 'vendor-leaflet', priority: 10, test: /node_modules[\\/](\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?(leaflet|react-leaflet|@react-leaflet[\\/][^\\/]+)[\\/]/ },
+            { name: 'vendor-motion', priority: 10, test: /node_modules[\\/](\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?(framer-motion|motion-dom|motion-utils)[\\/]/ },
+            { name: 'vendor-ui', priority: 10, test: /node_modules[\\/](\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?lucide-react[\\/]/ },
+          ],
         },
       },
     },

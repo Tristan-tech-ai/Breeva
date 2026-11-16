@@ -15,7 +15,7 @@
     "seed:walks": "tsx supabase/seed/index.ts --only=walks",
     "classify:backlog": "tsx scripts/classify-backlog.ts",
     "test": "vitest run",
-    "check:bundle": "node scripts/check-bundle-keys.mjs"
+    "check:bundle": "node scripts/check-bundle-keys.mjs && node scripts/check-initial-js.mjs dist"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
