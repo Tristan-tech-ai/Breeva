@@ -15,9 +15,15 @@ export default function WheelGuard() {
     map.scrollWheelZoom.disable();
     const zoom = L.control.zoom({ position: 'bottomright', zoomInTitle: 'Perbesar', zoomOutTitle: 'Perkecil' }).addTo(map);
     const el = map.getContainer();
+    // Listen in the capture phase on the map's parent, so the event is handled before any wheel handler of the map
+    // itself: disabling scrollWheelZoom alone did not hold on a fast first load (the rotate plugin re-enables its
+    // handler), and the map then zoomed out 7 levels while the visitor scrolled the page (cursorcam check, 16 Nov).
+    const host = el.parentElement ?? el;
     let acc = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const onWheel = (e: WheelEvent) => {
+      if (!(e.target instanceof Node) || !el.contains(e.target)) return;
+      e.stopPropagation(); // Leaflet never sees the wheel; the default action (page scroll) still happens
       const r = wheelStep(acc, e);
       acc = r.acc;
       if (r.hint) {
@@ -29,9 +35,9 @@ export default function WheelGuard() {
       e.preventDefault();
       if (r.step) map.setZoomAround(map.mouseEventToContainerPoint(e), map.getZoom() + r.step);
     };
-    el.addEventListener('wheel', onWheel, { passive: false });
+    host.addEventListener('wheel', onWheel, { passive: false, capture: true });
     return () => {
-      el.removeEventListener('wheel', onWheel);
+      host.removeEventListener('wheel', onWheel, { capture: true });
       clearTimeout(timer);
       zoom.remove();
       map.scrollWheelZoom.enable();
