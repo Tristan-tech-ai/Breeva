@@ -48,6 +48,7 @@ const PaparanPage = lazy(() => import('./pages/PaparanPage'));
 const PrioritasPage = lazy(() => import('./pages/PrioritasPage'));
 const ValidasiPage = lazy(() => import('./pages/ValidasiPage'));
 const StatusPage = lazy(() => import('./pages/StatusPage'));
+const UjiCobaPage = lazy(() => import('./pages/UjiCobaPage'));
 const ExploreMapPage = lazy(() => import('./pages/ExploreMapPage'));
 const CityAirPage = lazy(() => import('./pages/CityAirPage'));
 const DevelopersPage = lazy(() => import('./pages/DevelopersPage'));
@@ -280,6 +281,7 @@ function App() {
             <Route path="/prioritas" element={<PrioritasPage />} />
             <Route path="/validasi" element={<ValidasiPage />} />
             <Route path="/status" element={<StatusPage />} />
+            <Route path="/uji-coba" element={<UjiCobaPage />} />
 
             {/* Public live-map showcase + per-city AQI pages (crawlable, no auth, prerendered) */}
             <Route path="/peta" element={<ExploreMapPage />} />
