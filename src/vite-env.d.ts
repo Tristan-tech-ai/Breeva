@@ -11,6 +11,10 @@ interface ImportMetaEnv {
   // VITE_WAQI_TOKEN removed 2026-05-24 (security: token was bundled publicly).
   // Use /api/vayu/waqi-stations + /api/vayu/waqi-feed proxy endpoints instead.
   readonly VITE_APP_URL?: string;
+  /** 'true' = road colors from the static field (PMTiles + value cells) instead of /api/tiles. */
+  readonly VITE_FIELD_STATIC?: string;
+  /** Base URL of the static field files; default /field (dev: public/field, staged by scripts/field/stage-dev.mjs). */
+  readonly VITE_FIELD_BASE?: string;
 }
 
 interface ImportMeta {

@@ -10,30 +10,18 @@ import { useDeviceHeading } from '../../hooks/useDeviceHeading';
 import { lookAheadPoint, routeProgress, splitPathAtFraction } from '../../lib/geo';
 import { useRoadPollutionLayer } from './RoadPollutionLayer';
 import { useRoadMvtLayer } from './RoadMvtLayer';
+import { useFieldLayer } from './FieldLayer';
+
+// Static field (PMTiles + value cells) instead of /api road tiles; see src/lib/field/source.ts.
+const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { useAQIStationLayer } from './AQIStationLayer';
 import POILayer from './POILayer';
 import { GCNConfidenceLegend } from './GCNConfidenceLegend';
 import type { POI } from '../../lib/poi-api';
-import type { Coordinate, Route } from '../../types';
+import type { Coordinate } from '../../types';
 import type { PollutantType, RoadDisplayMode } from '../../types';
-
-// ── Route / AQI color helpers ────────────────────────────────────────
-
-function getRouteColor(route: Route): string {
-  if (route.route_type === 'eco') return '#22c55e';
-  if (route.route_type === 'balanced') return '#3b82f6';
-  return '#f59e0b';
-}
-
-function getAQIColor(aqi: number): string {
-  if (aqi <= 50) return '#22c55e';
-  if (aqi <= 100) return '#eab308';
-  if (aqi <= 150) return '#f97316';
-  if (aqi <= 200) return '#ef4444';
-  if (aqi <= 300) return '#a855f7';
-  return '#7f1d1d';
-}
+import { getAQIColor, getRouteColor } from './mapColors';
 
 const toTuple = (wp: Coordinate): L.LatLngTuple => [wp.lat, wp.lng];
 
@@ -497,7 +485,13 @@ function MapController({
   const useMvt = (forecastHour || 0) === 0;
   const mvtMeta = useRoadMvtLayer(
     map,
-    !!showAQIOverlay && useMvt,
+    !!showAQIOverlay && useMvt && !FIELD_STATIC,
+    pollutant || 'aqi',
+    roadDisplayMode || 'total',
+  );
+  const fieldMeta = useFieldLayer(
+    map,
+    !!showAQIOverlay && useMvt && FIELD_STATIC,
     pollutant || 'aqi',
     roadDisplayMode || 'total',
   );
@@ -508,7 +502,7 @@ function MapController({
     forecastHour || 0,
     roadDisplayMode || 'total',
   );
-  const roadMeta = useMvt ? mvtMeta : vectorMeta;
+  const roadMeta = useMvt ? (FIELD_STATIC ? fieldMeta : mvtMeta) : vectorMeta;
 
   // Forward road layer meta to parent
   useEffect(() => {
@@ -663,4 +657,3 @@ export default function LeafletMap({
   );
 }
 
-export { getAQIColor, getRouteColor };

@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Wind, Droplets, CloudSun, Activity, Info, ShieldCheck, Clock } from 'lucide-react';
 import type { AirQualityData } from '../../types';
-import { getAQIColor } from '../map/LeafletMap';
-import { getAQILabel, getAQIEmoji } from './AQIBadge';
+import { getAQIColor, getAQILabel, getAQIEmoji } from '../map/mapColors';
 
 interface AQICardProps {
   data: AirQualityData;

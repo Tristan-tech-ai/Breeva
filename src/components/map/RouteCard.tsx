@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Clock, Route as RouteIcon, Wind, Star, Leaf, Zap, Scale, Check, TreePine, Car } from 'lucide-react';
 import type { Route } from '../../types';
-import { getAQIColor } from './LeafletMap';
+import { getAQIColor } from './mapColors';
 import RouteForecastBadge from './RouteForecastBadge';
 import { computeDose, computeTrapDose, type UserExposureProfile } from '../../lib/exposure';
 import { useDistanceUnit, type DistanceUnit } from '../../stores/settingsStore';

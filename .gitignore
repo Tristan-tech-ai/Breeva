@@ -47,3 +47,6 @@ kaggle/
 
 # Blender MCP tooling
 tools/blender-mcp/
+
+# static field files staged for local dev (scripts/field/stage-dev.mjs)
+public/field/

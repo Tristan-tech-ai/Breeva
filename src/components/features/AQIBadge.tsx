@@ -1,29 +1,11 @@
 import { Wind } from 'lucide-react';
-import { getAQIColor } from '../map/LeafletMap';
+import { getAQIColor, getAQIEmoji, getAQILabel } from '../map/mapColors';
 
 interface AQIBadgeProps {
   aqi: number;
   size?: 'sm' | 'md' | 'lg';
   showLabel?: boolean;
   confidence?: number;
-}
-
-function getAQILabel(aqi: number): string {
-  if (aqi <= 50) return 'Good';
-  if (aqi <= 100) return 'Moderate';
-  if (aqi <= 150) return 'Sensitive';
-  if (aqi <= 200) return 'Unhealthy';
-  if (aqi <= 300) return 'Very Unhealthy';
-  return 'Hazardous';
-}
-
-function getAQIEmoji(aqi: number): string {
-  if (aqi <= 50) return '😊';
-  if (aqi <= 100) return '🙂';
-  if (aqi <= 150) return '😐';
-  if (aqi <= 200) return '😷';
-  if (aqi <= 300) return '🤢';
-  return '☠️';
 }
 
 export default function AQIBadge({ aqi, size = 'md', showLabel = true, confidence }: AQIBadgeProps) {
@@ -66,4 +48,3 @@ export default function AQIBadge({ aqi, size = 'md', showLabel = true, confidenc
   );
 }
 
-export { getAQILabel, getAQIEmoji, getAQIColor };
