@@ -29,6 +29,7 @@ import { ROAD_ATTRIBUTION, WAQI_ATTRIBUTION } from '../../lib/attribution';
 import type { RouteLink } from '../../lib/route/share';
 import type { RouteDest } from './WalkRouteLayer';
 import WheelGuard from './WheelGuard';
+import { FIELD_DRAWN_EVENT, FIELD_REGIONS } from '../../lib/field/source';
 
 const toTuple = (wp: Coordinate): L.LatLngTuple => [wp.lat, wp.lng];
 
@@ -618,6 +619,17 @@ export default function LeafletMap({
 }: LeafletMapProps) {
   const { center } = useMapStore();
   const base = basemap(mapStyle, isDarkMode);
+  // F1-13: over a static-field region the base map waits for the first colored roads (or 5 s), so its tiles do not
+  // compete with the field for a slow connection; elsewhere it loads at once.
+  const [baseOn, setBaseOn] = useState(() => !(FIELD_STATIC && !!showAQIOverlay
+    && FIELD_REGIONS.some((r) => center.lat >= r.bounds[0][0] && center.lat <= r.bounds[1][0] && center.lng >= r.bounds[0][1] && center.lng <= r.bounds[1][1])));
+  useEffect(() => {
+    if (baseOn) return;
+    const on = () => setBaseOn(true);
+    window.addEventListener(FIELD_DRAWN_EVENT, on);
+    const t = setTimeout(on, 5000);
+    return () => { window.removeEventListener(FIELD_DRAWN_EVENT, on); clearTimeout(t); };
+  }, [baseOn]);
   const [internalMeta, setInternalMeta] = useState<RoadLayerMeta | null>(null);
 
   return (
@@ -642,7 +654,7 @@ export default function LeafletMap({
         attributionControl
         {...({ rotate: true, rotateControl: false, touchRotate: false, bearing: 0 } as Record<string, unknown>)}
       >
-        <TileLayer key={base.url + (base.className ?? '')} url={base.url} attribution={base.attribution} className={base.className} {...(base.subdomains ? { subdomains: base.subdomains } : {})} />
+        {baseOn && <TileLayer key={base.url + (base.className ?? '')} url={base.url} attribution={base.attribution} className={base.className} {...(base.subdomains ? { subdomains: base.subdomains } : {})} />}
         {onViewChange && <ViewReporter onViewChange={onViewChange} />}
         {wheelNeedsModifier && <WheelGuard />}
         <MapController

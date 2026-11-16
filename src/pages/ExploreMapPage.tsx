@@ -25,6 +25,23 @@ const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
 // read the prerendered text below. The whole map stack is auth-free.
 const LeafletMap = lazy(() => import('../components/map/LeafletMap'));
 
+// F1-13: start the slow parts of the first colored map as soon as this page's code runs: the connection to the field
+// CDN and the vector-tile script that the map chunk would otherwise request only after it loads.
+if (typeof document !== 'undefined' && import.meta.env.VITE_FIELD_STATIC === 'true') {
+  const add = (rel: string, href: string, as?: string, cross = false) => {
+    if (document.head.querySelector(`link[rel="${rel}"][href="${href}"]`)) return;
+    const l = document.createElement('link');
+    l.rel = rel; l.href = href;
+    if (as) l.as = as;
+    if (cross) l.crossOrigin = '';
+    document.head.appendChild(l);
+  };
+  const base = (import.meta.env.VITE_FIELD_BASE as string | undefined)?.replace(/\/$/, '');
+  if (base && /^https:/.test(base)) add('preconnect', new URL(base).origin, undefined, true);
+  add('preload', '/vendor/leaflet-vectorgrid.js', 'script');
+  void import('../components/map/LeafletMap');
+}
+
 // ISPU categories (Permen LHK P.14/2020, Lampiran II) for the index view.
 const AQI_LEGEND = ISPU_CATEGORIES.map((c) => ({ label: `${c.name} (${c.range})`, color: c.color }));
 

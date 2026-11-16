@@ -5,7 +5,7 @@ import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { ensureVectorGrid } from './RoadMvtLayer';
 import { weightFor } from '../../lib/roadColors';
 import { fieldColor } from '../../lib/field/color';
-import { FIELD_REGIONS, FieldSource, overzoomPoints } from '../../lib/field/source';
+import { FIELD_DRAWN_EVENT, FIELD_REGIONS, FieldSource, overzoomPoints, type Box } from '../../lib/field/source';
 import { HARGA_COLORS } from '../../lib/field/harga';
 import { popupHtml } from '../../lib/field/popup';
 import { nearestFeature, tileFraction, unitsPerPixel, type TileFeature } from '../../lib/field/tap';
@@ -29,6 +29,7 @@ export function useFieldLayer(
 ): RoadLayerMeta | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layersRef = useRef<any[]>([]);
+  const sourcesRef = useRef<FieldSource[]>([]);
   const modeRef = useRef({ pollutant, displayMode });
   modeRef.current = { pollutant, displayMode };
 
@@ -59,15 +60,29 @@ export function useFieldLayer(
       return false;
     };
     (map as unknown as { __fieldTap?: { tapAt: (ll: L.LatLng) => boolean } }).__fieldTap = { tapAt };
+    // F1-13: the region in view first, with its visible cells fetched beside the geometry; the other regions and the
+    // harga hirup files only after the first colored roads are drawn (or 6 s), so they do not compete for bandwidth.
+    const b = map.getBounds();
+    const view: Box = [[b.getSouth(), b.getWest()], [b.getNorth(), b.getEast()]];
+    const centre = map.getCenter();
+    const ordered = [...FIELD_REGIONS].sort((p, q) => Number(L.latLngBounds(q.bounds).contains(centre)) - Number(L.latLngBounds(p.bounds).contains(centre)));
+    let drawn = false;
+    let markDrawn: () => void = () => {};
+    const firstDrawn = new Promise<void>((resolve) => { markDrawn = resolve; setTimeout(resolve, 6000); });
     ensureVectorGrid()
       .then(async () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const LG = L as any;
         const Proto = LG.VectorGrid.Protobuf;
-        for (const region of FIELD_REGIONS) {
-          const src = new FieldSource(region);
-          try { await src.init(); } catch (e) { console.warn('[field]', region.name, e); continue; }
+        for (const [k, region] of ordered.entries()) {
+          if (k > 0) await firstDrawn;
           if (cancelled) return;
+          const src = new FieldSource(region);
+          try { await src.init(k === 0 ? view : undefined); } catch (e) { console.warn('[field]', region.name, e); continue; }
+          if (cancelled) return;
+          sourcesRef.current = [...sourcesRef.current, src];
+          void firstDrawn.then(() => (modeRef.current.displayMode === 'harga' ? undefined : new Promise((r) => setTimeout(r, 2000)))).then(() => src.ensureHarga());
+          if (modeRef.current.displayMode === 'harga') void src.ensureHarga();
           const tiles = new Map<string, TileFeature[]>();
           tapSources.push({ src, bounds: L.latLngBounds(region.bounds), tiles });
           const FieldGrid = Proto.extend({
@@ -127,7 +142,17 @@ export function useFieldLayer(
             },
           });
           let redrawTimer: ReturnType<typeof setTimeout> | undefined;
-          src.onCell = () => { clearTimeout(redrawTimer); redrawTimer = setTimeout(() => layer.redraw(), 120); };
+          src.onCell = () => {
+            clearTimeout(redrawTimer);
+            redrawTimer = setTimeout(() => {
+              layer.redraw();
+              if (!drawn) {
+                drawn = true;
+                // let the canvas paint, then tell the base map and the other regions they may load
+                setTimeout(() => { markDrawn(); window.dispatchEvent(new Event(FIELD_DRAWN_EVENT)); }, 50);
+              }
+            }, 120);
+          };
           layer.addTo(map);
           created.push(layer);
           layersRef.current = [...layersRef.current, layer];
@@ -140,10 +165,12 @@ export function useFieldLayer(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const l of created as any[]) l.remove?.();
       layersRef.current = [];
+      sourcesRef.current = [];
     };
   }, [map, enabled]);
 
   useEffect(() => {
+    if (displayMode === 'harga') for (const s of sourcesRef.current) void s.ensureHarga();
     for (const l of layersRef.current) l.redraw?.();
   }, [pollutant, displayMode]);
 

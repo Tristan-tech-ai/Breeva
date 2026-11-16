@@ -39,6 +39,32 @@ export function fieldBase(): string {
   return (import.meta.env.VITE_FIELD_BASE as string | undefined)?.replace(/\/$/, '') || '/field';
 }
 
+/** Event the field layer sends once its first colored roads are drawn (the base map waits for it, F1-13). */
+export const FIELD_DRAWN_EVENT = 'breeva:field-drawn';
+
+/** Box [[south, west], [north, east]]. */
+export type Box = [[number, number], [number, number]];
+
+/**
+ * Cells whose z12 tile (manifest cell_tiles, indexed by cell) intersects the box: fetched together with the geometry
+ * instead of after the first tiles are decoded (F1-13).
+ */
+export function cellsInView(m: Pick<FieldManifest, 'cells' | 'cell_tiles'>, box: Box): number[] {
+  if (!m.cell_tiles?.length) return [];
+  const n = 2 ** 12;
+  const x = (lon: number) => Math.floor(((lon + 180) / 360) * n);
+  const y = (lat: number) => {
+    const r = (lat * Math.PI) / 180;
+    return Math.floor(((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * n);
+  };
+  const [[s, w], [nl, e]] = box;
+  const x0 = x(w), x1 = x(e), y0 = y(nl), y1 = y(s);
+  return m.cells.filter((c) => {
+    const t = m.cell_tiles![c];
+    return !!t && t[0] >= x0 && t[0] <= x1 && t[1] >= y0 && t[1] <= y1;
+  });
+}
+
 export class FieldSource {
   readonly pm: PMTiles;
   manifest: FieldManifest | null = null;
@@ -47,6 +73,7 @@ export class FieldSource {
   harga: HargaIndex | null = null;
   private readonly cells = new Map<number, CellValue[]>();
   private readonly pending = new Map<number, Promise<void>>();
+  private hargaLoad: Promise<void> | null = null;
   /** Called whenever a cell arrives, so the layer can redraw. */
   onCell: (() => void) | null = null;
 
@@ -61,15 +88,25 @@ export class FieldSource {
     this.pm = new PMTiles(`${base}/tiles/${region.geometry}/${region.name}.pmtiles`);
   }
 
-  async init(): Promise<void> {
+  /**
+   * Manifest, then the cells in view (in parallel with the archive's header), then the archive metadata. The harga
+   * hirup file is not loaded here: ensureHarga() loads it when the mode needs it or once the map is colored.
+   */
+  async init(view?: Box): Promise<void> {
     const r = await this.fetchImpl(`${this.base}/v/${this.region.name}/manifest.json`, { cache: 'no-cache' });
     if (!r.ok) throw new Error(`manifest ${r.status}`);
     const m = (await r.json()) as FieldManifest;
     if (m.geometry !== this.region.geometry) throw new Error(`geometry ${m.geometry} does not match tiles ${this.region.geometry}`);
     this.manifest = m;
+    if (view) for (const c of cellsInView(m, view)) void this.loadCell(c);
     const meta = (await this.pm.getMetadata()) as { highway_codes?: string[] } | undefined;
     this.highwayCodes = meta?.highway_codes ?? [];
-    void this.loadHarga();
+  }
+
+  /** Loads the harga hirup file once (idempotent). */
+  ensureHarga(): Promise<void> {
+    this.hargaLoad ??= this.loadHarga();
+    return this.hargaLoad;
   }
 
   /** Loads the harga hirup file of the region; a region without one keeps harga = null. */
