@@ -6,6 +6,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 // 24h ML forecast (Jakarta GRUHead) folded in here (?ml_forecast) to stay within the Hobby 12-fn
 // quota. Underscore module + .js extension so Node ESM resolves it in the bundle.
 import { forecast24 as gruForecast24 } from './_forecast24.js';
+import { pm25AqiToUg, no2AqiToUg, blendConcentrations, type BlendInput } from './_units.js';
 
 // v2 engine: serve the point/headline AQI from the nearest precomputed road (the same
 // calibrated v2 values as the road map) with a v1 Gaussian fallback. Same flag as road-aqi.
@@ -182,7 +183,11 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 
 // ─── WAQI nearest station ──────────────────────────────────
 interface StationData {
-  pm25: number; no2: number; aqi: number; distance_km: number;
+  /** µg/m³, converted from the WAQI PM2.5 sub-index. */
+  pm25: number;
+  /** µg/m³, or null when the station does not report NO2. */
+  no2: number | null;
+  aqi: number; distance_km: number;
 }
 async function getNearestStation(lat: number, lon: number): Promise<StationData | null> {
   const token = process.env.WAQI_TOKEN || process.env.VITE_WAQI_TOKEN;
@@ -196,11 +201,12 @@ async function getNearestStation(lat: number, lon: number): Promise<StationData 
     const sLat = d.city?.geo?.[0];
     const sLon = d.city?.geo?.[1];
     const iaqi = d.iaqi ?? {};
-    const pm25 = typeof iaqi.pm25?.v === 'number' ? iaqi.pm25.v : undefined;
-    if (typeof sLat !== 'number' || typeof sLon !== 'number' || pm25 === undefined) return null;
+    // WAQI iaqi values are US AQI sub-indices, not concentrations (https://aqicn.org/api/doc/).
+    const pm25 = typeof iaqi.pm25?.v === 'number' ? pm25AqiToUg(iaqi.pm25.v) : null;
+    if (typeof sLat !== 'number' || typeof sLon !== 'number' || pm25 === null) return null;
     return {
       pm25,
-      no2: typeof iaqi.no2?.v === 'number' ? iaqi.no2.v : 0,
+      no2: typeof iaqi.no2?.v === 'number' ? no2AqiToUg(iaqi.no2.v) : null,
       aqi: typeof d.aqi === 'number' ? d.aqi : pm25ToAQI(pm25),
       distance_km: haversineKm(lat, lon, sLat, sLon),
     };
@@ -349,39 +355,35 @@ async function compute(lat: number, lon: number): Promise<Omit<AQIResponse, 'til
     findNearbyRoads(lat, lon),
   ]);
 
-  // Build weighted blend of pm25/no2 from independent sources.
+  // Build weighted blend of pm25/no2 from independent sources (all values in µg/m³).
   const sources: AqiSource[] = [];
-  let pm25Sum = 0, no2Sum = 0, weightSum = 0;
+  const inputs: BlendInput[] = [];
 
   // Station (highest weight, decay with distance)
   if (station && station.distance_km < 30) {
     const w = Math.max(0.05, 0.5 * Math.exp(-station.distance_km / 8));
-    pm25Sum += station.pm25 * w;
-    no2Sum += station.no2 * w;
-    weightSum += w;
+    inputs.push({ pm25: station.pm25, no2: station.no2, weight: w });
     sources.push({ source: 'station', value: station.pm25, distance_km: station.distance_km, weight: w });
   }
 
   // Model (Open-Meteo) — always available
   {
     const w = 0.2;
-    pm25Sum += baseline.pm25 * w;
-    no2Sum += baseline.no2 * w;
-    weightSum += w;
+    inputs.push({ pm25: baseline.pm25, no2: baseline.no2, weight: w });
     sources.push({ source: 'model', value: baseline.pm25, weight: w });
   }
 
-  // Crowdsource — last 2h within 500m
+  // Crowdsource — last 2h within 500m (PM2.5 only)
   if (reports.length > 0) {
     const avgPm25 = reports.reduce((s, r) => s + r.pm25, 0) / reports.length;
     const w = Math.min(0.4, 0.1 * reports.length);
-    pm25Sum += avgPm25 * w;
-    weightSum += w;
+    inputs.push({ pm25: avgPm25, no2: null, weight: w });
     sources.push({ source: 'crowdsource', value: avgPm25, count: reports.length, weight: w });
   }
 
-  const blendedPm25 = weightSum > 0 ? pm25Sum / weightSum : baseline.pm25;
-  const blendedNo2 = weightSum > 0 ? no2Sum / weightSum : baseline.no2;
+  const blend = blendConcentrations(inputs);
+  const blendedPm25 = blend.pm25 ?? baseline.pm25;
+  const blendedNo2 = blend.no2 ?? baseline.no2;
 
   // Dispersion delta from nearby roads (added on top of blended baseline)
   const diurnal = HOURLY_TRAFFIC[new Date().getHours()] ?? 1.0;

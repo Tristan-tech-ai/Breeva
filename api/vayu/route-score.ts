@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireApiKey } from './_apiauth.js';
+import { pm25AqiToUg as pm25AQIToUg, no2AqiToUg as no2AQIToUg, o3AqiToUg as o3AQIToUg } from './_units.js';
 // v2 prior (Layer A Background-β + Layer D GP) — shared underscore module (inlines into the bundle;
 // .js extension required by Node ESM under type:module). Lets route scoring use the SAME calibrated
 // ambient as the map (road-aqi), instead of raw CAMS — the validated 45%-LODO accuracy lever.
@@ -1115,30 +1116,6 @@ async function fetchBaselineGrid(south: number, west: number, north: number, eas
 
 // ─── WAQI bias correction (from road-aqi.ts) ────────────────
 interface WAQIBias { pm25: number; pm10: number; no2: number; o3: number; stationName: string | null; }
-
-function pm25AQIToUg(aqi: number): number {
-  const bp = [ [0,50,0,12], [51,100,12.1,35.4], [101,150,35.5,55.4], [151,200,55.5,150.4], [201,300,150.5,250.4], [301,500,250.5,500.4] ];
-  for (const [aqiLo, aqiHi, cLo, cHi] of bp) {
-    if (aqi <= aqiHi) return ((cHi - cLo) / (aqiHi - aqiLo)) * (aqi - aqiLo) + cLo;
-  }
-  return 500;
-}
-
-function no2AQIToUg(aqi: number): number {
-  const bp = [ [0,50,0,53], [51,100,54,100], [101,150,101,360], [151,200,361,649], [201,300,650,1249], [301,500,1250,2049] ];
-  for (const [aqiLo, aqiHi, cLo, cHi] of bp) {
-    if (aqi <= aqiHi) return (((cHi - cLo) / (aqiHi - aqiLo)) * (aqi - aqiLo) + cLo) * 1.88;
-  }
-  return 2049 * 1.88;
-}
-
-function o3AQIToUg(aqi: number): number {
-  const bp = [ [0,50,0,54], [51,100,55,70], [101,150,71,85], [151,200,86,105], [201,300,106,200] ];
-  for (const [aqiLo, aqiHi, cLo, cHi] of bp) {
-    if (aqi <= aqiHi) return (((cHi - cLo) / (aqiHi - aqiLo)) * (aqi - aqiLo) + cLo) * 2.0;
-  }
-  return 200 * 2.0;
-}
 
 async function fetchWAQIBias(lat: number, lon: number, openMeteoBaseline: BaselineData): Promise<WAQIBias> {
   const noBias: WAQIBias = { pm25: 0, pm10: 0, no2: 0, o3: 0, stationName: null };

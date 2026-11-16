@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireApiKey } from './_apiauth.js';
+import { pm25AqiToUg as pm25AQIToUg, pm10AqiToUg as pm10AQIToUg, no2AqiToUg as no2AQIToUg, o3AqiToUg as o3AQIToUg } from './_units.js';
 // v2 engine (Phase 3): import the parity-tested CALINE4 line-source from _caline4.ts.
 // MUST be an underscore-prefixed module — Vercel INLINES non-route (_-prefixed) modules into the
 // importing function bundle, so the import resolves at runtime. Importing the same fns from
@@ -1100,41 +1101,6 @@ async function fetchWAQIBias(lat: number, lon: number, openMeteoBaseline: Baseli
   } catch {
     return noBias;
   }
-}
-
-// ─── WAQI AQI → concentration converters (US EPA breakpoints) ─
-function pm25AQIToUg(aqi: number): number {
-  const bp = [ [0,50,0,12], [51,100,12.1,35.4], [101,150,35.5,55.4], [151,200,55.5,150.4], [201,300,150.5,250.4], [301,500,250.5,500.4] ];
-  for (const [aqiLo, aqiHi, cLo, cHi] of bp) {
-    if (aqi <= aqiHi) return ((cHi - cLo) / (aqiHi - aqiLo)) * (aqi - aqiLo) + cLo;
-  }
-  return 500;
-}
-
-function pm10AQIToUg(aqi: number): number {
-  const bp = [ [0,50,0,54], [51,100,55,154], [101,150,155,254], [151,200,255,354], [201,300,355,424], [301,500,425,604] ];
-  for (const [aqiLo, aqiHi, cLo, cHi] of bp) {
-    if (aqi <= aqiHi) return ((cHi - cLo) / (aqiHi - aqiLo)) * (aqi - aqiLo) + cLo;
-  }
-  return 604;
-}
-
-function no2AQIToUg(aqi: number): number {
-  // EPA NO₂ breakpoints in ppb, convert to µg/m³ (* 1.88)
-  const bp = [ [0,50,0,53], [51,100,54,100], [101,150,101,360], [151,200,361,649], [201,300,650,1249], [301,500,1250,2049] ];
-  for (const [aqiLo, aqiHi, cLo, cHi] of bp) {
-    if (aqi <= aqiHi) return (((cHi - cLo) / (aqiHi - aqiLo)) * (aqi - aqiLo) + cLo) * 1.88;
-  }
-  return 2049 * 1.88;
-}
-
-function o3AQIToUg(aqi: number): number {
-  // EPA O₃ breakpoints in ppb, convert to µg/m³ (* 2.0)
-  const bp = [ [0,50,0,54], [51,100,55,70], [101,150,71,85], [151,200,86,105], [201,300,106,200] ];
-  for (const [aqiLo, aqiHi, cLo, cHi] of bp) {
-    if (aqi <= aqiHi) return (((cHi - cLo) / (aqiHi - aqiLo)) * (aqi - aqiLo) + cLo) * 2.0;
-  }
-  return 200 * 2.0;
 }
 
 // ─── IQAir daily budget tracker ─────────────────────────────
