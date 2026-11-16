@@ -7,6 +7,7 @@
  * Network calls take a fetch function so tests can run offline.
  */
 import type { Variogram } from './kriging.js';
+import { s1Keep } from './sensor-filter.js';
 import { koschmiederPm25, parseIemCsv, summariseHour, type MetarHour } from './smoke.js';
 
 export interface VettedSensor { loc_id: number; sensor_id: number; name: string; lat: number; lon: number }
@@ -114,9 +115,13 @@ export async function measureHour(
         const hour = [...byHour.keys()].sort().reverse().find((h) => byHour.get(h)!.length >= need);
         const fail = failed.length ? `, requests failed (sensor:status) ${failed.join(' ')}` : '';
         if (hour) {
-          const readings = byHour.get(hour)!;
+          // rule S1 drops implausible readings (F5-08: hidden-sensor test 16 Nov, hourly NRMSE 0.378 -> 0.368)
+          const all = byHour.get(hour)!;
+          const keep = s1Keep(all);
+          const readings = all.filter((_, i) => keep[i]);
+          const dropped = all.length - readings.length;
           const lag = Math.round((hourUtc.getTime() - Date.parse(hour)) / 3600_000);
-          notes.push(`${readings.length} of ${params.sensors.length} vetted sensors reported hour ${hour} (${lag} h before the field hour)${fail}`);
+          notes.push(`${all.length} of ${params.sensors.length} vetted sensors reported hour ${hour} (${lag} h before the field hour)${dropped ? `, ${dropped} dropped by rule S1` : ''}${fail}`);
           return { ...base, method: 'kriging', sensors: readings, sensor_hour_utc: hour, variogram_log: params.variogram_log, pi_scale: params.pi_scale ?? 1, note: notes.join('; ') };
         }
         notes.push(`fewer than ${need} vetted sensors reported in the last ${(opts.lookbackHours ?? 3) + 1} hours${fail}`);
