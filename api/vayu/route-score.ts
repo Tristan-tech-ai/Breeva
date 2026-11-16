@@ -2270,7 +2270,7 @@ async function doORSRequest(
 function envClean(v: string | undefined): string {
   // Strip BOM (U+FEFF) + zero-width chars (U+200B..U+200D, U+2060) then trim
   // ASCII whitespace. Regex uses \u escapes only — source file stays ASCII-clean.
-  return (v ?? '').replace(/[﻿​-‍⁠]/g, '').trim();
+  return (v ?? '').replace(/[\uFEFF\u200B-\u200D\u2060]/g, '').trim();
 }
 
 const ROUTING_ENGINE = envClean(process.env.ROUTING_ENGINE || 'ors').toLowerCase();
