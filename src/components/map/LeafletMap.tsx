@@ -27,6 +27,7 @@ import { basemap } from '../../lib/basemap';
 import { useMapAttribution } from './useMapAttribution';
 import { ROAD_ATTRIBUTION, WAQI_ATTRIBUTION } from '../../lib/attribution';
 import type { RouteLink } from '../../lib/route/share';
+import type { RouteDest } from './WalkRouteLayer';
 import WheelGuard from './WheelGuard';
 
 const toTuple = (wp: Coordinate): L.LatLngTuple => [wp.lat, wp.lng];
@@ -150,6 +151,8 @@ interface LeafletMapProps {
   routeMode?: 'walk' | 'motor';
   /** Route link (?rute=) played once when routing starts. */
   routeLink?: RouteLink | null;
+  /** Fixed destination of the on-device routes (school picker); taps then set the start. */
+  routeDest?: RouteDest | null;
   /** Map inside a scrolling page: the wheel scrolls the page, Ctrl/Cmd + wheel zooms, +/- buttons shown. */
   wheelNeedsModifier?: boolean;
 }
@@ -174,7 +177,8 @@ function MapController({
   onWalkRouting,
   routeMode,
   routeLink,
-}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId' | 'walkRouting' | 'onWalkRouting' | 'routeMode' | 'routeLink'>) {
+  routeDest,
+}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId' | 'walkRouting' | 'onWalkRouting' | 'routeMode' | 'routeLink' | 'routeDest'>) {
   const map = useMap();
   const {
     center,
@@ -513,7 +517,7 @@ function MapController({
     roadDisplayMode || 'total',
   );
   const roadMeta = useMvt ? (FIELD_STATIC ? fieldMeta : mvtMeta) : vectorMeta;
-  useWalkRouting(map, !!walkRouting, onWalkRouting, routeMode ?? 'walk', routeLink);
+  useWalkRouting(map, !!walkRouting, onWalkRouting, routeMode ?? 'walk', routeLink, routeDest);
 
   // Forward road layer meta to parent
   useEffect(() => {
@@ -605,6 +609,7 @@ export default function LeafletMap({
   onWalkRouting,
   routeMode = 'walk',
   routeLink = null,
+  routeDest = null,
   wheelNeedsModifier = false,
 }: LeafletMapProps) {
   const { center } = useMapStore();
@@ -657,6 +662,7 @@ export default function LeafletMap({
           onWalkRouting={onWalkRouting}
           routeMode={routeMode}
           routeLink={routeLink}
+          routeDest={routeDest}
         />
       </MapContainer>
       <NavControls />

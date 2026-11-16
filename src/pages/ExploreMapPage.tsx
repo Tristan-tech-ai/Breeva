@@ -11,7 +11,8 @@ import { CITIES } from '../lib/cities';
 import TrafficLegend from '../components/map/TrafficLegend';
 import HargaLegend from '../components/map/HargaLegend';
 import WalkRouteCards from '../components/map/WalkRouteCards';
-import type { WalkRoutingState } from '../components/map/WalkRouteLayer';
+import SchoolPicker from '../components/map/SchoolPicker';
+import type { RouteDest, WalkRoutingState } from '../components/map/WalkRouteLayer';
 import type { PollutantType, RoadDisplayMode } from '../types';
 import { ISPU_CATEGORIES } from '../lib/ispu';
 import { FIELD_REGIONS, pickRegion } from '../lib/field/source';
@@ -66,6 +67,8 @@ export default function ExploreMapPage() {
   const [walkMode, setWalkMode] = useState(!!link);
   const [walkState, setWalkState] = useState<WalkRoutingState | null>(null);
   const [routeMode, setRouteMode] = useState<'walk' | 'motor'>(link?.mode ?? 'walk');
+  // "Ke sekolah": a school chosen from the list is the destination, the next tap the start (F1-12)
+  const [schoolDest, setSchoolDest] = useState<RouteDest | null>(null);
   const activeP = POLLUTANTS.find((p) => p.id === pollutant) ?? POLLUTANTS[0];
   // The traffic view of the index shows NO2, and harga hirup does not depend on the pollutant: modes for every pollutant.
   const showRoadModes = true;
@@ -169,7 +172,7 @@ export default function ExploreMapPage() {
           <div className="flex flex-wrap gap-2" role="group" aria-label="Wilayah">
             {FIELD_REGIONS.map((r) => (
               <button key={r.name} aria-pressed={region === r.name}
-                onClick={() => { setRegion(r.name); useMapStore.getState().setCenter(r.home); void useMapStore.getState().fetchAreaReading(r.home); }}
+                onClick={() => { setRegion(r.name); setSchoolDest(null); useMapStore.getState().setCenter(r.home); void useMapStore.getState().fetchAreaReading(r.home); }}
                 className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${region === r.name ? 'bg-sky-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
                 {r.label}
               </button>
@@ -180,7 +183,7 @@ export default function ExploreMapPage() {
         {/* Interactive map (progressive enhancement) */}
         <div className="relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg" style={{ height: 'min(58vh, 480px)' }}>
           <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
-            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} walkRouting={walkMode} onWalkRouting={setWalkState} routeMode={routeMode} routeLink={link} wheelNeedsModifier />
+            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} walkRouting={walkMode} onWalkRouting={setWalkState} routeMode={routeMode} routeLink={link} routeDest={schoolDest} wheelNeedsModifier />
           </Suspense>
 
           {/* Search overlay */}
@@ -191,7 +194,7 @@ export default function ExploreMapPage() {
           {/* Walking routes computed on the device (static field regions) */}
           {FIELD_STATIC && (
             <button
-              onClick={() => { setWalkMode((m) => !m); setWalkState(null); }}
+              onClick={() => { setWalkMode((m) => !m); setWalkState(null); setSchoolDest(null); }}
               aria-pressed={walkMode}
               className={`absolute left-3 bottom-3 z-[500] flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold shadow-lg ring-1 ring-black/5 ${walkMode ? 'bg-teal-700 text-white' : 'bg-white/95 dark:bg-gray-900/90 text-teal-700 dark:text-teal-300'}`}
             >
@@ -207,7 +210,12 @@ export default function ExploreMapPage() {
           )}
         </div>
 
-        {walkMode && <WalkRouteCards state={walkState} mode={routeMode} onMode={setRouteMode} />}
+        {walkMode && (
+          <div className="space-y-2">
+            <SchoolPicker region={pickRegion(region)} value={schoolDest} onChange={setSchoolDest} />
+            <WalkRouteCards state={walkState} mode={routeMode} onMode={setRouteMode} />
+          </div>
+        )}
 
         {/* Live AQI card, below the map so the map's data attribution stays visible */}
         {currentAQI && <AQICard data={currentAQI} />}

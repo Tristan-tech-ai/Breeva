@@ -26,6 +26,10 @@ export interface SchoolFile {
   hours: Array<[number, number]>;
   /** [lat, lon] of every school and kindergarten. */
   points: Array<[number, number]>;
+  /** Version 2: OSM name ('' when unnamed) and kind of each point, aligned with points. */
+  version?: number;
+  names?: string[];
+  kinds?: Array<'school' | 'kindergarten'>;
 }
 
 /** Entry 06.30-07.30 and exit 12.00-13.30 local time (decision of 16 Nov). */

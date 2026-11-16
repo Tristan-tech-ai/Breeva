@@ -4,6 +4,10 @@ import { FIELD_REGIONS } from '../../lib/field/source';
 import { RouteClient } from '../../lib/route/client';
 import { routeCards, type RouteCard } from '../../lib/route/summary';
 import type { RouteLink } from '../../lib/route/share';
+import { chooseDest, onTap, type TapState } from '../../lib/route/tapFlow';
+
+/** A fixed destination chosen from a list ("Ke sekolah"): the next tap is the start. */
+export interface RouteDest { lat: number; lng: number; name: string }
 
 export interface WalkRoutingState {
   status: string; cards: RouteCard[]; ms?: number;
@@ -15,10 +19,18 @@ export interface WalkRoutingState {
  * Walking routes computed on the device: the first tap sets the start, the second the destination; the Web Worker
  * returns the Pareto routes (time vs NO2) and they are drawn, fastest orange, cleanest teal. A third tap starts again.
  * Registered on the map as __walkTap so the map's click handler hands taps here while the mode is on. A route link
- * (?rute=, share.ts) is played as the two taps once, and the map fits both ends.
+ * (?rute=, share.ts) is played as the two taps once, and the map fits both ends. With a fixed destination (dest, the
+ * school picker) every tap is a start and the route goes to that destination. Switching walk/motor recomputes the
+ * routes shown.
  */
-export function useWalkRouting(map: L.Map | null, enabled: boolean, onState?: (s: WalkRoutingState) => void, mode: 'walk' | 'motor' = 'walk', link?: RouteLink | null) {
+export function useWalkRouting(
+  map: L.Map | null, enabled: boolean, onState?: (s: WalkRoutingState) => void, mode: 'walk' | 'motor' = 'walk',
+  link?: RouteLink | null, dest?: RouteDest | null,
+) {
   const linkRef = useRef(link);
+  const apiRef = useRef<{ setDest: (d: RouteDest | null) => void; rerun: () => void } | null>(null);
+  const destRef = useRef(dest ?? null);
+  destRef.current = dest ?? null;
   const onStateRef = useRef(onState);
   onStateRef.current = onState;
   const modeRef = useRef(mode);
@@ -29,30 +41,46 @@ export function useWalkRouting(map: L.Map | null, enabled: boolean, onState?: (s
     const group = L.layerGroup().addTo(map);
     let client: RouteClient | null = null;
     const ready = new Map<string, Promise<unknown>>();
-    let start: L.LatLng | null = null;
+    let tap: TapState = { start: null, fixed: null };
+    let fixed: RouteDest | null = null;
+    let lastEnds: { from: L.LatLng; to: L.LatLng } | null = null;
     let busy = false;
     const say = (s: WalkRoutingState) => onStateRef.current?.(s);
+    const destMarker = () => {
+      if (!fixed) return;
+      L.circleMarker([fixed.lat, fixed.lng], { radius: 9, color: '#0f766e', weight: 4, fillColor: '#ffffff', fillOpacity: 1 })
+        .bindTooltip(fixed.name, { permanent: true, direction: 'top', offset: [0, -8] }).addTo(group);
+    };
+    const startMarker = (ll: L.LatLng) =>
+      L.circleMarker(ll, { radius: 7, color: '#14213D', weight: 3, fillColor: '#F7F7F2', fillOpacity: 1 }).addTo(group);
+    const endMarker = (ll: L.LatLng) =>
+      L.circleMarker(ll, { radius: 7, color: '#14213D', weight: 3, fillColor: '#14213D', fillOpacity: 1 }).addTo(group);
     say({ status: 'Ketuk titik berangkat di peta.', cards: [] });
 
     const regionOf = (ll: L.LatLng) => FIELD_REGIONS.find((r) => L.latLngBounds(r.bounds).contains(ll));
     const tapAt = (ll: L.LatLng): boolean => {
       if (busy) return true;
-      if (!start) {
-        group.clearLayers();
-        start = ll;
-        L.circleMarker(ll, { radius: 7, color: '#14213D', weight: 3, fillColor: '#F7F7F2', fillOpacity: 1 }).addTo(group);
-        say({ status: 'Ketuk tujuan.', cards: [] });
-        return true;
+      const r = onTap(tap, ll);
+      const firstOfPair = !tap.fixed && !tap.start;
+      tap = r.state;
+      if (firstOfPair || tap.fixed) group.clearLayers();
+      if (firstOfPair || tap.fixed) startMarker(ll);
+      if (tap.fixed) destMarker();
+      if (r.prompt) say({ status: r.prompt, cards: [] });
+      if (r.compute) {
+        if (!tap.fixed) endMarker(ll);
+        compute(L.latLng(r.compute.from), L.latLng(r.compute.to));
       }
-      const from = start, to = ll;
-      start = null;
+      return true;
+    };
+    const compute = (from: L.LatLng, to: L.LatLng) => {
       const region = regionOf(from);
       if (!region || regionOf(to) !== region) {
         say({ status: 'Rute di perangkat baru tersedia di dalam satu wilayah (Badung–Denpasar atau Kota Bogor).', cards: [] });
-        return true;
+        return;
       }
       busy = true;
-      L.circleMarker(to, { radius: 7, color: '#14213D', weight: 3, fillColor: '#14213D', fillOpacity: 1 }).addTo(group);
+      lastEnds = { from, to };
       say({ status: 'Menghitung rute di perangkat…', cards: [] });
       client ??= new RouteClient();
       const c = client;
@@ -72,7 +100,8 @@ export function useWalkRouting(map: L.Map | null, enabled: boolean, onState?: (s
             L.polyline(ll, { color: '#ffffff', weight: w + 4, opacity: 0.95, interactive: false }).addTo(group);
             L.polyline(ll, { color: cards[k].color, weight: w, opacity: 1, interactive: false }).addTo(group);
           }
-          say({ status: routes.length ? `${routes.length} rute dihitung di perangkat dalam ${Math.round(ms)} ms. Ketuk lagi untuk rute baru.` : 'Tidak ada rute.', cards, ms,
+          const again = fixed ? `Ketuk titik berangkat lain untuk rute baru ke ${fixed.name}.` : 'Ketuk lagi untuk rute baru.';
+          say({ status: routes.length ? `${routes.length} rute dihitung di perangkat dalam ${Math.round(ms)} ms. ${again}` : 'Tidak ada rute.', cards, ms,
             ends: { from: { lat: from.lat, lng: from.lng }, to: { lat: to.lat, lng: to.lng } } });
         })
         .catch((e: Error) => {
@@ -80,9 +109,31 @@ export function useWalkRouting(map: L.Map | null, enabled: boolean, onState?: (s
           say({ status: `Rute gagal: ${e.message}`, cards: [] });
         })
         .finally(() => { busy = false; });
-      return true;
     };
+    const setDest = (d: RouteDest | null) => {
+      const c = chooseDest(d);
+      tap = c.state;
+      fixed = d;
+      lastEnds = null;
+      group.clearLayers();
+      say({ status: c.prompt, cards: [] });
+      if (!d) return;
+      destMarker();
+      map.setView([d.lat, d.lng], Math.max(map.getZoom(), 15));
+    };
+    // switching walk/motor recomputes the routes shown (same start and destination)
+    const rerun = () => {
+      if (!lastEnds || busy) return;
+      const { from, to } = lastEnds;
+      group.clearLayers();
+      startMarker(from);
+      if (fixed) destMarker();
+      else endMarker(to);
+      compute(from, to);
+    };
+    apiRef.current = { setDest, rerun };
     (map as unknown as { __walkTap?: { tapAt: (ll: L.LatLng) => boolean } }).__walkTap = { tapAt };
+    if (destRef.current) setDest(destRef.current);
     const l = linkRef.current;
     if (l) {
       linkRef.current = null; // once
@@ -91,9 +142,25 @@ export function useWalkRouting(map: L.Map | null, enabled: boolean, onState?: (s
       tapAt(a); tapAt(b);
     }
     return () => {
+      apiRef.current = null;
       delete (map as unknown as { __walkTap?: unknown }).__walkTap;
       group.remove();
       client?.terminate();
     };
   }, [map, enabled]);
+
+  // react to changes only: on mount the main effect has already applied dest (and a route link must not be wiped)
+  const destKey = dest ? `${dest.lat},${dest.lng},${dest.name}` : '';
+  const seenDest = useRef(destKey);
+  const seenMode = useRef(mode);
+  useEffect(() => {
+    if (seenDest.current === destKey) return;
+    seenDest.current = destKey;
+    apiRef.current?.setDest(destRef.current);
+  }, [destKey]);
+  useEffect(() => {
+    if (seenMode.current === mode) return;
+    seenMode.current = mode;
+    apiRef.current?.rerun();
+  }, [mode]);
 }
