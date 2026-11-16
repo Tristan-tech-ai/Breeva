@@ -28,3 +28,5 @@ pyarrow>=15.0                  # Parquet file read/write (history export)
 # --- ML (Phase 0.5+) ---
 xgboost>=2.0                   # Primary ML correction model
 scikit-learn>=1.4              # Feature preprocessing, metrics
+pmtiles==3.8.1
+mapbox-vector-tile==2.2.0
