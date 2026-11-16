@@ -234,8 +234,8 @@ async function getNearbyReports(lat: number, lon: number, radiusKm: number, maxA
       3000,
     );
     if (!resp.ok) return [];
-    const rows = await resp.json();
-    return rows.filter((r: any) => typeof r.pm25 === 'number');
+    const rows: Array<Partial<CrowdReport>> = await resp.json();
+    return rows.filter((r): r is CrowdReport => typeof r.pm25 === 'number');
   } catch { return []; }
 }
 

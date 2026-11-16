@@ -2263,7 +2263,7 @@ async function doORSRequest(
 /** Strip BOM (U+FEFF) + zero-width chars + whitespace from env values.
  *  Defensive: env vars set via clipboard paste (esp. Windows shell propagation)
  *  can pick up BOM/ZWSP, silently corrupting === string comparisons.
- *  2026-05-27 incident: ROUTING_ENGINE='﻿valhalla' caused useValhalla=false,
+ *  2026-05-27 incident: ROUTING_ENGINE='<U+FEFF>valhalla' caused useValhalla=false,
  *  silently routing Preview to ORS fallback for 3+ days. Scope kept narrow to
  *  routing-critical env vars (ROUTING_ENGINE + VALHALLA_AUTH_TOKEN) — broader
  *  refactor would inflate diff in this critical file. */

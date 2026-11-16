@@ -1530,8 +1530,8 @@ export function computeRoadAQIv2(
   // Outside calibration support → refuse: serve the baseline ambient (no confident road increment), wide PI.
   // #64: when multiDelta is supplied (flag on), use the summed nearby-roads dispersion (matches the
   // offline 500m calibration); else this road's own line source only.
-  let pm25Delta = oodRefused ? 0 : (multiDelta ? multiDelta.pm25 : caline4PolylineConc(poly, qPM25, recvLat, recvLon, wind, windDir, stab) * mod);
-  let no2Delta  = oodRefused ? 0 : (multiDelta ? multiDelta.nox  : caline4PolylineConc(poly, qNOx,  recvLat, recvLon, wind, windDir, stab) * mod);
+  const pm25Delta = oodRefused ? 0 : (multiDelta ? multiDelta.pm25 : caline4PolylineConc(poly, qPM25, recvLat, recvLon, wind, windDir, stab) * mod);
+  const no2Delta  = oodRefused ? 0 : (multiDelta ? multiDelta.nox  : caline4PolylineConc(poly, qNOx,  recvLat, recvLon, wind, windDir, stab) * mod);
   const pm10Delta = pm25Delta * 1.8 * (SURFACE_PM10_FACTOR[road.surface || ''] ?? 1.0);
   const o3Titration = no2Delta * 0.4;
 
@@ -1958,6 +1958,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } catch { /* fall through to v1 on any v2 error */ }
       }
 
+      // eslint-disable-next-line prefer-const -- some of these are reassigned below
       let { aqi, pm25, no2, o3, pm10, pm25_delta, no2_delta, pm10_delta, ai_classified } =
         computeRoadAQI(road, baseline, diurnal, regionMultiplier, trafficCorrections);
 
