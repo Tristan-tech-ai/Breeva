@@ -9,6 +9,11 @@ describe('data attribution', () => {
     expect(CAMS_NOTICE).toMatch(/2026$/);
   });
 
+  it('road colours credit OpenAQ and the sensor provider, since the field krigs citizen sensors', () => {
+    expect(ROAD_ATTRIBUTION).toMatch(/href="https:\/\/openaq\.org\/"/);
+    expect(ROAD_ATTRIBUTION).toContain('AirGradient, CC BY 4.0');
+  });
+
   it('every WAQI reading credits WAQI and the originating agencies', () => {
     expect(waqiCredit([{ name: 'World Air Quality Index Project' }, { name: 'BMKG' }])).toBe('World Air Quality Index Project · BMKG');
     expect(waqiCredit([])).toBe('World Air Quality Index Project');

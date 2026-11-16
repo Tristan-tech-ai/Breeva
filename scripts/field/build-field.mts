@@ -6,16 +6,21 @@
  *
  * Writes v/<name>/<run>/<c>.bin (BVF1), v/<name>/<run>/inputs.json and report.json, then v/<name>/manifest.json last,
  * so a manifest never points at a cell that does not exist yet. run = valid hour in UTC, YYYYMMDDHH; never overwritten.
- * Inputs this version uses: Open-Meteo background per z12 cell, CAMS daily mean (region background), static diurnal
- * traffic curve, CALINE4 multi-source dispersion over the whole region. No station bias yet (measurements: task F2-07).
+ * Inputs: Open-Meteo background per z12 cell, CAMS daily mean (region background), static diurnal traffic curve, CALINE4
+ * multi-source dispersion over the whole region, and the measurement layer of the last complete hour
+ * (scripts/field/measure.ts, parameters in scripts/field/params/measure.json): log-space kriging of the region's vetted
+ * OpenAQ citizen sensors, else the Koschmieder smoke rule of its airport, else nothing. --measure off skips it.
+ * OPENAQ_API_KEY comes from the environment (for example tsx --env-file=<path to .env.local>); it is never printed.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { fetchBaselineGrid } from '../../api/vayu/_baseline.js';
 import { HOURLY_TRAFFIC, fetchCamsDailyMean } from '../../api/vayu/road-aqi.js';
 import { RoadPack } from './pack.js';
 import { encodeCell, saturated } from './cells.js';
 import { computeField, type FieldInputs } from './engine.js';
+import { measureHour, type RegionMeasureParams } from './measure.js';
 
 function arg(name: string, def?: string): string {
   const i = process.argv.indexOf(`--${name}`);
@@ -45,6 +50,8 @@ const tz = Number(arg('tz'));
 const outRoot = arg('out', 'D:/breeva-ml-data/field');
 // --indicative: no measuring station inside the area; values are shown as indicative only.
 const indicative = process.argv.includes('--indicative');
+const measureMode = arg('measure', 'auto');
+if (measureMode !== 'auto' && measureMode !== 'off') throw new Error('--measure must be auto or off');
 
 const pack = new RoadPack(new Uint8Array(readFileSync(packPath)));
 const now = new Date();
@@ -73,7 +80,12 @@ for (const [c, [x, y]] of pack.meta.cells.entries()) {
 }
 const [w, s, e, n] = pack.meta.bbox;
 const camsDaily = await fetchCamsDailyMean((s + n) / 2, (w + e) / 2, region, todayLocal);
-const inputs: FieldInputs = { region, hourLocal, monthLocal, diurnal: HOURLY_TRAFFIC[hourLocal] ?? 1.0, camsDaily, grids };
+const paramsFile = join(dirname(fileURLToPath(import.meta.url)), 'params', 'measure.json');
+const measureParams = (JSON.parse(readFileSync(paramsFile, 'utf8')).regions ?? {})[name] as RegionMeasureParams | undefined;
+// The last complete hour: OpenAQ hourly values and METAR reports of the current hour are not in yet.
+const measured = measureMode === 'off' ? undefined
+  : await measureHour(measureParams, new Date(validUtc.getTime() - 3600_000), { openaqKey: process.env.OPENAQ_API_KEY }, { spacingMs: 1100 });
+const inputs: FieldInputs = { region, hourLocal, monthLocal, diurnal: HOURLY_TRAFFIC[hourLocal] ?? 1.0, camsDaily, grids, measured };
 const t1 = Date.now();
 
 const results = computeField(pack, inputs);
@@ -99,6 +111,8 @@ const report = {
   run, region, name, roads: results.length, cells: cellIds.length, bytes, saturated: sat,
   pm25: { min: pm[0], median: pm[Math.floor(pm.length / 2)], p95: pm[Math.floor(pm.length * 0.95)], max: pm[pm.length - 1] },
   inputs: { hourLocal, monthLocal, diurnal: inputs.diurnal, camsDaily, background_grids: gridCache.size },
+  measurement: measured ? { method: measured.method, hour_utc: measured.hour_utc, sensors: measured.sensors.length,
+    vetted: measured.sensors_vetted, koschmieder: measured.koschmieder ?? null, note: measured.note } : { method: 'off' },
   seconds: { inputs: (t1 - t0) / 1000, compute: (t2 - t1) / 1000, total: (Date.now() - t0) / 1000 },
 };
 writeAtomic(join(runDir, 'report.json'), JSON.stringify(report, null, 1));
@@ -111,10 +125,16 @@ for (const c of cellIds) {
 }
 const manifest = {
   geometry: pack.meta.geometry, run, computed_at: new Date().toISOString(), valid_hour_local: hourLocal,
-  engine: 'v2.1', cells: cellIds, forecast_runs: [], sensors_used: 0,
+  engine: 'v2.1', cells: cellIds, forecast_runs: [], sensors_used: measured?.method === 'kriging' ? measured.sensors.length : 0,
+  measurement: { method: measured?.method ?? 'off', hour_utc: measured?.hour_utc ?? null, sensor_hour_utc: measured?.sensor_hour_utc ?? null,
+    metar: measured?.metar?.station ?? null },
   cell_tiles: pack.meta.cells, cell_stats: cellStats, indicative,
   state: { background: [], met: [], diurnal: inputs.diurnal, oi_weights: [] },
-  inputs_note: 'Open-Meteo background per z12 cell + CAMS daily mean; no station measurements yet',
+  inputs_note: measured?.method === 'kriging'
+    ? `ambient from log-space kriging of ${measured.sensors.length} OpenAQ citizen sensors (hour ${measured.sensor_hour_utc}) + CALINE4 road increment`
+    : measured?.method === 'koschmieder'
+      ? `ambient raised to the ${measured.metar?.station} visibility smoke estimate (${measured.koschmieder?.reason}) + CALINE4 road increment`
+      : 'Open-Meteo background per z12 cell + CAMS daily mean + CALINE4 road increment; no measurement this hour',
 };
 writeAtomic(join(outRoot, 'v', name, 'manifest.json'), JSON.stringify(manifest, null, 1));
 console.log(JSON.stringify(report));

@@ -2,10 +2,12 @@
  * The per-road computation used by the field builder and the parity check. It calls the service engine functions
  * (computeRoadAQIv2, buildMultiSourceDeltas from api/vayu/road-aqi.ts) and never re-implements them.
  */
-import { buildMultiSourceDeltas, computeRoadAQIv2, type RoadRow } from '../../api/vayu/road-aqi.js';
+import { buildMultiSourceDeltas, computeRoadAQIv2, pm25ToAQI, type RoadRow } from '../../api/vayu/road-aqi.js';
 import { buildInterpolator, type BaselineCorners, type BaselineData } from '../../api/vayu/_baseline.js';
 import type { RoadPack } from './pack.js';
 import type { CellValue } from './cells.js';
+import { OrdinaryKriging } from './kriging.js';
+import type { MeasuredInputs } from './measure.js';
 
 /** Everything the computation depends on, saved with each run so it can be recomputed exactly. */
 export interface FieldInputs {
@@ -16,6 +18,46 @@ export interface FieldInputs {
   camsDaily: number;
   /** One background grid per pack cell, as fetched from Open-Meteo. */
   grids: Array<{ cell: number; corners: BaselineCorners; bounds: { south: number; west: number; north: number; east: number } }>;
+  /** Measurement layer of the hour (scripts/field/measure.ts); absent in runs built before task F2-07. */
+  measured?: MeasuredInputs;
+}
+
+/** Sensors closer than this to a road make its value 'high' confidence (hidden-sensor error by distance, stats_i.json). */
+export const HIGH_CONFIDENCE_KM = 2;
+
+const r2 = (x: number) => Math.round(x * 100) / 100;
+
+/**
+ * Replace the engine's ambient (background + spatial residual) with the measurement layer, keeping the per-road
+ * dispersion increment pm25_delta on top:
+ *   kriging      ambient = expm1(OK estimate of log1p PM2.5 at the road midpoint); 95 % interval from the kriging variance;
+ *   koschmieder  ambient = max(engine ambient, visibility estimate) (the 'lin_kosch_maks' choice of analysis F); the
+ *                engine's interval width is kept and confidence is low, since one airport stands for the whole region.
+ */
+export function makeMeasuredAdjust(m: MeasuredInputs | undefined) {
+  if (!m || m.method === 'none') return null;
+  if (m.method === 'kriging') {
+    if (!m.variogram_log || !m.sensors.length) throw new Error('kriging inputs without sensors or variogram');
+    const ok = new OrdinaryKriging(m.sensors, m.variogram_log);
+    const vals = m.sensors.map((s) => Math.log1p(s.pm25));
+    return (lat: number, lon: number, v: { pm25: number; pm25_delta: number; pi95_hi: number; ood_refused: boolean; confidence: CellValue['confidence'] }) => {
+      const r = ok.predict(vals, lat, lon);
+      const sd = Math.sqrt(r.variance);
+      const pm25 = r2(Math.max(0, Math.expm1(r.mean) + v.pm25_delta));
+      return {
+        pm25, pi95_lo: r2(Math.max(0, Math.expm1(r.mean - 1.96 * sd) + v.pm25_delta)),
+        pi95_hi: r2(Math.min(500, Math.expm1(r.mean + 1.96 * sd) + v.pm25_delta)),
+        confidence: (v.ood_refused ? v.confidence : r.nearest_km <= HIGH_CONFIDENCE_KM ? 'high' : 'medium') as CellValue['confidence'],
+      };
+    };
+  }
+  const k = m.koschmieder;
+  if (!k) throw new Error('koschmieder inputs without an estimate');
+  return (_lat: number, _lon: number, v: { pm25: number; pm25_delta: number; pi95_hi: number; ood_refused: boolean; confidence: CellValue['confidence'] }) => {
+    const pm25 = r2(Math.max(v.pm25, k.pm25 + v.pm25_delta));
+    const half = Math.max(0, v.pi95_hi - v.pm25);
+    return { pm25, pi95_lo: r2(Math.max(0, pm25 - half)), pi95_hi: r2(Math.min(500, pm25 + half)), confidence: 'low' as const };
+  };
 }
 
 export function roadRow(p: RoadPack, k: number): RoadRow {
@@ -65,17 +107,19 @@ export function computeField(p: RoadPack, inputs: FieldInputs, only?: number[]):
   const interp = makeInterp(p, inputs);
   const multi = buildMultiSourceDeltas(rows, interp, inputs.diurnal, inputs.hourLocal, inputs.monthLocal);
   const ks = only ?? rows.map((_, k) => k);
+  const adjust = makeMeasuredAdjust(inputs.measured);
   return ks.map((k) => {
     const coords = p.coords(k);
     const mid = coords[Math.floor(coords.length / 2)];
     const baseline = interp(mid[1], mid[0]);
     const v = computeRoadAQIv2(rows[k], coords, mid[1], mid[0], baseline, inputs.diurnal, inputs.region,
       inputs.hourLocal, inputs.monthLocal, inputs.camsDaily, multi.get(rows[k].osm_way_id));
-    if (!Number.isFinite(v.pm25)) throw new Error(`non-finite pm25 for road ${k}`);
+    const a = adjust ? adjust(mid[1], mid[0], v) : v;
+    if (!Number.isFinite(a.pm25)) throw new Error(`non-finite pm25 for road ${k}`);
     return {
-      k, aqi: v.aqi, pm25: v.pm25, pm25_delta: v.pm25_delta, no2: v.no2, no2_delta: v.no2_delta,
-      confidence: v.confidence, ood: v.ood_refused, pi_half: Math.max(0, v.pi95_hi - v.pm25),
-      pi95_lo: v.pi95_lo, pi95_hi: v.pi95_hi,
+      k, aqi: adjust ? pm25ToAQI(a.pm25) : v.aqi, pm25: a.pm25, pm25_delta: v.pm25_delta, no2: v.no2, no2_delta: v.no2_delta,
+      confidence: a.confidence, ood: v.ood_refused, pi_half: Math.max(0, a.pi95_hi - a.pm25),
+      pi95_lo: a.pi95_lo, pi95_hi: a.pi95_hi,
     };
   });
 }

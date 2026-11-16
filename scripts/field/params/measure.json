@@ -1,0 +1,229 @@
+{
+ "regions": {
+  "badung_denpasar": {
+   "network": "openaq",
+   "min_sensors": 3,
+   "variogram_log": {
+    "nugget": 0,
+    "sill": 1.3573535974093636,
+    "range_km": 79.43282347242814
+   },
+   "fitted": {
+    "from": "2026-06-15T12:00:00.000Z",
+    "to": "2026-10-14T23:00:00.000Z",
+    "hours": 2912,
+    "sensors": 28,
+    "script": "scripts/field/validate-sensors.mts"
+   },
+   "sensors": [
+    {
+     "loc_id": 6403967,
+     "sensor_id": 16625235,
+     "name": "Kuwum, Bali",
+     "lat": -8.661245,
+     "lon": 115.16204
+    },
+    {
+     "loc_id": 6404859,
+     "sensor_id": 16632095,
+     "name": "Pejeng Kangin",
+     "lat": -8.492994479130525,
+     "lon": 115.30036092298012
+    },
+    {
+     "loc_id": 6413387,
+     "sensor_id": 16694904,
+     "name": "Tabanan",
+     "lat": -8.59456160873381,
+     "lon": 115.12636083931228
+    },
+    {
+     "loc_id": 6415107,
+     "sensor_id": 16707717,
+     "name": "zest ubud",
+     "lat": -8.50498,
+     "lon": 115.25379
+    },
+    {
+     "loc_id": 6432409,
+     "sensor_id": 16835170,
+     "name": "Padang2 Uluwatu",
+     "lat": -8.811206,
+     "lon": 115.102523
+    },
+    {
+     "loc_id": 6464186,
+     "sensor_id": 17066585,
+     "name": "Pantai Nyanyi",
+     "lat": -8.6158136,
+     "lon": 115.1116163
+    },
+    {
+     "loc_id": 6488423,
+     "sensor_id": 17244026,
+     "name": "Raya Pererenan dan Tumbakbayuh",
+     "lat": -8.6322931,
+     "lon": 115.1335655
+    },
+    {
+     "loc_id": 6489590,
+     "sensor_id": 17252598,
+     "name": "Gg Drupadi",
+     "lat": -8.574738,
+     "lon": 115.214613
+    },
+    {
+     "loc_id": 6491121,
+     "sensor_id": 17265641,
+     "name": "Bindu Ricefields",
+     "lat": -8.532428350421988,
+     "lon": 115.23403561026724
+    },
+    {
+     "loc_id": 6494236,
+     "sensor_id": 17286751,
+     "name": "Bali - Canggu - Padang Linjong",
+     "lat": -8.639718800071547,
+     "lon": 115.13980229563802
+    },
+    {
+     "loc_id": 6494341,
+     "sensor_id": 17287510,
+     "name": "Shiva Industries",
+     "lat": -8.6418293,
+     "lon": 115.1994208
+    },
+    {
+     "loc_id": 6496045,
+     "sensor_id": 17299934,
+     "name": "Sibang Kaja - Sogil Brew",
+     "lat": -8.5677498,
+     "lon": 115.2126491
+    },
+    {
+     "loc_id": 6496264,
+     "sensor_id": 17301510,
+     "name": "Nyambu",
+     "lat": -8.583793,
+     "lon": 115.13047
+    },
+    {
+     "loc_id": 6498140,
+     "sensor_id": 17315229,
+     "name": "Sibang22",
+     "lat": -8.57065776243817,
+     "lon": 115.21116301576195
+    },
+    {
+     "loc_id": 6499122,
+     "sensor_id": 17322426,
+     "name": "Monitor Kdg Village",
+     "lat": -8.604,
+     "lon": 115.09066
+    },
+    {
+     "loc_id": 6506349,
+     "sensor_id": 17375530,
+     "name": "Villa Malaikat",
+     "lat": -8.534967846418004,
+     "lon": 115.278142608067
+    },
+    {
+     "loc_id": 6512368,
+     "sensor_id": 17419702,
+     "name": "Kerambitan Tabanan",
+     "lat": -8.5453,
+     "lon": 115.10704
+    },
+    {
+     "loc_id": 6521504,
+     "sensor_id": 17487017,
+     "name": "Jl Cempaka, Ubud",
+     "lat": -8.53992,
+     "lon": 115.26745
+    },
+    {
+     "loc_id": 6522475,
+     "sensor_id": 17494446,
+     "name": "Subak Uma Lambing",
+     "lat": -8.55929,
+     "lon": 115.22366
+    },
+    {
+     "loc_id": 6522742,
+     "sensor_id": 17496010,
+     "name": "Fuego Pererenan",
+     "lat": -8.648348545374589,
+     "lon": 115.1295409108198
+    },
+    {
+     "loc_id": 6523221,
+     "sensor_id": 17499504,
+     "name": "Villa Aliana, Umalas",
+     "lat": -8.656963703639029,
+     "lon": 115.15572616524555
+    },
+    {
+     "loc_id": 6527992,
+     "sensor_id": 17534619,
+     "name": "Community park",
+     "lat": -8.62132,
+     "lon": 115.14776
+    },
+    {
+     "loc_id": 6529420,
+     "sensor_id": 17545096,
+     "name": "Yeh Gangga",
+     "lat": -8.58191,
+     "lon": 115.07198
+    },
+    {
+     "loc_id": 6529526,
+     "sensor_id": 17545845,
+     "name": "Tibubeneng \u00e2\u20ac\u201d Jl. Batan Celagi",
+     "lat": -8.6308,
+     "lon": 115.15892
+    },
+    {
+     "loc_id": 6530859,
+     "sensor_id": 17555521,
+     "name": "Kaba Kaba North",
+     "lat": -8.58406,
+     "lon": 115.14273
+    },
+    {
+     "loc_id": 6532615,
+     "sensor_id": 17568429,
+     "name": "Cemagi ",
+     "lat": -8.63723,
+     "lon": 115.10538
+    },
+    {
+     "loc_id": 6534937,
+     "sensor_id": 17585398,
+     "name": "Grow in Kedungu",
+     "lat": -8.5975721,
+     "lon": 115.0938161
+    },
+    {
+     "loc_id": 6536246,
+     "sensor_id": 17595037,
+     "name": "Cactus House",
+     "lat": -8.70913,
+     "lon": 115.24927
+    }
+   ],
+   "metar": "WADD",
+   "alpha_m2g": 6.18,
+   "licence": "OpenAQ location records: CC BY 4.0 (checked 2026-11-16); attribution to OpenAQ and AirGradient",
+   "alpha_source": "sumber_proposal/data/stats_f.json alpha, fold bali (Koschmieder, estimated from the other cities)"
+  },
+  "kota_bogor": {
+   "metar": "WIHH",
+   "alpha_m2g": 6.61,
+   "alpha_source": "sumber_proposal/data/stats_f.json alpha, fold jakarta",
+   "note": "no vetted citizen sensor inside Kota Bogor; WIHH Halim about 38 km from the city centre"
+  }
+ },
+ "about": "Measurement layer of the field builder (scripts/field/measure.ts). variogram_log and sensors written by scripts/field/validate-sensors.mts --params"
+}
