@@ -39,6 +39,14 @@ export function schoolCostText(cost: { extraM: number; extraS: number; changed: 
   if (!cost) return null;
   if (!cost.changed) return 'Zona sekolah tidak mengubah rute ini';
   const min = Math.round(cost.extraS / 60), m = Math.round(cost.extraM / 10) * 10;
+  if (min < 0 || m < 0) {
+    // the zone-free route is chosen by the same two-number cost, so the zoned one can be shorter or quicker
+    const parts = [
+      m >= 50 ? `${m.toLocaleString('id-ID')} m lebih jauh` : m <= -50 ? `${(-m).toLocaleString('id-ID')} m lebih dekat` : null,
+      min >= 1 ? `${min} menit lebih lama` : min <= -1 ? `${-min} menit lebih cepat` : null,
+    ].filter(Boolean);
+    if (parts.length) return `Zona sekolah mengubah rute: ${parts.join(', ')} dibanding rute tanpa zona`;
+  }
   if (min < 1 && m < 50) return 'Zona sekolah mengubah jalannya, tanpa tambahan waktu yang berarti';
   const parts = [min >= 1 ? `${min} menit` : 'kurang dari 1 menit', m >= 50 ? `${m.toLocaleString('id-ID')} m` : null].filter(Boolean);
   return `Zona sekolah menambah ${parts.join(' dan ')} dibanding rute tanpa zona`;

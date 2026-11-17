@@ -127,6 +127,9 @@ describe('school points and notes', () => {
     expect(schoolCostText({ extraM: 420, extraS: 95, changed: true })).toBe('Zona sekolah menambah 2 menit dan 420 m dibanding rute tanpa zona');
     expect(schoolCostText({ extraM: 1260, extraS: 20, changed: true })).toBe('Zona sekolah menambah kurang dari 1 menit dan 1.260 m dibanding rute tanpa zona');
     expect(schoolCostText({ extraM: 10, extraS: 10, changed: true })).toBe('Zona sekolah mengubah jalannya, tanpa tambahan waktu yang berarti');
+    // a real Bogor trip (motor-bench seed, 17 Nov): the zoned route is longer but quicker
+    expect(schoolCostText({ extraM: 564, extraS: -266, changed: true })).toBe('Zona sekolah mengubah rute: 560 m lebih jauh, 4 menit lebih cepat dibanding rute tanpa zona');
+    expect(schoolCostText({ extraM: -300, extraS: 20, changed: true })).toBe('Zona sekolah mengubah rute: 300 m lebih dekat dibanding rute tanpa zona');
     expect(schoolCostText(undefined)).toBeNull();
     const base = { lengthM: 1000, timeS: 200, pm25Mean: 20, no2Mean: 15, coords: [], w: 0 };
     const cards = routeCards([{ ...base, kind: 'dua-angka', school: 'kept', schoolCost: { extraM: 300, extraS: 70, changed: true } },
