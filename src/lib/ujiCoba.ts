@@ -6,7 +6,7 @@ export const TRIAL_DATES = '26 November–2 Desember 2026';
 export const STEPS: Step[] = [
   { title: 'Buka peta', body: 'Buka breeva.site di ponsel. Tidak perlu akun. Peta langsung menunjukkan asap kendaraan per ruas jalan di Badung–Denpasar (Kota Bogor juga ada): makin ungu, makin banyak gas buang.', link: { label: 'Buka peta', to: '/peta' } },
   { title: 'Pilih sekolahmu', body: 'Tekan "Rute di perangkat", lalu ketik nama sekolahmu di kolom "Ke sekolah" dan pilih dari daftar.' },
-  { title: 'Ketuk titik berangkat', body: 'Ketuk rumah, kos, atau halte tempatmu berangkat. Rute dihitung di ponselmu; titik itu tidak dikirim ke server Breeva (peta hanya memuat data area yang sedang kamu lihat).' },
+  { title: 'Ketuk titik berangkat', body: 'Ketuk rumah, kos, atau halte tempatmu berangkat, atau tekan "Pakai lokasiku" bila kamu sedang di sana. Rute dihitung di ponselmu; titik itu tidak dikirim ke server Breeva (peta hanya memuat data area yang sedang kamu lihat, dan "Pakai lokasiku" mengirim lokasi yang dibulatkan sekitar 1 km untuk kartu kualitas udara).' },
   { title: 'Bandingkan rute', body: 'Lihat rute tercepat dan rute paling sedikit asap kendaraan: berapa menit lebih lama, dan berapa persen asap kendaraan yang kamu hirup berkurang. Ganti ke "Motor" untuk melihat paparan yang ditimbulkan bagi orang lain (harga hirup).' },
   { title: 'Coba jam masuk sekolah', body: 'Ubah "Berangkat" ke 06.45. Rute motor tidak lewat jalan kecil di depan sekolah pada jam masuk dan pulang, dan kartunya menyebut berapa menit dan meter yang ditambahkan zona sekolah.' },
   { title: 'Simpan rutemu', body: 'Tekan "Salin tautan rute" dan simpan tautannya. Tautan itu memuat titik berangkatmu, jadi bagikan hanya ke guru. Guru juga bisa membagikan tautan rute ke kelas.' },

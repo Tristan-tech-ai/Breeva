@@ -1,3 +1,4 @@
+import { coarsePoint } from '../lib/coarsePoint';
 import { create } from 'zustand';
 import type { Coordinate, Route, AirQualityData, TransportMode } from '../types';
 import {
@@ -199,8 +200,8 @@ export const useMapStore = create<MapState>()((set, get) => ({
         };
         set({ userLocation: location, center: location, isLocating: false });
 
-        // Fetch AQI for user location
-        get().fetchAirQuality(location);
+        // Fetch AQI for the user's area: only a rounded point (about 1 km) leaves the device (F3-14)
+        get().fetchAirQuality(coarsePoint(location));
       },
       (error) => {
         set({ locationError: error.message, isLocating: false });
