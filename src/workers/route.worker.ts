@@ -16,6 +16,7 @@ import { localTimeToMs, motorRouteAt, schoolEdges, type SchoolFile, type SchoolZ
 import { HargaIndex } from '../lib/field/harga';
 import { cachedBytes } from '../lib/route/assets';
 import { loadRegionFiles } from '../lib/route/regionFiles';
+import { progressCounter } from '../lib/route/loadProgress';
 import { decodeCell } from '../lib/field/cells';
 import { decodeExhaust, pickForecast, SOON_HOURS, type ForecastEntry } from '../lib/field/forecast';
 import { edgeExhaust, meanAlong, no2AtHour, type SoonHour } from '../lib/route/departForecast';
@@ -38,9 +39,9 @@ const forecastEdges = new Map<string, Promise<Float64Array>>();
 /** NO2 of each forecast hour, kept with the hour's exhaust so its median is also computed once (F3-21). */
 const forecastNo2 = new Map<string, { x: Float64Array; no2: Float64Array }>();
 
-async function init(base: string, region: { name: string; geometry: string }) {
-  // every file requested at once (F1-53); the Cache API keeps them for offline use
-  const files = await loadRegionFiles(base, region, (url, o) => cachedBytes(url, o));
+async function init(base: string, region: { name: string; geometry: string }, onBytes?: (n: number) => void) {
+  // every file requested at once (F1-53); the Cache API keeps them for offline use; bytes counted for the card (X-W4)
+  const files = await loadRegionFiles(base, region, (url, o) => cachedBytes(url, { ...o, onBytes }));
   const g = new WalkGraph(files.graph);
   const manifest = files.manifest;
   const cells = new Map<number, ReturnType<typeof decodeCell>>();
@@ -180,7 +181,10 @@ async function routeAt(from: { lat: number; lng: number }, to: { lat: number; ln
 self.onmessage = async (ev: MessageEvent) => {
   const { id, type } = ev.data ?? {};
   try {
-    if (type === 'init') self.postMessage({ id, ok: true, ...(await init(ev.data.base, ev.data.region)) });
+    if (type === 'init') {
+      const count = progressCounter((bytes) => self.postMessage({ id, type: 'progress', bytes }));
+      self.postMessage({ id, ok: true, ...(await init(ev.data.base, ev.data.region, count)) });
+    }
     else if (type === 'route') {
       const t0 = performance.now();
       const { routes, soonPlan } = await routeAt(ev.data.from, ev.data.to, ev.data.mode === 'motor' ? 'motor' : 'walk', ev.data.departLocal);

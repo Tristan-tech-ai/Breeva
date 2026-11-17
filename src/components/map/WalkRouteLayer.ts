@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { FIELD_REGIONS } from '../../lib/field/source';
 import { ROUTE_SETTLED_EVENT } from '../../lib/field/firstDraw';
+import { COMPUTING, routeLoadingText } from '../../lib/route/loadProgress';
 import { RouteClient, withSoon, type SoonHours, type WalkRoute } from '../../lib/route/client';
 import { routeCards, type RouteCard } from '../../lib/route/summary';
 import type { RouteLink } from '../../lib/route/share';
@@ -61,6 +62,8 @@ export function useWalkRouting(
     let queued: { lat: number; lng: number } | null = null;
     // each request is numbered so a leave-later hint arriving late only updates the cards it belongs to (F3-18)
     let reqSeq = 0;
+    // cards of the current request are on screen: a late progress message must not replace them (X-W4)
+    let lastShownCards = false;
     const say = (s: WalkRoutingState) => onStateRef.current?.(s);
     const destMarker = () => {
       if (!fixed) return;
@@ -97,12 +100,20 @@ export function useWalkRouting(
       }
       busy = true;
       lastEnds = { from, to };
-      say({ status: 'Menghitung rute di perangkat…', cards: [] });
+      say({ status: COMPUTING, cards: [] });
       client ??= new RouteClient();
       const c = client;
-      let init = ready.get(region.name);
-      if (!init) { init = c.init({ name: region.name, geometry: region.geometry }); ready.set(region.name, init); }
       const req = ++reqSeq;
+      let init = ready.get(region.name);
+      if (!init) {
+        // the first route of a region waits for its files: after 3 s the card says what is downloading (X-W4)
+        const t0 = Date.now();
+        init = c.init({ name: region.name, geometry: region.geometry }, undefined, (bytes) => {
+          if (req === reqSeq && !lastShownCards) say({ status: routeLoadingText(bytes, Date.now() - t0), cards: [] });
+        });
+        ready.set(region.name, init);
+      }
+      lastShownCards = false;
       let shown: WalkRoutingState | null = null;
       let early: SoonHours | null = null;
       const onSoon = (soon: SoonHours) => {
@@ -128,6 +139,7 @@ export function useWalkRouting(
           const again = fixed ? `Ketuk titik berangkat lain untuk rute baru ke ${fixed.name}.` : 'Ketuk lagi untuk rute baru.';
           shown = { status: routes.length ? `${routes.length} rute dihitung di perangkat dalam ${Math.round(ms)} ms. ${again}` : 'Tidak ada rute.', cards, ms,
             ends: { from: { lat: from.lat, lng: from.lng }, to: { lat: to.lat, lng: to.lng } }, routes };
+          lastShownCards = true;
           say(shown);
           if (early) { const s = early; early = null; onSoon(s); }
         })
