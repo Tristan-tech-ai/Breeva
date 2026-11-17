@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { Seo } from '../components/Seo';
 import { FIELD_REGIONS, fieldBase } from '../lib/field/source';
+import { runsSummary, runsText, type RunsFile } from '../lib/field/runsRecent';
 import { FRESH_MINUTES, manifestStatus, statusText, type FieldStatus } from '../lib/field/status';
 import { readSaved, saveRegionOffline, sizeLabel } from '../lib/pwa/offlineRegion';
 
@@ -12,6 +13,8 @@ type Saving = { state: 'saving'; done: number; total: number } | { state: 'done'
 export default function StatusPage() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<Record<string, FieldStatus | null>>({});
+  // the builder's last day per region (F2-23): hours published, failed or missing
+  const [runs, setRuns] = useState<Record<string, RunsFile | null>>({});
   // saving a region for the offline demo (F2-15): pressed by the user, never automatic
   const [saving, setSaving] = useState<Record<string, Saving>>({});
   const save = (r: (typeof FIELD_REGIONS)[number]) => {
@@ -41,6 +44,10 @@ export default function StatusPage() {
           .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
           .then((m) => alive && setRows((p) => ({ ...p, [r.name]: manifestStatus(m, new Date()) })))
           .catch((e: Error) => alive && setRows((p) => ({ ...p, [r.name]: { ok: false, error: e.message } })));
+        fetch(`${fieldBase()}/v/${r.name}/runs_recent.json`, { cache: 'no-cache' })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((f: RunsFile | null) => alive && setRuns((p) => ({ ...p, [r.name]: f })))
+          .catch(() => alive && setRuns((p) => ({ ...p, [r.name]: null })));
       }
     };
     load();
@@ -65,7 +72,7 @@ export default function StatusPage() {
           dari {FRESH_MINUTES} menit lalu.
         </p>
         <p className="text-[13px] text-gray-600 dark:text-gray-400">
-          Untuk peragaan tanpa internet: tekan "Simpan … untuk tanpa internet" sekali sambil online (sekitar 3,4 MB untuk Kota Bogor, 6,5 MB untuk Badung–Denpasar).
+          Untuk peragaan tanpa internet: tekan "Simpan … untuk tanpa internet" sekali sambil online (sekitar 3,5 MB untuk Kota Bogor, 7 MB untuk Badung–Denpasar).
           Angkanya tetap jam yang tersimpan.
         </p>
         <ul className="space-y-2">
@@ -84,6 +91,12 @@ export default function StatusPage() {
                     {new Date(s.computed_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
                   </p>
                 )}
+                {(() => {
+                  const rs = runsSummary(runs[r.name] ?? null);
+                  if (!rs) return null;
+                  const fmt = (d: Date) => d.toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                  return <p className={`mt-1 text-[12px] ${rs.ok === rs.hours ? 'text-gray-600 dark:text-gray-400' : 'text-amber-800 dark:text-amber-300'}`}>{runsText(rs, fmt)}</p>;
+                })()}
                 {(() => {
                   const sv = saving[r.name];
                   if (sv?.state === 'saving') return <p className="mt-2 text-[12px] text-gray-600 dark:text-gray-300" aria-live="polite">Menyimpan… {sv.total ? `${sv.done} dari ${sv.total} berkas` : ''}</p>;

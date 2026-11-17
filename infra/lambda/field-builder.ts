@@ -17,6 +17,7 @@ import { BUILD_REGIONS, packKey } from '../../scripts/field/regions';
 import type { RegionMeasureParams } from '../../scripts/field/measure';
 import { dailyEpa, localDate, mergeDaily, mergeRecent, type HourRows, type RecentEntry, type RecentFile } from '../../src/lib/field/validationRecent';
 import { withRetry } from '../../src/lib/field/fetchRetry';
+import { mergeRuns, shortReason, type RunRecord, type RunsFile } from '../../src/lib/field/runsRecent';
 
 // every source fetch (Open-Meteo, OpenAQ, METAR) goes through a retry with a fresh pause budget per invocation (F2-18)
 const baseFetch = globalThis.fetch.bind(globalThis);
@@ -43,6 +44,17 @@ async function readJson<T>(bucket: string, k: string): Promise<T | null> {
     const r = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: k }));
     return JSON.parse(await r.Body!.transformToString()) as T;
   } catch { return null; }
+}
+
+/** F2-23: one line per region and run in v/<name>/runs_recent.json, so /status shows hours that failed. Never throws. */
+async function noteRun(bucket: string, name: string, rec: RunRecord): Promise<void> {
+  try {
+    const key = `v/${name}/runs_recent.json`;
+    const next = mergeRuns(await readJson<RunsFile>(bucket, key), name, rec, new Date());
+    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: JSON.stringify(next), CacheControl: 'public, max-age=60, stale-while-revalidate=600', ContentType: 'application/json' }));
+  } catch (e) {
+    console.log(JSON.stringify({ runs_recent_failed: name, error: shortReason((e as Error).message) }));
+  }
 }
 
 async function pack(bucket: string, k: string): Promise<RoadPack> {
@@ -93,12 +105,14 @@ export const handler = async () => {
       }
       const val = rep.validation && { n: rep.validation.n, rmse: rep.validation.rmse, nrmse: rep.validation.nrmse };
       out.push({ name: r.name, run, roads: rep.roads, pm25_median: rep.pm25.median, measurement: rep.measurement.method, note: rep.measurement.note, validation: val, seconds: rep.seconds.total });
+      await noteRun(bucket, r.name, { run, ok: true, seconds: Math.round(rep.seconds.total) });
     } catch (e) {
       failed++;
       out.push({ name: r.name, run, error: (e as Error).message });
       // one line per failed region for the breeva-field-region-failed alarm (F2-20): a region can fail while the run
       // as a whole succeeds, which the Lambda Errors metric does not see (run 2026111717, Badung-Denpasar)
       console.log(JSON.stringify({ region_failed: r.name, run, error: (e as Error).message }));
+      await noteRun(bucket, r.name, { run, ok: false, reason: shortReason((e as Error).message) });
     }
   }
   console.log(JSON.stringify(out));
