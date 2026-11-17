@@ -96,6 +96,45 @@ for (let i = 0; i < N; i++) for (let t = 0; t < T; t++) {
 }
 widths.sort((a, b) => a - b);
 
+// F5-29: coverage by part of the day (WITA): night 18-06, morning 06-10, day 10-18, with the single nested factor and
+// with a nested factor per part (each hidden sensor's factor from the other sensors' |z| in that part only). Rule
+// written before looking: adopt per-part factors only if the single factor leaves a part outside 0.90-0.97, every part
+// and the whole land in 0.90-0.97 with per-part factors, and the median width grows by at most 10 %.
+const PARTS = ['malam', 'pagi', 'siang'] as const;
+const partOf = (t: number) => { const h = (new Date(hours[t]).getUTCHours() + 8) % 24; return h >= 18 || h < 6 ? 0 : h < 10 ? 1 : 2; };
+const zPart: number[][][] = PARTS.map(() => ids.map(() => [] as number[]));
+for (let i = 0; i < N; i++) for (let t = 0; t < T; t++) {
+  if (!Number.isFinite(P[i][t]) || !(SD[i][t] > 0)) continue;
+  zPart[partOf(t)][i].push((Y[i][t] - MU[i][t]) / SD[i][t]);
+}
+const partScale = zPart.map((zs) => nestedIntervalScale(zs).perSensor);
+const tally = (factor: (i: number, t: number) => number) => {
+  const inside = [0, 0, 0], n = [0, 0, 0], w: number[] = [];
+  for (let i = 0; i < N; i++) for (let t = 0; t < T; t++) {
+    if (!Number.isFinite(P[i][t]) || !Number.isFinite(SD[i][t])) continue;
+    const k = factor(i, t), pt = partOf(t);
+    const lo = Math.expm1(MU[i][t] - 1.96 * k * SD[i][t]), hi = Math.expm1(MU[i][t] + 1.96 * k * SD[i][t]);
+    n[pt]++; if (V[i][t] >= lo && V[i][t] <= hi) inside[pt]++;
+    w.push(hi - lo);
+  }
+  w.sort((a, b) => a - b);
+  const all = inside.reduce((a, b) => a + b, 0) / n.reduce((a, b) => a + b, 0);
+  return { per_part: Object.fromEntries(PARTS.map((p, k) => [p, { n: n[k], coverage: Number((inside[k] / n[k]).toFixed(3)) }])),
+    all: Number(all.toFixed(3)), median_width: Number(w[Math.floor(w.length / 2)].toFixed(1)) };
+};
+const single = tally((i) => scale.perSensor[i]);
+const perPart = tally((i, t) => partScale[partOf(t)][i]);
+const inBand = (c: number) => c >= 0.9 && c <= 0.97;
+const needed = Object.values(single.per_part).some((x) => !inBand(x.coverage));
+const adopt = needed && Object.values(perPart.per_part).every((x) => inBand(x.coverage)) && inBand(perPart.all) && perPart.median_width <= single.median_width * 1.1;
+const pi95ByPart = {
+  rule: 'adopt per-part factors only if the single factor leaves a part outside 0.90-0.97, every part and the whole are in 0.90-0.97 with them, and the median width grows <= 10 %',
+  parts_wita: { malam: '18-06', pagi: '06-10', siang: '10-18' },
+  single_factor: single, per_part_factor: perPart,
+  factors_all_sensors: Object.fromEntries(PARTS.map((p, k) => [p, Number((nestedIntervalScale(zPart[k]).all).toFixed(3))])),
+  needed, adopt,
+};
+
 function metrics(pred: number[], obs: number[]) {
   const n = pred.length;
   const mo = obs.reduce((s, x) => s + x, 0) / n, mp = pred.reduce((s, x) => s + x, 0) / n;
@@ -190,7 +229,7 @@ const report = {
   test: 'leave-one-sensor-out, log-space ordinary kriging (port of analisis_h ok_log)',
   data: { sensors: N, hours: T, from: hours[0], to: hours[T - 1], source: 'OpenAQ v3 /sensors/{id}/hours (AirGradient), CC BY 4.0' },
   reference: 'sumber_proposal/data/stats_h.json penduga.ok_log: harian nrmse 22.9 %, rmse 7.92, r 0.817, n 1470',
-  hourly: hourlyM, daily, daily_single_day: dailySingleDay, per_sensor: perSensor, epa_daily_targets: epa, epa_passed: Object.values(epa).filter(Boolean).length,
+  hourly: hourlyM, daily, daily_single_day: dailySingleDay, per_sensor: perSensor, pi95_by_part_of_day: pi95ByPart, epa_daily_targets: epa, epa_passed: Object.values(epa).filter(Boolean).length,
   pi95_hourly_coverage: Number((inside / hp.length).toFixed(3)),
   pi95_calibrated: {
     method: 'nested: factor for each hidden sensor = 95th percentile of |z| over the other sensors / 1.96',
