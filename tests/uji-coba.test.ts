@@ -31,3 +31,15 @@ describe('student trial guide', () => {
     expect(seg.modules.size).toBeGreaterThanOrEqual(21);
   });
 });
+
+describe('printable sheet (F4-06)', async () => {
+  const { existsSync, readFileSync } = await import('node:fs');
+  const { PRINT_SHEET } = await import('../src/lib/ujiCoba');
+  it('links a one-page PDF that exists in public/', () => {
+    const path = `public${PRINT_SHEET.href}`;
+    expect(existsSync(path)).toBe(true);
+    const head = readFileSync(path).subarray(0, 5).toString('latin1');
+    expect(head).toBe('%PDF-');
+    expect(PRINT_SHEET.label).toMatch(/lembar A4/);
+  });
+});

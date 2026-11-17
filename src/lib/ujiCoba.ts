@@ -14,6 +14,9 @@ export const STEPS: Step[] = [
 
 export const PRIVACY = 'Uji coba ini tidak meminta nama, akun, atau lokasi rumah. Rute dihitung di ponselmu sendiri.';
 
+/** The printable A4 sheet of the same steps (public/panduan-uji-coba.pdf, built from these strings; task F4-05/F4-06). */
+export const PRINT_SHEET = { label: 'Unduh lembar A4 untuk dicetak', href: '/panduan-uji-coba.pdf' };
+
 /** Address the QR code on the guide points to. */
 export function trialUrl(origin: string): string {
   return `${origin.replace(/\/$/, '')}/uji-coba`;

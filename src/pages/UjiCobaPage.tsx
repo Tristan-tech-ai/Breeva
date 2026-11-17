@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { Seo } from '../components/Seo';
-import { PRIVACY, STEPS, TRIAL_DATES, trialUrl } from '../lib/ujiCoba';
+import { PRINT_SHEET, PRIVACY, STEPS, TRIAL_DATES, trialUrl } from '../lib/ujiCoba';
 
 const QrImage = lazy(() => import('../components/ui/QrImage'));
 
@@ -39,6 +39,7 @@ export default function UjiCobaPage() {
           ))}
         </ol>
         <p className="text-[13px] text-gray-600 dark:text-gray-400">{PRIVACY}</p>
+        <p className="text-[13px]"><a href={PRINT_SHEET.href} download className="font-semibold text-teal-700 dark:text-teal-300 underline underline-offset-2">{PRINT_SHEET.label}</a> (untuk guru: satu halaman, langkah yang sama dengan halaman ini)</p>
         <section className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <Suspense fallback={<div style={{ width: 132, height: 132 }} aria-hidden />}>
             <QrImage value={url} size={132} alt="Kode QR halaman uji coba Breeva" />
