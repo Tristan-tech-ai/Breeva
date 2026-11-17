@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { Seo } from '../components/Seo';
 import { PRINT_SHEET, PRIVACY, STEPS, TRIAL_DATES, trialUrl } from '../lib/ujiCoba';
+import TrialDiaryCard from '../components/features/TrialDiaryCard';
 
 const QrImage = lazy(() => import('../components/ui/QrImage'));
 
@@ -26,6 +27,7 @@ export default function UjiCobaPage() {
           Uji coba {TRIAL_DATES}: cari rute ke sekolah yang membuatmu menghirup lebih sedikit gas buang, dan lihat berapa
           gas buang yang kamu timbulkan bagi orang lain bila naik motor.
         </p>
+        <TrialDiaryCard />
         <ol className="space-y-3">
           {STEPS.map((s, k) => (
             <li key={s.title} className="flex gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">

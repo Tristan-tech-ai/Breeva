@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { Coordinate } from '../types';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Wind, Route, Gauge, MapPin, Crosshair, ArrowRight, Sparkles } from 'lucide-react';
@@ -22,6 +22,7 @@ import { parseDestLink, parseRouteLink } from '../lib/route/share';
 import { locationStart } from '../lib/route/appRoute';
 import { parseDepart } from '../lib/route/depart';
 import { totalModeNote } from '../lib/roadColors';
+import { noteRouteLookup } from '../lib/trial/storage';
 
 const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
 
@@ -93,6 +94,13 @@ export default function ExploreMapPage() {
   const [walkMode, setWalkMode] = useState(!!link || !!destParam);
   const [walkState, setWalkState] = useState<WalkRoutingState | null>(null);
   const [routeMode, setRouteMode] = useState<'walk' | 'motor'>(link?.mode ?? 'walk');
+  // the student trial diary (F4-07): counts a route lookup only while the student turned it on at /uji-coba; the mode
+  // is read from a ref so a mode switch is recorded with the recomputed cards, not the old ones
+  const modeRef = useRef(routeMode);
+  useEffect(() => { modeRef.current = routeMode; }, [routeMode]); // runs before the effect below in the same commit
+  useEffect(() => {
+    if (walkState?.cards.length) noteRouteLookup(walkState.cards, modeRef.current, walkState.ends?.from);
+  }, [walkState]);
   // "Ke sekolah": a school chosen from the list is the destination, the next tap the start (F1-12)
   const [schoolDest, setSchoolDest] = useState<RouteDest | null>(() => destParam);
   // departure for the school zone: ?berangkat=HH:MM, or the choice on the route cards (F3-08)

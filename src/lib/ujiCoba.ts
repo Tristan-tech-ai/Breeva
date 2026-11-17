@@ -4,6 +4,7 @@ export interface Step { title: string; body: string; link?: { label: string; to:
 export const TRIAL_DATES = '26 November–2 Desember 2026';
 
 export const STEPS: Step[] = [
+  { title: 'Nyalakan catatan', body: 'Di halaman breeva.site/uji-coba (kode QR di lembar ini), tekan "Nyalakan catatan". Ponselmu mencatat hari-hari kamu memakai rute, tanpa lokasi. Di hari terakhir, tekan "Salin kode ringkasan" dan tempel kodenya di kuesioner dari guru.' },
   { title: 'Buka peta', body: 'Buka breeva.site di ponsel. Tidak perlu akun. Peta langsung menunjukkan asap kendaraan per ruas jalan di Badung–Denpasar (Kota Bogor juga ada): makin ungu, makin banyak gas buang.', link: { label: 'Buka peta', to: '/peta' } },
   { title: 'Pilih sekolahmu', body: 'Tekan "Rute di perangkat", lalu ketik nama sekolahmu di kolom "Ke sekolah" dan pilih dari daftar.' },
   { title: 'Ketuk titik berangkat', body: 'Ketuk rumah, kos, atau halte tempatmu berangkat, atau tekan "Pakai lokasiku" bila kamu sedang di sana. Rute dihitung di ponselmu; titik itu tidak dikirim ke server Breeva (peta hanya memuat data area yang sedang kamu lihat, dan "Pakai lokasiku" mengirim lokasi yang dibulatkan sekitar 1 km untuk kartu kualitas udara).' },
@@ -12,7 +13,7 @@ export const STEPS: Step[] = [
   { title: 'Simpan rutemu', body: 'Tekan "Salin tautan rute" dan simpan tautannya. Tautan itu memuat titik berangkatmu, jadi bagikan hanya ke guru. Guru juga bisa membagikan tautan rute ke kelas.' },
 ];
 
-export const PRIVACY = 'Uji coba ini tidak meminta nama, akun, atau lokasi rumah. Rute dihitung di ponselmu sendiri.';
+export const PRIVACY = 'Uji coba ini tidak meminta nama, akun, atau lokasi rumah. Rute dihitung di ponselmu sendiri; catatan uji coba hanya menyimpan tanggal, moda, dan angka perbandingan rute, dan baru keluar dari ponselmu bila kamu menyalin kodenya.';
 
 /** The printable A4 sheet of the same steps (public/panduan-uji-coba.pdf, built from these strings; task F4-05/F4-06). */
 export const PRINT_SHEET = { label: 'Unduh lembar A4 untuk dicetak', href: '/panduan-uji-coba.pdf' };
