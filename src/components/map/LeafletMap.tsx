@@ -695,7 +695,8 @@ export default function LeafletMap({
         />
       </MapContainer>
       <NavControls />
-      {showAQIOverlay && internalMeta && (internalMeta.gcn_applied_count ?? 0) > 0 && (
+      {/* legacy GCN legend of the server road layer; the static field (production) has no GCN part */}
+      {!FIELD_STATIC && showAQIOverlay && internalMeta && (internalMeta.gcn_applied_count ?? 0) > 0 && (
         <GCNConfidenceLegend
           gcnCount={internalMeta.gcn_applied_count ?? 0}
           totalCount={internalMeta.count}
