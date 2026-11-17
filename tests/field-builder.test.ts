@@ -62,7 +62,7 @@ describe('hourly field run objects', () => {
     const t = readFileSync('infra/aws/breeva-builder.yaml', 'utf8');
     expect(t).toMatch(/AlarmName: breeva-field-builder-errors[\s\S]*?MetricName: Errors[\s\S]*?Period: 3600[\s\S]*?Threshold: 1/);
     expect(t).toMatch(/AlarmName: breeva-field-stale[\s\S]*?Expression: inv - FILL\(err, 0\)[\s\S]*?EvaluationPeriods: 2[\s\S]*?TreatMissingData: breaching/);
-    expect((t.match(/AlarmActions: \[!Sub 'arn:aws:sns:\$\{AWS::Region\}:\$\{AWS::AccountId\}:breeva-alarms'\]/g) ?? []).length).toBe(2);
+    expect((t.match(/AlarmActions: \[!Sub 'arn:aws:sns:\$\{AWS::Region\}:\$\{AWS::AccountId\}:breeva-alarms'\]/g) ?? []).length).toBe(4); // + retries and region failures (F2-20)
     // the topic policy lets those alarms publish (a custom policy replaces the default one)
     expect(readFileSync('infra/aws/breeva-field.yaml', 'utf8')).toMatch(/Principal: \{ Service: cloudwatch.amazonaws.com \}[\s\S]*?alarm:breeva-\*/);
   });
