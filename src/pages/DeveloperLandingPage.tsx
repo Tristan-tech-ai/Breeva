@@ -205,7 +205,7 @@ export default function DeveloperLandingPage() {
               <span className="jb ml-3 text-[11px] text-zinc-500">breeva — road-aqi</span>
               <span className="jb ml-auto text-[10px] text-emerald-400/70">200 OK · 184ms</span>
             </div>
-            <pre className="jb text-[12.5px] leading-[1.7] p-5 overflow-x-auto">
+            <pre tabIndex={0} className="jb text-[12.5px] leading-[1.7] p-5 overflow-x-auto">
 {termLines.map((l, i) => (
   <motion.div key={i}
     initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }}
@@ -281,7 +281,7 @@ export default function DeveloperLandingPage() {
               </div>
               <div className="relative rounded-xl border border-white/[0.07] bg-[#06100d]/80 overflow-hidden">
                 <CopyBtn text={e.code.replace(/\\\n\s*/g, ' ')} id={e.path} copied={copied} setCopied={setCopied} />
-                <pre className="jb text-[11.5px] leading-relaxed text-zinc-300 p-4 pr-10 overflow-x-auto">{e.code}</pre>
+                <pre tabIndex={0} className="jb text-[11.5px] leading-relaxed text-zinc-300 p-4 pr-10 overflow-x-auto">{e.code}</pre>
               </div>
             </motion.div>
           ))}
@@ -316,7 +316,7 @@ export default function DeveloperLandingPage() {
           </div>
           <CopyBtn id="js-snippet" copied={copied} setCopied={setCopied}
             text={`const r = await fetch("${BASE}/exposure", {\n  method: "POST",\n  headers: { Authorization: "Bearer " + process.env.BREEVA_KEY, "Content-Type": "application/json" },\n  body: JSON.stringify({ polyline: route, vehicle_type: "pedestrian", duration_minutes: 20 }),\n});\nconst { data } = await r.json();\nconsole.log(data.cigarette_equivalent); // 0.018`} />
-          <pre className="jb text-[12px] leading-[1.75] text-zinc-300 p-5 pr-10 overflow-x-auto">
+          <pre tabIndex={0} className="jb text-[12px] leading-[1.75] text-zinc-300 p-5 pr-10 overflow-x-auto">
 <span className="text-violet-300">const</span> r = <span className="text-violet-300">await</span> <span className="text-sky-300">fetch</span>(<span className="text-emerald-300">"{BASE}/exposure"</span>, {'{'}
   method: <span className="text-emerald-300">"POST"</span>,
   headers: {'{'} Authorization: <span className="text-emerald-300">"Bearer "</span> + process.env.<span className="text-lime-300">BREEVA_KEY</span>, <span className="text-emerald-300">"Content-Type"</span>: <span className="text-emerald-300">"application/json"</span> {'}'},
@@ -387,7 +387,7 @@ console.<span className="text-sky-300">log</span>(data.cigarette_equivalent); <s
             <Link to="/" className="hover:text-emerald-300 transition">← breeva.site</Link>
             <a href="/openapi.json" target="_blank" rel="noreferrer" className="hover:text-emerald-300 transition">OpenAPI</a>
             <Link to="/terms" className="hover:text-emerald-300 transition">Terms</Link>
-            <a href="https://github.com/Tristan-tech-ai/Breeva" target="_blank" rel="noreferrer" className="hover:text-emerald-300 transition"><Github className="w-4 h-4" /></a>
+            <a href="https://github.com/Tristan-tech-ai/Breeva" target="_blank" rel="noreferrer" aria-label="Breeva on GitHub" className="hover:text-emerald-300 transition"><Github className="w-4 h-4" aria-hidden /></a>
           </div>
         </div>
       </footer>

@@ -46,7 +46,7 @@ export default function AboutPage() {
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Intelijen udara & navigasi bersih untuk kota</p>
           <div className="flex gap-2 mt-3">
             {stats.map((s) => (
-              <div key={s.label} className="px-3 py-1.5 rounded-full bg-primary-50 dark:bg-primary-900/20 text-xs font-semibold text-primary-600 dark:text-primary-400">{s.value}</div>
+              <div key={s.label} className="px-3 py-1.5 rounded-full bg-primary-50 dark:bg-primary-900/20 text-xs font-semibold text-primary-700 dark:text-primary-400">{s.value}</div>
             ))}
           </div>
         </motion.div>

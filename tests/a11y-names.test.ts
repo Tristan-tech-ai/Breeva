@@ -63,3 +63,16 @@ describe('touch targets at 320 px (F1-45)', () => {
     expect(search).toMatch(/<input[^>]*id="search-input"[^>]*class="[^"]*self-stretch/);
   });
 });
+
+describe('other public pages (F1-49)', () => {
+  const src = (f: string) => readFileSync(f, 'utf8');
+  it('no emerald-600 text or filled buttons on the landing page, darker chips on about, named icon link and focusable code on developers', () => {
+    const landing = src('src/pages/LandingPage.tsx');
+    expect(landing).not.toMatch(/text-emerald-600|bg-emerald-600 text-white/);
+    expect(src('src/pages/AboutPage.tsx')).not.toMatch(/bg-primary-50 dark:bg-primary-900\/20 text-xs font-semibold text-primary-600/);
+    const dev = src('src/pages/DeveloperLandingPage.tsx');
+    expect(dev).toMatch(/aria-label="Breeva on GitHub"/);
+    expect((dev.match(/<pre (?!tabIndex=\{0\})/g) ?? []).length).toBe(0);
+  });
+});
+
