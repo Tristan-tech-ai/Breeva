@@ -11,6 +11,8 @@ export default function TrialDiaryCard() {
   const [diary, setDiary] = useState(loadDiary);
   const [copied, setCopied] = useState(false);
   const [asking, setAsking] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const turn = (on: boolean) => { const r = setDiaryOn(on); setDiary(r.diary); setBlocked(on && !r.saved); setCopied(false); };
   const rows = dayRows(diary), s = summarize(rows), prog = trialProgress(rows);
   const code = rows.length ? encode(diary.id, rows) : null;
   const copy = () => {
@@ -28,9 +30,15 @@ export default function TrialDiaryCard() {
             angka perbandingan rute (berapa persen asap kendaraan berkurang, berapa menit tambahannya), tanpa lokasi.
             Catatan tinggal di ponselmu sampai kamu menyalin kodenya untuk guru.
           </p>
-          <button onClick={() => { setDiary(setDiaryOn(true)); setCopied(false); }} className={`${btn} bg-teal-700 text-white`}>
+          <button onClick={() => turn(true)} className={`${btn} bg-teal-700 text-white`}>
             Nyalakan catatan
           </button>
+          {blocked && (
+            <p role="alert" className="text-[12px] font-semibold text-red-700 dark:text-red-300">
+              Ponsel atau peramban ini tidak mengizinkan Breeva menyimpan catatan (misalnya mode privat atau data situs diblokir).
+              Buka breeva.site/uji-coba di peramban biasa, lalu nyalakan lagi.
+            </p>
+          )}
           {rows.length > 0 && <p className="text-[12px] text-gray-600 dark:text-gray-400">Catatan sedang mati; {s.days} hari yang sudah tercatat masih tersimpan.</p>}
         </>
       ) : (
@@ -59,7 +67,7 @@ export default function TrialDiaryCard() {
             <button onClick={copy} className={`${btn} bg-white dark:bg-gray-900 border border-teal-700 text-teal-800 dark:text-teal-200`}>
               {copied ? 'Kode disalin' : 'Salin kode ringkasan'}
             </button>
-            {diary.on && <button onClick={() => setDiary(setDiaryOn(false))} className={`${btn} text-gray-600 dark:text-gray-300 underline underline-offset-2`}>Matikan catatan</button>}
+            {diary.on && <button onClick={() => turn(false)} className={`${btn} text-gray-600 dark:text-gray-300 underline underline-offset-2`}>Matikan catatan</button>}
             {!asking ? (
               <button onClick={() => setAsking(true)} className={`${btn} text-gray-600 dark:text-gray-300 underline underline-offset-2`}>Hapus catatan</button>
             ) : (

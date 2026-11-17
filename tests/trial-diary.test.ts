@@ -162,3 +162,31 @@ describe('progress towards 5 days (F4-10)', async () => {
     expect(TRIAL_DATES).toBe('26 November–2 Desember 2026');
   });
 });
+
+describe('diary when the phone does not allow storage (F4-11)', () => {
+  const setStore = (s: unknown) => { (globalThis as { localStorage?: unknown }).localStorage = s; };
+  it('a storage that throws: the diary does not pretend to be on', async () => {
+    const st = await import('../src/lib/trial/storage');
+    setStore({ getItem: () => { throw new Error('SecurityError'); }, setItem: () => { throw new Error('QuotaExceededError'); }, removeItem: () => {} });
+    const r = st.setDiaryOn(true);
+    expect(r.saved).toBe(false);
+    expect(r.diary.on).toBe(false);
+    expect(st.noteRouteLookup([{ minutes: 5, km: '0,40', vsFastest: null }], 'walk', null)).toBe(false);
+    delete (globalThis as { localStorage?: unknown }).localStorage;
+  });
+  it('a storage that silently keeps nothing: also reported as not saved', async () => {
+    const st = await import('../src/lib/trial/storage');
+    setStore({ getItem: () => null, setItem: () => {}, removeItem: () => {} });
+    const r = st.setDiaryOn(true);
+    expect(r).toMatchObject({ saved: false, diary: { on: false } });
+    delete (globalThis as { localStorage?: unknown }).localStorage;
+  });
+  it('a working storage: saved and on', async () => {
+    const st = await import('../src/lib/trial/storage');
+    const m = new Map<string, string>();
+    setStore({ getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) });
+    expect(st.setDiaryOn(true)).toMatchObject({ saved: true, diary: { on: true } });
+    expect(st.setDiaryOn(false)).toMatchObject({ saved: true, diary: { on: false } });
+    delete (globalThis as { localStorage?: unknown }).localStorage;
+  });
+});

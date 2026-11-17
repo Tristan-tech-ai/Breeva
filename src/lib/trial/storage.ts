@@ -37,10 +37,14 @@ export function saveDiary(d: Diary): boolean {
   }
 }
 
-export function setDiaryOn(on: boolean): Diary {
+/**
+ * Turn the diary on or off. `saved` is read back from storage after writing: in a private window or with site data
+ * blocked the write throws or silently does nothing, and the card must not pretend the diary is on (F4-11).
+ */
+export function setDiaryOn(on: boolean): { diary: Diary; saved: boolean } {
   const d = { ...loadDiary(), on };
-  saveDiary(d);
-  return d;
+  const saved = saveDiary(d) && loadDiary().on === on;
+  return { diary: saved ? d : { ...d, on: false }, saved };
 }
 
 /** Forget everything, including the device id (a new one is drawn when the diary is turned on again). */
