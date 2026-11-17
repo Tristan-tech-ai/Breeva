@@ -5,9 +5,9 @@ export const TRIAL_DATES = '26 November–2 Desember 2026';
 
 export const STEPS: Step[] = [
   { title: 'Nyalakan catatan', body: 'Di halaman breeva.site/uji-coba (kode QR di lembar ini), tekan "Nyalakan catatan". Ponselmu mencatat hari-hari kamu memakai rute, tanpa lokasi. Di hari terakhir, tekan "Salin kode ringkasan" dan tempel kodenya di kuesioner dari guru.' },
-  // F4-16: on a weak 3G signal the first visit takes about 25 s, a visit after one on Wi-Fi about 7 s
-  // (lambat3g_sesudah_2026-11-18.json, kunjungan2_3g_2026-11-18.json)
-  { title: 'Pertama kali, pakai Wi-Fi sekolah', body: 'Buka breeva.site/peta sekali saat tersambung Wi-Fi sekolah, lalu di breeva.site/status tekan "Simpan Badung–Denpasar untuk tanpa internet" (atau Kota Bogor). Di sinyal 3G yang lemah, kunjungan pertama butuh sekitar 25 detik; sesudah itu peta dan rute muncul dalam sekitar 7 detik dan tetap jalan tanpa internet.', link: { label: 'Buka halaman status', to: '/status' } },
+  // F4-16: on a weak 3G signal the first visit takes about 19 s (F1-54), a visit after one on Wi-Fi about 7 s
+  // (peta_f154b_2026-11-18.json, kunjungan2_3g_2026-11-18.json)
+  { title: 'Pertama kali, pakai Wi-Fi sekolah', body: 'Buka breeva.site/peta sekali saat tersambung Wi-Fi sekolah, lalu di breeva.site/status tekan "Simpan Badung–Denpasar untuk tanpa internet" (atau Kota Bogor). Di sinyal 3G yang lemah, kunjungan pertama butuh sekitar 19 detik; sesudah itu peta dan rute muncul dalam sekitar 7 detik dan tetap jalan tanpa internet.', link: { label: 'Buka halaman status', to: '/status' } },
   { title: 'Buka peta', body: 'Buka breeva.site di ponsel. Tidak perlu akun. Peta langsung menunjukkan asap kendaraan per ruas jalan di Badung–Denpasar (Kota Bogor juga ada): makin ungu, makin banyak gas buang.', link: { label: 'Buka peta', to: '/peta' } },
   { title: 'Pilih sekolahmu', body: 'Tekan "Rute di perangkat", lalu ketik nama sekolahmu di kolom "Ke sekolah" dan pilih dari daftar.' },
   { title: 'Ketuk titik berangkat', body: 'Ketuk rumah, kos, atau halte tempatmu berangkat, atau tekan "Pakai lokasiku" bila kamu sedang di sana. Rute dihitung di ponselmu; titik itu tidak dikirim ke server Breeva (peta hanya memuat data area yang sedang kamu lihat, dan "Pakai lokasiku" mengirim lokasi yang dibulatkan sekitar 1 km untuk kartu kualitas udara).' },

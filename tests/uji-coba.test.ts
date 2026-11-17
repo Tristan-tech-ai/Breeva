@@ -30,7 +30,7 @@ describe('student trial guide', () => {
     expect(STEPS[1].body).toMatch(/Wi-Fi sekolah/);
     expect(STEPS[1].body).toMatch(/Simpan Badung–Denpasar untuk tanpa internet/);
     expect(STEPS[1].link?.to).toBe('/status');
-    expect(STEPS[1].body).toMatch(/sekitar 25 detik/);
+    expect(STEPS[1].body).toMatch(/sekitar 19 detik/);
     expect(STEPS[1].body).toMatch(/sekitar 7 detik/);
   });
 
