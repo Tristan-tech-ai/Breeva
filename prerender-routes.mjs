@@ -21,6 +21,7 @@
 import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { preloadFiles, preloadTags, referencedAssets } from './preload-links.mjs';
+import { earlyFieldScript, parseRegions } from './early-field.mjs';
 
 const DIST = join(process.cwd(), 'dist');
 const TEMPLATE_PATH = join(DIST, 'index.html');
@@ -138,6 +139,8 @@ const ROUTES = [
     // F1-51: the page and its map chunks start with the HTML instead of one lazy level after the other
     preload: ['src/pages/ExploreMapPage.tsx', 'src/components/map/LeafletMap.tsx'],
     preloadScripts: ['/vendor/leaflet-vectorgrid.js'],
+    // F1-54: the region manifest and the PMTiles header start with the HTML (needs the CDN field base of the build)
+    earlyField: true,
     title: 'Peta Udara Langsung — Asap Kendaraan per Jalan & Rute Bersih | Breeva',
     description: 'Peta asap kendaraan dan kualitas udara per ruas jalan untuk Badung–Denpasar dan Kota Bogor, dihitung ulang tiap jam; rute jalan kaki dengan asap paling sedikit dihitung di ponsel. Kota lain: kualitas udara kota. Gratis, tanpa login.',
     body: page('Kualitas udara per jalan, langsung di peta', [
@@ -238,6 +241,13 @@ for (const r of ROUTES) {
     html = sub(html, /<\/head>/, `    ${preloadTags(files, r.preloadScripts ?? [])}
   </head>`);
     console.log(`[prerender] ${r.file}: preload ${files.js.length} JS, ${files.css.length} CSS, ${(r.preloadScripts ?? []).length} script`);
+  }
+  if (r.earlyField) {
+    const regions = parseRegions(readFileSync(join(process.cwd(), 'src/lib/field/source.ts'), 'utf8'));
+    const tag = process.env.VITE_FIELD_STATIC === 'true' ? earlyFieldScript(process.env.VITE_FIELD_BASE ?? '', regions) : '';
+    if (tag) html = sub(html, /<\/head>/, `    ${tag}
+  </head>`);
+    console.log(`[prerender] ${r.file}: early field ${tag ? `on (${regions.map((g) => g.name).join(', ')})` : 'off (no VITE_FIELD_STATIC or CDN base in this build)'}`);
   }
   html = sub(html, /<div id="root">[\s\S]*?<\/div>/, `<div id="root">${r.body}\n    </div>`);
   writeFileSync(join(DIST, r.file), html, 'utf8');

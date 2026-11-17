@@ -2,7 +2,7 @@
  * Static field client (LAMPIRAN_TEKNIS L1.5): road geometry from PMTiles, values from BVF1 cells, freshness from the
  * manifest. No API or database call: everything is a static file under the field base URL.
  */
-import { PMTiles } from 'pmtiles';
+import { FetchSource, PMTiles, type RangeResponse, type Source } from 'pmtiles';
 import { decodeCell, type CellValue } from './cells';
 import { HargaIndex } from './harga';
 
@@ -92,6 +92,36 @@ export function cellsInView(m: Pick<FieldManifest, 'cells' | 'cell_tiles'>, box:
   });
 }
 
+/**
+ * Requests started by the inline script of peta.html (early-field.mjs, F1-54): the manifest and the PMTiles header of
+ * the region the page opens in. Each is taken once; a failed one falls back to the app's own request.
+ */
+interface FieldEarly { base: string; name: string; manifest?: Promise<FieldManifest>; header?: Promise<RangeResponse> }
+
+export function takeEarly<K extends 'manifest' | 'header'>(kind: K, base: string, name: string): FieldEarly[K] | undefined {
+  const e = (globalThis as { __fieldEarly?: FieldEarly }).__fieldEarly;
+  if (!e || e.base !== base || e.name !== name) return undefined;
+  const p = e[kind];
+  e[kind] = undefined;
+  return p;
+}
+
+/** PMTiles source that serves the archive header from the early request once, everything else as FetchSource. */
+export function earlyHeaderSource(url: string, base: string, name: string): Source {
+  let fetchSource: FetchSource | null = null;
+  const plain = () => (fetchSource ??= new FetchSource(url));
+  return {
+    getKey: () => url,
+    getBytes: async (offset, length, signal, etag) => {
+      if (offset === 0 && length === 16384) {
+        const early = takeEarly('header', base, name);
+        if (early) { try { return await early; } catch { /* the app's own request below */ } }
+      }
+      return plain().getBytes(offset, length, signal, etag);
+    },
+  };
+}
+
 /** The browser fetch, one function: the manifest cache below is shared by everything that uses it. */
 export const defaultFetch: typeof fetch = (...a) => fetch(...a);
 
@@ -109,10 +139,13 @@ export function fetchManifest(base: string, name: string, fetchImpl: typeof fetc
   const key = `${base}/v/${name}`;
   const hit = cache.get(key);
   if (hit && now - hit.at <= MANIFEST_TTL_MS) return hit.p;
-  const p = fetchImpl(`${key}/manifest.json`, { cache: 'no-cache' }).then(async (r) => {
+  const own = () => fetchImpl(`${key}/manifest.json`, { cache: 'no-cache' }).then(async (r) => {
     if (!r.ok) throw new Error(`manifest ${r.status}`);
     return (await r.json()) as FieldManifest;
   });
+  // the request the HTML started already (F1-54), else our own; a failed early one falls back to our own
+  const early = fetchImpl === defaultFetch ? takeEarly('manifest', base, name) : undefined;
+  const p = early ? early.catch(own) : own();
   cache.set(key, { at: now, p });
   p.catch(() => { if (cache.get(key)?.p === p) cache.delete(key); });
   return p;
@@ -139,7 +172,7 @@ export class FieldSource {
     this.region = region;
     this.base = base;
     this.fetchImpl = fetchImpl;
-    this.pm = new PMTiles(`${base}/tiles/${region.geometry}/${region.name}.pmtiles`);
+    this.pm = new PMTiles(earlyHeaderSource(`${base}/tiles/${region.geometry}/${region.name}.pmtiles`, base, region.name));
   }
 
   /** Resolves once the archive metadata (highway codes) has arrived or failed. */
