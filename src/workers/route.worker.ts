@@ -5,7 +5,8 @@
  *   { id, type: 'route', from: {lat, lng}, to: {lat, lng}, mode?, departLocal? } Pareto walking routes (exposure = NO2
  *     of the field roads), or motor routes with the zona napas and, when the departure (local "HH:MM", default now)
  *     falls in school hours, the school zone; a departure later than now uses the exhaust forecast of that hour
- *     (BXF1, src/lib/field/forecast.ts) and a departure now also reports the next hours of the cleanest route
+ *     (BXF1, src/lib/field/forecast.ts) and a departure now also reports the next hours of the cleanest route, in a
+ *     second reply { id, type: 'soon', ok: true, soon } sent after the routes (the route reply says soonPending)
  * Replies { id, ok: true, ... } or { id, ok: false, error }.
  */
 import { WalkGraph } from '../lib/route/walkGraph';
@@ -156,15 +157,21 @@ async function routeAt(from: { lat: number; lng: number }, to: { lat: number; ln
     } catch { field = undefined; } // forecast file unavailable: the run's own hour, labelled as such by forecastHour null
   }
   const { routes, raw } = routeBetween(from, to, mode, at, field);
-  if (!field && routes.length && graph) {
+  // a departure now: the next hours of the cleanest route are worked out after the routes are sent (F3-18), because
+  // loading the forecast files is the slow part of a first route on a slow phone
+  const soonHours = forecasts.filter((f) => f.ahead <= SOON_HOURS);
+  let soonPlan: (() => Promise<SoonHour[]>) | null = null;
+  if (!field && routes.length && graph && soonHours.length) {
     const last = raw[raw.length - 1], g = graph;
-    const soon: SoonHour[] = [];
-    for (const e of forecasts.filter((f) => f.ahead <= SOON_HOURS)) {
-      try { soon.push({ local_hour: e.local_hour, ahead: e.ahead, exhMean: meanAlong(g, last.edges, last.timeS, last.lengthM, await exhaustOf(e)) }); } catch { /* skip that hour */ }
-    }
-    if (soon.length) (routes[routes.length - 1] as { soon?: SoonHour[] }).soon = soon;
+    soonPlan = async () => {
+      const soon: SoonHour[] = [];
+      for (const e of soonHours) {
+        try { soon.push({ local_hour: e.local_hour, ahead: e.ahead, exhMean: meanAlong(g, last.edges, last.timeS, last.lengthM, await exhaustOf(e)) }); } catch { /* skip that hour */ }
+      }
+      return soon;
+    };
   }
-  return routes;
+  return { routes, soonPlan };
 }
 
 self.onmessage = async (ev: MessageEvent) => {
@@ -173,8 +180,13 @@ self.onmessage = async (ev: MessageEvent) => {
     if (type === 'init') self.postMessage({ id, ok: true, ...(await init(ev.data.base, ev.data.region)) });
     else if (type === 'route') {
       const t0 = performance.now();
-      const routes = await routeAt(ev.data.from, ev.data.to, ev.data.mode === 'motor' ? 'motor' : 'walk', ev.data.departLocal);
-      self.postMessage({ id, ok: true, routes, ms: performance.now() - t0, run });
+      const { routes, soonPlan } = await routeAt(ev.data.from, ev.data.to, ev.data.mode === 'motor' ? 'motor' : 'walk', ev.data.departLocal);
+      self.postMessage({ id, ok: true, routes, ms: performance.now() - t0, run, soonPending: !!soonPlan });
+      if (soonPlan) {
+        // second reply with the same id: the leave-later hint for the last route
+        const soon = await soonPlan().catch(() => [] as SoonHour[]);
+        self.postMessage({ id, type: 'soon', ok: true, soon });
+      }
     } else throw new Error(`unknown message ${type}`);
   } catch (e) {
     self.postMessage({ id, ok: false, error: (e as Error).message });

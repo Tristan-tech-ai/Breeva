@@ -19,25 +19,43 @@ export interface WalkRoute {
   schoolCost?: { extraM: number; extraS: number; changed: boolean };
 }
 
+export type SoonHours = NonNullable<WalkRoute['soon']>;
+
+/** The routes with the leave-later hours on the last (cleanest) route, as the worker sends them after the routes. */
+export function withSoon(routes: WalkRoute[], soon: SoonHours | null | undefined): WalkRoute[] {
+  if (!routes.length || !soon?.length) return routes;
+  return routes.map((r, k) => (k === routes.length - 1 ? { ...r, soon } : r));
+}
+
 export class RouteClient {
   private readonly worker: Worker;
   private seq = 0;
   private readonly pending = new Map<number, { ok: (v: unknown) => void; fail: (e: Error) => void }>();
+  private readonly soonWaiters = new Map<number, (soon: SoonHours) => void>();
 
   constructor() {
     this.worker = new Worker(new URL('../../workers/route.worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (ev) => {
-      const p = this.pending.get(ev.data.id);
+      const id = ev.data.id;
+      if (ev.data.type === 'soon') {
+        const w = this.soonWaiters.get(id);
+        this.soonWaiters.delete(id);
+        if (w && ev.data.ok) w(ev.data.soon ?? []);
+        return;
+      }
+      const p = this.pending.get(id);
       if (!p) return;
-      this.pending.delete(ev.data.id);
+      this.pending.delete(id);
+      if (!ev.data.soonPending) this.soonWaiters.delete(id);
       if (ev.data.ok) p.ok(ev.data); else p.fail(new Error(ev.data.error));
     };
   }
 
-  private call<T>(msg: Record<string, unknown>): Promise<T> {
+  private call<T>(msg: Record<string, unknown>, onSoon?: (soon: SoonHours) => void): Promise<T> {
     const id = ++this.seq;
     return new Promise<T>((ok, fail) => {
       this.pending.set(id, { ok: ok as (v: unknown) => void, fail });
+      if (onSoon) this.soonWaiters.set(id, onSoon);
       this.worker.postMessage({ id, ...msg });
     });
   }
@@ -48,10 +66,11 @@ export class RouteClient {
 
   /**
    * departLocal: departure as local clock time "HH:MM" in the region (default now); it decides whether the school zone
-   * is active.
+   * is active. onSoon receives the leave-later hours of the last route when they arrive after the routes (departure now).
    */
-  route(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor' = 'walk', departLocal?: string | null) {
-    return this.call<{ routes: WalkRoute[]; ms: number; run: string }>({ type: 'route', from, to, mode, departLocal });
+  route(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor' = 'walk', departLocal?: string | null,
+    onSoon?: (soon: SoonHours) => void) {
+    return this.call<{ routes: WalkRoute[]; ms: number; run: string; soonPending?: boolean }>({ type: 'route', from, to, mode, departLocal }, onSoon);
   }
 
   terminate() { this.worker.terminate(); }

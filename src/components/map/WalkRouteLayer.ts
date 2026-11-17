@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { FIELD_REGIONS } from '../../lib/field/source';
-import { RouteClient, type WalkRoute } from '../../lib/route/client';
+import { RouteClient, withSoon, type SoonHours, type WalkRoute } from '../../lib/route/client';
 import { routeCards, type RouteCard } from '../../lib/route/summary';
 import type { RouteLink } from '../../lib/route/share';
 import { chooseDest, onTap, startFrom, type TapState } from '../../lib/route/tapFlow';
@@ -58,6 +58,8 @@ export function useWalkRouting(
     let busy = false;
     // a start given while a route is being computed runs when that one is done
     let queued: { lat: number; lng: number } | null = null;
+    // each request is numbered so a leave-later hint arriving late only updates the cards it belongs to (F3-18)
+    let reqSeq = 0;
     const say = (s: WalkRoutingState) => onStateRef.current?.(s);
     const destMarker = () => {
       if (!fixed) return;
@@ -99,8 +101,18 @@ export function useWalkRouting(
       const c = client;
       let init = ready.get(region.name);
       if (!init) { init = c.init({ name: region.name, geometry: region.geometry }); ready.set(region.name, init); }
+      const req = ++reqSeq;
+      let shown: WalkRoutingState | null = null;
+      let early: SoonHours | null = null;
+      const onSoon = (soon: SoonHours) => {
+        if (req !== reqSeq) return; // a newer request replaced these cards
+        if (!shown?.routes) { early = soon; return; }
+        const routes2 = withSoon(shown.routes, soon);
+        shown = { ...shown, routes: routes2, cards: routeCards(routes2) };
+        say(shown);
+      };
       init
-        .then(() => c.route({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, modeRef.current, departRef.current))
+        .then(() => c.route({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, modeRef.current, departRef.current, onSoon))
         .then(({ routes, ms }) => {
           const cards = routeCards(routes);
           // draw the alternatives first, then the fastest, the cleanest last (on top)
@@ -113,8 +125,10 @@ export function useWalkRouting(
             L.polyline(ll, { color: cards[k].color, weight: w, opacity: 1, interactive: false }).addTo(group);
           }
           const again = fixed ? `Ketuk titik berangkat lain untuk rute baru ke ${fixed.name}.` : 'Ketuk lagi untuk rute baru.';
-          say({ status: routes.length ? `${routes.length} rute dihitung di perangkat dalam ${Math.round(ms)} ms. ${again}` : 'Tidak ada rute.', cards, ms,
-            ends: { from: { lat: from.lat, lng: from.lng }, to: { lat: to.lat, lng: to.lng } }, routes });
+          shown = { status: routes.length ? `${routes.length} rute dihitung di perangkat dalam ${Math.round(ms)} ms. ${again}` : 'Tidak ada rute.', cards, ms,
+            ends: { from: { lat: from.lat, lng: from.lng }, to: { lat: to.lat, lng: to.lng } }, routes };
+          say(shown);
+          if (early) { const s = early; early = null; onSoon(s); }
         })
         .catch((e: Error) => {
           ready.delete(region.name);
