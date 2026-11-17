@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FIELD_REGIONS, fieldBase } from '../../lib/field/source';
+import { FIELD_REGIONS, fetchManifest, fieldBase } from '../../lib/field/source';
 import { layerAges, type LayeredManifest } from '../../lib/field/status';
 
 /** Two lines: how old the exhaust part and the background of the map are, from the region's manifest. */
@@ -10,9 +10,10 @@ export default function FieldAgeNote({ region, at, className = '' }: { region?: 
   useEffect(() => {
     if (!name) return;
     let alive = true;
-    fetch(`${fieldBase()}/v/${name}/manifest.json`, { cache: 'no-cache' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((m: LayeredManifest | null) => { if (alive && m) { setGot({ name, m }); setNow(Date.now()); } })
+    // the same request as the map layer and the value card (F1-54: a second request for the same file waited for the
+    // first and then revalidated, 2 s on slow 3G, and the map layer got its manifest from that second one)
+    fetchManifest(fieldBase(), name)
+      .then((m) => { if (alive) { setGot({ name, m: m as unknown as LayeredManifest }); setNow(Date.now()); } })
       .catch(() => {});
     return () => { alive = false; };
   }, [name]);

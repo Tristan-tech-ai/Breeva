@@ -142,17 +142,24 @@ export class FieldSource {
     this.pm = new PMTiles(`${base}/tiles/${region.geometry}/${region.name}.pmtiles`);
   }
 
+  /** Resolves once the archive metadata (highway codes) has arrived or failed. */
+  metaReady: Promise<void> = Promise.resolve();
+
   /**
-   * Manifest, then the cells in view (in parallel with the archive's header), then the archive metadata. The harga
-   * hirup file is not loaded here: ensureHarga() loads it when the mode needs it or once the map is colored.
+   * Manifest, then the cells in view. The archive header and metadata do not depend on the manifest, so they are asked
+   * for at the same time, and init does not wait for the metadata: the highway codes only set line widths, and the layer
+   * redraws (onCell) when they arrive (F1-54: on slow 3G each wait in a row costs about 2 s). The harga hirup file is not
+   * loaded here: ensureHarga() loads it when the mode needs it or once the map is colored.
    */
   async init(view?: Box): Promise<void> {
+    this.metaReady = this.pm.getMetadata().then(
+      (meta) => { this.highwayCodes = (meta as { highway_codes?: string[] } | undefined)?.highway_codes ?? []; this.onCell?.(); },
+      (e) => { console.warn('[field] metadata', this.region.name, e); },
+    );
     const m = await fetchManifest(this.base, this.region.name, this.fetchImpl);
     if (m.geometry !== this.region.geometry) throw new Error(`geometry ${m.geometry} does not match tiles ${this.region.geometry}`);
     this.manifest = m;
     if (view) for (const c of cellsInView(m, view)) void this.loadCell(c);
-    const meta = (await this.pm.getMetadata()) as { highway_codes?: string[] } | undefined;
-    this.highwayCodes = meta?.highway_codes ?? [];
   }
 
   /** Loads the harga hirup file once (idempotent). */
