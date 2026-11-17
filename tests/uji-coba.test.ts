@@ -3,27 +3,35 @@ import { describe, expect, it } from 'vitest';
 import { PRIVACY, STEPS, trialUrl } from '../src/lib/ujiCoba';
 
 describe('student trial guide', () => {
-  it('walks through the trial in order: diary, map, school, start, compare, school hours, link', () => {
-    expect(STEPS.map((s) => s.title)).toEqual(['Nyalakan catatan', 'Buka peta', 'Pilih sekolahmu', 'Ketuk titik berangkat', 'Bandingkan rute', 'Coba jam masuk sekolah', 'Simpan rutemu']);
+  it('walks through the trial in order: diary, Wi-Fi first, map, school, start, compare, school hours, link', () => {
+    expect(STEPS.map((s) => s.title)).toEqual(['Nyalakan catatan', 'Pertama kali, pakai Wi-Fi sekolah', 'Buka peta', 'Pilih sekolahmu', 'Ketuk titik berangkat', 'Bandingkan rute', 'Coba jam masuk sekolah', 'Simpan rutemu']);
     expect(STEPS[0].body).toMatch(/Nyalakan catatan/);
     expect(STEPS[0].body).toMatch(/Salin kode ringkasan/);
     expect(STEPS[0].body).toMatch(/tanpa lokasi/);
-    expect(STEPS[2].body).toMatch(/Ke sekolah/);
-    expect(STEPS[5].body).toMatch(/06\.45/);
-    expect(STEPS[6].body).toMatch(/Salin tautan rute/);
+    expect(STEPS[3].body).toMatch(/Ke sekolah/);
+    expect(STEPS[6].body).toMatch(/06\.45/);
+    expect(STEPS[7].body).toMatch(/Salin tautan rute/);
     // the start point and the privacy line promise the same thing the app does: nothing leaves the phone
-    expect(STEPS[3].body).toMatch(/tidak dikirim/);
+    expect(STEPS[4].body).toMatch(/tidak dikirim/);
     expect(PRIVACY).toMatch(/tidak meminta nama, akun, atau lokasi rumah/);
   });
 
   it('uses the words the app shows today (F4-04, 17 Nov): exhaust, not NO2; the school-zone cost; the link carries the start', () => {
     const all = STEPS.map((s) => s.body).join(' ');
     expect(all).not.toMatch(/NO₂|NO2/);
-    expect(STEPS[1].body).toMatch(/asap kendaraan/);
-    expect(STEPS[1].body).toMatch(/Kota Bogor/);
-    expect(STEPS[4].body).toMatch(/paling sedikit asap kendaraan/);
-    expect(STEPS[5].body).toMatch(/zona sekolah/);
-    expect(STEPS[6].body).toMatch(/memuat titik berangkatmu/);
+    expect(STEPS[2].body).toMatch(/asap kendaraan/);
+    expect(STEPS[2].body).toMatch(/Kota Bogor/);
+    expect(STEPS[5].body).toMatch(/paling sedikit asap kendaraan/);
+    expect(STEPS[6].body).toMatch(/zona sekolah/);
+    expect(STEPS[7].body).toMatch(/memuat titik berangkatmu/);
+  });
+
+  it('asks for one visit on the school Wi-Fi and a saved region before the trial (F4-16)', () => {
+    expect(STEPS[1].body).toMatch(/Wi-Fi sekolah/);
+    expect(STEPS[1].body).toMatch(/Simpan Badung–Denpasar untuk tanpa internet/);
+    expect(STEPS[1].link?.to).toBe('/status');
+    expect(STEPS[1].body).toMatch(/sekitar 25 detik/);
+    expect(STEPS[1].body).toMatch(/sekitar 7 detik/);
   });
 
   it('the QR code encodes the guide address', async () => {
