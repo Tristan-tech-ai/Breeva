@@ -195,7 +195,7 @@ export default function ExploreMapPage() {
                     onClick={() => setRoadDisplayMode(m)}
                     className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
                       roadDisplayMode === m
-                        ? 'bg-sky-600 text-white shadow-sm'
+                        ? 'bg-sky-700 text-white shadow-sm'
                         : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                     }`}
                   >
@@ -216,7 +216,7 @@ export default function ExploreMapPage() {
             {FIELD_REGIONS.map((r) => (
               <button key={r.name} aria-pressed={region === r.name}
                 onClick={() => { setRegion(r.name); rememberRegion(r.name); setSchoolDest(null); useMapStore.getState().setCenter(r.home); void useMapStore.getState().fetchAreaReading(r.home); }}
-                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${region === r.name ? 'bg-sky-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
+                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${region === r.name ? 'bg-sky-700 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
                 {r.label}
               </button>
             ))}

@@ -625,7 +625,7 @@ export default function HomePage() {
                         {FIELD_REGIONS.map((r) => (
                           <button key={r.name} aria-pressed={schoolRegion.name === r.name}
                             onClick={() => { setSchoolRegionName(r.name); rememberRegion(r.name); setCenter(r.home); }}
-                            className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${schoolRegion.name === r.name ? 'bg-sky-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
+                            className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${schoolRegion.name === r.name ? 'bg-sky-700 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
                             {r.label}
                           </button>
                         ))}
