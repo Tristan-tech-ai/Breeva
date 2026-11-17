@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Wind, Droplets, CloudSun, Activity, Info, ShieldCheck, Clock } from 'lucide-react';
 import type { AirQualityData } from '../../types';
 import { ispuRounded, pm25Category, sensitiveAdvice } from '../../lib/ispu';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { FIELD_LAYER_SOURCE } from '../../lib/field/areaReading';
+import { staleReadingNote } from '../../lib/field/status';
 import { WAQI_NAME } from '../../lib/attribution';
 
 interface AQICardProps {
@@ -25,6 +26,13 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
   const percentage = Math.min(index, 300) / 300;
   const sensitive = useSettingsStore((s) => s.health_sensitive);
   const personal = sensitive ? sensitiveAdvice(data.pm25) : null;
+  // an old reading (e.g. offline for hours) says which hour it describes; the clock ticks each minute
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const stale = staleReadingNote(data.timestamp, now);
 
   const cycle = () => {
     setLevel((prev) => {
@@ -95,6 +103,9 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
           <p className="mt-0.5 text-[13px] leading-snug text-gray-600 dark:text-gray-400">{cat.advice}</p>
           {personal && (
             <p className="mt-1 text-[12px] font-medium leading-snug text-amber-700 dark:text-amber-400">{personal}</p>
+          )}
+          {stale && (
+            <p className="mt-1 text-[12px] font-semibold leading-snug text-amber-700 dark:text-amber-300">{stale}</p>
           )}
         </div>
 

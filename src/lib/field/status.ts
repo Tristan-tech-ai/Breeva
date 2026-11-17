@@ -50,6 +50,19 @@ export interface LayerAges { exhaust: string; background: string; stale: boolean
 
 const hh = (h: number) => `${String(((h % 24) + 24) % 24).padStart(2, '0')}.00`;
 
+/**
+ * Line for a reading older than the freshness limit (task F2-14), e.g. on a phone that went offline hours ago: the
+ * hour it describes and how long ago, so the advice is read as that hour's. Null while fresh or without a time.
+ */
+export function staleReadingNote(timestamp: string | undefined, now: number, freshMin = FRESH_MINUTES, timeZone?: string): string | null {
+  const t = Date.parse(timestamp ?? '');
+  if (!Number.isFinite(t)) return null;
+  const min = (now - t) / 60000;
+  if (min <= freshMin) return null;
+  const at = new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone });
+  return `Data lama: keadaan jam ${at} (${agoWords(min)} lalu), bukan sekarang`;
+}
+
 /** "25 menit", "89 menit", "3 jam", "2 hari": how long ago, in whole units (minutes below 2 hours). */
 export function agoWords(min: number): string {
   if (min < 120) return `${Math.max(1, Math.round(min))} menit`; // "1 jam" for 89 min would understate it
