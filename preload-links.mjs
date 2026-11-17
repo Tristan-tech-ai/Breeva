@@ -40,3 +40,17 @@ export function preloadTags({ js, css }, scripts = []) {
     ...scripts.map((s) => `<link rel="preload" as="script" href="${s}">`),
   ].join('\n    ');
 }
+
+/**
+ * For the SPA shell (index.html, served for every app route): an inline script that adds the preload links of the
+ * page being opened, only for the paths listed (X-W7: on /home the map code arrived through three lazy levels, the
+ * last at 18.5 s on slow 3G, lambat3g_home_2026-11-18.json). Other routes download nothing extra.
+ * byPath: { '/home': { js, css, scripts } }.
+ */
+export function appPreloadScript(byPath) {
+  const P = JSON.stringify(byPath);
+  return `<script>(function(){try{var P=${P},l=P[location.pathname];if(!l)return;var h=document.head,e,i;`
+    + `function add(rel,as,href,co){e=document.createElement('link');e.rel=rel;if(as)e.as=as;if(co)e.crossOrigin='';e.href=href;h.appendChild(e)}`
+    + `for(i=0;i<l.js.length;i++)add('modulepreload','','/'+l.js[i],1);for(i=0;i<l.css.length;i++)add('preload','style','/'+l.css[i],1);`
+    + `for(i=0;i<l.scripts.length;i++)add('preload','script',l.scripts[i],0)}catch(_){}})();</script>`;
+}

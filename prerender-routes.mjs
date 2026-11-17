@@ -20,7 +20,7 @@
 
 import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { preloadFiles, preloadTags, referencedAssets } from './preload-links.mjs';
+import { appPreloadScript, preloadFiles, preloadTags, referencedAssets } from './preload-links.mjs';
 import { earlyFieldScript, parseRegions } from './early-field.mjs';
 
 const DIST = join(process.cwd(), 'dist');
@@ -258,9 +258,19 @@ for (const r of ROUTES) {
 {
   const regions = parseRegions(readFileSync(join(process.cwd(), 'src/lib/field/source.ts'), 'utf8'));
   const tag = process.env.VITE_FIELD_STATIC === 'true' ? earlyFieldScript(process.env.VITE_FIELD_BASE ?? '', regions, 'app') : '';
-  if (tag) writeFileSync(TEMPLATE_PATH, sub(template, /<\/head>/, `    ${tag}
+  // the map code of / and /home, preloaded only on those paths (the shell serves every route)
+  const have = referencedAssets(template);
+  const map = ['src/components/map/LeafletMap.tsx'];
+  const vg = ['/vendor/leaflet-vectorgrid.js'];
+  const byPath = {
+    '/': { ...preloadFiles(buildManifest, ['src/pages/ExploreMapPage.tsx', ...map], have), scripts: vg },
+    '/home': { ...preloadFiles(buildManifest, ['src/pages/HomePage.tsx', ...map], have), scripts: vg },
+  };
+  const pre = appPreloadScript(byPath);
+  writeFileSync(TEMPLATE_PATH, sub(template, /<\/head>/, `    ${pre}${tag ? `
+    ${tag}` : ''}
   </head>`), 'utf8');
-  console.log(`[prerender] index.html: early field ${tag ? 'on for / and /home' : 'off (no VITE_FIELD_STATIC or CDN base in this build)'}`);
+  console.log(`[prerender] index.html: preload / ${byPath['/'].js.length} JS, /home ${byPath['/home'].js.length} JS; early field ${tag ? 'on for / and /home' : 'off (no VITE_FIELD_STATIC or CDN base in this build)'}`);
 }
 
 // the build manifest maps source paths to files; it is a build input, not something to serve

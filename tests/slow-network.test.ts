@@ -1,8 +1,9 @@
+import { runInNewContext } from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS, onFirstDraw, ROUTE_FALLBACK_MS, ROUTE_SETTLED_EVENT, routeSettled } from '../src/lib/field/firstDraw';
 import { fetchManifest, FIELD_DRAWN_EVENT, MANIFEST_TTL_MS } from '../src/lib/field/source';
 // @ts-expect-error plain ES module used by the build (prerender-routes.mjs)
-import { preloadFiles, preloadTags, referencedAssets } from '../preload-links.mjs';
+import { appPreloadScript, preloadFiles, preloadTags, referencedAssets } from '../preload-links.mjs';
 
 // F1-51: on the DevTools "3G" profile (2 s per request, 50 KB/s) the coloured map took 32.9 s. Three causes, three fixes.
 
@@ -145,5 +146,26 @@ describe('preloadFiles: /peta lists its lazy chunks in the HTML', () => {
     expect(tags).toContain('<link rel="preload" as="style" crossorigin href="/assets/b.css">');
     expect(tags).toContain('<link rel="preload" as="script" href="/vendor/v.js">');
     expect(tags).not.toContain('rel="stylesheet"');
+  });
+});
+
+describe('appPreloadScript: the SPA shell preloads the map code of / and /home only (X-W7)', () => {
+  const byPath = { '/home': { js: ['assets/HomePage-a.js', 'assets/LeafletMap-b.js'], css: ['assets/vendor-leaflet-c.css'], scripts: ['/vendor/leaflet-vectorgrid.js'] } };
+  const run = (pathname: string) => {
+    const links: Array<Record<string, string>> = [];
+    const document = { head: { appendChild: (e: Record<string, string>) => links.push(e) }, createElement: () => ({}) };
+    const code = (appPreloadScript(byPath) as string).replace(/^<script>|<\/script>$/g, '');
+    runInNewContext(code, { location: { pathname }, document });
+    return links;
+  };
+  it('adds module preloads, a style preload and the classic script preload on /home', () => {
+    const l = run('/home');
+    expect(l.filter((e) => e.rel === 'modulepreload').map((e) => [e.href, e.crossOrigin])).toEqual([['/assets/HomePage-a.js', ''], ['/assets/LeafletMap-b.js', '']]);
+    expect(l.find((e) => e.as === 'style')).toMatchObject({ rel: 'preload', href: '/assets/vendor-leaflet-c.css', crossOrigin: '' });
+    expect(l.find((e) => e.as === 'script')).toMatchObject({ rel: 'preload', href: '/vendor/leaflet-vectorgrid.js' });
+    expect(l.find((e) => e.as === 'script')!.crossOrigin).toBeUndefined();
+  });
+  it('downloads nothing extra on other routes', () => {
+    for (const p of ['/', '/prioritas', '/status', '/profile']) expect(run(p)).toEqual([]);
   });
 });
