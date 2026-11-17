@@ -5,7 +5,7 @@ import { Seo } from '../components/Seo';
 import { FIELD_REGIONS, fieldBase } from '../lib/field/source';
 import { runsSummary, runsText, type RunsFile } from '../lib/field/runsRecent';
 import { FRESH_MINUTES, manifestStatus, statusText, type FieldStatus } from '../lib/field/status';
-import { readSaved, saveRegionOffline, sizeLabel } from '../lib/pwa/offlineRegion';
+import { estimateDownload, estimateText, readSaved, saveRegionOffline, savedText } from '../lib/pwa/offlineRegion';
 
 type Saving = { state: 'saving'; done: number; total: number } | { state: 'done'; bytes: number; files: number; run: string; at: string } | { state: 'error'; error: string };
 
@@ -25,6 +25,20 @@ export default function StatusPage() {
       .then((res) => setSaving((p) => ({ ...p, [r.name]: { state: 'done', ...res, at: new Date().toISOString() } })))
       .catch((e: Error) => setSaving((p) => ({ ...p, [r.name]: { state: 'error', error: e.message } })));
   };
+
+  // what saving would download (X-W12): HEAD requests only, after the page's own requests
+  const [estimates, setEstimates] = useState<Record<string, { sent: number; known: number } | null>>({});
+  useEffect(() => {
+    let alive = true;
+    const t = setTimeout(() => {
+      for (const r of FIELD_REGIONS) {
+        estimateDownload(fieldBase(), { name: r.name, geometry: r.geometry })
+          .then((e) => alive && setEstimates((p) => ({ ...p, [r.name]: e })))
+          .catch(() => alive && setEstimates((p) => ({ ...p, [r.name]: null })));
+      }
+    }, 1500);
+    return () => { alive = false; clearTimeout(t); };
+  }, []);
 
   // what is already saved for offline, read from the caches (F2-16), so the presenter can check before switching Wi-Fi off
   useEffect(() => {
@@ -103,7 +117,7 @@ export default function StatusPage() {
                   if (sv?.state === 'done') return (
                     <div className="mt-2" aria-live="polite">
                       <p className="text-[12px] text-teal-800 dark:text-teal-300">
-                        Tersimpan untuk tanpa internet: {sizeLabel(sv.bytes)} ({sv.files} berkas, run {sv.run}, disimpan {new Date(sv.at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}). Peta dan rute {r.label} jalan tanpa internet dengan angka jam itu; peta dasar tidak ikut tersimpan.
+                        {savedText(sv, new Date(sv.at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }))} Peta dan rute {r.label} jalan tanpa internet dengan angka jam itu; peta dasar tidak ikut tersimpan.
                       </p>
                       <button onClick={() => save(r)} className="mt-1 min-h-8 rounded-full px-2 text-[12px] font-semibold text-teal-800 dark:text-teal-200 underline underline-offset-2">Simpan ulang (angka jam terbaru)</button>
                     </div>
@@ -113,6 +127,7 @@ export default function StatusPage() {
                       <button onClick={() => save(r)} className="mt-2 min-h-8 rounded-full border border-teal-700 px-3 py-1 text-[12px] font-semibold text-teal-800 dark:text-teal-200">
                         Simpan {r.label} untuk tanpa internet
                       </button>
+                      {estimateText(estimates[r.name]) && <p className="mt-1 text-[12px] text-gray-600 dark:text-gray-400">{estimateText(estimates[r.name])}</p>}
                       {sv?.state === 'error' && <p className="mt-1 text-[12px] text-red-700 dark:text-red-300">Gagal menyimpan: {sv.error}</p>}
                     </>
                   );

@@ -27,7 +27,8 @@ export function regionFiles(base: string, r: RegionRef, m: ManifestLike): Region
   ];
 }
 
-export interface SaveResult { files: number; bytes: number; run: string }
+/** bytes: stored on the phone (decoded); sent: downloaded, as the data plan counts it (X-W12; absent in older records). */
+export interface SaveResult { files: number; bytes: number; run: string; sent?: number }
 export interface SavedInfo extends SaveResult { at: string }
 type CachesLike = { open(name: string): Promise<Pick<Cache, 'put' | 'match'>> };
 
@@ -64,12 +65,13 @@ export async function saveRegionOffline(
   if (!mr.ok) throw new Error(`manifest ${r.name}: HTTP ${mr.status}`);
   const m = (await mr.json()) as ManifestLike;
   const files = regionFiles(base, r, m);
-  let bytes = 0, done = 0;
+  let bytes = 0, sent = 0, done = 0;
   for (const file of files) {
     const res = await f(file.url);
     if (!res.ok) throw new Error(`${file.url.split('/').slice(-2).join('/')}: HTTP ${res.status}`);
     const buf = await res.arrayBuffer();
     bytes += buf.byteLength;
+    sent += wireSize(res, buf.byteLength);
     const type = res.headers.get('Content-Type') ?? 'application/octet-stream';
     for (const name of file.into) {
       const cache = await cs.open(name);
@@ -77,11 +79,45 @@ export async function saveRegionOffline(
     }
     opts.onProgress?.(++done, files.length);
   }
-  const result = { files: files.length, bytes, run: m.run };
+  const result = { files: files.length, bytes, run: m.run, sent };
   // the record is written last, so a save cut short is never reported as saved
   const at = new Date().toISOString();
   await (await cs.open(FIELD_CACHES.geometry)).put(markerKey(base, r.name), new Response(JSON.stringify({ ...result, at }), { headers: { 'Content-Type': 'application/json' } }));
   return result;
+}
+
+/**
+ * Size a response took on the wire: its Content-Length (the encoded size when the file is stored brotli or gzip), or the
+ * decoded size when the header is missing (a response compressed on the fly, or rebuilt by the service worker).
+ */
+export function wireSize(res: Pick<Response, 'headers'>, decoded: number): number {
+  const len = Number(res.headers.get('content-length'));
+  return Number.isFinite(len) && len > 0 ? len : decoded;
+}
+
+/**
+ * Download estimate before saving (X-W12): HEAD of every file of the region and the run now published, summing the
+ * Content-Length; files that do not tell their size are left out (the manifest, the school points: a few KB).
+ */
+export async function estimateDownload(base: string, r: RegionRef, fetchImpl: typeof fetch = (...a) => fetch(...a)): Promise<{ sent: number; files: number; known: number }> {
+  const mr = await fetchImpl(`${base}/v/${r.name}/manifest.json`, { cache: 'no-cache' });
+  if (!mr.ok) throw new Error(`manifest ${r.name}: HTTP ${mr.status}`);
+  const files = regionFiles(base, r, (await mr.json()) as ManifestLike);
+  const sizes = await Promise.all(files.map(async (file) => {
+    try { const h = await fetchImpl(file.url, { method: 'HEAD' }); const n = Number(h.headers.get('content-length')); return h.ok && n > 0 ? n : 0; } catch { return 0; }
+  }));
+  return { sent: sizes.reduce((a, b) => a + b, 0), files: files.length, known: sizes.filter((n) => n > 0).length };
+}
+
+/** "Tersimpan untuk tanpa internet: 6,9 MB di ponsel, terunduh 2,4 MB (20 berkas, run …" (X-W12). */
+export function savedText(sv: SaveResult, when: string): string {
+  const sent = sv.sent && sv.sent > 0 ? `, terunduh ${sizeLabel(sv.sent)}` : '';
+  return `Tersimpan untuk tanpa internet: ${sizeLabel(sv.bytes)} di ponsel${sent} (${sv.files} berkas, run ${sv.run}, disimpan ${when}).`;
+}
+
+/** "Perkiraan unduhan sekitar 2,4 MB" before saving, or '' when nothing could be measured. */
+export function estimateText(e: { sent: number; known: number } | null | undefined): string {
+  return e && e.sent > 0 && e.known > 0 ? `Perkiraan unduhan sekitar ${sizeLabel(e.sent)}; di ponsel tersimpan lebih besar karena berkas dikirim dimampatkan.` : '';
 }
 
 /** "4,1 MB" */
