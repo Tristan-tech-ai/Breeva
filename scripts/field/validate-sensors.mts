@@ -136,6 +136,28 @@ for (let i = 0; i < N; i++) {
   for (const [day, d] of days) if (d.no >= 18 && d.np >= 18) { dp.push(d.p / d.np); dob.push(d.o / d.no); dday.push(day); }
 }
 const daily = metrics(dp, dob);
+// Per hidden sensor (F5-25): its daily bias and how much of its hourly under-prediction comes from its worst hours.
+const perSensor = ids.map((id, i) => {
+  const days = new Map<string, { p: number; o: number; n: number }>();
+  const errs: number[] = [];
+  for (let t = 0; t < T; t++) {
+    if (!Number.isFinite(V[i][t]) || !Number.isFinite(P[i][t])) continue;
+    errs.push(P[i][t] - V[i][t]);
+    const day = new Date(Date.parse(hours[t]) + 8 * 3600_000).toISOString().slice(0, 10);
+    const d = days.get(day) ?? { p: 0, o: 0, n: 0 };
+    d.p += P[i][t]; d.o += V[i][t]; d.n++; days.set(day, d);
+  }
+  const db = [...days.values()].filter((d) => d.n >= 18).map((d) => (d.p - d.o) / d.n);
+  const neg = errs.filter((e) => e < 0).map((e) => -e).sort((a, b) => b - a);
+  const negSum = neg.reduce((s, x) => s + x, 0), top = neg.slice(0, Math.max(1, Math.ceil(0.05 * errs.length))).reduce((s, x) => s + x, 0);
+  const r2 = (x: number, d = 2) => Number(x.toFixed(d));
+  return {
+    loc_id: id, name: sensors[i].name, days: db.length, hours: errs.length,
+    daily_bias_mean: db.length ? r2(db.reduce((s, x) => s + x, 0) / db.length) : null,
+    share_days_bias_le_minus5: db.length ? r2(db.filter((x) => x <= -5).length / db.length, 3) : null,
+    share_under_from_worst_5pct_hours: negSum > 0 ? r2(top / negSum, 3) : null,
+  };
+});
 // The same daily pairs scored one day at a time, as the live map's daily test does (F5-24): within a single day the
 // sensors differ much less than across days, so R2 and slope measure only the spatial pattern of that day.
 const byDay = new Map<string, number[]>();
@@ -168,7 +190,7 @@ const report = {
   test: 'leave-one-sensor-out, log-space ordinary kriging (port of analisis_h ok_log)',
   data: { sensors: N, hours: T, from: hours[0], to: hours[T - 1], source: 'OpenAQ v3 /sensors/{id}/hours (AirGradient), CC BY 4.0' },
   reference: 'sumber_proposal/data/stats_h.json penduga.ok_log: harian nrmse 22.9 %, rmse 7.92, r 0.817, n 1470',
-  hourly: hourlyM, daily, daily_single_day: dailySingleDay, epa_daily_targets: epa, epa_passed: Object.values(epa).filter(Boolean).length,
+  hourly: hourlyM, daily, daily_single_day: dailySingleDay, per_sensor: perSensor, epa_daily_targets: epa, epa_passed: Object.values(epa).filter(Boolean).length,
   pi95_hourly_coverage: Number((inside / hp.length).toFixed(3)),
   pi95_calibrated: {
     method: 'nested: factor for each hidden sensor = 95th percentile of |z| over the other sensors / 1.96',
