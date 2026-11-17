@@ -253,6 +253,16 @@ for (const r of ROUTES) {
   writeFileSync(join(DIST, r.file), html, 'utf8');
   count++;
 }
+// X-W7: the SPA shell (index.html, served for / and /home among others) starts the field requests of / and /home too;
+// written after the route files, which were made from the template without it
+{
+  const regions = parseRegions(readFileSync(join(process.cwd(), 'src/lib/field/source.ts'), 'utf8'));
+  const tag = process.env.VITE_FIELD_STATIC === 'true' ? earlyFieldScript(process.env.VITE_FIELD_BASE ?? '', regions, 'app') : '';
+  if (tag) writeFileSync(TEMPLATE_PATH, sub(template, /<\/head>/, `    ${tag}
+  </head>`), 'utf8');
+  console.log(`[prerender] index.html: early field ${tag ? 'on for / and /home' : 'off (no VITE_FIELD_STATIC or CDN base in this build)'}`);
+}
+
 // the build manifest maps source paths to files; it is a build input, not something to serve
 rmSync(join(DIST, '.vite'), { recursive: true, force: true });
 console.log(`[prerender] wrote ${count} per-route HTML files to dist/ (${ROUTES.map((r) => r.path).join(', ')})`);
