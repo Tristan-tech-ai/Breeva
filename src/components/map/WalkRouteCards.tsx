@@ -3,6 +3,7 @@ import type { WalkRoutingState } from './WalkRouteLayer';
 import { routeLink } from '../../lib/route/share';
 import { DEPART_CHOICES } from '../../lib/route/depart';
 import FieldAgeNote from './FieldAgeNote';
+import { announceRoutes } from '../../lib/route/summary';
 
 /** Cards of the routes computed on the device: vehicle exhaust breathed against the fastest route, time, distance. */
 export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = null, onDepart }: {
@@ -18,7 +19,9 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = 
     navigator.clipboard?.writeText(url).then(() => setCopied(true), () => setCopied(false));
   };
   return (
-    <div className="glass-card p-4" aria-live="polite">
+    <div className="glass-card p-4">
+      {/* one short summary for screen readers, instead of re-reading the whole card on every change (F1-47) */}
+      <p className="sr-only" role="status">{announceRoutes(state.cards, state.status)}</p>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold text-gray-900 dark:text-white">Rute (dihitung di perangkat)</p>
         {onMode && (
@@ -81,7 +84,7 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = 
           ))}
         </div>
       )}
-      <p className="mt-2 text-[10.5px] leading-relaxed text-gray-400 dark:text-gray-500">
+      <p className="mt-2 text-[10.5px] leading-relaxed text-gray-500 dark:text-gray-400">
         {mode === 'motor'
           ? 'Motor: biaya rute menghitung paparan diri dan paparan yang ditimbulkan bagi warga sekitar (harga hirup); gang dan jalan lingkungan hanya dipakai dekat titik berangkat dan tujuan (zona napas); pada jam masuk 06.30–07.30 dan pulang 12.00–13.30 jalan kecil di depan sekolah juga dihindari. Rute darurat paling cepat dan tidak memberi poin, tetapi tetap menjauhi gang. '
           : 'Asap kendaraan (gas buang dan jelaga knalpot) paling pekat di jalan ramai dan cepat menipis begitu menjauh, jadi rute dipilih menurut asap kendaraan yang dihirup. '}

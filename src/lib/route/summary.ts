@@ -106,3 +106,19 @@ export function routeCards(routes: WalkRoute[]): RouteCard[] {
     };
   });
 }
+
+/**
+ * One short sentence set for screen readers when routes arrive (F1-47): how many routes, then per route its label,
+ * distance, minutes and first line, plus the school-zone cost and a leave-later hint when there are any. Without
+ * cards the status line (computing, error) is announced.
+ */
+export function announceRoutes(cards: RouteCard[], status: string): string {
+  if (!cards.length) return status;
+  const parts = cards.map((c) => [
+    `${c.label}: ${c.km} km, ${c.minutes} menit.`,
+    c.headline ? `${c.headline.replace(/\.$/, '')}.` : '',
+    c.schoolCost ? `${c.schoolCost.replace(/\.$/, '')}.` : '',
+    c.soonHint ? `${c.soonHint.replace(/\.$/, '')}.` : '',
+  ].filter(Boolean).join(' '));
+  return `${cards.length} rute. ${parts.join(' ')}`;
+}
