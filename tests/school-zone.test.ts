@@ -7,7 +7,7 @@ import {
   ARTERIAL, localMinutes, localTimeToMs, motorRouteAt, ownSchools, SCHOOL_HOURS, schoolActive, schoolEdges, schoolFilter,
   type SchoolFile,
 } from '../src/lib/route/schoolZone';
-import { routeCards, SCHOOL_NOTES } from '../src/lib/route/summary';
+import { routeCards, SCHOOL_NOTES, schoolCostText } from '../src/lib/route/summary';
 // @ts-expect-error tsx script module, typed loosely here
 import { schoolPoints } from '../scripts/field/build-schools.mts';
 
@@ -85,6 +85,23 @@ describe('school zone edges', () => {
     }
     expect(kept).toBeGreaterThan(0);
   });
+
+  it('the zone-free route the worker compares with is never longer in time than the zoned one by search', () => {
+    const f = file([school]);
+    let compared = 0;
+    for (let s = 0; s < g.n; s++) for (let t = 0; t < g.n; t++) {
+      if (s === t || !motorNode(g, s) || !motorNode(g, t)) continue;
+      const inp = { no2: new Float64Array(g.m).fill(10) };
+      const zoned = motorRouteAt(route, g, 'motor', s, t, inp, { file: f, edgeSchool: es }, at(7), true);
+      const free = motorRouteAt(route, g, 'motor', s, t, inp, null, at(7), true);
+      if (!zoned || !free || zoned.school === 'off') continue;
+      expect(free.school).toBe('off');
+      // the emergency route is the fastest one: dropping a restriction can only keep or shorten its time
+      expect(free.route.timeS).toBeLessThanOrEqual(zoned.route.timeS + 1e-6);
+      compared++;
+    }
+    expect(compared).toBeGreaterThan(0);
+  });
 });
 
 describe('school points and notes', () => {
@@ -104,4 +121,17 @@ describe('school points and notes', () => {
     const cards = routeCards([{ ...base, kind: 'darurat', school: 'lifted-near-ends' }, { ...base, kind: 'dua-angka', school: 'kept' }, { ...base, school: 'off' }]);
     expect(cards.map((c) => c.schoolNote)).toEqual([SCHOOL_NOTES['lifted-near-ends'], SCHOOL_NOTES.kept, null]);
   });
+
+  it('route cards say what the school zone costs, or that it changes nothing (F3-09)', () => {
+    expect(schoolCostText({ extraM: 0, extraS: 0, changed: false })).toBe('Zona sekolah tidak mengubah rute ini');
+    expect(schoolCostText({ extraM: 420, extraS: 95, changed: true })).toBe('Zona sekolah menambah 2 menit dan 420 m dibanding rute tanpa zona');
+    expect(schoolCostText({ extraM: 1260, extraS: 20, changed: true })).toBe('Zona sekolah menambah kurang dari 1 menit dan 1.260 m dibanding rute tanpa zona');
+    expect(schoolCostText({ extraM: 10, extraS: 10, changed: true })).toBe('Zona sekolah mengubah jalannya, tanpa tambahan waktu yang berarti');
+    expect(schoolCostText(undefined)).toBeNull();
+    const base = { lengthM: 1000, timeS: 200, pm25Mean: 20, no2Mean: 15, coords: [], w: 0 };
+    const cards = routeCards([{ ...base, kind: 'dua-angka', school: 'kept', schoolCost: { extraM: 300, extraS: 70, changed: true } },
+      { ...base, school: 'off', schoolCost: { extraM: 300, extraS: 70, changed: true } }]);
+    expect(cards.map((c) => c.schoolCost)).toEqual(['Zona sekolah menambah 1 menit dan 300 m dibanding rute tanpa zona', null]);
+  });
+
 });

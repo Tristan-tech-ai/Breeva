@@ -74,6 +74,9 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = 
               {c.schoolNote && (
                 <p className="mt-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300">{c.schoolNote}</p>
               )}
+              {c.schoolCost && (
+                <p className="text-[11px] text-amber-800 dark:text-amber-300">{c.schoolCost}</p>
+              )}
             </div>
           ))}
         </div>

@@ -15,6 +15,8 @@ export interface WalkRoute {
   hargaMean?: number;
   /** Motor routes: school zone off (outside school hours or no school data), kept, or lifted near the trip's ends. */
   school?: 'off' | 'kept' | 'lifted-near-ends';
+  /** Motor routes while the school zone is on: this route against the same kind of route without the zone. */
+  schoolCost?: { extraM: number; extraS: number; changed: boolean };
 }
 
 export class RouteClient {

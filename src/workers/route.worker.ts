@@ -96,17 +96,28 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
   const s = index.nearest(from.lat, from.lng, 500, keep), t = index.nearest(to.lat, to.lng, 500, keep);
   if (s < 0 || t < 0) throw new Error('titik di luar jaringan jalan wilayah ini');
   const nArr = field?.no2 ?? no2, pArr = pm25, hArr = harga, xArr = field?.exhaust ?? exhaust;
-  let routes: Array<RouteResult & { kind?: 'dua-angka' | 'darurat'; school?: 'off' | 'kept' | 'lifted-near-ends' }>;
+  let routes: Array<RouteResult & { kind?: 'dua-angka' | 'darurat'; school?: 'off' | 'kept' | 'lifted-near-ends';
+    schoolCost?: { extraM: number; extraS: number; changed: boolean } }>;
   if (mode === 'motor') {
     const inp = { no2: nArr, harga: hArr ?? undefined };
     const zone = schoolZone(g);
     const two = motorRouteAt(route, g, 'motor', s, t, inp, zone, at);
     const emer = motorRouteAt(route, g, 'motor', s, t, inp, zone, at, true);
     if (!two || !emer) throw new Error('tidak ada rute kendaraan yang menghormati zona napas');
+    // while the zone is on, the same two searches without it say what the zone costs (F3-09)
+    const costOf = (withZone: RouteResult, emergency: boolean) => {
+      const free = motorRouteAt(route, g, 'motor', s, t, inp, null, at, emergency);
+      if (!free) return undefined;
+      return { extraM: withZone.lengthM - free.route.lengthM, extraS: withZone.timeS - free.route.timeS,
+        changed: withZone.edges.join(',') !== free.route.edges.join(',') };
+    };
+    const zoneOn = two.school !== 'off';
+    const twoCost = zoneOn ? costOf(two.route, false) : undefined;
     // fastest (emergency) first, like the walking list; the same route twice is shown once
     routes = emer.route.edges.join(',') === two.route.edges.join(',')
-      ? [{ ...two.route, kind: 'dua-angka', school: two.school }]
-      : [{ ...emer.route, kind: 'darurat', school: emer.school }, { ...two.route, kind: 'dua-angka', school: two.school }];
+      ? [{ ...two.route, kind: 'dua-angka', school: two.school, schoolCost: twoCost }]
+      : [{ ...emer.route, kind: 'darurat', school: emer.school, schoolCost: emer.school !== 'off' ? costOf(emer.route, true) : undefined },
+        { ...two.route, kind: 'dua-angka', school: two.school, schoolCost: twoCost }];
   } else {
     const medN = median(nArr);
     routes = pareto(g, s, t, { speed: SPEED, exposureOf: (e) => (Number.isFinite(nArr[e]) ? nArr[e] / medN : 1) });
@@ -128,7 +139,7 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
     // mean concentration along the route (ug/m3), the honest number to compare routes by
     const o = { lengthM: Math.round(r.lengthM), timeS: Math.round(r.timeS), pm25Mean: pmDose / tSum, no2Mean: no2Dose / tSum, exhMean: xDose / tSum, coords, w: r.w,
       forecastHour: field ? field.hour : null };
-    return mode === 'motor' ? { ...o, kind: r.kind, hargaMean: hDose / tSum, school: r.school } : o;
+    return mode === 'motor' ? { ...o, kind: r.kind, hargaMean: hDose / tSum, school: r.school, schoolCost: r.schoolCost } : o;
   });
   return { routes: out, raw };
 }

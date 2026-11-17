@@ -22,12 +22,27 @@ export interface RouteCard {
   vsFastest: { extraTimePct: number; extraMin: number; no2Pct: number; exhDosePct: number | null } | null;
   /** Motor routes during school hours: what the school zone did to this route. */
   schoolNote: string | null;
+  /** Motor routes during school hours: the minutes and metres the zone adds, or that it changes nothing. */
+  schoolCost: string | null;
 }
 
 export const SCHOOL_NOTES = {
   kept: 'Jam sekolah: rute tidak lewat jalan kecil di depan sekolah',
   'lifted-near-ends': 'Jam sekolah: dekat titik berangkat atau tujuan rute ini terpaksa lewat depan sekolah (tidak ada jalan lain)',
 } as const;
+
+/**
+ * What the school zone costs this trip, against the same kind of route computed without the zone (the worker does
+ * this only while the zone is on). Differences under 1 minute and 50 m are shown as no change in time.
+ */
+export function schoolCostText(cost: { extraM: number; extraS: number; changed: boolean } | null | undefined): string | null {
+  if (!cost) return null;
+  if (!cost.changed) return 'Zona sekolah tidak mengubah rute ini';
+  const min = Math.round(cost.extraS / 60), m = Math.round(cost.extraM / 10) * 10;
+  if (min < 1 && m < 50) return 'Zona sekolah mengubah jalannya, tanpa tambahan waktu yang berarti';
+  const parts = [min >= 1 ? `${min} menit` : 'kurang dari 1 menit', m >= 50 ? `${m.toLocaleString('id-ID')} m` : null].filter(Boolean);
+  return `Zona sekolah menambah ${parts.join(' dan ')} dibanding rute tanpa zona`;
+}
 
 /** Fastest orange, cleanest teal, the rest slate: none of them an ISPU colour (Sedang is blue), drawn on a white casing. */
 export const ROUTE_COLORS = { fastest: '#c2410c', cleanest: '#0f766e', other: '#475569' } as const;
@@ -70,6 +85,7 @@ export function routeCards(routes: WalkRoute[]): RouteCard[] {
       soonHint: best ? `Berangkat sekitar jam ${hh(best.hour.local_hour)} lewat rute ini: asap kendaraan ${best.pct}% lebih sedikit daripada berangkat sekarang` : null,
       harga: r.hargaMean != null ? Math.round(r.hargaMean * 100) / 100 : null,
       schoolNote: r.school === 'kept' || r.school === 'lifted-near-ends' ? SCHOOL_NOTES[r.school] : null,
+      schoolCost: r.school === 'kept' || r.school === 'lifted-near-ends' ? schoolCostText(r.schoolCost) : null,
       km: (r.lengthM / 1000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       minutes: Math.max(1, Math.round(r.timeS / 60)),
       no2: Math.round(r.no2Mean * 10) / 10, pm25: Math.round(r.pm25Mean * 10) / 10,
