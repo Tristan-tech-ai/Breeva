@@ -45,6 +45,19 @@ const MAJOR_CLASSES = new Set([
 
 export const isMajor = (highway: string) => MAJOR_CLASSES.has(highway);
 
+/**
+ * Stability class for the exhaust in a city at night. AERMOD Model Formulation (EPA-454/B-26-003, section 5.10): after
+ * sunset the urban surface stays warmer than the countryside and forms a "convective-like" boundary layer; for stable
+ * hours AERMOD takes the most neutral Monin-Obukhov length of the urban and rural ones ("stable-to-neutral") and
+ * computes the vertical spread with N = 0, i.e. neutral. Both field regions are urban cores (Kota Bogor; Denpasar, Kuta,
+ * Jimbaran and Canggu south of 8.55 S), so at night the stable classes E and F become the neutral class D; day classes
+ * are unchanged. (Added 17 Nov 2026, task F5-19.)
+ */
+export function urbanStability(s: Stability, hourLocal: number): Stability {
+  const night = hourLocal < 6 || hourLocal > 18;
+  return night && (s === 'E' || s === 'F') ? 'D' : s;
+}
+
 /** Briggs urban sigma_z in metres, x in metres (ISC3 vol. II table 1-4). */
 export function urbanSigmaZ(x: number, s: Stability): number {
   if (x <= 0) return 0;

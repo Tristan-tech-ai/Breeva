@@ -1,5 +1,5 @@
 {
- "built_at": "2026-11-17T12:31:31.570Z",
+ "built_at": "2026-11-17T13:22:45.523Z",
  "roadside": {
   "measured": [
    {
@@ -73,7 +73,11 @@
    }
   ],
   "correction": {
-   "note": "Koreksi 17 Nov 2026: angin paling rendah 1 m/s (CALINE-3 bagian 8.1.6, ISC3 jilid II bagian 1.1.3) dan tiap separuh jalan dua jalur membawa separuh volume.",
+   "note": "Koreksi 17 Nov 2026: angin paling rendah 1 m/s (CALINE-3 bagian 8.1.6, ISC3 jilid II bagian 1.1.3) dan tiap separuh jalan dua jalur membawa separuh volume. Lalu malam di kota dihitung netral, bukan stabil (AERMOD, formulasi model bagian 5.10).",
+   "night_city": {
+    "p99_after": 108.6,
+    "max_after": 338.6
+   },
    "bogor_night_p99_before": 336.3,
    "bogor_night_p99_after": 138.8,
    "bogor_night_max_before": 1010.3,

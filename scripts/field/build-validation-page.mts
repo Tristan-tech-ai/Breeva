@@ -65,7 +65,8 @@ const roadside = {
   measured: pembanding.pembanding, measured_source: 'reports/pembanding_pinggir_jalan.json',
   model_latest: ['badung_denpasar', 'kota_bogor'].map(latestReport),
   correction: {
-    note: 'Koreksi 17 Nov 2026: angin paling rendah 1 m/s (CALINE-3 bagian 8.1.6, ISC3 jilid II bagian 1.1.3) dan tiap separuh jalan dua jalur membawa separuh volume.',
+    note: 'Koreksi 17 Nov 2026: angin paling rendah 1 m/s (CALINE-3 bagian 8.1.6, ISC3 jilid II bagian 1.1.3) dan tiap separuh jalan dua jalur membawa separuh volume. Lalu malam di kota dihitung netral, bukan stabil (AERMOD, formulasi model bagian 5.10).',
+    night_city: f516.malam_kota_D_F5_19 ? { p99_after: f516.malam_kota_D_F5_19.kota_bogor_22.sesudah[0], max_after: f516.malam_kota_D_F5_19.kota_bogor_22.sesudah[1] } : null,
     bogor_night_p99_before: bogor22.sebelum[0], bogor_night_p99_after: bogor22.keduanya[0],
     bogor_night_max_before: bogor22.sebelum[1], bogor_night_max_after: bogor22.keduanya[1],
     source: 'reports/f5-16_nox.json uraian_bogor_22 (run 2026111615, 22.00 WIB)',

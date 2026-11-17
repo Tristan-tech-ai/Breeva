@@ -5,7 +5,7 @@
 import { buildMultiSourceDeltas, computeRoadAQIv2, pm25ToAQI, type RoadRow } from '../../api/vayu/road-aqi.js';
 import { buildInterpolator, type BaselineCorners, type BaselineData } from '../../api/vayu/_baseline.js';
 import { caline4CanyonFactor, pasquillClass } from '../../api/vayu/_caline4.js';
-import { exhaustAt, isMajor, mixingHalfWidth, splitCarriagewayShare, type ExhaustSource } from '../../src/lib/field/exhaust.js';
+import { exhaustAt, isMajor, mixingHalfWidth, splitCarriagewayShare, urbanStability, type ExhaustSource, type Stability } from '../../src/lib/field/exhaust.js';
 import type { RoadPack } from './pack.js';
 import type { CellValue } from './cells.js';
 import { OrdinaryKriging } from './kriging.js';
@@ -122,7 +122,7 @@ export function exhaustForHour(p: RoadPack, grids: FieldInputs['grids'], hourLoc
   const met = (lat: number, lon: number) => {
     const b = interp(lat, lon);
     const ws = Number.isFinite(b.wind_speed) ? b.wind_speed : 2.0;
-    return { wind: ws, stability: pasquillClass(ws, hourLocal, 0.5) };
+    return { wind: ws, stability: urbanStability(pasquillClass(ws, hourLocal, 0.5) as Stability, hourLocal) };
   };
   const mids = rows.map((_, k) => { const c = p.coords(k); const m = c[Math.floor(c.length / 2)]; return { lat: m[1], lon: m[0] }; });
   const r = exhaustAt(exhaustSources(rows, (k) => p.coords(k), diurnal), mids, met);
@@ -168,7 +168,7 @@ export function computeField(p: RoadPack, inputs: FieldInputs, only?: number[]):
     const met = (lat: number, lon: number) => {
       const b = interp(lat, lon);
       const ws = Number.isFinite(b.wind_speed) ? b.wind_speed : 2.0;
-      return { wind: ws, stability: pasquillClass(ws, inputs.hourLocal, 0.5) };
+      return { wind: ws, stability: urbanStability(pasquillClass(ws, inputs.hourLocal, 0.5) as Stability, inputs.hourLocal) };
     };
     iso = exhaustAt(exhaustSources(rows, (k) => p.coords(k), inputs.diurnal, inputs.congestion), mids.map((m) => ({ lat: m[1], lon: m[0] })), met);
   } else {

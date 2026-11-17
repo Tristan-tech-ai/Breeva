@@ -15,7 +15,7 @@ import { dirname } from 'node:path';
 import { fetchBaselineGrid } from '../../api/vayu/_baseline.js';
 import { computeRoadAQIv2, fetchCamsDailyMean, HOURLY_TRAFFIC, type RoadRow } from '../../api/vayu/road-aqi.js';
 import { pasquillClass } from '../../api/vayu/_caline4.js';
-import { exhaustAt } from '../../src/lib/field/exhaust.js';
+import { exhaustAt, urbanStability, type Stability } from '../../src/lib/field/exhaust.js';
 import { RoadPack } from './pack.js';
 import { exhaustSources, makeInterp, roadRow, type FieldInputs } from './engine.js';
 
@@ -122,7 +122,7 @@ for (const h of neededHours) {
   const met = (lat: number, lon: number) => {
     const ws = interp(lat, lon).wind_speed;
     const u = Number.isFinite(ws) ? ws : 2.0;
-    return { wind: u, stability: pasquillClass(u, h, 0.5) };
+    return { wind: u, stability: urbanStability(pasquillClass(u, h, 0.5) as Stability, h) };
   };
   const iso = exhaustAt(sources(inputs.diurnal), receptors, met);
   perHour.set(h, receptors.map((r) => {

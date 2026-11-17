@@ -107,7 +107,7 @@ export default function ValidasiPage() {
                     <li key={m.id}>{measuredLine(m)}<span className="block text-[11px] text-gray-500">{m.sumber}</span></li>
                   ))}
                 </ul>
-                <p>{v.roadside.correction.note} Kota Bogor jam 22.00: 99% ruas di bawah {num(v.roadside.correction.bogor_night_p99_before, 0)} → {num(v.roadside.correction.bogor_night_p99_after, 0)} µg/m³, tertinggi {num(v.roadside.correction.bogor_night_max_before, 0)} → {num(v.roadside.correction.bogor_night_max_after, 0)}.</p>
+                <p>{v.roadside.correction.note} Kota Bogor jam 22.00: 99% ruas di bawah {num(v.roadside.correction.bogor_night_p99_before, 0)} → {num(v.roadside.correction.bogor_night_p99_after, 0)} µg/m³, tertinggi {num(v.roadside.correction.bogor_night_max_before, 0)} → {num(v.roadside.correction.bogor_night_max_after, 0)}{v.roadside.correction.night_city ? <>; dengan malam kota netral {num(v.roadside.correction.night_city.p99_after, 0)} dan {num(v.roadside.correction.night_city.max_after, 0)}</> : null}.</p>
                 <p className="text-amber-800 dark:text-amber-300">{v.roadside.limits}</p>
                 <p className="text-[11px] text-gray-500">{v.roadside.measured_source} · {v.roadside.correction.source}</p>
               </section>

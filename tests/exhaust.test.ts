@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CUTOFF_M, EMISSION_G_PER_KM, MIN_WIND_MS, exhaustAt, initialSigmaZ, isMajor, lineKernel, mixingHalfWidth,
-  splitCarriagewayShare, urbanSigmaZ, type ExhaustSource, type Stability,
+  splitCarriagewayShare, urbanSigmaZ, urbanStability, type ExhaustSource, type Stability,
 } from '../src/lib/field/exhaust';
 
 /** A straight north-south road of the given length, seen from a receptor d metres to its east. */
@@ -39,6 +39,18 @@ describe('dispersion formulas from the primary sources', () => {
     const xy = straight(20);
     expect(lineKernel(xy, 0.3, 'F', HALF_W)).toBe(lineKernel(xy, 1, 'F', HALF_W));
     expect(lineKernel(xy, 2, 'F', HALF_W)).toBeLessThan(lineKernel(xy, 1, 'F', HALF_W));
+  });
+
+  it('a city night is never more stable than neutral (AERMOD formulation section 5.10)', () => {
+    expect(urbanStability('F', 22)).toBe('D');
+    expect(urbanStability('E', 2)).toBe('D');
+    expect(urbanStability('D', 23)).toBe('D');
+    expect(urbanStability('B', 10)).toBe('B');
+    expect(urbanStability('F', 12)).toBe('F'); // only night hours change
+    expect(urbanStability('F', 18)).toBe('F');
+    expect(urbanStability('F', 19)).toBe('D');
+    // so a calm city night dilutes more than the stable rural curve would
+    expect(lineKernel(straight(20), 1, urbanStability('F', 22), HALF_W)).toBeLessThan(lineKernel(straight(20), 1, 'F', HALF_W));
   });
 
   it('road classes: tertiary and above are major', () => {

@@ -27,7 +27,8 @@ export interface RoadsideMeasured {
 export interface Roadside {
   measured: RoadsideMeasured[]; measured_source: string;
   model_latest: Array<{ name: string; run: string; hour_local: number | null; median: number; p90: number; p99: number; source: string }>;
-  correction: { note: string; bogor_night_p99_before: number; bogor_night_p99_after: number; bogor_night_max_before: number; bogor_night_max_after: number; source: string };
+  correction: { note: string; bogor_night_p99_before: number; bogor_night_p99_after: number; bogor_night_max_before: number; bogor_night_max_after: number; source: string;
+    night_city?: { p99_after: number; max_after: number } | null };
   limits: string;
 }
 
