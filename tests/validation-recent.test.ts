@@ -27,6 +27,19 @@ describe('running hourly validation file', () => {
     expect(summarizeRecent(f)).toEqual({ hours: 3, median_nrmse: 0.4, median_rmse: 12, median_coverage: 0.95, sensors_median: 21, last_run: '2026111612' });
     expect(summarizeRecent(null)).toBeNull();
   });
+
+  it('counts each sensor hour once: the later run of the same OpenAQ hour stands for it (F5-27)', () => {
+    const at = (run: string, hour: string | null, nrmse: number, n = 24): RecentEntry => ({ ...e(run, nrmse, n), sensor_hour_utc: hour });
+    const f = { format: 'validation_recent' as const, name: 'r', scope: '', updated_at: '', entries: [
+      at('2026111714', '2026-11-17T12:00:00Z', 0.30), at('2026111715', '2026-11-17T12:00:00Z', 0.90, 10), // same hour, later run wins
+      at('2026111716', '2026-11-17T14:00:00Z', 0.40), at('2026111717', null, 0.50), at('2026111718', '2026-11-17T16:00:00Z', 0.60),
+    ] };
+    const s = summarizeRecent(f)!;
+    expect(s.hours).toBe(4);
+    expect(s.median_nrmse).toBe(0.55); // 0.40, 0.50, 0.60, 0.90
+    expect(s.sensors_median).toBe(24);
+    expect(s.last_run).toBe('2026111718');
+  });
 });
 
 describe('daily EPA test from hourly hidden guesses', async () => {

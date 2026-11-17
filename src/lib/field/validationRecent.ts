@@ -129,15 +129,22 @@ const median = (a: number[]) => {
 
 export interface RecentSummary { hours: number; median_nrmse: number; median_rmse: number; median_coverage: number; sensors_median: number; last_run: string | null }
 
+/**
+ * Medians over sensor hours, each counted once (F5-27): two runs can test the same OpenAQ hour (the sensors report 1-2 h
+ * late), and the later run's entry stands for it; an entry without a sensor hour counts by its run.
+ */
 export function summarizeRecent(f: RecentFile | null): RecentSummary | null {
-  const es = f?.entries ?? [];
-  if (!es.length) return null;
+  const all = f?.entries ?? [];
+  if (!all.length) return null;
+  const byHour = new Map<string, RecentEntry>();
+  for (const e of [...all].sort((a, b) => a.run.localeCompare(b.run))) byHour.set(e.sensor_hour_utc ?? `run:${e.run}`, e);
+  const es = [...byHour.values()];
   return {
     hours: es.length,
     median_nrmse: median(es.map((e) => e.nrmse)),
     median_rmse: median(es.map((e) => e.rmse)),
     median_coverage: median(es.map((e) => e.pi95_coverage)),
     sensors_median: median(es.map((e) => e.n)),
-    last_run: es[es.length - 1].run,
+    last_run: all.reduce((m, e) => (e.run > m ? e.run : m), all[0].run),
   };
 }
