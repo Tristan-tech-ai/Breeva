@@ -25,7 +25,7 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = 
           <div className="flex gap-1" role="group" aria-label="Moda">
             {(['walk', 'motor'] as const).map((m) => (
               <button key={m} onClick={() => onMode(m)} aria-pressed={mode === m}
-                className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${mode === m ? 'bg-teal-700 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
+                className={`min-h-8 rounded-full px-3 py-1 text-[11px] font-bold ${mode === m ? 'bg-teal-700 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
                 {m === 'walk' ? 'Jalan kaki' : 'Motor'}
               </button>
             ))}
@@ -45,7 +45,7 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = 
       <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
         {state.status}
         {ends && state.cards.length > 0 && (
-          <button onClick={copy} className="ml-2 font-semibold text-teal-700 dark:text-teal-300 underline underline-offset-2">
+          <button onClick={copy} className="ml-1 inline-flex min-h-8 items-center px-1 font-semibold text-teal-700 dark:text-teal-300 underline underline-offset-2">
             {copied ? 'Tautan disalin' : 'Salin tautan rute'}
           </button>
         )}

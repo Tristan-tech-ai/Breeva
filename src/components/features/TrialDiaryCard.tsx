@@ -40,7 +40,7 @@ export default function TrialDiaryCard() {
       {rows.length > 0 ? (
         <>
           <p className="text-[13px]">
-            <b>{s.days} hari</b> memakai rute ({s.lookups} kali){s.medianRed != null && <>; rute paling sedikit asap kendaraan rata-rata (median) <b>{s.medianRed}%</b> lebih sedikit asap, tambahan {s.medianExtra ?? 0} menit</>}.
+            <b>{s.days} hari</b> memakai rute ({s.lookups} kali){s.medianRed != null && <>; rute paling sedikit asap kendaraan rata-rata (median) <b>{Math.round(s.medianRed)}%</b> lebih sedikit asap, tambahan {Math.round(s.medianExtra ?? 0)} menit</>}.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={copy} className={`${btn} bg-white dark:bg-gray-900 border border-teal-700 text-teal-800 dark:text-teal-200`}>
