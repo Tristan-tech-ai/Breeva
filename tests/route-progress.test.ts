@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { COMPUTING, progressCounter, routeLoadingText, SHOW_PROGRESS_AFTER_MS, sizeText } from '../src/lib/route/loadProgress';
+import { announceRoutes } from '../src/lib/route/summary';
 import { cachedBytes, readCounting } from '../src/lib/route/assets';
 
 // X-W4: on a slow link the first route waits about 50 s for the walking graph; the card says what is downloading.
@@ -54,5 +55,16 @@ describe('cachedBytes with a download meter', () => {
     const starts2: Array<number | null> = [];
     await cachedBytes('/x.bin', { cacheFirst: true, fetchImpl, cache: hit, meter: { start: (n) => starts2.push(n), bytes: () => {} } });
     expect(starts2).toEqual([]);
+  });
+});
+
+describe('screen readers', () => {
+  it('hear the download message once: the live region text does not change with the size or the seconds', () => {
+    const a = announceRoutes([], routeLoadingText(1_100_000, 5_000));
+    const b = announceRoutes([], routeLoadingText(1_201_000, 34_000));
+    expect(a).toBe(b);
+    expect(a).toContain('Mengunduh peta jalan kaki wilayah ini');
+    expect(a).not.toMatch(/Sudah \d+ detik/);
+    expect(announceRoutes([], COMPUTING)).toBe(COMPUTING);
   });
 });

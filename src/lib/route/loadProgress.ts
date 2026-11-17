@@ -17,10 +17,20 @@ export function sizeText(bytes: number): string {
  * sentBytes: the size the files travel at (sum of their Content-Length, brotli or gzip encoded), which is what a data
  * plan pays; the decoded size is about three times larger and would overstate it. Unknown (0) leaves the size out.
  */
+export const DOWNLOADING = 'Mengunduh peta jalan kaki wilayah ini, sekali saja';
+
 export function routeLoadingText(sentBytes: number, elapsedMs: number): string {
   if (elapsedMs < SHOW_PROGRESS_AFTER_MS) return COMPUTING;
   const size = sentBytes > 0 ? ` (sekitar ${sizeText(sentBytes)})` : '';
-  return `Mengunduh peta jalan kaki wilayah ini, sekali saja${size}. Sudah ${Math.floor(elapsedMs / 1000)} detik; di sinyal lemah bisa hampir satu menit, sesudahnya tersimpan di ponsel.`;
+  return `${DOWNLOADING}${size}. Sudah ${Math.floor(elapsedMs / 1000)} detik; di sinyal lemah bisa hampir satu menit, sesudahnya tersimpan di ponsel.`;
+}
+
+/**
+ * The status for the screen-reader live region: the download message without its size and seconds, so it is announced
+ * once instead of every second.
+ */
+export function steadyStatus(status: string): string {
+  return status.startsWith(DOWNLOADING) ? `${DOWNLOADING}. Ini bisa hampir satu menit di sinyal lemah.` : status;
 }
 
 /**

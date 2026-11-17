@@ -1,4 +1,5 @@
 /** Labels and comparisons for the walking route cards (pure, tested). */
+import { steadyStatus } from './loadProgress';
 import type { WalkRoute } from './client';
 import { bestSoon } from './departForecast';
 
@@ -113,7 +114,7 @@ export function routeCards(routes: WalkRoute[]): RouteCard[] {
  * cards the status line (computing, error) is announced.
  */
 export function announceRoutes(cards: RouteCard[], status: string): string {
-  if (!cards.length) return status;
+  if (!cards.length) return steadyStatus(status); // the download message changes every second (X-W4)
   const parts = cards.map((c) => [
     `${c.label}: ${c.km} km, ${c.minutes} menit.`,
     c.headline ? `${c.headline.replace(/\.$/, '')}.` : '',
