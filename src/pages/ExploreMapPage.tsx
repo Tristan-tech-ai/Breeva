@@ -345,12 +345,12 @@ export default function ExploreMapPage() {
         </section>
 
         {/* Footer nav (internal links for crawlers) */}
-        <nav className="flex flex-wrap gap-x-4 gap-y-1 pt-2 text-[11px] text-gray-400 dark:text-gray-500">
-          <Link to="/" className="hover:text-primary-500">Beranda</Link>
-          <Link to="/paparan" className="hover:text-primary-500">Kalkulator Paparan</Link>
-          <Link to="/about" className="hover:text-primary-500">Tentang</Link>
-          <Link to="/developers" className="hover:text-primary-500">Developer API</Link>
-          <Link to="/eco-tips" className="hover:text-primary-500">Tips Udara Bersih</Link>
+        <nav className="flex flex-wrap gap-x-4 pt-2 text-[11px] text-gray-500 dark:text-gray-400">
+          <Link to="/" className="inline-flex min-h-6 items-center hover:text-primary-500">Beranda</Link>
+          <Link to="/paparan" className="inline-flex min-h-6 items-center hover:text-primary-500">Kalkulator Paparan</Link>
+          <Link to="/about" className="inline-flex min-h-6 items-center hover:text-primary-500">Tentang</Link>
+          <Link to="/developers" className="inline-flex min-h-6 items-center hover:text-primary-500">Developer API</Link>
+          <Link to="/eco-tips" className="inline-flex min-h-6 items-center hover:text-primary-500">Tips Udara Bersih</Link>
         </nav>
       </div>
     </div>
