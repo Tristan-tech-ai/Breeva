@@ -9,6 +9,10 @@
  * Uses the AWS CLI already signed in on this machine; credentials are never read or printed here.
  */
 import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import { planUploads } from './publish-plan.mjs';
 
 const arg = (n, d) => { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : d; };
@@ -18,10 +22,16 @@ const root = arg('root', 'D:/breeva-ml-data/field');
 const regions = arg('region', 'badung_denpasar,kota_bogor').split(',');
 const withRuns = process.argv.includes('--with-runs');
 const plan = planUploads(root, regions).filter((u) => withRuns || !u.key.startsWith('v/'));
+const tmp = mkdtempSync(join(tmpdir(), 'breeva-publish-'));
 for (const u of plan) {
-  const cmd = ['s3', 'cp', u.local, `s3://${bucket}/${u.key}`, '--cache-control', u.cacheControl, '--content-type', u.contentType, '--only-show-errors'];
+  // gzip entries go up compressed with Content-Encoding: gzip (publish-plan.mjs says which)
+  const local = u.gzip ? join(tmp, u.key.replace(/[\/]/g, '_') + '.gz') : u.local;
+  if (u.gzip && !process.argv.includes('--dry')) writeFileSync(local, gzipSync(readFileSync(u.local), { level: 9 }));
+  const cmd = ['s3', 'cp', local, `s3://${bucket}/${u.key}`, '--cache-control', u.cacheControl, '--content-type', u.contentType,
+    ...(u.gzip ? ['--content-encoding', 'gzip'] : []), '--only-show-errors'];
   if (process.argv.includes('--dry')) { console.log('aws', cmd.join(' ')); continue; }
   execFileSync('aws', cmd, { stdio: 'inherit' });
-  console.log(`uploaded ${u.key}`);
+  console.log(`uploaded ${u.key}${u.gzip ? ' (gzip)' : ''}`);
 }
+rmSync(tmp, { recursive: true, force: true });
 console.log(JSON.stringify({ bucket, files: plan.length, regions }));

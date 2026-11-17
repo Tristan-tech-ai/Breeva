@@ -4,10 +4,13 @@
  *   tiles/{geometry}/{name}.pmtiles     public, max-age=31536000, immutable       (L1.2)
  *   v/{name}/{run}/{c}.bin              public, max-age=31536000, immutable       (L1.3, runs are never overwritten)
  *   v/{name}/manifest.json              public, max-age=60, stale-while-revalidate=600 (L1.4), uploaded LAST
- *   harga/{geometry}/{name}.bin         public, max-age=86400  (from harga/{geometry}/client/{name}.bin)
- *   graphs/{geometry}/{name}.bin        public, max-age=86400
+ *   harga/{geometry}/{name}.bin         public, max-age=86400  (from harga/{geometry}/client/{name}.bin), gzip
+ *   graphs/{geometry}/{name}.bin        public, max-age=86400, gzip
  *   graphs/{geometry}/{name}_schools.json  public, max-age=86400 (school zone points, F3-07)
  * inputs.json and report.json of a run stay local.
+ * gzip: stored with Content-Encoding: gzip (browsers decode it themselves). Only files always read whole: CloudFront
+ * does not compress application/octet-stream, and the walking graph went out at 3.2 MB (1.5 MB gzip), about 64 s on a
+ * slow 3G link (F1-53). The PMTiles archive is read by byte range, so it stays plain.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -35,9 +38,9 @@ export function planUploads(root, regions) {
     const extra = readdirSync(runDir).filter((f) => f.endsWith('.bin') && !man.cells.includes(Number(f.replace('.bin', ''))));
     if (extra.length) throw new Error(`run ${name}/${man.run} has cells the manifest does not list: ${extra.join(', ')}`);
     const harga = join(root, 'harga', g, 'client', `${name}.bin`);
-    if (existsSync(harga)) out.push({ local: harga, key: `harga/${g}/${name}.bin`, cacheControl: DAILY, contentType: 'application/octet-stream' });
+    if (existsSync(harga)) out.push({ local: harga, key: `harga/${g}/${name}.bin`, cacheControl: DAILY, contentType: 'application/octet-stream', gzip: true });
     const graph = join(root, 'graphs', g, `${name}.bin`);
-    if (existsSync(graph)) out.push({ local: graph, key: `graphs/${g}/${name}.bin`, cacheControl: DAILY, contentType: 'application/octet-stream' });
+    if (existsSync(graph)) out.push({ local: graph, key: `graphs/${g}/${name}.bin`, cacheControl: DAILY, contentType: 'application/octet-stream', gzip: true });
     const schools = join(root, 'graphs', g, `${name}_schools.json`);
     if (existsSync(schools)) out.push({ local: schools, key: `graphs/${g}/${name}_schools.json`, cacheControl: DAILY, contentType: 'application/json' });
     last.push({ local: manPath, key: `v/${name}/manifest.json`, cacheControl: MANIFEST, contentType: 'application/json' });

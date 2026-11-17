@@ -43,6 +43,16 @@ describe('field upload plan', () => {
     expect(plan.at(-1)!.key).toBe('v/r/manifest.json');
   });
 
+  it('gzips the files read whole (graph, harga), never the range-read PMTiles or the hourly files (F1-53)', () => {
+    const root = fakeField([0]);
+    mkdirSync(join(root, 'graphs', '2026-11'), { recursive: true });
+    writeFileSync(join(root, 'graphs', '2026-11', 'r.bin'), 'g');
+    const plan = planUploads(root, ['r']) as Array<Upload & { gzip?: boolean }>;
+    const gz = plan.filter((u) => u.gzip).map((u) => u.key).sort();
+    expect(gz).toEqual(['graphs/2026-11/r.bin', 'harga/2026-11/r.bin']);
+    expect(plan.find((u) => u.key.endsWith('.pmtiles'))!.gzip).toBeUndefined();
+  });
+
   it('refuses a run that does not match its manifest', () => {
     expect(() => planUploads(fakeField([0], true), ['r'])).toThrow(/does not list/);
   });

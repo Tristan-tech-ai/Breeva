@@ -15,6 +15,7 @@ import { motorNode } from '../lib/route/cost';
 import { localTimeToMs, motorRouteAt, schoolEdges, type SchoolFile, type SchoolZone } from '../lib/route/schoolZone';
 import { HargaIndex } from '../lib/field/harga';
 import { cachedBytes } from '../lib/route/assets';
+import { loadRegionFiles } from '../lib/route/regionFiles';
 import { decodeCell } from '../lib/field/cells';
 import { decodeExhaust, pickForecast, SOON_HOURS, type ForecastEntry } from '../lib/field/forecast';
 import { edgeExhaust, meanAlong, no2AtHour, type SoonHour } from '../lib/route/departForecast';
@@ -38,15 +39,14 @@ const forecastEdges = new Map<string, Promise<Float64Array>>();
 const forecastNo2 = new Map<string, { x: Float64Array; no2: Float64Array }>();
 
 async function init(base: string, region: { name: string; geometry: string }) {
-  const g = new WalkGraph(await cachedBytes(`${base}/graphs/${region.geometry}/${region.name}.bin`, { cacheFirst: true }));
-  const manifest = JSON.parse(new TextDecoder().decode(await cachedBytes(`${base}/v/${region.name}/manifest.json`, { cacheFirst: false }))) as
-    { run: string; cells: number[]; valid_hour_local?: number; forecast_runs?: ForecastEntry[] };
+  // every file requested at once (F1-53); the Cache API keeps them for offline use
+  const files = await loadRegionFiles(base, region, (url, o) => cachedBytes(url, o));
+  const g = new WalkGraph(files.graph);
+  const manifest = files.manifest;
   const cells = new Map<number, ReturnType<typeof decodeCell>>();
-  await Promise.all(manifest.cells.map(async (c) => {
-    cells.set(c, decodeCell(await cachedBytes(`${base}/v/${region.name}/${manifest.run}/${c}.bin`, { cacheFirst: true })));
-  }));
+  for (const [c, b] of files.cells) cells.set(c, decodeCell(b));
   let hi: HargaIndex | null = null;
-  try { hi = new HargaIndex(await cachedBytes(`${base}/harga/${region.geometry}/${region.name}.bin`, { cacheFirst: true })); } catch { hi = null; }
+  try { hi = files.harga ? new HargaIndex(files.harga) : null; } catch { hi = null; }
   const n = new Float64Array(g.m).fill(Number.NaN), p = new Float64Array(g.m).fill(Number.NaN), h = new Float64Array(g.m).fill(Number.NaN);
   const x = new Float64Array(g.m).fill(Number.NaN);
   for (let e = 0; e < g.m; e++) {
@@ -58,7 +58,7 @@ async function init(base: string, region: { name: string; geometry: string }) {
     if (hv != null) h[e] = hv;
   }
   let sf: SchoolFile | null = null;
-  try { sf = JSON.parse(new TextDecoder().decode(await cachedBytes(`${base}/graphs/${region.geometry}/${region.name}_schools.json`, { cacheFirst: false }))) as SchoolFile; } catch { sf = null; }
+  try { sf = files.schools ? JSON.parse(new TextDecoder().decode(files.schools)) as SchoolFile : null; } catch { sf = null; }
   graph = g; index = new NodeIndex(g); no2 = n; pm25 = p; exhaust = x; harga = hi ? h : null; run = manifest.run;
   fieldMedian(n); // computed while loading, so the first route does not pay for it
   schoolFile = sf; schools = null;
