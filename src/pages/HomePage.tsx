@@ -59,7 +59,7 @@ import type { RouteDest, WalkRoutingState } from '../components/map/WalkRouteLay
 import type { POI } from '../lib/poi-api';
 import type { PollutantType, RoadDisplayMode, SavedPlace } from '../types';
 import type { RoadLayerMeta } from '../components/map/RoadPollutionLayer';
-import { FIELD_REGIONS, pickRegion } from '../lib/field/source';
+import { FIELD_REGIONS, pickRegion, rememberRegion } from '../lib/field/source';
 import { deviceRouteAsRoute, deviceRouteStart, fieldRegionOf, routeModeFor, transportFor } from '../lib/route/appRoute';
 import { pm25ToAQISimple } from '../lib/api';
 import { walkEcoPoints } from '../lib/walkPoints';
@@ -624,7 +624,7 @@ export default function HomePage() {
                       <div className="flex flex-wrap gap-2" role="group" aria-label="Wilayah">
                         {FIELD_REGIONS.map((r) => (
                           <button key={r.name} aria-pressed={schoolRegion.name === r.name}
-                            onClick={() => { setSchoolRegionName(r.name); setCenter(r.home); }}
+                            onClick={() => { setSchoolRegionName(r.name); rememberRegion(r.name); setCenter(r.home); }}
                             className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${schoolRegion.name === r.name ? 'bg-sky-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
                             {r.label}
                           </button>

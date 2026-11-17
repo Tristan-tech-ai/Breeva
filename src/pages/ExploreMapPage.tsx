@@ -16,7 +16,7 @@ import SchoolPicker from '../components/map/SchoolPicker';
 import type { RouteDest, WalkRoutingState } from '../components/map/WalkRouteLayer';
 import type { PollutantType, RoadDisplayMode } from '../types';
 import { ISPU_CATEGORIES } from '../lib/ispu';
-import { FIELD_REGIONS, pickRegion } from '../lib/field/source';
+import { FIELD_REGIONS, pickRegion, rememberRegion } from '../lib/field/source';
 import FieldAgeNote from '../components/map/FieldAgeNote';
 import { parseDestLink, parseRouteLink } from '../lib/route/share';
 import { locationStart } from '../lib/route/appRoute';
@@ -82,6 +82,7 @@ export default function ExploreMapPage() {
   const startRegion = anchor
     ? FIELD_REGIONS.find((r) => r.bounds[0][0] <= anchor.lat && anchor.lat <= r.bounds[1][0] && r.bounds[0][1] <= anchor.lng && anchor.lng <= r.bounds[1][1]) ?? pickRegion(null)
     : pickRegion(new URLSearchParams(location.search).get('wilayah'));
+  const regionFromLink = !!anchor || new URLSearchParams(location.search).has('wilayah');
   const [region, setRegion] = useState(startRegion.name);
   const isDark = useIsDark();
   const currentAQI = useMapStore((s) => s.currentAQI);
@@ -117,9 +118,11 @@ export default function ExploreMapPage() {
   // No geolocation prompt.
   useEffect(() => {
     const start = FIELD_STATIC ? startRegion.home : { lat: -6.2088, lng: 106.8456 };
+    // a region named by the link (?wilayah, a route or a school) is also where the app map starts next time (F1-52)
+    if (FIELD_STATIC && regionFromLink) rememberRegion(startRegion.name);
     useMapStore.getState().setCenter(start);
     void useMapStore.getState().fetchAreaReading(start);
-  }, [startRegion]);
+  }, [startRegion, regionFromLink]);
 
   const useMyLocation = () => {
     setLocated(true);
@@ -212,7 +215,7 @@ export default function ExploreMapPage() {
           <div className="flex flex-wrap gap-2" role="group" aria-label="Wilayah">
             {FIELD_REGIONS.map((r) => (
               <button key={r.name} aria-pressed={region === r.name}
-                onClick={() => { setRegion(r.name); setSchoolDest(null); useMapStore.getState().setCenter(r.home); void useMapStore.getState().fetchAreaReading(r.home); }}
+                onClick={() => { setRegion(r.name); rememberRegion(r.name); setSchoolDest(null); useMapStore.getState().setCenter(r.home); void useMapStore.getState().fetchAreaReading(r.home); }}
                 className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${region === r.name ? 'bg-sky-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
                 {r.label}
               </button>

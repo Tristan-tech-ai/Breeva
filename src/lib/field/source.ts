@@ -33,6 +33,33 @@ export function pickRegion(name: string | null): FieldRegion {
   return FIELD_REGIONS.find((r) => r.name === name) ?? FIELD_REGIONS[0];
 }
 
+const LAST_REGION_KEY = 'breeva_field_region';
+/** Time zones of WIB: a phone set to one starts in Kota Bogor, the WIB field region. */
+const WIB_ZONES = new Set(['Asia/Jakarta', 'Asia/Pontianak']);
+
+/**
+ * Region the app map starts in (F1-52): ?wilayah= in the URL, else the region last opened on this device, else Kota Bogor
+ * for a phone in WIB, else Badung-Denpasar. Never Jakarta: it has no published field, so its roads have no colour.
+ */
+export function chooseStartRegion(o: { param?: string | null; stored?: string | null; timeZone?: string | null }): FieldRegion {
+  const byName = (n?: string | null) => (n ? FIELD_REGIONS.find((r) => r.name === n) : undefined);
+  return byName(o.param) ?? byName(o.stored) ?? (o.timeZone && WIB_ZONES.has(o.timeZone) ? byName('kota_bogor') : undefined) ?? FIELD_REGIONS[0];
+}
+
+/** chooseStartRegion with the browser's URL, storage and time zone; each read may fail (private mode, no window). */
+export function startRegionHere(): FieldRegion {
+  let param: string | null = null, stored: string | null = null, timeZone: string | null = null;
+  try { param = new URLSearchParams(globalThis.location?.search ?? '').get('wilayah'); } catch { /* no location */ }
+  try { stored = globalThis.localStorage?.getItem(LAST_REGION_KEY) ?? null; } catch { /* storage blocked */ }
+  try { timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? null; } catch { /* no Intl zone */ }
+  return chooseStartRegion({ param, stored, timeZone });
+}
+
+/** Remember the region the visitor chose, for the next start. */
+export function rememberRegion(name: string): void {
+  try { globalThis.localStorage?.setItem(LAST_REGION_KEY, name); } catch { /* storage blocked: start from the default */ }
+}
+
 export const STALE_HOURS = 3;
 
 export function fieldBase(): string {

@@ -20,6 +20,9 @@ import {
 import { searchGoogleMaps } from '../lib/searchapi';
 import { relabelScoredRoutes } from '../lib/routeLabels';
 import { readFieldArea } from '../lib/field/areaClient';
+import { startRegionHere } from '../lib/field/source';
+
+const FIELD_STATIC_STORE = import.meta.env.VITE_FIELD_STATIC === 'true';
 
 export interface SearchResult {
   name: string;
@@ -122,8 +125,8 @@ const loadRecentSearches = (): SearchResult[] => {
 };
 
 export const useMapStore = create<MapState>()((set, get) => ({
-  // Initial state — default center: Jakarta
-  center: { lat: -6.2088, lng: 106.8456 },
+  // Initial centre: with the static field, a region whose roads have colour (F1-52); without it, Jakarta as before.
+  center: FIELD_STATIC_STORE ? startRegionHere().home : { lat: -6.2088, lng: 106.8456 },
   zoom: 15,
   userLocation: null,
   isLocating: false,
