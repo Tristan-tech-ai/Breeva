@@ -129,6 +129,57 @@ Resources:
       AlarmActions: [!Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:breeva-alarms']
       OKActions: [!Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:breeva-alarms']
 
+  # F2-20: retries of a passing network fault (src/lib/field/fetchRetry.ts log {"retry":{...,"waitMs":...}}) and regions
+  # that failed while the run as a whole succeeded ({"region_failed":...}). The log format is text, so the patterns are
+  # plain terms.
+  BuilderRetryFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref BuilderLogs
+      FilterPattern: '"retry" "waitMs"'
+      MetricTransformations:
+        - { MetricNamespace: Breeva, MetricName: BuilderRetries, MetricValue: '1', DefaultValue: 0 }
+
+  BuilderRetriesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: breeva-field-builder-retries
+      AlarmDescription: The field builder retried a data source 6 times or more in 3 hours (a source is flaky or failing).
+      Namespace: Breeva
+      MetricName: BuilderRetries
+      Statistic: Sum
+      Period: 10800
+      EvaluationPeriods: 1
+      Threshold: 6
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:breeva-alarms']
+      OKActions: [!Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:breeva-alarms']
+
+  BuilderRegionFailedFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref BuilderLogs
+      FilterPattern: '"region_failed"'
+      MetricTransformations:
+        - { MetricNamespace: Breeva, MetricName: BuilderRegionFailures, MetricValue: '1', DefaultValue: 0 }
+
+  BuilderRegionFailedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: breeva-field-region-failed
+      AlarmDescription: A region of the field builder failed in the last hour while the run as a whole succeeded.
+      Namespace: Breeva
+      MetricName: BuilderRegionFailures
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:breeva-alarms']
+      OKActions: [!Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:breeva-alarms']
+
   BuilderStaleAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:

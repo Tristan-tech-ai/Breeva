@@ -96,6 +96,9 @@ export const handler = async () => {
     } catch (e) {
       failed++;
       out.push({ name: r.name, run, error: (e as Error).message });
+      // one line per failed region for the breeva-field-region-failed alarm (F2-20): a region can fail while the run
+      // as a whole succeeds, which the Lambda Errors metric does not see (run 2026111717, Badung-Denpasar)
+      console.log(JSON.stringify({ region_failed: r.name, run, error: (e as Error).message }));
     }
   }
   console.log(JSON.stringify(out));
