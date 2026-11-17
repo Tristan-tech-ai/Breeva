@@ -12,7 +12,7 @@ import { Seo } from '../components/Seo';
 // staying on-brand via emerald + the air-quality data motif. SEO target for "breeva api",
 // "breeva api key", "air quality api", "clean route / navigation api".
 
-const MONO = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
+const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 const BASE = 'https://breeva.site/api/v1';
 const KEYS_PATH = '/developers/keys';
 
@@ -127,8 +127,6 @@ export default function DeveloperLandingPage() {
         description="Breeva Developer API: calibrated per-road air-quality (AQI), pollution-aware navigation/routing, and PM2.5 exposure in one REST API. Get a free API key — 1,000 requests/day. API kualitas udara, navigasi rute bersih & paparan untuk developer."
         path="/developers"
       />
-      {/* JetBrains Mono — hoisted by React 19 only when this page renders (kept off other routes). */}
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" />
       <style>{`
         .jb { font-family: ${MONO}; font-feature-settings: "ss02","calt"; }
         @keyframes drift { 0%,100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(0,-26px,0); } }
