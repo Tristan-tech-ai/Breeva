@@ -12,6 +12,7 @@
  */
 import type { WalkGraph } from './walkGraph';
 import type { SearchOptions } from './router';
+import { fieldMedian } from './fieldMedian';
 
 export type Mode = 'walk' | 'motor' | 'car';
 
@@ -71,14 +72,11 @@ export interface CostInputs {
   allow?: (e: number) => boolean;
 }
 
-function medianOf(a: Float64Array): number {
-  const s = Array.from(a).filter(Number.isFinite).sort((x, y) => x - y);
-  return s.length ? s[Math.floor(s.length / 2)] : 1;
-}
-
 /** Router options for a mode and a trip from node s to node t. emergency: no points, fastest, zona napas kept. */
 export function optionsFor(g: WalkGraph, mode: Mode, s: number, t: number, inp: CostInputs, emergency = false, accessM = ACCESS_M): SearchOptions {
-  const medN = medianOf(inp.no2);
+  // the same median, kept per array: sorting every road's NO2 for each of the four searches of a motor route was 84%
+  // of its time on a phone (CPU profile 18 Nov, F3-21)
+  const medN = fieldMedian(inp.no2);
   const exposureOf = (e: number) => (Number.isFinite(inp.no2[e]) ? inp.no2[e] / medN : 1);
   if (mode === 'walk') return { speed: 1.3, exposureOf };
   const zone = accessZone(g, s, t, accessM);

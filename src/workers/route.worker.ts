@@ -34,6 +34,8 @@ let fieldRoot = '';
 let forecasts: ForecastEntry[] = [];
 let runLocalHour = -1;
 const forecastEdges = new Map<string, Promise<Float64Array>>();
+/** NO2 of each forecast hour, kept with the hour's exhaust so its median is also computed once (F3-21). */
+const forecastNo2 = new Map<string, { x: Float64Array; no2: Float64Array }>();
 
 async function init(base: string, region: { name: string; geometry: string }) {
   const g = new WalkGraph(await cachedBytes(`${base}/graphs/${region.geometry}/${region.name}.bin`, { cacheFirst: true }));
@@ -64,6 +66,7 @@ async function init(base: string, region: { name: string; geometry: string }) {
   forecasts = Array.isArray(manifest.forecast_runs) ? manifest.forecast_runs : [];
   runLocalHour = manifest.valid_hour_local ?? -1;
   forecastEdges.clear();
+  forecastNo2.clear();
   return { nodes: g.n, edges: g.m, run, harga: !!hi, schools: sf?.points.length ?? 0, forecasts: forecasts.length };
 }
 
@@ -151,7 +154,9 @@ async function routeAt(from: { lat: number; lng: number }, to: { lat: number; ln
   if (entry && no2 && exhaust) {
     try {
       const x = await exhaustOf(entry);
-      field = { no2: no2AtHour(no2, exhaust, x), exhaust: x, hour: entry.local_hour };
+      let f = forecastNo2.get(entry.key);
+      if (!f || f.x !== x) { f = { x, no2: no2AtHour(no2, exhaust, x) }; forecastNo2.set(entry.key, f); }
+      field = { no2: f.no2, exhaust: x, hour: entry.local_hour };
     } catch { field = undefined; } // forecast file unavailable: the run's own hour, labelled as such by forecastHour null
   }
   const { routes, raw } = routeBetween(from, to, mode, at, field);
