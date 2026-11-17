@@ -81,33 +81,43 @@ export function schoolEdges(g: WalkGraph, points: Array<[number, number]>, radiu
   if (!points.length) return out;
   const lat0 = points.reduce((s, p) => s + p[0], 0) / points.length;
   const mLon = M_LAT * Math.cos((lat0 * Math.PI) / 180);
-  const cell = Math.max(radiusM, 1);
-  // numeric cell keys, unique while |cy| < 2^20 (any latitude with cells of 10 m or more; the school radius is 50 m);
-  // string keys were most of the first motor route's time on a phone (F3-21). Same cells, same order of schools, so
-  // the same school for every edge.
-  const key = (cx: number, cy: number) => cx * 2097152 + cy;
-  const grid = new Map<number, number[]>();
   const px = points.map((p) => p[1] * mLon), py = points.map((p) => p[0] * M_LAT);
-  points.forEach((_, k) => { const kk = key(Math.floor(px[k] / cell), Math.floor(py[k] / cell)); (grid.get(kk) ?? grid.set(kk, []).get(kk)!).push(k); });
+  let cell = Math.max(radiusM, 1);
+  // a region much larger than a city would need a huge grid: wider cells still cover the radius (any school within
+  // radiusM is still a candidate); for Badung-Denpasar (230 thousand cells) and Kota Bogor (92 thousand) cell = radiusM
+  const sx = Math.max(...px) - Math.min(...px), sy = Math.max(...py) - Math.min(...py);
+  while ((sx / cell + 2) * (sy / cell + 2) > 4e6) cell *= 2;
+  // schools in a dense grid of cells over their own extent, each cell's schools in input order (CSR); string
+  // keys (F3-21) and then numeric Map keys (F3-22) were most of the first motor route's time on a phone. Same cells
+  // visited in the same order, same schools in the same order, so the same school for every edge.
+  const pcx = px.map((x) => Math.floor(x / cell)), pcy = py.map((y) => Math.floor(y / cell));
+  const gx0 = Math.min(...pcx), gx1 = Math.max(...pcx), gy0 = Math.min(...pcy), gy1 = Math.max(...pcy);
+  const W = gx1 - gx0 + 1, H = gy1 - gy0 + 1;
+  const start = new Int32Array(W * H + 1);
+  for (let k = 0; k < points.length; k++) start[(pcx[k] - gx0) * H + (pcy[k] - gy0) + 1]++;
+  for (let c = 0; c < W * H; c++) start[c + 1] += start[c];
+  const items = new Int32Array(points.length), fill = start.slice(0, W * H);
+  for (let k = 0; k < points.length; k++) items[fill[(pcx[k] - gx0) * H + (pcy[k] - gy0)]++] = k;
   const r2 = radiusM * radiusM;
   let xs = new Float64Array(16), ys = new Float64Array(16);
   for (let u = 0; u < g.n; u++) {
     for (let e = g.off[u]; e < g.off[u + 1]; e++) {
-      const c = g.edgeCoords(e, u);
-      const n = c.length;
-      if (n > xs.length) { xs = new Float64Array(2 * n); ys = new Float64Array(2 * n); }
+      let n = g.edgeXY(e, u, mLon, M_LAT, xs, ys);
+      if (n < 0) { xs = new Float64Array(-2 * n); ys = new Float64Array(-2 * n); n = g.edgeXY(e, u, mLon, M_LAT, xs, ys); }
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       for (let q = 0; q < n; q++) {
-        const x = c[q][0] * mLon, y = c[q][1] * M_LAT;
-        xs[q] = x; ys[q] = y;
+        const x = xs[q], y = ys[q];
         x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
       }
       let best = r2, bestK = -1;
-      for (let cx = Math.floor((x0 - radiusM) / cell); cx <= Math.floor((x1 + radiusM) / cell); cx++) {
-        for (let cy = Math.floor((y0 - radiusM) / cell); cy <= Math.floor((y1 + radiusM) / cell); cy++) {
-          const ks = grid.get(key(cx, cy));
-          if (!ks) continue;
-          for (const k of ks) {
+      // the edge's cells clipped to the schools' extent (cells outside it hold no school)
+      const ca = Math.max(gx0, Math.floor((x0 - radiusM) / cell)), cb = Math.min(gx1, Math.floor((x1 + radiusM) / cell));
+      const da = Math.max(gy0, Math.floor((y0 - radiusM) / cell)), db = Math.min(gy1, Math.floor((y1 + radiusM) / cell));
+      for (let cx = ca; cx <= cb; cx++) {
+        for (let cy = da; cy <= db; cy++) {
+          const c = (cx - gx0) * H + (cy - gy0);
+          for (let j = start[c]; j < start[c + 1]; j++) {
+            const k = items[j];
             for (let q = 1; q < n; q++) {
               const d2 = segDist2(px[k], py[k], xs[q - 1], ys[q - 1], xs[q], ys[q]);
               if (d2 <= best) { best = d2; bestK = k; }

@@ -68,6 +68,29 @@ export class WalkGraph {
   }
 
   /** Polyline of directed edge e, which leaves node u, as [lon, lat] pairs with both end nodes. */
+  /**
+   * The points of edgeCoords(e, u), in the same order, as x = lon * mx and y = lat * my written into xs and ys without
+   * allocating (F3-22: building a point array per edge was the slow part of finding the school of every edge). Returns
+   * the point count, or minus that count when xs or ys is too short (nothing written).
+   */
+  edgeXY(e: number, u: number, mx: number, my: number, xs: Float64Array, ys: Float64Array): number {
+    const s = this.sh[e];
+    const k = s >>> 1;
+    const a = this.shOff[k], b = this.shOff[k + 1];
+    const n = b - a + 2;
+    if (xs.length < n || ys.length < n) return -n;
+    xs[0] = this.nodeLon(u) * mx; ys[0] = this.nodeLat(u) * my;
+    const rev = (s & 1) === 1;
+    for (let j = 0; j < b - a; j++) {
+      const q = rev ? b - 1 - j : a + j;
+      xs[j + 1] = (this.shPts[2 * q] / this.scale) * mx;
+      ys[j + 1] = (this.shPts[2 * q + 1] / this.scale) * my;
+    }
+    const v = this.target[e];
+    xs[n - 1] = this.nodeLon(v) * mx; ys[n - 1] = this.nodeLat(v) * my;
+    return n;
+  }
+
   edgeCoords(e: number, u: number): Array<[number, number]> {
     const s = this.sh[e];
     const k = s >>> 1;

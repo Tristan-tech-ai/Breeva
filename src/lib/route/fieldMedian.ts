@@ -4,8 +4,13 @@
  * The value depends only on the array, so it is kept per array: the same number, computed once.
  */
 export function median(a: Float64Array): number {
-  const s = Array.from(a).filter(Number.isFinite).sort((x, y) => x - y);
-  return s.length ? s[Math.floor(s.length / 2)] : 1;
+  // finite values into a typed array and its native numeric sort: the same element as sorting a plain array with a
+  // comparator, several times faster (F3-22: the forecast hour's median was a fifth of the first motor route)
+  const s = new Float64Array(a.length);
+  let n = 0;
+  for (let i = 0; i < a.length; i++) { const v = a[i]; if (Number.isFinite(v)) s[n++] = v; }
+  if (!n) return 1;
+  return s.subarray(0, n).sort()[Math.floor(n / 2)];
 }
 
 const cache = new WeakMap<Float64Array, number>();
