@@ -80,7 +80,8 @@ export const handler = async () => {
         // F5-10: once a local day is over (the day before this run's sensor hour), its daily EPA test from the audit
         // reports of the runs that can hold its hours (from local 00 to 03 of the next day, OpenAQ lags 1-2 h)
         const day = localDate(Date.parse(sensor_hour_utc ?? new Date().toISOString()) - 24 * 3_600_000, r.tz);
-        if (sensor_hour_utc && !(next.daily ?? []).some((d) => d.date === day)) {
+        // a day written before F5-24 has no sums to pool: worked out again once
+        if (sensor_hour_utc && !(next.daily ?? []).some((d) => d.date === day && d.sums)) {
           const dayStartUtc = Date.parse(`${day}T00:00:00Z`) - r.tz * 3_600_000;
           const ids = Array.from({ length: 28 }, (_, h) => new Date(dayStartUtc + h * 3_600_000).toISOString().slice(0, 13).replace(/[-T]/g, ''));
           const reps = await Promise.all(ids.map((id) => readJson<{ validation_rows?: HourRows | null }>(bucket, reportKey(r.name, id))));

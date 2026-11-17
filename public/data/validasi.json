@@ -1,5 +1,5 @@
 {
- "built_at": "2026-11-17T14:27:23.504Z",
+ "built_at": "2026-11-17T18:32:04.063Z",
  "roadside": {
   "measured": [
    {
@@ -55,21 +55,21 @@
   "model_latest": [
    {
     "name": "badung_denpasar",
-    "run": "2026111714",
-    "hour_local": 22,
-    "median": 1.19,
-    "p90": 4.65,
-    "p99": 22.05,
-    "source": "audit/badung_denpasar/2026111714/report.json exhaust"
+    "run": "2026111718",
+    "hour_local": 2,
+    "median": 0.16,
+    "p90": 0.63,
+    "p99": 2.98,
+    "source": "audit/badung_denpasar/2026111718/report.json exhaust"
    },
    {
     "name": "kota_bogor",
-    "run": "2026111714",
-    "hour_local": 21,
-    "median": 1.49,
-    "p90": 12.73,
-    "p99": 63.71,
-    "source": "audit/kota_bogor/2026111714/report.json exhaust"
+    "run": "2026111718",
+    "hour_local": 1,
+    "median": 0.29,
+    "p90": 2.37,
+    "p99": 11.84,
+    "source": "audit/kota_bogor/2026111718/report.json exhaust"
    }
   ],
   "correction": {
@@ -85,6 +85,25 @@
    "source": "reports/f5-16_nox.json uraian_bogor_22 (run 2026111615, 22.00 WIB)"
   },
   "limits": "Model menghitung NOx lalu lintas tanpa kimia NO -> NO2 dan tanpa udara latar; di pinggir jalan sebagian besar NOx kendaraan berupa NO, jadi NO2 terukur jauh di bawah NOx. Belum ada pengukuran NOx kontinu di Bogor atau Bali."
+ },
+ "single_day": {
+  "days": 53,
+  "passes_count": [
+   8,
+   44,
+   1,
+   0,
+   0
+  ],
+  "nrmse_pct": 20,
+  "r2": 0.3,
+  "slope": 0.321,
+  "intercept": 22.9,
+  "sd_within_day": 7.776,
+  "sd_pooled": 13.62,
+  "pooled_n": 1470,
+  "pooled_passed": 2,
+  "source": "sensors_bali_loso.json daily_single_day (median over days)"
  },
  "standard": {
   "name": "EPA, target sensor untuk informasi publik, rata-rata 24 jam (EPA/600/R-20/280)",

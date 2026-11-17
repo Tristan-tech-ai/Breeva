@@ -18,6 +18,13 @@ export interface Validasi {
   rejected: Array<{ name: string; before: number | null; after: number | null; unit: string; source: string }>;
   /** Near-road exhaust: measured roadside values beside the model's traffic NOx (F5-17); absent in older files. */
   roadside?: Roadside;
+  /** The static hidden-sensor test scored one day at a time, as the live daily test is (F5-24); absent in older files. */
+  single_day?: SingleDay;
+}
+
+export interface SingleDay {
+  days: number; passes_count: number[]; nrmse_pct: number; r2: number; slope: number; intercept: number;
+  sd_within_day: number; sd_pooled: number; pooled_n: number; pooled_passed: number; source: string;
 }
 
 export interface RoadsideMeasured {

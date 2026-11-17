@@ -122,7 +122,7 @@ for (let i = 0; i < N; i++) for (let t = 0; t < T; t++) {
   if (V[i][t] >= LO[i][t] && V[i][t] <= HI[i][t]) inside++;
 }
 // Daily means in WITA (UTC+8), days with at least 18 hours, prediction masked to the hours the sensor reported.
-const dp: number[] = [], dob: number[] = [];
+const dp: number[] = [], dob: number[] = [], dday: string[] = [];
 for (let i = 0; i < N; i++) {
   const days = new Map<string, { p: number; o: number; np: number; no: number }>();
   for (let t = 0; t < T; t++) {
@@ -133,9 +133,31 @@ for (let i = 0; i < N; i++) {
     d.o += V[i][t]; d.no++;
     if (Number.isFinite(P[i][t])) { d.p += P[i][t]; d.np++; }
   }
-  for (const d of days.values()) if (d.no >= 18 && d.np >= 18) { dp.push(d.p / d.np); dob.push(d.o / d.no); }
+  for (const [day, d] of days) if (d.no >= 18 && d.np >= 18) { dp.push(d.p / d.np); dob.push(d.o / d.no); dday.push(day); }
 }
 const daily = metrics(dp, dob);
+// The same daily pairs scored one day at a time, as the live map's daily test does (F5-24): within a single day the
+// sensors differ much less than across days, so R2 and slope measure only the spatial pattern of that day.
+const byDay = new Map<string, number[]>();
+dday.forEach((d, k) => { const a = byDay.get(d) ?? []; a.push(k); byDay.set(d, a); });
+const singleDays = [...byDay.entries()].filter(([, ks]) => ks.length >= 10).map(([day, ks]) => {
+  const m = metrics(ks.map((k) => dp[k]), ks.map((k) => dob[k]));
+  const sd = Math.sqrt(ks.reduce((s, k) => s + (dob[k] - ks.reduce((t, j) => t + dob[j], 0) / ks.length) ** 2, 0) / ks.length);
+  const passes = [m.nrmse_pct <= 30, m.r_squared >= 0.7, Math.abs(m.slope - 1) <= 0.35, Math.abs(m.intercept) <= 5].filter(Boolean).length;
+  return { day, n: ks.length, sd_obs: sd, ...m, passes };
+});
+const q = (a: number[], p: number) => { const s = [...a].sort((x, y) => x - y); return s.length ? Number(s[Math.min(s.length - 1, Math.round(p * (s.length - 1)))].toFixed(3)) : null; };
+const sdAll = Math.sqrt(dob.reduce((s, x) => s + (x - dob.reduce((t, y) => t + y, 0) / dob.length) ** 2, 0) / dob.length);
+const dailySingleDay = {
+  method: 'daily pairs above, grouped by WITA day, days with >= 10 sensors; quantiles 10/50/90 over days',
+  days: singleDays.length, sd_obs_pooled: Number(sdAll.toFixed(2)),
+  sd_obs_within_day: [0.1, 0.5, 0.9].map((p) => q(singleDays.map((d) => d.sd_obs), p)),
+  nrmse_pct: [0.1, 0.5, 0.9].map((p) => q(singleDays.map((d) => d.nrmse_pct), p)),
+  r_squared: [0.1, 0.5, 0.9].map((p) => q(singleDays.map((d) => d.r_squared), p)),
+  slope: [0.1, 0.5, 0.9].map((p) => q(singleDays.map((d) => d.slope), p)),
+  intercept: [0.1, 0.5, 0.9].map((p) => q(singleDays.map((d) => d.intercept), p)),
+  passes_count: [0, 1, 2, 3, 4].map((k) => singleDays.filter((d) => d.passes === k).length),
+};
 const hourlyM = metrics(hp, ho);
 const all = fitVariogram(G, W, D);
 const epa = {
@@ -146,7 +168,7 @@ const report = {
   test: 'leave-one-sensor-out, log-space ordinary kriging (port of analisis_h ok_log)',
   data: { sensors: N, hours: T, from: hours[0], to: hours[T - 1], source: 'OpenAQ v3 /sensors/{id}/hours (AirGradient), CC BY 4.0' },
   reference: 'sumber_proposal/data/stats_h.json penduga.ok_log: harian nrmse 22.9 %, rmse 7.92, r 0.817, n 1470',
-  hourly: hourlyM, daily, epa_daily_targets: epa, epa_passed: Object.values(epa).filter(Boolean).length,
+  hourly: hourlyM, daily, daily_single_day: dailySingleDay, epa_daily_targets: epa, epa_passed: Object.values(epa).filter(Boolean).length,
   pi95_hourly_coverage: Number((inside / hp.length).toFixed(3)),
   pi95_calibrated: {
     method: 'nested: factor for each hidden sensor = 95th percentile of |z| over the other sensors / 1.96',

@@ -63,3 +63,47 @@ describe('daily EPA test from hourly hidden guesses', async () => {
     expect(f.entries).toHaveLength(2);
   });
 });
+
+describe('pooled daily test (F5-24)', async () => {
+  const { dailyEpa, pooledDaily, epaFromSums } = await import('../src/lib/field/validationRecent');
+  // one sensor hour per local hour of a day, sensors with a fixed reading and guess per day
+  const dayRows = (date: string, sensors: Array<[number, number]>) => Array.from({ length: 20 }, (_, h) => ({
+    sensor_hour_utc: new Date(Date.parse(`${date}T00:00:00Z`) - 8 * 3_600_000 + h * 3_600_000).toISOString(),
+    rows: sensors.map(([o, p], k) => ({ loc_id: k + 1, obs: o, pred: p })),
+  }));
+  // two days with a small spread between sensors and different levels, as in the field (F5-24)
+  const a: Array<[number, number]> = [[20, 24], [30, 26], [25, 29], [22, 23], [28, 24]];
+  const b: Array<[number, number]> = [[50, 55], [55, 52], [52, 56], [58, 54]];
+
+  it('the sums of a day give back that day\'s numbers', () => {
+    const d = dailyEpa(dayRows('2026-11-17', a), '2026-11-17', 8)!;
+    const m = epaFromSums(d.sums!);
+    expect(m.n).toBe(5);
+    expect(Number(m.nrmse.toFixed(3))).toBe(d.nrmse);
+    expect(Number(m.r2.toFixed(3))).toBe(d.r2);
+    expect(Number(m.slope.toFixed(3))).toBe(d.slope);
+    expect(Number(m.intercept.toFixed(2))).toBe(d.intercept);
+    expect(m.passes).toBe(d.passes);
+  });
+
+  it('pooling two days equals one test over all their sensor-days, and days without sums are left out', () => {
+    const d1 = dailyEpa(dayRows('2026-11-17', a), '2026-11-17', 8)!;
+    const d2 = dailyEpa(dayRows('2026-11-18', b), '2026-11-18', 8)!;
+    const old = { ...d1, date: '2026-11-16', sums: undefined };
+    const p = pooledDaily([d2, old, d1])!;
+    const all = [...a, ...b];
+    // the same pairs as one "day" of 9 sensors
+    const one = dailyEpa(dayRows('2026-11-20', all), '2026-11-20', 8)!;
+    expect(p.days).toBe(2);
+    expect([p.from, p.to]).toEqual(['2026-11-17', '2026-11-18']);
+    expect(p.n).toBe(9);
+    expect(Number(p.nrmse.toFixed(3))).toBe(one.nrmse);
+    expect(Number(p.r2.toFixed(3))).toBe(one.r2);
+    expect(Number(p.slope.toFixed(3))).toBe(one.slope);
+    expect(Number(p.intercept.toFixed(2))).toBe(one.intercept);
+    // across days the readings spread far more than within one, so R2 is higher pooled than on either day
+    expect(p.r2).toBeGreaterThan(Math.max(d1.r2, d2.r2));
+    expect(pooledDaily([old])).toBeNull();
+    expect(pooledDaily(undefined)).toBeNull();
+  });
+});

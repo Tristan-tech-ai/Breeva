@@ -75,7 +75,7 @@ export default function ValidasiPage() {
               </div>
             </section>
 
-            <RunningValidation />
+            <RunningValidation singleDay={v.single_day} />
 
             <section className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 text-sm space-y-1">

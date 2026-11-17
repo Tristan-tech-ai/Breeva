@@ -26,7 +26,11 @@ export interface DailyEntry {
   slope: number;
   intercept: number;
   passes: number;
+  /** Sums over the day's sensors (obs = mean reading, pred = mean guess), so days can be pooled (F5-24); statistics only. */
+  sums?: DailySums;
 }
+
+export interface DailySums { n: number; so: number; sp: number; soo: number; spp: number; sop: number }
 
 /** Hidden-sensor guesses of one sensor hour (kept in the private audit report of a run). */
 export interface HourRows { sensor_hour_utc: string; rows: Array<{ loc_id: number; obs: number; pred: number }> }
@@ -82,7 +86,33 @@ export function dailyEpa(hours: HourRows[], date: string, tz: number, minHours =
   const intercept = mp - slope * mo;
   const f = (x: number, d = 3) => Number(x.toFixed(d));
   const passes = [nrmse <= 0.3, r2 >= 0.7, Math.abs(slope - 1) <= 0.35, Math.abs(intercept) <= 5].filter(Boolean).length;
-  return { date, n, hours_min: Math.min(...full.map((a) => a.n)), nrmse: f(nrmse), r2: f(r2), slope: f(slope), intercept: f(intercept, 2), passes };
+  const sums: DailySums = { n, so: 0, sp: 0, soo: 0, spp: 0, sop: 0 };
+  for (let k = 0; k < n; k++) { sums.so += obs[k]; sums.sp += pred[k]; sums.soo += obs[k] ** 2; sums.spp += pred[k] ** 2; sums.sop += obs[k] * pred[k]; }
+  return { date, n, hours_min: Math.min(...full.map((a) => a.n)), nrmse: f(nrmse), r2: f(r2), slope: f(slope), intercept: f(intercept, 2), passes, sums };
+}
+
+/** EPA daily metrics from pooled sums (the same formulas as dailyEpa). */
+export function epaFromSums(s: DailySums) {
+  const { n } = s;
+  const mo = s.so / n, mp = s.sp / n;
+  const sxx = s.soo - n * mo * mo, syy = s.spp - n * mp * mp, sxy = s.sop - n * mo * mp;
+  const se = s.spp - 2 * s.sop + s.soo;
+  const nrmse = Math.sqrt(Math.max(0, se) / n) / mo, r2 = sxx > 0 && syy > 0 ? (sxy * sxy) / (sxx * syy) : 0, slope = sxx > 0 ? sxy / sxx : 0;
+  const intercept = mp - slope * mo;
+  const passes = [nrmse <= 0.3, r2 >= 0.7, Math.abs(slope - 1) <= 0.35, Math.abs(intercept) <= 5].filter(Boolean).length;
+  return { n, nrmse, r2, slope, intercept, passes };
+}
+
+/**
+ * All sensor-days since the first day with sums, pooled (F5-24): the comparison that matches the static hidden-sensor
+ * test (1,470 site-days). One day alone mostly measures that day's small spread between sensors.
+ */
+export function pooledDaily(daily: DailyEntry[] | undefined) {
+  const ds = (daily ?? []).filter((d) => d.sums && d.sums.n > 0).sort((a, b) => a.date.localeCompare(b.date));
+  if (!ds.length) return null;
+  const t: DailySums = { n: 0, so: 0, sp: 0, soo: 0, spp: 0, sop: 0 };
+  for (const d of ds) for (const k of Object.keys(t) as Array<keyof DailySums>) t[k] += d.sums![k];
+  return { days: ds.length, from: ds[0].date, to: ds[ds.length - 1].date, ...epaFromSums(t) };
 }
 
 /** Add (or replace) a day, oldest first, at most max days; the hourly entries stay as they are. */

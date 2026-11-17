@@ -78,9 +78,18 @@ const roadside = {
   limits: 'Model menghitung NOx lalu lintas tanpa kimia NO -> NO2 dan tanpa udara latar; di pinggir jalan sebagian besar NOx kendaraan berupa NO, jadi NO2 terukur jauh di bawah NOx. Belum ada pengukuran NOx kontinu di Bogor atau Bali.',
 };
 
+// F5-24: the same static test scored one day at a time, the way the live map's daily test is scored
+const sd = loso.daily_single_day;
+const single_day = {
+  days: sd.days, passes_count: sd.passes_count, nrmse_pct: sd.nrmse_pct[1], r2: sd.r_squared[1], slope: sd.slope[1], intercept: sd.intercept[1],
+  sd_within_day: sd.sd_obs_within_day[1], sd_pooled: sd.sd_obs_pooled, pooled_n: loso.daily.n, pooled_passed: loso.epa_passed,
+  source: 'sensors_bali_loso.json daily_single_day (median over days)',
+};
+
 const out = {
   built_at: new Date().toISOString(),
   roadside,
+  single_day,
   standard: { name: 'EPA, target sensor untuk informasi publik, rata-rata 24 jam (EPA/600/R-20/280)', ...EPA },
   rule: 'Akurasi hanya diklaim dari uji di lokasi yang disembunyikan: lokasi yang dinilai tidak pernah dipakai untuk menebak dirinya sendiri.',
   daily: rows,
