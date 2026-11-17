@@ -19,6 +19,7 @@ const statsG = read(join(P, 'stats_g.json'));
 const loso = read(join(F, 'validation', 'sensors_bali_loso.json'));
 const time = read(join(F, 'validation', 'time_split.json'));
 const hum = read(join(F, 'validation', 'humidity_correction_bali.json'));
+const bogor = read(join(F, 'reports', 'bogor_stasiun_2026-11-17.json'));
 
 const EPA = { nrmse_pct: 30, r2: 0.7, slope: [0.65, 1.35], intercept: 5 };
 const pass = (r: { nrmse_pct: number; r2: number; slope?: number | null; intercept?: number | null }) => {
@@ -41,6 +42,9 @@ const rows = [
     intercept: time.kriging_bali.fit_may_aug.intercept, n: time.kriging_bali.fit_may_aug.n },
   { id: 'city_hidden', label: 'Kota tanpa stasiun, kota disembunyikan', source: 'stats_i.json kota_harian.kalibrasi_pandang_semua',
     nrmse_pct: statsI.kota_harian.kalibrasi_pandang_semua.nrmse_pct, r2: statsI.kota_harian.kalibrasi_pandang_semua.r2, slope: null, intercept: null, n: null },
+  { id: 'bogor_nearest', label: 'Kota Bogor: stasiun terdekat (Cibinong, Sentul City), kotanya disembunyikan', source: 'reports/bogor_stasiun_2026-11-17.json gabungan_harian_kalibrasi',
+    nrmse_pct: bogor.gabungan_harian_kalibrasi.nrmse_pct, r2: bogor.gabungan_harian_kalibrasi.r2, slope: bogor.gabungan_harian_kalibrasi.slope,
+    intercept: bogor.gabungan_harian_kalibrasi.intercept, n: bogor.gabungan_harian_kalibrasi.n },
 ].map((r) => ({ ...r, ...pass(r) }));
 
 // Near-road exhaust (F5-17): measured roadside values from the literature next to the model's traffic NOx at road

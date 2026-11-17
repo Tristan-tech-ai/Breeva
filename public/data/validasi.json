@@ -1,5 +1,5 @@
 {
- "built_at": "2026-11-17T13:22:45.523Z",
+ "built_at": "2026-11-17T14:27:23.504Z",
  "roadside": {
   "measured": [
    {
@@ -55,21 +55,21 @@
   "model_latest": [
    {
     "name": "badung_denpasar",
-    "run": "2026111712",
-    "hour_local": 20,
-    "median": 1.48,
-    "p90": 5.81,
-    "p99": 27.92,
-    "source": "audit/badung_denpasar/2026111712/report.json exhaust"
+    "run": "2026111714",
+    "hour_local": 22,
+    "median": 1.19,
+    "p90": 4.65,
+    "p99": 22.05,
+    "source": "audit/badung_denpasar/2026111714/report.json exhaust"
    },
    {
     "name": "kota_bogor",
-    "run": "2026111712",
-    "hour_local": 19,
-    "median": 4.48,
-    "p90": 35.7,
-    "p99": 195.83,
-    "source": "audit/kota_bogor/2026111712/report.json exhaust"
+    "run": "2026111714",
+    "hour_local": 21,
+    "median": 1.49,
+    "p90": 12.73,
+    "p99": 63.71,
+    "source": "audit/kota_bogor/2026111714/report.json exhaust"
    }
   ],
   "correction": {
@@ -158,6 +158,23 @@
    "slope": null,
    "intercept": null,
    "n": null,
+   "flags": {
+    "nrmse": false,
+    "r2": false,
+    "slope": false,
+    "intercept": false
+   },
+   "passed": 0
+  },
+  {
+   "id": "bogor_nearest",
+   "label": "Kota Bogor: stasiun terdekat (Cibinong, Sentul City), kotanya disembunyikan",
+   "source": "reports/bogor_stasiun_2026-11-17.json gabungan_harian_kalibrasi",
+   "nrmse_pct": 52.3,
+   "r2": 0.01,
+   "slope": 0.04,
+   "intercept": 51.5,
+   "n": 137,
    "flags": {
     "nrmse": false,
     "r2": false,
