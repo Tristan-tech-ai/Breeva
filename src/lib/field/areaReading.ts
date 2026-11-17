@@ -29,5 +29,7 @@ export function areaReadingFromManifest(m: FieldManifest, center: Coordinate): A
     aqi, level: aqi <= 50 ? 'good' : aqi <= 100 ? 'moderate' : aqi <= 150 ? 'unhealthy-sensitive' : aqi <= 200 ? 'unhealthy' : aqi <= 300 ? 'very-unhealthy' : 'hazardous',
     pm25: st.pm25_median, no2: st.no2_median, pm10: Number.NaN, o3: Number.NaN, co: Number.NaN, so2: null,
     timestamp: m.computed_at, location: center, layer_source: FIELD_LAYER_SOURCE,
+    // the area's own clock (the run's UTC hour vs its local hour), so an old reading names the hour the map shows
+    utc_offset_h: (m.valid_hour_local - Number(m.run.slice(8, 10)) + 24) % 24,
   };
 }

@@ -33,9 +33,10 @@ describe('old reading on the AQI card (F2-14)', async () => {
   const { staleReadingNote } = await import('../src/lib/field/status');
   const t = '2026-11-17T15:24:30.723Z'; // 23.24 WITA
   it('says nothing while fresh, then the hour it describes and how long ago', () => {
-    expect(staleReadingNote(t, Date.parse('2026-11-17T16:30:00Z'), 75, 'Asia/Makassar')).toBeNull();
-    expect(staleReadingNote(t, Date.parse('2026-11-17T19:30:00Z'), 75, 'Asia/Makassar')).toBe('Data lama: keadaan jam 23.24 (4 jam lalu), bukan sekarang');
-    expect(staleReadingNote(t, Date.parse('2026-11-17T17:00:00Z'), 75, 'Asia/Makassar')).toBe('Data lama: keadaan jam 23.24 (95 menit lalu), bukan sekarang'); // 95,49 menit
+    expect(staleReadingNote(t, Date.parse('2026-11-17T16:30:00Z'), 8)).toBeNull();
+    expect(staleReadingNote(t, Date.parse('2026-11-17T19:30:00Z'), 8)).toBe('Data lama: keadaan jam 23.24 (4 jam lalu), bukan sekarang');
+    expect(staleReadingNote(t, Date.parse('2026-11-17T17:00:00Z'), 8)).toBe('Data lama: keadaan jam 23.24 (95 menit lalu), bukan sekarang'); // 95,49 menit
+    expect(staleReadingNote(t, Date.parse('2026-11-17T19:30:00Z'), 7)).toBe('Data lama: keadaan jam 22.24 (4 jam lalu), bukan sekarang'); // Kota Bogor, WIB
     expect(staleReadingNote(undefined, Date.now())).toBeNull();
     expect(staleReadingNote('bukan waktu', Date.now())).toBeNull();
   });

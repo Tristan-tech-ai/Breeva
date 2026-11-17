@@ -32,7 +32,7 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
     const t = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(t);
   }, []);
-  const stale = staleReadingNote(data.timestamp, now);
+  const stale = staleReadingNote(data.timestamp, now, data.utc_offset_h);
 
   const cycle = () => {
     setLevel((prev) => {

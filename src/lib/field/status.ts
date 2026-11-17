@@ -54,12 +54,15 @@ const hh = (h: number) => `${String(((h % 24) + 24) % 24).padStart(2, '0')}.00`;
  * Line for a reading older than the freshness limit (task F2-14), e.g. on a phone that went offline hours ago: the
  * hour it describes and how long ago, so the advice is read as that hour's. Null while fresh or without a time.
  */
-export function staleReadingNote(timestamp: string | undefined, now: number, freshMin = FRESH_MINUTES, timeZone?: string): string | null {
+export function staleReadingNote(timestamp: string | undefined, now: number, utcOffsetH?: number, freshMin = FRESH_MINUTES): string | null {
   const t = Date.parse(timestamp ?? '');
   if (!Number.isFinite(t)) return null;
   const min = (now - t) / 60000;
   if (min <= freshMin) return null;
-  const at = new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone });
+  // the area's local time when known (the same clock as the map's age note), else the phone's
+  const at = utcOffsetH == null
+    ? new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+    : new Date(t + utcOffsetH * 3_600_000).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
   return `Data lama: keadaan jam ${at} (${agoWords(min)} lalu), bukan sekarang`;
 }
 

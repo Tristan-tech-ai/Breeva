@@ -19,6 +19,8 @@ describe('area reading for the value card', () => {
     expect(r.no2).toBe(7);
     expect(r.layer_source).toBe(FIELD_LAYER_SOURCE);
     expect(r.timestamp).toBe(manifest.computed_at);
+    expect(r.utc_offset_h).toBe(8); // run hour 08 UTC is 16 local: WITA
+    expect(areaReadingFromManifest({ ...manifest, run: '2026111623', valid_hour_local: 6 }, denpasar)!.utc_offset_h).toBe(7); // across midnight (WIB)
     expect(Number.isNaN(r.pm10)).toBe(true); // not in the field: shown as a dash, never invented
     expect(pm25Category(r.pm25).name).toBe('Baik');
   });

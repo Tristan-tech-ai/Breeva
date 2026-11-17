@@ -112,6 +112,8 @@ export interface AirQualityData {
   confidence?: number;        // 0.0-1.0
   freshness?: AQIFreshness;
   layer_source?: number;      // 0=cache, 1=computed, 2=crowdsource, 3=sensor, 4=ML
+  /** Hours from UTC to the local time of the area the reading describes (field readings: WITA 8, WIB 7). */
+  utc_offset_h?: number;
   tile_id?: string;           // H3 hex id
 }
 
