@@ -16,6 +16,10 @@ import { buildFieldRun, reportKey, runFor, runObjects, uploadBody } from '../../
 import { BUILD_REGIONS, packKey } from '../../scripts/field/regions';
 import type { RegionMeasureParams } from '../../scripts/field/measure';
 import { dailyEpa, localDate, mergeDaily, mergeRecent, type HourRows, type RecentEntry, type RecentFile } from '../../src/lib/field/validationRecent';
+import { withRetry } from '../../src/lib/field/fetchRetry';
+
+// every source fetch (Open-Meteo, OpenAQ, METAR) goes through a retry with a fresh pause budget per invocation (F2-18)
+const baseFetch = globalThis.fetch.bind(globalThis);
 
 const s3 = new S3Client({});
 const ssm = new SSMClient({});
@@ -51,6 +55,7 @@ async function pack(bucket: string, k: string): Promise<RoadPack> {
 }
 
 export const handler = async () => {
+  globalThis.fetch = withRetry(baseFetch, { onRetry: (i) => console.log(JSON.stringify({ retry: i })) }) as typeof fetch;
   const bucket = process.env.FIELD_BUCKET;
   if (!bucket) throw new Error('FIELD_BUCKET not set');
   const out: Array<Record<string, unknown>> = [];
