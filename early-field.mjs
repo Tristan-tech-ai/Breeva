@@ -37,3 +37,16 @@ export function earlyFieldScript(base, regions, mode = 'peta') {
     + `cacheControl:x.headers.get('Cache-Control')||undefined,expires:x.headers.get('Expires')||undefined}})});`
     + `m.catch(function(){});h.catch(function(){});window.__fieldEarly={base:b,name:r.name,manifest:m,header:h}}catch(_){}})();</script>`;
 }
+
+/**
+ * Puts a snippet at the start of <head>, right after <meta charset> (which must stay in the first 1024 bytes).
+ * An inline script placed after a stylesheet waits for that stylesheet before it runs and holds the parser: on slow
+ * 3G the early requests then started only after index.css (10.2 s) and the prerendered text appeared at the same time
+ * (F1-56, 18 Nov). Throws when there is no charset meta to anchor to.
+ */
+export function atHeadStart(html, snippet) {
+  const m = html.match(/<meta charset="[^"]*"\s*\/?>/i);
+  if (!m) throw new Error('[prerender] no <meta charset> in the template');
+  const at = m.index + m[0].length;
+  return `${html.slice(0, at)}\n    ${snippet}${html.slice(at)}`;
+}

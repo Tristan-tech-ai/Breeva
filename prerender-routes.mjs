@@ -21,7 +21,7 @@
 import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { appPreloadScript, preloadFiles, preloadTags, referencedAssets } from './preload-links.mjs';
-import { earlyFieldScript, parseRegions } from './early-field.mjs';
+import { atHeadStart, earlyFieldScript, parseRegions } from './early-field.mjs';
 
 const DIST = join(process.cwd(), 'dist');
 const TEMPLATE_PATH = join(DIST, 'index.html');
@@ -245,8 +245,8 @@ for (const r of ROUTES) {
   if (r.earlyField) {
     const regions = parseRegions(readFileSync(join(process.cwd(), 'src/lib/field/source.ts'), 'utf8'));
     const tag = process.env.VITE_FIELD_STATIC === 'true' ? earlyFieldScript(process.env.VITE_FIELD_BASE ?? '', regions) : '';
-    if (tag) html = sub(html, /<\/head>/, `    ${tag}
-  </head>`);
+    // before the stylesheet: an inline script after it would wait for it (F1-56)
+    if (tag) html = atHeadStart(html, tag);
     console.log(`[prerender] ${r.file}: early field ${tag ? `on (${regions.map((g) => g.name).join(', ')})` : 'off (no VITE_FIELD_STATIC or CDN base in this build)'}`);
   }
   html = sub(html, /<div id="root">[\s\S]*?<\/div>/, `<div id="root">${r.body}\n    </div>`);
@@ -267,9 +267,8 @@ for (const r of ROUTES) {
     '/home': { ...preloadFiles(buildManifest, ['src/pages/HomePage.tsx', ...map], have), scripts: vg },
   };
   const pre = appPreloadScript(byPath);
-  writeFileSync(TEMPLATE_PATH, sub(template, /<\/head>/, `    ${pre}${tag ? `
-    ${tag}` : ''}
-  </head>`), 'utf8');
+  writeFileSync(TEMPLATE_PATH, atHeadStart(template, `${pre}${tag ? `
+    ${tag}` : ''}`), 'utf8');
   console.log(`[prerender] index.html: preload / ${byPath['/'].js.length} JS, /home ${byPath['/home'].js.length} JS; early field ${tag ? 'on for / and /home' : 'off (no VITE_FIELD_STATIC or CDN base in this build)'}`);
 }
 

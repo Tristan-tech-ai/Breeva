@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { chooseStartRegion, defaultFetch, earlyHeaderSource, fetchManifest, FIELD_REGIONS, takeEarly } from '../src/lib/field/source';
 // @ts-expect-error plain ES module used by the build (prerender-routes.mjs)
-import { earlyFieldScript, parseRegions } from '../early-field.mjs';
+import { atHeadStart, earlyFieldScript, parseRegions } from '../early-field.mjs';
 
 // F1-54: peta.html starts the region manifest and the PMTiles header with the HTML; the app takes them once.
 const BASE = 'https://cdn.example.net';
@@ -95,5 +95,17 @@ describe('the app takes the early requests once', () => {
     expect(src.getKey()).toBe('/e3/tiles/2026-11/r.pmtiles');
     expect(await src.getBytes(0, 16384)).toBe(header);
     expect(takeEarly('header', '/e3', 'r')).toBeUndefined();
+  });
+});
+
+describe('atHeadStart (F1-56): the early scripts run before any stylesheet', () => {
+  const tpl = '<!doctype html><html lang="id"><head>\n<meta charset="UTF-8" />\n<link rel="stylesheet" href="/assets/index.css"><title>x</title></head><body></body></html>';
+  it('puts the snippet right after the charset meta and before the stylesheet', () => {
+    const out = atHeadStart(tpl, '<script>1</script>') as string;
+    expect(out.indexOf('<script>1</script>')).toBeGreaterThan(out.indexOf('<meta charset'));
+    expect(out.indexOf('<script>1</script>')).toBeLessThan(out.indexOf('rel="stylesheet"'));
+  });
+  it('fails a build whose template has no charset meta', () => {
+    expect(() => atHeadStart('<head><link rel="stylesheet" href="a.css"></head>', 'x')).toThrow('meta charset');
   });
 });
