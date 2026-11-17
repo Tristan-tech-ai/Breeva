@@ -135,6 +135,7 @@ Resources:
   BuilderRetryFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
+      FilterName: breeva-builder-retries
       LogGroupName: !Ref BuilderLogs
       FilterPattern: '"retry" "waitMs"'
       MetricTransformations:
@@ -159,6 +160,7 @@ Resources:
   BuilderRegionFailedFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
+      FilterName: breeva-builder-region-failed
       LogGroupName: !Ref BuilderLogs
       FilterPattern: '"region_failed"'
       MetricTransformations:
