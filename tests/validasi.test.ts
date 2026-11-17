@@ -33,3 +33,27 @@ describe('public validation page data', () => {
     expect(v.daily.find((r) => r.id === 'bali_campaign14')!.slope).toBe(s.kampanye['14'].harian.kemiringan);
   });
 });
+
+describe('near-road exhaust comparison (F5-17)', async () => {
+  const { measuredLine, modelLine } = await import('../src/lib/validasi');
+  it('the page data carries the measured comparators, the latest run of both regions and the correction', () => {
+    const r = v.roadside!;
+    expect(r.measured.map((m) => m.id)).toEqual(['bangkok_nox', 'bogor_dramaga_no2', 'bogor_tol_no2']);
+    expect(r.model_latest.map((m) => m.name)).toEqual(['badung_denpasar', 'kota_bogor']);
+    for (const m of r.model_latest) {
+      expect(m.source).toMatch(/^audit\/.+\/\d{10}\/report\.json exhaust$/);
+      expect(m.p99).toBeGreaterThan(m.median);
+    }
+    expect(r.correction.bogor_night_p99_after).toBeLessThan(r.correction.bogor_night_p99_before);
+    expect(r.limits).toMatch(/NO -> NO2/);
+  });
+
+  it('lines read as written in the sources, in ug/m3', () => {
+    expect(measuredLine({ id: 'x', tempat: 'Bangkok', zat: 'NOx', sumber: 's', nilai: [{ label: 'rata-rata', ug_m3: 172, ppb: 91.4 }] }))
+      .toBe('Bangkok, NOx: rata-rata 172 µg/m³');
+    expect(measuredLine({ id: 'y', tempat: 'Dramaga', zat: 'NO2', sumber: 's', nilai: [{ label: 'rentang', min: 8.54, max: 30.9 }] }))
+      .toBe('Dramaga, NO2: rentang 8,5–30,9 µg/m³');
+    expect(modelLine({ name: 'kota_bogor', run: '2026111712', hour_local: 19, median: 4.48, p90: 35.7, p99: 195.83, source: 's' }))
+      .toBe('Kota Bogor (run 2026111712, jam 19.00): median 4,5, 99% ruas di bawah 196 µg/m³ NOx lalu lintas');
+  });
+});

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { Seo } from '../components/Seo';
-import { epaFlags, num, pct, verdict, type Validasi } from '../lib/validasi';
+import { epaFlags, measuredLine, modelLine, num, pct, verdict, type Validasi } from '../lib/validasi';
 import ExhaustExplainer from '../components/features/ExhaustExplainer';
 import RunningValidation from '../components/features/RunningValidation';
 
@@ -93,6 +93,25 @@ export default function ValidasiPage() {
             </section>
 
             <ExhaustExplainer />
+
+            {v.roadside && (
+              <section className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 text-sm space-y-2">
+                <h2 className="font-semibold">Asap kendaraan dibanding pengukuran pinggir jalan</h2>
+                <p className="text-xs text-gray-600 dark:text-gray-400">Model (NOx lalu lintas di titik tengah ruas, tanpa udara latar):</p>
+                <ul className="space-y-1">
+                  {v.roadside.model_latest.map((m) => <li key={m.name}>{modelLine(m)}</li>)}
+                </ul>
+                <p className="text-xs text-gray-600 dark:text-gray-400">Terukur di tempat lain:</p>
+                <ul className="space-y-1">
+                  {v.roadside.measured.map((m) => (
+                    <li key={m.id}>{measuredLine(m)}<span className="block text-[11px] text-gray-500">{m.sumber}</span></li>
+                  ))}
+                </ul>
+                <p>{v.roadside.correction.note} Kota Bogor jam 22.00: 99% ruas di bawah {num(v.roadside.correction.bogor_night_p99_before, 0)} → {num(v.roadside.correction.bogor_night_p99_after, 0)} µg/m³, tertinggi {num(v.roadside.correction.bogor_night_max_before, 0)} → {num(v.roadside.correction.bogor_night_max_after, 0)}.</p>
+                <p className="text-amber-800 dark:text-amber-300">{v.roadside.limits}</p>
+                <p className="text-[11px] text-gray-500">{v.roadside.measured_source} · {v.roadside.correction.source}</p>
+              </section>
+            )}
 
             <section>
               <h2 className="text-sm font-semibold mb-2">Sumber data yang kami tolak</h2>

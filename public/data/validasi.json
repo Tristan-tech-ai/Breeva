@@ -1,5 +1,87 @@
 {
- "built_at": "2026-11-16T10:47:42.655Z",
+ "built_at": "2026-11-17T12:31:31.570Z",
+ "roadside": {
+  "measured": [
+   {
+    "id": "bangkok_nox",
+    "tempat": "Bangkok, stasiun pinggir jalan (2010-2014)",
+    "zat": "NOx (NO + NO2), alat kontinu",
+    "nilai": [
+     {
+      "label": "rata-rata",
+      "ppb": 91.4,
+      "ug_m3": 172
+     },
+     {
+      "label": "puncak pagi (07-09)",
+      "ppb": 143,
+      "ug_m3": 269
+     },
+     {
+      "label": "puncak malam (21-22)",
+      "ppb": 110,
+      "ug_m3": 207
+     }
+    ],
+    "sumber": "Uttamang, Aneja & Hanna (2018), Atmos. Chem. Phys. 18, 12581-12593, doi 10.5194/acp-18-12581-2018, hlm. 3 dan 5 (NO 60,5 dan NO2 30,9 ppb rata-rata; puncak NO 110/73 dan NO2 33/37 ppb)"
+   },
+   {
+    "id": "bogor_dramaga_no2",
+    "tempat": "Jalan Raya Dramaga-Ciampea, Kab. Bogor (Apr-Mei 2021), 4.534-7.212 kendaraan/jam",
+    "zat": "NO2 saja, Griess-Saltzman 1 jam",
+    "nilai": [
+     {
+      "label": "rentang 10 sampel",
+      "min": 8.54,
+      "max": 30.9
+     }
+    ],
+    "sumber": "Dewapandhu & Pribadi (2023), JSIL 8(1):67-76, doi 10.29244/jsil.8.1.67-76, Tabel 2"
+   },
+   {
+    "id": "bogor_tol_no2",
+    "tempat": "Pintu Tol Jagorawi, Bogor, gardu tol (07-14 WIB, 16 hari), sekitar 237 kendaraan per gardu per jam",
+    "zat": "NO2 saja, Griess-Saltzman 1 jam",
+    "nilai": [
+     {
+      "label": "tertinggi",
+      "max": 40.008
+     }
+    ],
+    "sumber": "Salatin, Arif & Rachmawati (2019), JSIL 4(1):49-58, doi 10.29244/jsil.4.1.49-58"
+   }
+  ],
+  "measured_source": "reports/pembanding_pinggir_jalan.json",
+  "model_latest": [
+   {
+    "name": "badung_denpasar",
+    "run": "2026111712",
+    "hour_local": 20,
+    "median": 1.48,
+    "p90": 5.81,
+    "p99": 27.92,
+    "source": "audit/badung_denpasar/2026111712/report.json exhaust"
+   },
+   {
+    "name": "kota_bogor",
+    "run": "2026111712",
+    "hour_local": 19,
+    "median": 4.48,
+    "p90": 35.7,
+    "p99": 195.83,
+    "source": "audit/kota_bogor/2026111712/report.json exhaust"
+   }
+  ],
+  "correction": {
+   "note": "Koreksi 17 Nov 2026: angin paling rendah 1 m/s (CALINE-3 bagian 8.1.6, ISC3 jilid II bagian 1.1.3) dan tiap separuh jalan dua jalur membawa separuh volume.",
+   "bogor_night_p99_before": 336.3,
+   "bogor_night_p99_after": 138.8,
+   "bogor_night_max_before": 1010.3,
+   "bogor_night_max_after": 403.1,
+   "source": "reports/f5-16_nox.json uraian_bogor_22 (run 2026111615, 22.00 WIB)"
+  },
+  "limits": "Model menghitung NOx lalu lintas tanpa kimia NO -> NO2 dan tanpa udara latar; di pinggir jalan sebagian besar NOx kendaraan berupa NO, jadi NO2 terukur jauh di bawah NOx. Belum ada pengukuran NOx kontinu di Bogor atau Bali."
+ },
  "standard": {
   "name": "EPA, target sensor untuk informasi publik, rata-rata 24 jam (EPA/600/R-20/280)",
   "nrmse_pct": 30,

@@ -4,6 +4,7 @@
  *   pnpm exec tsx scripts/field/build-validation-page.mts [--proposal <sumber_proposal/data>] [--field D:/breeva-ml-data/field]
  * Writes public/data/validasi.json. Every number carries the file and key it came from.
  */
+import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -42,8 +43,39 @@ const rows = [
     nrmse_pct: statsI.kota_harian.kalibrasi_pandang_semua.nrmse_pct, r2: statsI.kota_harian.kalibrasi_pandang_semua.r2, slope: null, intercept: null, n: null },
 ].map((r) => ({ ...r, ...pass(r) }));
 
+// Near-road exhaust (F5-17): measured roadside values from the literature next to the model's traffic NOx at road
+// midpoints in the latest hourly run of each region (read from the private run report at build time).
+const BUCKET = 'breeva-field-422509704741';
+const aws = (args: string[]) => execFileSync('aws', [...args, '--region', 'ap-southeast-1'], { encoding: 'utf8', env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
+const latestReport = (name: string) => {
+  const runs = aws(['s3', 'ls', `s3://${BUCKET}/audit/${name}/`]).split(/\r?\n/)
+    .map((l) => l.trim().replace(/^PRE /, '').replace(/\/$/, '')).filter((x) => /^\d{10}$/.test(x)).sort();
+  for (const run of runs.reverse()) {
+    try {
+      const r = JSON.parse(aws(['s3', 'cp', `s3://${BUCKET}/audit/${name}/${run}/report.json`, '-']));
+      if (r.exhaust?.kernel === 'iso1') return { name, run, hour_local: r.inputs?.hourLocal ?? null, median: r.exhaust.nox_median, p90: r.exhaust.nox_p90, p99: r.exhaust.nox_p99, source: `audit/${name}/${run}/report.json exhaust` };
+    } catch { /* next */ }
+  }
+  throw new Error(`no iso1 report for ${name}`);
+};
+const pembanding = read(join(F, 'reports', 'pembanding_pinggir_jalan.json'));
+const f516 = read(join(F, 'reports', 'f5-16_nox.json'));
+const bogor22 = f516.uraian_bogor_22;
+const roadside = {
+  measured: pembanding.pembanding, measured_source: 'reports/pembanding_pinggir_jalan.json',
+  model_latest: ['badung_denpasar', 'kota_bogor'].map(latestReport),
+  correction: {
+    note: 'Koreksi 17 Nov 2026: angin paling rendah 1 m/s (CALINE-3 bagian 8.1.6, ISC3 jilid II bagian 1.1.3) dan tiap separuh jalan dua jalur membawa separuh volume.',
+    bogor_night_p99_before: bogor22.sebelum[0], bogor_night_p99_after: bogor22.keduanya[0],
+    bogor_night_max_before: bogor22.sebelum[1], bogor_night_max_after: bogor22.keduanya[1],
+    source: 'reports/f5-16_nox.json uraian_bogor_22 (run 2026111615, 22.00 WIB)',
+  },
+  limits: 'Model menghitung NOx lalu lintas tanpa kimia NO -> NO2 dan tanpa udara latar; di pinggir jalan sebagian besar NOx kendaraan berupa NO, jadi NO2 terukur jauh di bawah NOx. Belum ada pengukuran NOx kontinu di Bogor atau Bali.',
+};
+
 const out = {
   built_at: new Date().toISOString(),
+  roadside,
   standard: { name: 'EPA, target sensor untuk informasi publik, rata-rata 24 jam (EPA/600/R-20/280)', ...EPA },
   rule: 'Akurasi hanya diklaim dari uji di lokasi yang disembunyikan: lokasi yang dinilai tidak pernah dipakai untuk menebak dirinya sendiri.',
   daily: rows,
