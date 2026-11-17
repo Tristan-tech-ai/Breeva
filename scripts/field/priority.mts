@@ -4,16 +4,20 @@
  *   pnpm exec tsx scripts/field/priority.mts --pack <pack.bin> --facilities <fasilitas_jarak.csv> --region bali --tz 8 \
  *        --name badung_denpasar --out public/data/prioritas/badung_denpasar.json
  *
- * Exposure is computed AT each facility (not at the nearest road) with the service engine: CAMS background via Open-Meteo,
- * CALINE4 dispersion from the 40 nearest roads within 500 m (buildMultiSourceAt), for every activity hour of the next day
- * (Open-Meteo forecast). It is a model estimate without station correction; the page says so.
+ * Exposure is computed AT each facility (not at the nearest road): CAMS background via Open-Meteo plus vehicle exhaust from
+ * the same kernel as the map (src/lib/field/exhaust.ts, iso1: every major road within 500 m and the 40 nearest minor ones,
+ * wind from every direction, at least 1 m/s, one half of a dual carriageway carrying half the volume), for every activity
+ * hour of the next day (Open-Meteo forecast). Ranked by the exhaust (traffic NOx), the part that differs between facilities
+ * and that road measures can change (task F4-03, 17 Nov 2026). A model estimate without station correction; the page says so.
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fetchBaselineGrid } from '../../api/vayu/_baseline.js';
-import { buildMultiSourceAt, computeRoadAQIv2, fetchCamsDailyMean, HOURLY_TRAFFIC, type RoadRow } from '../../api/vayu/road-aqi.js';
+import { computeRoadAQIv2, fetchCamsDailyMean, HOURLY_TRAFFIC, type RoadRow } from '../../api/vayu/road-aqi.js';
+import { pasquillClass } from '../../api/vayu/_caline4.js';
+import { exhaustAt } from '../../src/lib/field/exhaust.js';
 import { RoadPack } from './pack.js';
-import { makeInterp, roadRow, type FieldInputs } from './engine.js';
+import { exhaustSources, makeInterp, roadRow, type FieldInputs } from './engine.js';
 
 function arg(name: string, def?: string): string {
   const i = process.argv.indexOf(`--${name}`);
@@ -86,6 +90,13 @@ const camsDaily = await fetchCamsDailyMean((s + n) / 2, (w + e) / 2, region, dat
 const rows: RoadRow[] = Array.from({ length: pack.n }, (_, k) => roadRow(pack, k));
 const neededHours = [...new Set(fac.flatMap((f) => ACTIVITY_HOURS[f.jenis] ?? ACTIVITY_HOURS.school))].sort((a, b) => a - b);
 const noCache = { redisGet: async () => null, redisSetEx: async () => {}, ttlSec: 0, fetchImpl: memoFetch };
+const coordsAll = rows.map((_, k) => pack.coords(k));
+const sourceMemo = new Map<number, ReturnType<typeof exhaustSources>>();
+const sources = (diurnal: number) => {
+  let s = sourceMemo.get(diurnal);
+  if (!s) { s = exhaustSources(rows, (k) => coordsAll[k], diurnal); sourceMemo.set(diurnal, s); }
+  return s;
+};
 
 function tileBounds(x: number, y: number, z: number) {
   const nn = 2 ** z;
@@ -107,12 +118,18 @@ for (const h of neededHours) {
   const inputs: FieldInputs = { region, hourLocal: h, monthLocal: month, diurnal: HOURLY_TRAFFIC[h] ?? 1.0, camsDaily, grids };
   const interp = makeInterp(pack, inputs);
   const receptors = fac.map((f, k) => ({ key: k, lat: Number(f.lat), lon: Number(f.lon) }));
-  const multi = buildMultiSourceAt(rows, receptors, interp, inputs.diurnal, h, month);
+  // the map's met rule (scripts/field/engine.ts computeField): model wind at the point, Pasquill class from wind and hour
+  const met = (lat: number, lon: number) => {
+    const ws = interp(lat, lon).wind_speed;
+    const u = Number.isFinite(ws) ? ws : 2.0;
+    return { wind: u, stability: pasquillClass(u, h, 0.5) };
+  };
+  const iso = exhaustAt(sources(inputs.diurnal), receptors, met);
   perHour.set(h, receptors.map((r) => {
     // A zero-emission stand-in "road" at the facility: its own line source is not used when multiDelta is given.
     const stand: RoadRow = { ...rows[0], osm_way_id: -1, traffic_base_estimate: 0, geojson: '' };
     const coords = [[r.lon, r.lat], [r.lon + 1e-6, r.lat]];
-    const v = computeRoadAQIv2(stand, coords, r.lat, r.lon, interp(r.lat, r.lon), inputs.diurnal, region, h, month, camsDaily, multi.get(r.key));
+    const v = computeRoadAQIv2(stand, coords, r.lat, r.lon, interp(r.lat, r.lon), inputs.diurnal, region, h, month, camsDaily, iso[r.key]);
     return { pm25: v.pm25, pm25_delta: v.pm25_delta, no2_delta: v.no2_delta, pi_half: Math.max(0, v.pi95_hi - v.pm25) };
   }));
 }
@@ -131,22 +148,26 @@ const items = fac.map((f, k) => {
     pm25_puncak: round(peak.v), jam_puncak: peak.h, pi95: round(mean((v) => v.pi_half)),
   };
 });
-// Ranked by the part caused by nearby roads during activity hours: it is resolved facility by facility and is what road
-// and school measures can change. Totals are shown, but their 95% interval (about +-23 ug/m3) is wider than the spread
-// of totals between facilities, so totals cannot order them.
-items.sort((a, b) => b.pm25_lalin - a.pm25_lalin || b.no2_lalin - a.no2_lalin);
+// Ranked by vehicle exhaust (traffic NOx) during activity hours: it is resolved facility by facility and is what road and
+// school measures can change. Totals are shown, but their 95% interval (about +-23 ug/m3) is wider than the spread of
+// totals between facilities, so totals cannot order them.
+items.sort((a, b) => b.no2_lalin - a.no2_lalin || b.pm25_lalin - a.pm25_lalin);
+const asap = items.map((it) => it.no2_lalin).sort((a, b) => a - b);
+const q = (p: number) => asap[Math.min(asap.length - 1, Math.floor(p * asap.length))];
 const rankIn: Record<string, number> = {};
 const ranked = items.map((it, j) => ({ peringkat: j + 1, peringkat_kelas: (rankIn[it.kelas] = (rankIn[it.kelas] ?? 0) + 1), ...it }));
 
 const out = {
   wilayah: name, tanggal: dateLocal, zona: `UTC+${tz}`, dibuat: new Date().toISOString(),
-  jumlah: ranked.length, jam_kegiatan: ACTIVITY_HOURS, urutan: 'pm25_lalin',
+  jumlah: ranked.length, jam_kegiatan: ACTIVITY_HOURS, urutan: 'asap_kendaraan',
   ringkasan: {
+    asap_median: round(q(0.5), 1),
+    asap_p90: round(q(0.9), 1),
     lalin_di_atas_1: ranked.filter((r) => r.pm25_lalin > 1).length,
     lalin_di_atas_0_5: ranked.filter((r) => r.pm25_lalin > 0.5).length,
     pm25_median: [...ranked].sort((a, b) => a.pm25 - b.pm25)[Math.floor(ranked.length / 2)].pm25,
   },
-  mesin: 'VAYU v2.1: latar CAMS (Open-Meteo, prakiraan per jam) + dispersi CALINE4 dari 40 ruas terdekat dalam 500 m',
+  mesin: 'VAYU v2.2: latar CAMS (Open-Meteo, prakiraan per jam) + asap kendaraan iso1 (semua jalan besar dalam 500 m dan 40 jalan kecil terdekat, angin segala arah, minimal 1 m/s, jalan dua jalur dibagi dua)',
   cams_harian: round(camsDaily, 2), ruas: pack.n, geometri: pack.meta.geometry,
   detik: (Date.now() - t0) / 1000,
   fasilitas: ranked,

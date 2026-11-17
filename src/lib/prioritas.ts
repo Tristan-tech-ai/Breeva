@@ -11,7 +11,7 @@ export interface Fasilitas {
 export interface DaftarPrioritas {
   wilayah: string; tanggal: string; zona: string; dibuat: string; jumlah: number; urutan: string;
   jam_kegiatan: Record<string, number[]>; mesin: string; cams_harian: number; ruas: number; geometri: string;
-  ringkasan: { lalin_di_atas_1: number; lalin_di_atas_0_5: number; pm25_median: number };
+  ringkasan: { lalin_di_atas_1: number; lalin_di_atas_0_5: number; pm25_median: number; asap_median?: number; asap_p90?: number };
   fasilitas: Fasilitas[];
 }
 
@@ -47,7 +47,8 @@ export function saringUrut(items: Fasilitas[], s: Saring): Fasilitas[] {
   const q = s.cari.trim().toLowerCase();
   const out = items.filter((f) => (s.kelas === 'semua' || f.kelas === s.kelas) && (!q || f.nama.toLowerCase().includes(q)));
   const by: Record<Urutan, (a: Fasilitas, b: Fasilitas) => number> = {
-    lalin: (a, b) => b.pm25_lalin - a.pm25_lalin || b.no2_lalin - a.no2_lalin,
+    // vehicle exhaust (traffic NOx) first: the part that differs between facilities (F4-03)
+    lalin: (a, b) => b.no2_lalin - a.no2_lalin || b.pm25_lalin - a.pm25_lalin,
     total: (a, b) => b.pm25 - a.pm25,
     jarak: (a, b) => a.d_ramai_m - b.d_ramai_m,
     nama: (a, b) => a.nama.localeCompare(b.nama, 'id'),

@@ -41,7 +41,7 @@ export default function PrioritasPage() {
 
   const all = useMemo(() => (data ? saringUrut(data.fasilitas, saring) : []), [data, saring]);
   const list = all.slice(0, shown);
-  const maxLalin = useMemo(() => Math.max(0.01, ...(data?.fasilitas.map((f) => f.pm25_lalin) ?? [0])), [data]);
+  const maxLalin = useMemo(() => Math.max(0.01, ...(data?.fasilitas.map((f) => f.no2_lalin) ?? [0])), [data]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 pb-16">
@@ -73,7 +73,7 @@ export default function PrioritasPage() {
         )}
         <section className="space-y-2">
           <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-            Sekolah, TK, penitipan anak, klinik, dan rumah sakit diurutkan menurut <b>PM2,5 dari lalu lintas jalan di sekitarnya</b> yang
+            Sekolah, TK, penitipan anak, klinik, dan rumah sakit diurutkan menurut <b>asap kendaraan dari jalan di sekitarnya</b> (NOx lalu lintas) yang
             diperkirakan terhirup pada jam kegiatan. Bagian ini berbeda tajam dari satu fasilitas ke fasilitas lain dan bisa diubah
             dengan kebijakan jalan dan sekolah. Polusi latar wilayah ditampilkan terpisah.
           </p>
@@ -81,8 +81,9 @@ export default function PrioritasPage() {
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Perkiraan untuk {new Date(`${data.tanggal}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} ({data.zona}),
               dihitung {new Date(data.dibuat).toLocaleString('id-ID')} dari {data.ruas.toLocaleString('id-ID')} ruas jalan.
-              {' '}{data.ringkasan.lalin_di_atas_1} fasilitas mendapat lebih dari 1 µg/m³ dari lalu lintas sekitar;
-              {' '}{data.ringkasan.lalin_di_atas_0_5} lebih dari 0,5 µg/m³.
+              {data.ringkasan.asap_median != null && data.ringkasan.asap_p90 != null
+                ? <> Asap kendaraan pada jam kegiatan: median {fmt(data.ringkasan.asap_median)} µg/m³; sepersepuluh fasilitas di atas {fmt(data.ringkasan.asap_p90)} µg/m³.</>
+                : <> {data.ringkasan.lalin_di_atas_1} fasilitas mendapat lebih dari 1 µg/m³ PM2,5 dari lalu lintas sekitar; {data.ringkasan.lalin_di_atas_0_5} lebih dari 0,5 µg/m³.</>}
             </p>
           )}
         </section>
@@ -103,7 +104,7 @@ export default function PrioritasPage() {
           </label>
           <select value={saring.urutan} onChange={(e) => setSaring((s) => ({ ...s, urutan: e.target.value as Saring['urutan'] }))}
             aria-label="Urutkan" className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
-            <option value="lalin">Urut: dari lalu lintas</option>
+            <option value="lalin">Urut: asap kendaraan</option>
             <option value="total">Urut: PM2,5 total</option>
             <option value="jarak">Urut: jarak ke jalan ramai</option>
             <option value="nama">Urut: nama</option>
@@ -127,12 +128,12 @@ export default function PrioritasPage() {
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         {JENIS[f.jenis] ?? f.jenis} · {f.d_ramai_m} m dari {JALAN[f.jalan_terdekat] ?? f.jalan_terdekat} · jam {rentangJam(f.jam)}
                       </p>
-                      <p className="mt-2 text-xs tabular-nums"><b className="text-sm">{fmt(f.pm25_lalin, 2)}</b> µg/m³ PM2,5 dari lalu lintas sekitar</p>
+                      <p className="mt-2 text-xs tabular-nums"><b className="text-sm">{fmt(f.no2_lalin)}</b> µg/m³ asap kendaraan (NOx lalu lintas)</p>
                       <div className="mt-1 h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden" aria-hidden>
-                        <div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.max(1, Math.min(100, (f.pm25_lalin / maxLalin) * 100))}%` }} />
+                        <div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.max(1, Math.min(100, (f.no2_lalin / maxLalin) * 100))}%` }} />
                       </div>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-                        NO₂ dari lalu lintas {fmt(f.no2_lalin)} µg/m³ · PM2,5 total {fmt(f.pm25)} µg/m³ (rentang 95%: ±{fmt(f.pi95, 0)}) · puncak jam {String(f.jam_puncak).padStart(2, '0')}.00
+                        PM2,5 dari lalu lintas {fmt(f.pm25_lalin, 2)} µg/m³ · PM2,5 total {fmt(f.pm25)} µg/m³ (rentang 95%: ±{fmt(f.pi95, 0)}) · puncak jam {String(f.jam_puncak).padStart(2, '0')}.00
                       </p>
                       {f.kelas === 'pendidikan' && simById.get(f.id) && (
                         <p className="mt-1.5 rounded-lg bg-sky-50 dark:bg-sky-900/20 px-2 py-1 text-[11.5px] leading-snug text-sky-900 dark:text-sky-200">
@@ -164,14 +165,15 @@ export default function PrioritasPage() {
         <section className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 space-y-2 text-sm leading-relaxed">
           <h2 className="font-semibold flex items-center gap-2"><Info className="w-4 h-4" /> Cara menghitung dan batasannya</h2>
           <ul className="list-disc pl-5 space-y-1.5 text-gray-600 dark:text-gray-300">
-            <li><b>Di titik fasilitas.</b> Nilai dihitung di lokasi fasilitas (OpenStreetMap), bukan di ruas jalan terdekat: sebaran
-              CALINE4 dari 40 ruas terdekat dalam 500 m, dengan arus kendaraan menurut kelas jalan dan pola jam, ditambah latar CAMS
-              (prakiraan Open-Meteo per jam).</li>
+            <li><b>Di titik fasilitas.</b> Nilai dihitung di lokasi fasilitas (OpenStreetMap), bukan di ruas jalan terdekat, dengan
+              rumus asap kendaraan yang sama dengan peta: semua jalan besar dalam 500 m dan 40 jalan kecil terdekat, angin dari segala
+              arah (paling pelan 1 m/s), arus kendaraan menurut kelas jalan dan pola jam, jalan dua jalur dibagi dua; ditambah latar
+              CAMS (prakiraan Open-Meteo per jam).</li>
             <li><b>Jam kegiatan.</b> Sekolah 07.00–14.00, TK/PAUD 07.00–12.00, penitipan anak 07.00–17.00, klinik 08.00–16.00,
               rumah sakit 24 jam. Angka adalah rata-rata jam-jam itu untuk satu hari prakiraan.</li>
-            <li><b>Kenapa diurutkan menurut lalu lintas.</b> Rentang 95% PM2,5 total sekitar ±23 µg/m³, lebih lebar dari selisih
-              total antarfasilitas, jadi total tidak bisa mengurutkan mereka. Bagian dari lalu lintas sekitar dihitung dengan fisika
-              yang sama untuk semua fasilitas, sehingga urutannya bermakna sebagai perbandingan.</li>
+            <li><b>Kenapa diurutkan menurut asap kendaraan.</b> Rentang 95% PM2,5 total sekitar ±23 µg/m³, lebih lebar dari selisih
+              total antarfasilitas, jadi total tidak bisa mengurutkan mereka. Asap kendaraan dari jalan sekitar dihitung dengan fisika
+              yang sama untuk semua fasilitas dan bisa diubah dengan kebijakan jalan, sehingga urutannya bermakna sebagai perbandingan.</li>
             <li><b>Nilai mutlak belum divalidasi.</b> Belum ada koreksi dari sensor; model latar cenderung lebih rendah dari
               pengukuran stasiun di Bali. Jangan memakai angka ini sebagai hasil ukur.</li>
             <li><b>Belum termasuk</b> pembakaran terbuka, sumber industri, dan arus lalu lintas terukur; arus memakai perkiraan per
