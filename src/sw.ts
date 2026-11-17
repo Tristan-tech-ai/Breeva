@@ -5,7 +5,7 @@ import { clientsClaim } from 'workbox-core';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { precacheAndRoute, cleanupOutdatedCaches, matchPrecache } from 'workbox-precaching';
 import { offlineDocument } from './lib/pwa/offlineDocument';
-import { cachedRange, fieldKind } from './lib/pwa/fieldCache';
+import { cachedRange, fieldKind, FIELD_CACHES } from './lib/pwa/fieldCache';
 import { registerRoute, setCatchHandler } from 'workbox-routing';
 import { CacheFirst, NetworkFirst, StaleWhileRevalidate } from 'workbox-strategies';
 
@@ -123,19 +123,19 @@ registerRoute(
 // immutable per run; the manifest changes hourly (network first, last one offline); harga changes daily.
 registerRoute(
   ({ url }: RouteCallbackOptions) => fieldKind(url, self.location.origin) === 'geometry',
-  async ({ request }: RouteCallbackOptions) => cachedRange(request, await caches.open(`${CACHE_PREFIX}-field-geometry`), (r) => fetch(r))
+  async ({ request }: RouteCallbackOptions) => cachedRange(request, await caches.open(FIELD_CACHES.geometry), (r) => fetch(r))
 );
 registerRoute(
   ({ url }: RouteCallbackOptions) => fieldKind(url, self.location.origin) === 'cells',
-  new CacheFirst({ cacheName: `${CACHE_PREFIX}-field-cells`, plugins: [new ExpirationPlugin({ maxEntries: 96, maxAgeSeconds: 60 * 60 * 24 * 3 })] })
+  new CacheFirst({ cacheName: FIELD_CACHES.cells, plugins: [new ExpirationPlugin({ maxEntries: 96, maxAgeSeconds: 60 * 60 * 24 * 3 })] })
 );
 registerRoute(
   ({ url }: RouteCallbackOptions) => fieldKind(url, self.location.origin) === 'manifest',
-  new NetworkFirst({ cacheName: `${CACHE_PREFIX}-field-manifest`, networkTimeoutSeconds: 4, plugins: [new ExpirationPlugin({ maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 3 })] })
+  new NetworkFirst({ cacheName: FIELD_CACHES.manifest, networkTimeoutSeconds: 4, plugins: [new ExpirationPlugin({ maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 3 })] })
 );
 registerRoute(
   ({ url }: RouteCallbackOptions) => fieldKind(url, self.location.origin) === 'harga',
-  new StaleWhileRevalidate({ cacheName: `${CACHE_PREFIX}-field-harga`, plugins: [new ExpirationPlugin({ maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 7 })] })
+  new StaleWhileRevalidate({ cacheName: FIELD_CACHES.harga, plugins: [new ExpirationPlugin({ maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 7 })] })
 );
 
 registerRoute(

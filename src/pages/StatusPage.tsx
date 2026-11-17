@@ -4,11 +4,24 @@ import { ChevronLeft } from 'lucide-react';
 import { Seo } from '../components/Seo';
 import { FIELD_REGIONS, fieldBase } from '../lib/field/source';
 import { FRESH_MINUTES, manifestStatus, statusText, type FieldStatus } from '../lib/field/status';
+import { saveRegionOffline, sizeLabel } from '../lib/pwa/offlineRegion';
+
+type Saving = { state: 'saving'; done: number; total: number } | { state: 'done'; bytes: number; files: number; run: string } | { state: 'error'; error: string };
 
 /** Public status of the hourly field: run, age and data source of each region, read from the same manifests the map reads. */
 export default function StatusPage() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<Record<string, FieldStatus | null>>({});
+  // saving a region for the offline demo (F2-15): pressed by the user, never automatic
+  const [saving, setSaving] = useState<Record<string, Saving>>({});
+  const save = (r: (typeof FIELD_REGIONS)[number]) => {
+    setSaving((p) => ({ ...p, [r.name]: { state: 'saving', done: 0, total: 0 } }));
+    saveRegionOffline(fieldBase(), { name: r.name, geometry: r.geometry }, {
+      onProgress: (done, total) => setSaving((p) => ({ ...p, [r.name]: { state: 'saving', done, total } })),
+    })
+      .then((res) => setSaving((p) => ({ ...p, [r.name]: { state: 'done', ...res } })))
+      .catch((e: Error) => setSaving((p) => ({ ...p, [r.name]: { state: 'error', error: e.message } })));
+  };
 
   useEffect(() => {
     let alive = true;
@@ -41,6 +54,10 @@ export default function StatusPage() {
           Peta dihitung ulang setiap jam di cloud (menit ke-20) tanpa komputer rumah. Data disebut segar bila dihitung kurang
           dari {FRESH_MINUTES} menit lalu.
         </p>
+        <p className="text-[13px] text-gray-600 dark:text-gray-400">
+          Untuk peragaan tanpa internet: tekan "Simpan … untuk tanpa internet" sekali sambil online (sekitar 3,4 MB untuk Kota Bogor, 6,5 MB untuk Badung–Denpasar).
+          Angkanya tetap jam yang tersimpan.
+        </p>
         <ul className="space-y-2">
           {FIELD_REGIONS.map((r) => {
             const s = rows[r.name];
@@ -57,6 +74,19 @@ export default function StatusPage() {
                     {new Date(s.computed_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
                   </p>
                 )}
+                {(() => {
+                  const sv = saving[r.name];
+                  if (sv?.state === 'saving') return <p className="mt-2 text-[12px] text-gray-600 dark:text-gray-300" aria-live="polite">Menyimpan… {sv.total ? `${sv.done} dari ${sv.total} berkas` : ''}</p>;
+                  if (sv?.state === 'done') return <p className="mt-2 text-[12px] text-teal-800 dark:text-teal-300" aria-live="polite">Tersimpan {sizeLabel(sv.bytes)} ({sv.files} berkas, run {sv.run}). Peta dan rute {r.label} kini jalan tanpa internet; peta dasar tidak ikut tersimpan.</p>;
+                  return (
+                    <>
+                      <button onClick={() => save(r)} className="mt-2 min-h-8 rounded-full border border-teal-700 px-3 py-1 text-[12px] font-semibold text-teal-800 dark:text-teal-200">
+                        Simpan {r.label} untuk tanpa internet
+                      </button>
+                      {sv?.state === 'error' && <p className="mt-1 text-[12px] text-red-700 dark:text-red-300">Gagal menyimpan: {sv.error}</p>}
+                    </>
+                  );
+                })()}
               </li>
             );
           })}
