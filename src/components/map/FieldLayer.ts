@@ -6,7 +6,7 @@ import { ensureVectorGrid } from './RoadMvtLayer';
 import { weightFor } from '../../lib/roadColors';
 import { fieldColor } from '../../lib/field/color';
 import { FIELD_DRAWN_EVENT, FIELD_REGIONS, FieldSource, overzoomPoints, type Box } from '../../lib/field/source';
-import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS } from '../../lib/field/firstDraw';
+import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS, routeSettled } from '../../lib/field/firstDraw';
 import { HARGA_COLORS } from '../../lib/field/harga';
 import { popupHtml } from '../../lib/field/popup';
 import { nearestFeature, tileFraction, unitsPerPixel, type TileFeature } from '../../lib/field/tap';
@@ -27,6 +27,8 @@ export function useFieldLayer(
   enabled: boolean,
   pollutant: PollutantType = 'aqi',
   displayMode: RoadDisplayMode = 'total',
+  /** a route link is open: the other regions also wait for its first route (F1-53) */
+  waitRoute = false,
 ): RoadLayerMeta | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layersRef = useRef<any[]>([]);
@@ -73,19 +75,21 @@ export function useFieldLayer(
     const firstDrawn = new Promise<void>((resolve) => { markDrawn = resolve; setTimeout(resolve, FIRST_DRAW_FALLBACK_MS); });
     // the first region cannot be drawn: release the base map and the other regions at once
     const failFirst = () => { if (drawn) return; drawn = true; markDrawn(); window.dispatchEvent(new Event(FIELD_FAILED_EVENT)); };
+    // what the region in view does not need yet (other regions, harga files) waits for this
+    const othersGo = waitRoute ? Promise.all([firstDrawn, routeSettled()]).then(() => undefined) : firstDrawn;
     ensureVectorGrid()
       .then(async () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const LG = L as any;
         const Proto = LG.VectorGrid.Protobuf;
         for (const [k, region] of ordered.entries()) {
-          if (k > 0) await firstDrawn;
+          if (k > 0) await othersGo;
           if (cancelled) return;
           const src = new FieldSource(region);
           try { await src.init(k === 0 ? view : undefined); } catch (e) { console.warn('[field]', region.name, e); if (k === 0) failFirst(); continue; }
           if (cancelled) return;
           sourcesRef.current = [...sourcesRef.current, src];
-          void firstDrawn.then(() => (modeRef.current.displayMode === 'harga' ? undefined : new Promise((r) => setTimeout(r, 2000)))).then(() => src.ensureHarga());
+          void othersGo.then(() => (modeRef.current.displayMode === 'harga' ? undefined : new Promise((r) => setTimeout(r, 2000)))).then(() => src.ensureHarga());
           if (modeRef.current.displayMode === 'harga') void src.ensureHarga();
           const tiles = new Map<string, TileFeature[]>();
           tapSources.push({ src, bounds: L.latLngBounds(region.bounds), tiles });
@@ -170,6 +174,8 @@ export function useFieldLayer(
       layersRef.current = [];
       sourcesRef.current = [];
     };
+  // waitRoute is read once: the layer is not rebuilt when the route link is later cleared
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, enabled]);
 
   useEffect(() => {

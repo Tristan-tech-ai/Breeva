@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { FIELD_REGIONS } from '../../lib/field/source';
+import { ROUTE_SETTLED_EVENT } from '../../lib/field/firstDraw';
 import { RouteClient, withSoon, type SoonHours, type WalkRoute } from '../../lib/route/client';
 import { routeCards, type RouteCard } from '../../lib/route/summary';
 import type { RouteLink } from '../../lib/route/share';
@@ -136,6 +137,8 @@ export function useWalkRouting(
         })
         .finally(() => {
           busy = false;
+          // the base map and the other regions of a route link wait for this (F1-53)
+          window.dispatchEvent(new Event(ROUTE_SETTLED_EVENT));
           if (queued) { const q = queued; queued = null; startAt(q); }
         });
     };

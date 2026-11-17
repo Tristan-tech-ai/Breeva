@@ -521,6 +521,7 @@ function MapController({
     !!showAQIOverlay && useMvt && FIELD_STATIC,
     pollutant || 'aqi',
     roadDisplayMode || 'total',
+    !!routeLink,
   );
   const vectorMeta = useRoadPollutionLayer(
     map,
@@ -635,7 +636,9 @@ export default function LeafletMap({
   // tiles do not compete with the field for a slow connection; elsewhere it loads at once.
   const [baseOn, setBaseOn] = useState(() => !(FIELD_STATIC && !!showAQIOverlay
     && FIELD_REGIONS.some((r) => center.lat >= r.bounds[0][0] && center.lat <= r.bounds[1][0] && center.lng >= r.bounds[0][1] && center.lng <= r.bounds[1][1])));
-  useEffect(() => (baseOn ? undefined : onFirstDraw(() => setBaseOn(true))), [baseOn]);
+  // a route link: the base map also waits for the first route, which needs the walking graph (F1-53)
+  const waitRoute = !!routeLink;
+  useEffect(() => (baseOn ? undefined : onFirstDraw(() => setBaseOn(true), window, undefined, waitRoute)), [baseOn, waitRoute]);
   const [internalMeta, setInternalMeta] = useState<RoadLayerMeta | null>(null);
 
   return (

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS, onFirstDraw } from '../src/lib/field/firstDraw';
+import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS, onFirstDraw, ROUTE_FALLBACK_MS, ROUTE_SETTLED_EVENT, routeSettled } from '../src/lib/field/firstDraw';
 import { fetchManifest, FIELD_DRAWN_EVENT, MANIFEST_TTL_MS } from '../src/lib/field/source';
 // @ts-expect-error plain ES module used by the build (prerender-routes.mjs)
 import { preloadFiles, preloadTags, referencedAssets } from '../preload-links.mjs';
@@ -44,6 +44,53 @@ describe('onFirstDraw: the base map waits for the roads, not for a short timer',
     t.dispatchEvent(new Event(FIELD_DRAWN_EVENT));
     vi.advanceTimersByTime(5_000);
     expect(cb).not.toHaveBeenCalled();
+  });
+});
+
+describe('route links: the base map and the other regions wait for the first route too (F1-53)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('needs both the first roads and the first route', () => {
+    const t = new EventTarget(); const cb = vi.fn();
+    onFirstDraw(cb, t, undefined, true);
+    t.dispatchEvent(new Event(FIELD_DRAWN_EVENT));
+    vi.advanceTimersByTime(FIRST_DRAW_FALLBACK_MS + 1);
+    expect(cb).not.toHaveBeenCalled(); // the 40 s fallback of a plain map does not apply
+    t.dispatchEvent(new Event(ROUTE_SETTLED_EVENT));
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+  it('a route alone is not enough, and a field failure counts as drawn', () => {
+    const t = new EventTarget(); const cb = vi.fn();
+    onFirstDraw(cb, t, undefined, true);
+    t.dispatchEvent(new Event(ROUTE_SETTLED_EVENT));
+    expect(cb).not.toHaveBeenCalled();
+    t.dispatchEvent(new Event(FIELD_FAILED_EVENT));
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+  it('gives up after the route fallback, longer than the measured 3G route', () => {
+    const t = new EventTarget(); const cb = vi.fn();
+    onFirstDraw(cb, t, undefined, true);
+    vi.advanceTimersByTime(ROUTE_FALLBACK_MS - 1); expect(cb).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1); expect(cb).toHaveBeenCalledTimes(1);
+    expect(ROUTE_FALLBACK_MS).toBeGreaterThan(55_000); // lambat3g_worker_2026-11-18.json: card after 54.5 s
+  });
+  it('without a route link the route event is not awaited', () => {
+    const t = new EventTarget(); const cb = vi.fn();
+    onFirstDraw(cb, t);
+    t.dispatchEvent(new Event(FIELD_DRAWN_EVENT));
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+  it('routeSettled resolves on the event or after its fallback', async () => {
+    const t = new EventTarget();
+    let a = false, b = false;
+    void routeSettled(t, 1_000).then(() => { a = true; });
+    t.dispatchEvent(new Event(ROUTE_SETTLED_EVENT));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a).toBe(true);
+    void routeSettled(t, 1_000).then(() => { b = true; });
+    await vi.advanceTimersByTimeAsync(999); expect(b).toBe(false);
+    await vi.advanceTimersByTimeAsync(1); expect(b).toBe(true);
   });
 });
 
