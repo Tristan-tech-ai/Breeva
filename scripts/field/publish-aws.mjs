@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { gzipSync } from 'node:zlib';
+import { brotliCompressSync, constants } from 'node:zlib';
 import { planUploads } from './publish-plan.mjs';
 
 const arg = (n, d) => { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : d; };
@@ -24,14 +24,16 @@ const withRuns = process.argv.includes('--with-runs');
 const plan = planUploads(root, regions).filter((u) => withRuns || !u.key.startsWith('v/'));
 const tmp = mkdtempSync(join(tmpdir(), 'breeva-publish-'));
 for (const u of plan) {
-  // gzip entries go up compressed with Content-Encoding: gzip (publish-plan.mjs says which)
-  const local = u.gzip ? join(tmp, u.key.replace(/[\/]/g, '_') + '.gz') : u.local;
-  if (u.gzip && !process.argv.includes('--dry')) writeFileSync(local, gzipSync(readFileSync(u.local), { level: 9 }));
+  // brotli entries go up compressed with Content-Encoding: br (publish-plan.mjs says which)
+  const local = u.encoding === 'br' ? join(tmp, u.key.replace(/\//g, '_') + '.br') : u.local;
+  if (u.encoding === 'br' && !process.argv.includes('--dry')) {
+    writeFileSync(local, brotliCompressSync(readFileSync(u.local), { params: { [constants.BROTLI_PARAM_QUALITY]: 11 } }));
+  }
   const cmd = ['s3', 'cp', local, `s3://${bucket}/${u.key}`, '--cache-control', u.cacheControl, '--content-type', u.contentType,
-    ...(u.gzip ? ['--content-encoding', 'gzip'] : []), '--only-show-errors'];
+    ...(u.encoding ? ['--content-encoding', u.encoding] : []), '--only-show-errors'];
   if (process.argv.includes('--dry')) { console.log('aws', cmd.join(' ')); continue; }
   execFileSync('aws', cmd, { stdio: 'inherit' });
-  console.log(`uploaded ${u.key}${u.gzip ? ' (gzip)' : ''}`);
+  console.log(`uploaded ${u.key}${u.encoding ? ` (${u.encoding})` : ''}`);
 }
 rmSync(tmp, { recursive: true, force: true });
 console.log(JSON.stringify({ bucket, files: plan.length, regions }));
