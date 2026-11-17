@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, School, Stethoscope, Search, Info, MapPin } from 'lucide-react';
 import { Seo } from '../components/Seo';
-import { fmt, JALAN, JENIS, PAGE_SIZE, PRIORITAS_REGIONS, pickPrioritasRegion, rentangJam, saringUrut, type DaftarPrioritas, type Saring } from '../lib/prioritas';
+import { fmt, indicativeNote, JALAN, JENIS, PAGE_SIZE, PRIORITAS_REGIONS, pickPrioritasRegion, rentangJam, saringUrut, type DaftarPrioritas, type Saring } from '../lib/prioritas';
 import { CAMS_NOTICE, OPEN_METEO_LINK } from '../lib/attribution';
 import { destLink } from '../lib/route/share';
 import { simulasiLine, type SimulasiFile } from '../lib/simulasi';
@@ -67,8 +67,8 @@ export default function PrioritasPage() {
         </div>
         {region.indicative && (
           <p className="rounded-xl bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-            Indikatif: {region.label} belum punya titik ukur di dalam kota, jadi latar polusinya dari model global dan kalibrasi
-            Jabodetabek. Urutan antarfasilitas (bagian dari lalu lintas sekitar) tetap bisa dibandingkan; angka mutlaknya belum.
+            {indicativeNote(region.label)}{' '}
+            <Link to="/validasi" className="font-semibold underline">Lihat uji akurasinya</Link>
           </p>
         )}
         <section className="space-y-2">

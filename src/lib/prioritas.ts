@@ -66,3 +66,13 @@ export function rentangJam(jam: number[]): string {
 export function fmt(x: number, d = 1): string {
   return x.toLocaleString('id-ID', { minimumFractionDigits: d, maximumFractionDigits: d });
 }
+
+/**
+ * Banner of a region without a measuring point (F1-27): what is indicative, what still compares, and the evidence (the
+ * hidden-city test at Kota Bogor's nearest stations, reports/bogor_stasiun_2026-11-17.json, shown on /validasi).
+ */
+export function indicativeNote(label: string): string {
+  return `Indikatif: ${label} belum punya titik ukur di dalam kota, jadi latar polusinya dari model global dan kalibrasi Jabodetabek. ` +
+    'Di stasiun terdekat (Cibinong, Sentul City) latar itu tidak mengikuti naik-turun harian, jadi angka mutlaknya belum bisa dipercaya. ' +
+    'Urutan antarfasilitas (asap kendaraan dari jalan sekitar, rumus yang sama dengan peta) tetap bisa dibandingkan.';
+}

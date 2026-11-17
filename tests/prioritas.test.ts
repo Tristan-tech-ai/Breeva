@@ -59,3 +59,13 @@ describe('priority list data', () => {
     expect(rentangJam(Array.from({ length: 24 }, (_, h) => h))).toBe('24 jam');
   });
 });
+
+describe('banner of an indicative region (F1-27)', async () => {
+  const { indicativeNote } = await import('../src/lib/prioritas');
+  it('says what is indicative, the nearest-station evidence, and what still compares', () => {
+    const n = indicativeNote('Kota Bogor');
+    expect(n).toMatch(/^Indikatif: Kota Bogor belum punya titik ukur/);
+    expect(n).toMatch(/Cibinong, Sentul City/);
+    expect(n).toMatch(/tetap bisa dibandingkan/);
+  });
+});
