@@ -62,8 +62,9 @@ export default function StatusPage() {
           })}
         </ul>
         <p className="text-[11px] text-gray-500 dark:text-gray-400">
-          Sumber: sensor warga OpenAQ (Badung–Denpasar), jarak pandang bandara, latar CAMS lewat Open-Meteo, dan model dispersi
-          CALINE4. Kota Bogor belum punya titik ukur, jadi nilainya indikatif.
+          Sumber: sensor warga OpenAQ (Badung–Denpasar), jarak pandang bandara, latar CAMS lewat Open-Meteo, dan asap kendaraan
+          dari semua jalan dalam 500 m dengan rumus sebaran dari panduan EPA (CALINE-3, ISC3, AERMOD). Kota Bogor belum punya
+          titik ukur, jadi nilainya indikatif.
         </p>
       </main>
     </div>
