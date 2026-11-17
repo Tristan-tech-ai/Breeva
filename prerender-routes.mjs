@@ -18,8 +18,9 @@
 // Lives at the repo ROOT (not scripts/, which .vercelignore excludes from the Vercel build).
 // Runs from the build CWD (repo root) on both local and Vercel, so dist/ resolves via process.cwd().
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { preloadFiles, preloadTags, referencedAssets } from './preload-links.mjs';
 
 const DIST = join(process.cwd(), 'dist');
 const TEMPLATE_PATH = join(DIST, 'index.html');
@@ -29,6 +30,13 @@ if (!existsSync(TEMPLATE_PATH)) {
   process.exit(1);
 }
 const template = readFileSync(TEMPLATE_PATH, 'utf8');
+// Vite build manifest (build.manifest in vite.config.ts): which chunks a lazily loaded page needs (F1-51)
+const MANIFEST_PATH = join(DIST, '.vite', 'manifest.json');
+if (!existsSync(MANIFEST_PATH)) {
+  console.error(`[prerender] ${MANIFEST_PATH} not found: build.manifest must stay on in vite.config.ts`);
+  process.exit(1);
+}
+const buildManifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
 
 const SITE = 'https://breeva.site';
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -127,6 +135,9 @@ const ROUTES = [
   },
   {
     file: 'peta.html', path: '/peta',
+    // F1-51: the page and its map chunks start with the HTML instead of one lazy level after the other
+    preload: ['src/pages/ExploreMapPage.tsx', 'src/components/map/LeafletMap.tsx'],
+    preloadScripts: ['/vendor/leaflet-vectorgrid.js'],
     title: 'Peta Udara Langsung — Asap Kendaraan per Jalan & Rute Bersih | Breeva',
     description: 'Peta asap kendaraan dan kualitas udara per ruas jalan untuk Badung–Denpasar dan Kota Bogor, dihitung ulang tiap jam; rute jalan kaki dengan asap paling sedikit dihitung di ponsel. Kota lain: kualitas udara kota. Gratis, tanpa login.',
     body: page('Kualitas udara per jalan, langsung di peta', [
@@ -221,8 +232,17 @@ for (const r of ROUTES) {
   html = sub(html, /<meta name="twitter:title" content="[\s\S]*?"\s*\/>/, `<meta name="twitter:title" content="${esc(r.title)}" />`);
   html = sub(html, /<meta name="twitter:description" content="[\s\S]*?"\s*\/>/, `<meta name="twitter:description" content="${esc(r.description)}" />`);
   if (r.extraJsonLd) html = sub(html, /<\/head>/, `${r.extraJsonLd}</head>`);
+  if (r.preload) {
+    const files = preloadFiles(buildManifest, r.preload, referencedAssets(template));
+    if (!files.js.length) { console.error(`[prerender] ${r.file}: no chunks to preload`); process.exit(1); }
+    html = sub(html, /<\/head>/, `    ${preloadTags(files, r.preloadScripts ?? [])}
+  </head>`);
+    console.log(`[prerender] ${r.file}: preload ${files.js.length} JS, ${files.css.length} CSS, ${(r.preloadScripts ?? []).length} script`);
+  }
   html = sub(html, /<div id="root">[\s\S]*?<\/div>/, `<div id="root">${r.body}\n    </div>`);
   writeFileSync(join(DIST, r.file), html, 'utf8');
   count++;
 }
+// the build manifest maps source paths to files; it is a build input, not something to serve
+rmSync(join(DIST, '.vite'), { recursive: true, force: true });
 console.log(`[prerender] wrote ${count} per-route HTML files to dist/ (${ROUTES.map((r) => r.path).join(', ')})`);

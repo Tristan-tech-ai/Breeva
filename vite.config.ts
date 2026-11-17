@@ -57,6 +57,8 @@ export default defineConfig({
     }),
   ],
   build: {
+    // .vite/manifest.json: prerender-routes.mjs reads it to preload a route's lazy chunks (F1-51), then removes it
+    manifest: true,
     rollupOptions: {
       output: {
         // rolldown advancedChunks (rolldown 1.0.0-beta.50 types): a group also takes its modules' dependencies

@@ -92,6 +92,32 @@ export function cellsInView(m: Pick<FieldManifest, 'cells' | 'cell_tiles'>, box:
   });
 }
 
+/** The browser fetch, one function: the manifest cache below is shared by everything that uses it. */
+export const defaultFetch: typeof fetch = (...a) => fetch(...a);
+
+export const MANIFEST_TTL_MS = 60_000;
+const manifestCaches = new WeakMap<typeof fetch, Map<string, { at: number; p: Promise<FieldManifest> }>>();
+
+/**
+ * Region manifest, shared by the value card (areaClient) and the map layer (FieldSource): one request per region per
+ * minute, including requests made while the first is still in flight (F1-51: on a slow 3G link every request costs about
+ * 2 s, and the map layer used to fetch the manifest again after the card had). A failed request is not kept.
+ */
+export function fetchManifest(base: string, name: string, fetchImpl: typeof fetch = defaultFetch, now = Date.now()): Promise<FieldManifest> {
+  let cache = manifestCaches.get(fetchImpl);
+  if (!cache) { cache = new Map(); manifestCaches.set(fetchImpl, cache); }
+  const key = `${base}/v/${name}`;
+  const hit = cache.get(key);
+  if (hit && now - hit.at <= MANIFEST_TTL_MS) return hit.p;
+  const p = fetchImpl(`${key}/manifest.json`, { cache: 'no-cache' }).then(async (r) => {
+    if (!r.ok) throw new Error(`manifest ${r.status}`);
+    return (await r.json()) as FieldManifest;
+  });
+  cache.set(key, { at: now, p });
+  p.catch(() => { if (cache.get(key)?.p === p) cache.delete(key); });
+  return p;
+}
+
 export class FieldSource {
   readonly pm: PMTiles;
   manifest: FieldManifest | null = null;
@@ -109,7 +135,7 @@ export class FieldSource {
   readonly base: string;
   private readonly fetchImpl: typeof fetch;
 
-  constructor(region: FieldRegion, base = fieldBase(), fetchImpl: typeof fetch = (...a) => fetch(...a)) {
+  constructor(region: FieldRegion, base = fieldBase(), fetchImpl: typeof fetch = defaultFetch) {
     this.region = region;
     this.base = base;
     this.fetchImpl = fetchImpl;
@@ -121,9 +147,7 @@ export class FieldSource {
    * hirup file is not loaded here: ensureHarga() loads it when the mode needs it or once the map is colored.
    */
   async init(view?: Box): Promise<void> {
-    const r = await this.fetchImpl(`${this.base}/v/${this.region.name}/manifest.json`, { cache: 'no-cache' });
-    if (!r.ok) throw new Error(`manifest ${r.status}`);
-    const m = (await r.json()) as FieldManifest;
+    const m = await fetchManifest(this.base, this.region.name, this.fetchImpl);
     if (m.geometry !== this.region.geometry) throw new Error(`geometry ${m.geometry} does not match tiles ${this.region.geometry}`);
     this.manifest = m;
     if (view) for (const c of cellsInView(m, view)) void this.loadCell(c);
@@ -152,6 +176,11 @@ export class FieldSource {
   /** True once at least one value cell has arrived. */
   hasCells(): boolean {
     return this.cells.size > 0;
+  }
+
+  /** Resolves when every cell request made so far has arrived or failed. */
+  cellsSettled(): Promise<void> {
+    return Promise.allSettled([...this.pending.values()]).then(() => undefined);
   }
 
   /**

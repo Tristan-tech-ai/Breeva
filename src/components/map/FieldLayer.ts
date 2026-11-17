@@ -6,6 +6,7 @@ import { ensureVectorGrid } from './RoadMvtLayer';
 import { weightFor } from '../../lib/roadColors';
 import { fieldColor } from '../../lib/field/color';
 import { FIELD_DRAWN_EVENT, FIELD_REGIONS, FieldSource, overzoomPoints, type Box } from '../../lib/field/source';
+import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS } from '../../lib/field/firstDraw';
 import { HARGA_COLORS } from '../../lib/field/harga';
 import { popupHtml } from '../../lib/field/popup';
 import { nearestFeature, tileFraction, unitsPerPixel, type TileFeature } from '../../lib/field/tap';
@@ -61,14 +62,17 @@ export function useFieldLayer(
     };
     (map as unknown as { __fieldTap?: { tapAt: (ll: L.LatLng) => boolean } }).__fieldTap = { tapAt };
     // F1-13: the region in view first, with its visible cells fetched beside the geometry; the other regions and the
-    // harga hirup files only after the first colored roads are drawn (or 6 s), so they do not compete for bandwidth.
+    // harga hirup files only after the first colored roads are drawn or the region failed (F1-51: not after a fixed 6 s,
+    // which on slow 3G let them take the bandwidth before the first roads), so they do not compete for bandwidth.
     const b = map.getBounds();
     const view: Box = [[b.getSouth(), b.getWest()], [b.getNorth(), b.getEast()]];
     const centre = map.getCenter();
     const ordered = [...FIELD_REGIONS].sort((p, q) => Number(L.latLngBounds(q.bounds).contains(centre)) - Number(L.latLngBounds(p.bounds).contains(centre)));
     let drawn = false;
     let markDrawn: () => void = () => {};
-    const firstDrawn = new Promise<void>((resolve) => { markDrawn = resolve; setTimeout(resolve, 6000); });
+    const firstDrawn = new Promise<void>((resolve) => { markDrawn = resolve; setTimeout(resolve, FIRST_DRAW_FALLBACK_MS); });
+    // the first region cannot be drawn: release the base map and the other regions at once
+    const failFirst = () => { if (drawn) return; drawn = true; markDrawn(); window.dispatchEvent(new Event(FIELD_FAILED_EVENT)); };
     ensureVectorGrid()
       .then(async () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,7 +82,7 @@ export function useFieldLayer(
           if (k > 0) await firstDrawn;
           if (cancelled) return;
           const src = new FieldSource(region);
-          try { await src.init(k === 0 ? view : undefined); } catch (e) { console.warn('[field]', region.name, e); continue; }
+          try { await src.init(k === 0 ? view : undefined); } catch (e) { console.warn('[field]', region.name, e); if (k === 0) failFirst(); continue; }
           if (cancelled) return;
           sourcesRef.current = [...sourcesRef.current, src];
           void firstDrawn.then(() => (modeRef.current.displayMode === 'harga' ? undefined : new Promise((r) => setTimeout(r, 2000)))).then(() => src.ensureHarga());
@@ -146,7 +150,9 @@ export function useFieldLayer(
           // "drawn" = the visible tiles have loaded while values exist, so colored roads are on screen; only then may
           // the base map, the other regions and the harga file use the connection (a cell alone arrived too early)
           layer.on('load', () => {
-            if (drawn || !src.hasCells()) return;
+            if (drawn) return;
+            // tiles are in but no value yet: wait for the cell requests; if none arrived, the region failed
+            if (!src.hasCells()) { if (k === 0) void src.cellsSettled().then(() => { if (!src.hasCells()) failFirst(); }); return; }
             drawn = true;
             setTimeout(() => { markDrawn(); window.dispatchEvent(new Event(FIELD_DRAWN_EVENT)); }, 50);
           });
