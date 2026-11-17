@@ -49,3 +49,15 @@ describe('in-app map on the on-device engine (F1-18)', () => {
     expect(home).toMatch(/routeStart=\{routeStart\}/);
   });
 });
+
+describe('"Pakai lokasiku" starts the route on /peta (F3-14)', async () => {
+  const { locationStart } = await import('../src/lib/route/appRoute');
+  it('uses the position when it is in the school region, and says why when it cannot', () => {
+    expect(locationStart(bogor, { lat: -6.59733, lng: 106.79335 }).start).toEqual(bogor);
+    expect(locationStart(bogor, { lat: -6.59733, lng: 106.79335 }).note).toMatch(/Berangkat dari lokasimu/);
+    expect(locationStart(jakarta, { lat: -6.59733, lng: 106.79335 })).toEqual({ start: null, note: expect.stringMatching(/di luar wilayah/) });
+    expect(locationStart(bogor, null)).toEqual({ start: null, note: expect.stringMatching(/setelah sekolah tujuan dipilih/) });
+    expect(locationStart(null, denpasar, 'User denied Geolocation')).toEqual({ start: null, note: expect.stringMatching(/izin ditolak/) });
+    expect(locationStart(null, denpasar)).toEqual({ start: null, note: null });
+  });
+});

@@ -57,3 +57,17 @@ export function deviceRouteAsRoute(r: WalkRoute, o: {
     aqi_estimate: 'model',
   };
 }
+
+/**
+ * The "Pakai lokasiku" button on /peta (task F3-14): the phone's position becomes the start of the route to the chosen
+ * school when both lie in the same field region, and the note says what happened when it cannot.
+ */
+export function locationStart(gps: P | null | undefined, dest: P | null | undefined, error?: string | null): { start: P | null; note: string | null } {
+  if (error) return { start: null, note: 'Lokasi tidak bisa dipakai (izin ditolak atau tidak tersedia). Ketuk titik berangkat di peta.' };
+  if (!gps) return { start: null, note: null };
+  if (!dest) return { start: null, note: 'Lokasimu akan dipakai sebagai titik berangkat setelah sekolah tujuan dipilih.' };
+  const start = deviceRouteStart(gps, dest);
+  return start
+    ? { start, note: 'Berangkat dari lokasimu sekarang. Ketuk peta untuk titik berangkat lain.' }
+    : { start: null, note: 'Lokasimu di luar wilayah sekolah ini. Ketuk titik berangkat di peta.' };
+}
