@@ -19,9 +19,10 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'favicon.ico', 'favicon-32.png', 'hero.webp'],
       manifest: {
         id: '/',
-        name: 'Breeva — Eco Walking Rewards',
+        name: 'Breeva — Asap Kendaraan per Ruas Jalan',
         short_name: 'Breeva',
-        description: 'Jalan kaki, kumpulkan EcoPoints, dan pantau kualitas udara real-time.',
+        description: 'Peta asap kendaraan per ruas jalan (Badung–Denpasar dan Kota Bogor), rute dengan asap paling sedikit di ponsel, tanpa akun.',
+        lang: 'id',
         start_url: '/',
         display: 'standalone',
         background_color: '#ffffff',

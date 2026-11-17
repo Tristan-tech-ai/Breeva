@@ -13,11 +13,11 @@ export default function OfflineBanner() {
           animate={{ y: 0 }}
           exit={{ y: -48 }}
           transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-          className="fixed top-0 inset-x-0 z-[100] bg-danger-500 text-white text-center py-2 text-xs font-semibold safe-area-top flex items-center justify-center gap-1.5"
+          className="fixed top-0 inset-x-0 z-[100] bg-red-700 text-white text-center py-2 text-xs font-semibold safe-area-top flex items-center justify-center gap-1.5"
           role="alert"
         >
-          <WifiOff className="w-3.5 h-3.5" />
-          You're offline. Some features may be limited.
+          <WifiOff className="w-3.5 h-3.5" aria-hidden />
+          Tanpa internet: wilayah yang sudah disimpan tetap berwarna dan rutenya tetap dihitung.
         </motion.div>
       )}
     </AnimatePresence>
