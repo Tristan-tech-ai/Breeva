@@ -18,6 +18,7 @@ import { cachedBytes } from '../lib/route/assets';
 import { decodeCell } from '../lib/field/cells';
 import { decodeExhaust, pickForecast, SOON_HOURS, type ForecastEntry } from '../lib/field/forecast';
 import { edgeExhaust, meanAlong, no2AtHour, type SoonHour } from '../lib/route/departForecast';
+import { fieldMedian } from '../lib/route/fieldMedian';
 
 const SPEED = 1.3; // m/s
 let graph: WalkGraph | null = null;
@@ -57,6 +58,7 @@ async function init(base: string, region: { name: string; geometry: string }) {
   let sf: SchoolFile | null = null;
   try { sf = JSON.parse(new TextDecoder().decode(await cachedBytes(`${base}/graphs/${region.geometry}/${region.name}_schools.json`, { cacheFirst: false }))) as SchoolFile; } catch { sf = null; }
   graph = g; index = new NodeIndex(g); no2 = n; pm25 = p; exhaust = x; harga = hi ? h : null; run = manifest.run;
+  fieldMedian(n); // computed while loading, so the first route does not pay for it
   schoolFile = sf; schools = null;
   fieldRoot = `${base}/v/${region.name}/${manifest.run}`;
   forecasts = Array.isArray(manifest.forecast_runs) ? manifest.forecast_runs : [];
@@ -65,10 +67,6 @@ async function init(base: string, region: { name: string; geometry: string }) {
   return { nodes: g.n, edges: g.m, run, harga: !!hi, schools: sf?.points.length ?? 0, forecasts: forecasts.length };
 }
 
-function median(a: Float64Array): number {
-  const s = Array.from(a).filter(Number.isFinite).sort((x, y) => x - y);
-  return s.length ? s[Math.floor(s.length / 2)] : 1;
-}
 
 /** School of every edge, computed on the first motor route (a few hundred ms) so walking stays fast to start. */
 function schoolZone(g: WalkGraph): SchoolZone | null {
@@ -120,7 +118,7 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
       : [{ ...emer.route, kind: 'darurat', school: emer.school, schoolCost: emer.school !== 'off' ? costOf(emer.route, true) : undefined },
         { ...two.route, kind: 'dua-angka', school: two.school, schoolCost: twoCost }];
   } else {
-    const medN = median(nArr);
+    const medN = fieldMedian(nArr); // once per field array, not per request (F3-20)
     routes = pareto(g, s, t, { speed: SPEED, exposureOf: (e) => (Number.isFinite(nArr[e]) ? nArr[e] / medN : 1) });
   }
   const raw = routes;
