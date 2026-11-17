@@ -90,3 +90,27 @@ describe('saving a region for offline (F2-15)', () => {
     expect(keys.filter((u) => u.includes('__bytes='))).toHaveLength(2);
   });
 });
+
+describe('what is saved, read back from the caches (F2-16)', async () => {
+  const { readSaved, markerKey } = await import('../src/lib/pwa/offlineRegion');
+  const okFetch = (async (u: RequestInfo | URL) => (String(u).endsWith('manifest.json') ? new Response(JSON.stringify(M)) : new Response(new Uint8Array(10)))) as typeof fetch;
+  it('a complete save is found with its run and size', async () => {
+    const fc = fakeCaches();
+    expect(await readSaved(BASE, R, fc)).toBeNull();
+    const r = await saveRegionOffline(BASE, R, { fetchImpl: okFetch, cachesImpl: fc });
+    const info = await readSaved(BASE, R, fc);
+    expect(info).toMatchObject({ run: '2026111716', bytes: r.bytes, files: 8 });
+    expect(Number.isFinite(Date.parse(info!.at))).toBe(true);
+  });
+  it('a save cut short (no record) or an archive gone (record left) is not reported as saved', async () => {
+    const cut = fakeCaches();
+    const failing = (async (u: RequestInfo | URL) => (String(u).endsWith('manifest.json') ? new Response(JSON.stringify(M)) : String(u).includes('graphs') ? new Response('', { status: 503 }) : new Response(new Uint8Array(10)))) as typeof fetch;
+    await expect(saveRegionOffline(BASE, R, { fetchImpl: failing, cachesImpl: cut })).rejects.toThrow();
+    expect(await readSaved(BASE, R, cut)).toBeNull();
+    const gone = fakeCaches();
+    await saveRegionOffline(BASE, R, { fetchImpl: okFetch, cachesImpl: gone });
+    gone.store.get(FIELD_CACHES.geometry)!.delete(fullKey(`${BASE}/tiles/2026-11/kota_bogor.pmtiles`));
+    expect(gone.store.get(FIELD_CACHES.geometry)!.has(markerKey(BASE, 'kota_bogor'))).toBe(true);
+    expect(await readSaved(BASE, R, gone)).toBeNull();
+  });
+});

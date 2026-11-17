@@ -26,7 +26,31 @@ export function regionFiles(base: string, r: RegionRef, m: ManifestLike): Region
 }
 
 export interface SaveResult { files: number; bytes: number; run: string }
-type CachesLike = { open(name: string): Promise<Pick<Cache, 'put'>> };
+export interface SavedInfo extends SaveResult { at: string }
+type CachesLike = { open(name: string): Promise<Pick<Cache, 'put' | 'match'>> };
+
+/** Where the record of a saved region is kept (next to its whole archive, never pruned). */
+export function markerKey(base: string, name: string): string {
+  return `${base}/__simpan/${name}.json`;
+}
+
+/**
+ * What is saved for a region, read from the caches themselves (task F2-16): the record written after a complete save,
+ * and only while the whole archive it describes is still there. Null when nothing (or not everything) is saved.
+ */
+export async function readSaved(base: string, r: RegionRef, cachesImpl: CachesLike = caches): Promise<SavedInfo | null> {
+  try {
+    const cache = await cachesImpl.open(FIELD_CACHES.geometry);
+    const rec = await cache.match(markerKey(base, r.name));
+    if (!rec) return null;
+    const archive = await cache.match(fullKey(`${base}/tiles/${r.geometry}/${r.name}.pmtiles`));
+    if (!archive) return null;
+    const info = (await rec.json()) as SavedInfo;
+    return typeof info.run === 'string' && typeof info.bytes === 'number' ? info : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function saveRegionOffline(
   base: string, r: RegionRef,
@@ -51,7 +75,11 @@ export async function saveRegionOffline(
     }
     opts.onProgress?.(++done, files.length);
   }
-  return { files: files.length, bytes, run: m.run };
+  const result = { files: files.length, bytes, run: m.run };
+  // the record is written last, so a save cut short is never reported as saved
+  const at = new Date().toISOString();
+  await (await cs.open(FIELD_CACHES.geometry)).put(markerKey(base, r.name), new Response(JSON.stringify({ ...result, at }), { headers: { 'Content-Type': 'application/json' } }));
+  return result;
 }
 
 /** "4,1 MB" */

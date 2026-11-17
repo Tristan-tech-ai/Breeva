@@ -4,9 +4,9 @@ import { ChevronLeft } from 'lucide-react';
 import { Seo } from '../components/Seo';
 import { FIELD_REGIONS, fieldBase } from '../lib/field/source';
 import { FRESH_MINUTES, manifestStatus, statusText, type FieldStatus } from '../lib/field/status';
-import { saveRegionOffline, sizeLabel } from '../lib/pwa/offlineRegion';
+import { readSaved, saveRegionOffline, sizeLabel } from '../lib/pwa/offlineRegion';
 
-type Saving = { state: 'saving'; done: number; total: number } | { state: 'done'; bytes: number; files: number; run: string } | { state: 'error'; error: string };
+type Saving = { state: 'saving'; done: number; total: number } | { state: 'done'; bytes: number; files: number; run: string; at: string } | { state: 'error'; error: string };
 
 /** Public status of the hourly field: run, age and data source of each region, read from the same manifests the map reads. */
 export default function StatusPage() {
@@ -19,9 +19,19 @@ export default function StatusPage() {
     saveRegionOffline(fieldBase(), { name: r.name, geometry: r.geometry }, {
       onProgress: (done, total) => setSaving((p) => ({ ...p, [r.name]: { state: 'saving', done, total } })),
     })
-      .then((res) => setSaving((p) => ({ ...p, [r.name]: { state: 'done', ...res } })))
+      .then((res) => setSaving((p) => ({ ...p, [r.name]: { state: 'done', ...res, at: new Date().toISOString() } })))
       .catch((e: Error) => setSaving((p) => ({ ...p, [r.name]: { state: 'error', error: e.message } })));
   };
+
+  // what is already saved for offline, read from the caches (F2-16), so the presenter can check before switching Wi-Fi off
+  useEffect(() => {
+    let alive = true;
+    for (const r of FIELD_REGIONS) {
+      readSaved(fieldBase(), { name: r.name, geometry: r.geometry })
+        .then((info) => { if (alive && info) setSaving((p) => (p[r.name] ? p : { ...p, [r.name]: { state: 'done', ...info } })); });
+    }
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -77,7 +87,14 @@ export default function StatusPage() {
                 {(() => {
                   const sv = saving[r.name];
                   if (sv?.state === 'saving') return <p className="mt-2 text-[12px] text-gray-600 dark:text-gray-300" aria-live="polite">Menyimpan… {sv.total ? `${sv.done} dari ${sv.total} berkas` : ''}</p>;
-                  if (sv?.state === 'done') return <p className="mt-2 text-[12px] text-teal-800 dark:text-teal-300" aria-live="polite">Tersimpan {sizeLabel(sv.bytes)} ({sv.files} berkas, run {sv.run}). Peta dan rute {r.label} kini jalan tanpa internet; peta dasar tidak ikut tersimpan.</p>;
+                  if (sv?.state === 'done') return (
+                    <div className="mt-2" aria-live="polite">
+                      <p className="text-[12px] text-teal-800 dark:text-teal-300">
+                        Tersimpan untuk tanpa internet: {sizeLabel(sv.bytes)} ({sv.files} berkas, run {sv.run}, disimpan {new Date(sv.at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}). Peta dan rute {r.label} jalan tanpa internet dengan angka jam itu; peta dasar tidak ikut tersimpan.
+                      </p>
+                      <button onClick={() => save(r)} className="mt-1 min-h-8 rounded-full px-2 text-[12px] font-semibold text-teal-800 dark:text-teal-200 underline underline-offset-2">Simpan ulang (angka jam terbaru)</button>
+                    </div>
+                  );
                   return (
                     <>
                       <button onClick={() => save(r)} className="mt-2 min-h-8 rounded-full border border-teal-700 px-3 py-1 text-[12px] font-semibold text-teal-800 dark:text-teal-200">

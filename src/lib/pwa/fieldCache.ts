@@ -85,8 +85,8 @@ export async function cachedRange(request: Request, cache: CacheLike, fetchImpl:
     const body = await res.clone().arrayBuffer();
     if (body.byteLength === range[1] - range[0] + 1) {
       await cache.put(key, new Response(body, { status: 200, headers: { 'Content-Type': res.headers.get('Content-Type') ?? 'application/octet-stream' } }));
-      // prune the oldest ranges; a whole archive saved on purpose is never pruned
-      const keys = (await cache.keys()).filter((k) => !k.url.endsWith('__utuh=1'));
+      // prune the oldest ranges only; a whole archive saved on purpose and its marker are never pruned
+      const keys = (await cache.keys()).filter((k) => k.url.includes('__bytes='));
       for (const k of keys.slice(0, Math.max(0, keys.length - maxEntries))) await cache.delete(k);
     }
   }
