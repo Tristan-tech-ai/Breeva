@@ -334,7 +334,8 @@ export default function HomePage() {
                 </div>
 
                 {/* Profile avatar */}
-                <a href="/profile" aria-label="Profil" className="relative flex-shrink-0 group">
+                <a href="/profile" className="relative flex-shrink-0 group">
+                  <span className="sr-only">Profil,</span>
                   <div className="w-11 h-11 rounded-2xl overflow-hidden bg-white dark:bg-gray-900/70 backdrop-blur-xl border border-gray-200 dark:border-gray-700/50 shadow-sm group-hover:shadow-md transition-all">
                     {profile?.avatar_url ? (
                       <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -347,6 +348,7 @@ export default function HomePage() {
                   <div className="absolute -bottom-1 -right-1 bg-amber-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-sm border border-white dark:border-gray-900">
                     {profile?.ecopoints_balance || 0}
                   </div>
+                  <span className="sr-only">EcoPoints</span>
                 </a>
               </div>
 

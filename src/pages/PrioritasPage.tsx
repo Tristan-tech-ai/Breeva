@@ -60,7 +60,7 @@ export default function PrioritasPage() {
         <div className="flex flex-wrap gap-2" role="group" aria-label="Wilayah">
           {PRIORITAS_REGIONS.map((r) => (
             <button key={r.name} aria-pressed={region.name === r.name} onClick={() => { setRegion(r); setShown(PAGE_SIZE); }}
-              className={`rounded-full px-3 py-1.5 text-xs font-bold ${region.name === r.name ? 'bg-sky-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
+              className={`rounded-full px-3 py-1.5 text-xs font-bold ${region.name === r.name ? 'bg-sky-700 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
               {r.label}
             </button>
           ))}
@@ -92,7 +92,7 @@ export default function PrioritasPage() {
           <div className="flex rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden text-sm" role="group" aria-label="Jenis fasilitas">
             {(['semua', 'pendidikan', 'kesehatan'] as const).map((k) => (
               <button key={k} onClick={() => setSaring((s) => ({ ...s, kelas: k }))}
-                className={`px-3 py-2 capitalize ${saring.kelas === k ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-gray-900'}`}>
+                className={`px-3 py-2 capitalize ${saring.kelas === k ? 'bg-emerald-700 text-white' : 'bg-white dark:bg-gray-900'}`}>
                 {k}
               </button>
             ))}
@@ -121,7 +121,7 @@ export default function PrioritasPage() {
               return (
                 <li key={f.id} className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-3.5">
                   <div className="flex items-start gap-3">
-                    <span className="w-9 shrink-0 text-right text-sm font-semibold tabular-nums text-gray-400">#{f.peringkat}</span>
+                    <span className="w-9 shrink-0 text-right text-sm font-semibold tabular-nums text-gray-500 dark:text-gray-400">#{f.peringkat}</span>
                     <Icon className="w-4 h-4 mt-0.5 shrink-0 text-emerald-600" aria-hidden />
                     <div className="min-w-0 flex-1">
                       <p className="font-medium leading-snug">{f.nama}</p>
@@ -141,7 +141,7 @@ export default function PrioritasPage() {
                         </p>
                       )}
                     </div>
-                    <Link to={destLink('/peta', { lat: f.lat, lng: f.lon, name: f.nama })} aria-label={`Rute ke ${f.nama}`}
+                    <Link to={destLink('/peta', { lat: f.lat, lng: f.lon, name: f.nama })} aria-label={`Rute ke sini: ${f.nama}`}
                       className="shrink-0 self-start rounded-lg px-2 py-1 text-[11px] font-semibold text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/30">
                       Rute ke sini
                     </Link>
@@ -153,11 +153,11 @@ export default function PrioritasPage() {
                 </li>
               );
             })}
-            {list.length === 0 && data && <p className="text-sm text-gray-500">Tidak ada fasilitas yang cocok.</p>}
+            {list.length === 0 && data && <li className="text-sm text-gray-500">Tidak ada fasilitas yang cocok.</li>}
             {all.length > list.length && (
-              <button onClick={() => setShown((n) => n + PAGE_SIZE)} className="w-full rounded-xl border border-gray-200 dark:border-gray-800 py-2 text-sm font-semibold text-teal-700 dark:text-teal-300">
+              <li><button onClick={() => setShown((n) => n + PAGE_SIZE)} className="w-full rounded-xl border border-gray-200 dark:border-gray-800 py-2 text-sm font-semibold text-teal-700 dark:text-teal-300">
                 Tampilkan {Math.min(PAGE_SIZE, all.length - list.length)} lagi ({list.length} dari {all.length.toLocaleString('id-ID')})
-              </button>
+              </button></li>
             )}
           </ol>
         )}
@@ -184,7 +184,7 @@ export default function PrioritasPage() {
               dan mobil di gerbang selama 15 menit sudah cukup untuk memperbaikinya.</li>
           </ul>
           {data && (
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               Mesin: {data.mesin}. Geometri jalan versi {data.geometri}. Data jalan dan fasilitas © kontributor OpenStreetMap (ODbL).
               {' '}Data cuaca dan latar: <a className="underline" href={OPEN_METEO_LINK} target="_blank" rel="noreferrer">Open-Meteo.com</a> (CC BY 4.0).
               {' '}{CAMS_NOTICE}.

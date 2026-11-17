@@ -47,17 +47,7 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
   return (
     <motion.div
       layout
-      role="button"
-      tabIndex={0}
-      aria-expanded={expanded}
-      aria-label={`Kualitas udara ISPU ${index}, ${cat.name}. Ketuk untuk ${expanded ? 'tutup' : 'detail'}.`}
       onClick={cycle}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          cycle();
-        }
-      }}
       className={`group relative cursor-pointer select-none overflow-hidden rounded-2xl border border-gray-200/70 bg-white/85 shadow-sm backdrop-blur-xl transition-shadow hover:shadow-md dark:border-gray-700/30 dark:bg-gray-900/80 ${className}`}
     >
       {/* Air-quality tint: a soft wash of the AQI color so the whole card "feels" the air. */}
@@ -69,11 +59,23 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
       {/* Top accent line in the AQI color */}
       <div aria-hidden className="absolute inset-x-0 top-0 h-[3px]" style={{ background: color }} />
 
-      {/* Glance */}
-      <div className="relative flex items-center gap-3.5 p-4">
+      {/* Glance: the disclosure button; its name is its visible text plus a hidden hint */}
+      <div
+        className="relative flex items-center gap-3.5 p-4"
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            cycle();
+          }
+        }}
+      >
+        <span className="sr-only">Kualitas udara:</span>
         {/* Circular gauge */}
         <div className="relative h-[60px] w-[60px] flex-shrink-0">
-          <svg className="h-[60px] w-[60px] -rotate-90" viewBox="0 0 60 60" role="img" aria-label={`ISPU ${index}`}>
+          <svg className="h-[60px] w-[60px] -rotate-90" viewBox="0 0 60 60" aria-hidden>
             <circle cx="30" cy="30" r="25" fill="none" strokeWidth="5.5" className="stroke-gray-100 dark:stroke-gray-800" />
             <circle
               cx="30"
@@ -110,8 +112,9 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
         </div>
 
         <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }} className="flex-shrink-0 text-gray-400 dark:text-gray-500">
-          <ChevronDown size={18} strokeWidth={2.2} />
+          <ChevronDown size={18} strokeWidth={2.2} aria-hidden />
         </motion.div>
+        <span className="sr-only">Ketuk untuk {expanded ? 'tutup' : 'detail'}.</span>
       </div>
 
       {/* Detail / Expert */}

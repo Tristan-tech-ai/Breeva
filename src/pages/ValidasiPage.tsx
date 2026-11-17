@@ -51,7 +51,7 @@ export default function ValidasiPage() {
 
             <section>
               <h2 className="text-sm font-semibold mb-2">Rata-rata harian PM2,5</h2>
-              <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800">
+              <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800" tabIndex={0} role="region" aria-label="Tabel uji rata-rata harian (geser ke samping)">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-100 dark:bg-gray-900 text-left text-xs">
                     <tr><th className="px-3 py-2">Uji</th><th className="px-3 py-2">NRMSE</th><th className="px-3 py-2">R²</th><th className="px-3 py-2">Kemiringan</th><th className="px-3 py-2">Titik potong</th><th className="px-3 py-2">Hasil</th></tr>

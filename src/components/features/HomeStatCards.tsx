@@ -27,7 +27,6 @@ export default function HomeStatCards() {
       <Link
         to="/quests"
         onClick={() => haptic('light')}
-        aria-label={`Misi: ${done} dari ${total} selesai. Buka misi.`}
         className={`${cardBase} border-primary-100/70 bg-primary-50/70 dark:border-primary-800/30 dark:bg-primary-950/30`}
       >
         <span className="mb-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-primary-500/15">
@@ -38,6 +37,7 @@ export default function HomeStatCards() {
           <span className="text-gray-400 dark:text-gray-500">/{total}</span>
         </span>
         <span className="mt-1 text-[10.5px] font-medium text-gray-500 dark:text-gray-400">Misi</span>
+        <span className="sr-only">selesai. Buka misi.</span>
         <span className="mt-1.5 block h-1 w-full overflow-hidden rounded-full bg-primary-200/50 dark:bg-primary-900/40">
           <span
             className="block h-full rounded-full bg-primary-500 transition-all duration-500"
@@ -50,7 +50,6 @@ export default function HomeStatCards() {
       <Link
         to="/profile"
         onClick={() => haptic('light')}
-        aria-label={`Hari beruntun: ${streak}. Buka profil.`}
         className={`${cardBase} border-amber-100/70 bg-amber-50/70 dark:border-amber-800/30 dark:bg-amber-950/30`}
       >
         <span className="mb-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15">
@@ -60,6 +59,7 @@ export default function HomeStatCards() {
           <AnimatedNumber value={streak} />
         </span>
         <span className="mt-1 text-[10.5px] font-medium text-gray-500 dark:text-gray-400">Hari beruntun</span>
+        <span className="sr-only">Buka profil.</span>
         <span className="mt-1.5 flex gap-0.5">
           {Array.from({ length: 7 }).map((_, i) => (
             <span
@@ -76,7 +76,6 @@ export default function HomeStatCards() {
       <Link
         to="/leaderboard"
         onClick={() => haptic('light')}
-        aria-label={rank ? `Peringkat #${rank} minggu ini. Buka papan peringkat.` : 'Peringkat belum ada. Buka papan peringkat.'}
         className={`${cardBase} border-violet-100/70 bg-violet-50/70 dark:border-violet-800/30 dark:bg-violet-950/30`}
       >
         <span className="mb-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/15">
@@ -89,6 +88,7 @@ export default function HomeStatCards() {
         <span className="mt-1.5 text-[9px] font-semibold text-violet-500/80 dark:text-violet-400/80">
           {rank ? 'minggu ini' : 'Mulai jalan!'}
         </span>
+        <span className="sr-only">Buka papan peringkat.</span>
       </Link>
     </div>
   );

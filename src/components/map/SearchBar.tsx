@@ -106,7 +106,7 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
   const activeChip = hasFilter ? filterChips.find(c => c.key === activeFilter) : undefined;
 
   return (
-    <div className="relative w-full" ref={filterRef} role="combobox" aria-expanded={showDropdown} aria-owns="search-results-list" aria-haspopup="listbox">
+    <div className="relative w-full" ref={filterRef} role="combobox" aria-expanded={showDropdown} aria-owns={showDropdown ? 'search-results-list' : undefined} aria-haspopup="listbox">
       {/* Search Input */}
       <div
         className={`
@@ -126,7 +126,7 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
           type="text"
           role="searchbox"
           aria-autocomplete="list"
-          aria-controls="search-results-list"
+          aria-controls={showDropdown ? 'search-results-list' : undefined}
           placeholder="Cari di sini"
           value={searchQuery}
           onChange={(e) => handleInputChange(e.target.value)}
@@ -153,9 +153,11 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
         {hasFilter && (
           <button
             onClick={() => { setFilterOpen(v => !v); setIsFocused(false); inputRef.current?.blur(); }}
+            aria-label={activeChip ? `Saring tempat: ${activeChip.label}` : 'Saring tempat'}
+            aria-expanded={filterOpen}
             className="relative p-1.5 -mr-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition flex-shrink-0"
           >
-            <SlidersHorizontal className="w-4 h-4 text-gray-500 dark:text-gray-400" strokeWidth={2} />
+            <SlidersHorizontal aria-hidden className="w-4 h-4 text-gray-500 dark:text-gray-400" strokeWidth={2} />
             {activeChip && (
               <span
                 className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full ring-2 ring-white dark:ring-gray-900"
