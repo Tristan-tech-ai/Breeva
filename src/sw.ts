@@ -3,7 +3,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { clientsClaim } from 'workbox-core';
 import { ExpirationPlugin } from 'workbox-expiration';
-import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
+import { precacheAndRoute, cleanupOutdatedCaches, matchPrecache } from 'workbox-precaching';
+import { offlineDocument } from './lib/pwa/offlineDocument';
 import { registerRoute, setCatchHandler } from 'workbox-routing';
 import { CacheFirst, NetworkFirst, StaleWhileRevalidate } from 'workbox-strategies';
 
@@ -145,8 +146,9 @@ registerRoute(
 
 setCatchHandler(async ({ request }: RouteCallbackOptions) => {
   if (request.destination === 'document') {
-    const offlineResponse = await caches.match('/offline.html');
-    if (offlineResponse) return offlineResponse;
+    // the precached app shell opens any route offline (a new /peta?rute= link computes from cached region files)
+    const page = await offlineDocument(matchPrecache);
+    if (page) return page;
   }
 
   return Response.error();
