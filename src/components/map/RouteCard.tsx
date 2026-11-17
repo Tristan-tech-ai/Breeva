@@ -210,7 +210,7 @@ export default function RouteCard({ route, isSelected, onSelect, isRecommended }
               </div>
               {worstNo2.length > 0 && (
                 <div>
-                  <span className="font-semibold text-gray-600 dark:text-gray-300">Jalan tersibuk (NO₂): </span>
+                  <span className="font-semibold text-gray-600 dark:text-gray-300">Jalan tersibuk (asap kendaraan, NOx): </span>
                   {worstNo2.map((s, i) => (
                     <span key={i}>{i > 0 ? ', ' : ''}{s.name || s.highway} (+{Math.round(s.no2_delta ?? 0)})</span>
                   ))}

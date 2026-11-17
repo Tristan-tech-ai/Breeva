@@ -58,3 +58,16 @@ describe('sensitive profile', () => {
     expect(pm25Category(24.3).name).toBe(pm25Category(24.3).name);
   });
 });
+
+describe('note under the Udara total legend (F1-20)', async () => {
+  const { totalModeNote } = await import('../src/lib/roadColors');
+  it('says the NO2 view adds exhaust counted as NOx and is an upper bound', () => {
+    const n = totalModeNote('no2')!;
+    expect(n).toMatch(/NOx/);
+    expect(n).toMatch(/batas atas/);
+    expect(n).toMatch(/bukan NO₂ terukur/);
+  });
+  it('has no note for the other pollutants', () => {
+    for (const p of ['aqi', 'pm25', 'pm10', 'o3']) expect(totalModeNote(p)).toBeNull();
+  });
+});

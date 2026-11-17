@@ -20,6 +20,7 @@ import { FIELD_REGIONS, pickRegion } from '../lib/field/source';
 import FieldAgeNote from '../components/map/FieldAgeNote';
 import { parseDestLink, parseRouteLink } from '../lib/route/share';
 import { parseDepart } from '../lib/route/depart';
+import { totalModeNote } from '../lib/roadColors';
 
 const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
 
@@ -274,6 +275,9 @@ export default function ExploreMapPage() {
                 <span>{roadDisplayMode === 'total' ? `Konsentrasi ${activeP.unit}` : 'Kontribusi lalu lintas'}</span>
                 <span>Tinggi</span>
               </div>
+              {roadDisplayMode === 'total' && totalModeNote(pollutant) && (
+                <p className="mt-1.5 text-[10.5px] leading-relaxed text-amber-800 dark:text-amber-300">{totalModeNote(pollutant)}</p>
+              )}
             </div>
           )}
         </div>

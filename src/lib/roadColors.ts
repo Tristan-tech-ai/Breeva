@@ -92,3 +92,12 @@ export function pm25ToAqi(pm25: number): number {
   for (const [lo, hi, aLo, aHi] of bp) if (c <= hi) return Math.round(((aHi - aLo) / (hi - lo)) * (c - lo) + aLo);
   return 500;
 }
+
+/**
+ * Note under the legend of the "Udara total" view. For NO2 the value is the CAMS NO2 background plus the vehicle exhaust,
+ * which the kernel carries as NOx (no NO -> NO2 chemistry), so it is an upper bound on NO2, not NO2 as measured.
+ */
+export function totalModeNote(pollutant: string): string | null {
+  if (pollutant !== 'no2') return null;
+  return 'NO₂ di mode ini = NO₂ latar (CAMS) + asap kendaraan yang dihitung sebagai NOx. Tidak semua NOx menjadi NO₂, jadi angka ini batas atas, bukan NO₂ terukur.';
+}
