@@ -127,7 +127,11 @@ const median = (a: number[]) => {
   return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : Number.NaN;
 };
 
-export interface RecentSummary { hours: number; median_nrmse: number; median_rmse: number; median_coverage: number; sensors_median: number; last_run: string | null }
+export interface RecentSummary {
+  hours: number; median_nrmse: number; median_rmse: number; median_coverage: number; sensors_median: number; last_run: string | null;
+  /** Hidden readings inside the 95 % interval over all of them (the gate's definition, F5-28), and how many readings. */
+  coverage_pooled: number; readings: number;
+}
 
 /**
  * Medians over sensor hours, each counted once (F5-27): two runs can test the same OpenAQ hour (the sensors report 1-2 h
@@ -144,6 +148,8 @@ export function summarizeRecent(f: RecentFile | null): RecentSummary | null {
     median_nrmse: median(es.map((e) => e.nrmse)),
     median_rmse: median(es.map((e) => e.rmse)),
     median_coverage: median(es.map((e) => e.pi95_coverage)),
+    coverage_pooled: es.reduce((a, e) => a + e.pi95_coverage * e.n, 0) / Math.max(1, es.reduce((a, e) => a + e.n, 0)),
+    readings: es.reduce((a, e) => a + e.n, 0),
     sensors_median: median(es.map((e) => e.n)),
     last_run: all.reduce((m, e) => (e.run > m ? e.run : m), all[0].run),
   };

@@ -28,8 +28,8 @@ export default function RunningValidation({ region = 'badung_denpasar', label = 
         <>
           <p>
             Setiap jam, tiap sensor warga disembunyikan bergiliran dan ditebak dari sensor lain. Dari {s.hours} jam terakhir:
-            NRMSE per jam median {pct(s.median_nrmse)} (RMSE {num(s.median_rmse, 1)} µg/m³), rentang 95% memuat {pct(s.median_coverage)} bacaan
-            yang disembunyikan, median {num(s.sensors_median, 0)} sensor per jam.
+            NRMSE per jam median {pct(s.median_nrmse)} (RMSE {num(s.median_rmse, 1)} µg/m³), median {num(s.sensors_median, 0)} sensor per jam;
+            rentang 95% memuat {pct(s.coverage_pooled)} dari {num(s.readings, 0)} bacaan yang disembunyikan (target 90–97%).
           </p>
           <p className="text-[11px] text-amber-700 dark:text-amber-400">
             Angka per jam, belum dibandingkan dengan target EPA: target NRMSE ≤ 30% berlaku untuk rata-rata 24 jam.

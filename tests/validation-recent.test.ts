@@ -24,7 +24,9 @@ describe('running hourly validation file', () => {
 
   it('summarises with medians, or nothing when empty', () => {
     const f = [0.3, 0.5, 0.4].reduce<ReturnType<typeof mergeRecent> | null>((acc, x, k) => mergeRecent(acc, 'r', e(`202611161${k}`, x, 20 + k), now), null);
-    expect(summarizeRecent(f)).toEqual({ hours: 3, median_nrmse: 0.4, median_rmse: 12, median_coverage: 0.95, sensors_median: 21, last_run: '2026111612' });
+    const s = summarizeRecent(f)!;
+    expect({ ...s, coverage_pooled: Number(s.coverage_pooled.toFixed(6)) }).toEqual({ hours: 3, median_nrmse: 0.4, median_rmse: 12, median_coverage: 0.95,
+      sensors_median: 21, last_run: '2026111612', coverage_pooled: 0.95, readings: 63 });
     expect(summarizeRecent(null)).toBeNull();
   });
 
@@ -39,6 +41,17 @@ describe('running hourly validation file', () => {
     expect(s.median_nrmse).toBe(0.55); // 0.40, 0.50, 0.60, 0.90
     expect(s.sensors_median).toBe(24);
     expect(s.last_run).toBe('2026111718');
+  });
+
+  it('pools the interval coverage over every hidden reading, so a few full hours do not hide a poor one (F5-28)', () => {
+    const at = (run: string, hour: string, cov: number, n: number): RecentEntry => ({ ...e(run, 0.4, n), sensor_hour_utc: hour, pi95_coverage: cov });
+    const f = { format: 'validation_recent' as const, name: 'r', scope: '', updated_at: '', entries: [
+      at('2026111710', '2026-11-17T08:00:00Z', 1, 20), at('2026111711', '2026-11-17T09:00:00Z', 1, 20), at('2026111712', '2026-11-17T10:00:00Z', 0.5, 40),
+    ] };
+    const s = summarizeRecent(f)!;
+    expect(s.median_coverage).toBe(1);
+    expect(s.readings).toBe(80);
+    expect(s.coverage_pooled).toBe(0.75); // (20 + 20 + 20) / 80
   });
 });
 
