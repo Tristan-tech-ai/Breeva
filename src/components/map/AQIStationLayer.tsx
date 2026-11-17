@@ -70,15 +70,23 @@ async function fetchBounds(bounds: L.LatLngBounds): Promise<WAQIStation[]> {
 
   const cached = boundsCache.get(key);
   if (cached && Date.now() - cached.ts < BOUNDS_TTL) return cached.data;
+  // a second call for the same cell while the first is on its way shares that request
+  const pending = inflight.get(key);
+  if (pending) return pending;
 
-  const resp = await fetch(`${PROXY_STATIONS}?bbox=${encodeURIComponent(key)}`);
-  if (!resp.ok) return cached?.data ?? [];
-  const json = await resp.json();
-  if (json.status !== 'ok') return cached?.data ?? [];
-
-  boundsCache.set(key, { data: json.data, ts: Date.now() });
-  return json.data;
+  const p = (async () => {
+    const resp = await fetch(`${PROXY_STATIONS}?bbox=${encodeURIComponent(key)}`);
+    if (!resp.ok) return cached?.data ?? [];
+    const json = await resp.json();
+    if (json.status !== 'ok') return cached?.data ?? [];
+    boundsCache.set(key, { data: json.data, ts: Date.now() });
+    return json.data as WAQIStation[];
+  })().finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
 }
+
+const inflight = new Map<string, Promise<WAQIStation[]>>();
 
 async function fetchFeed(uid: number): Promise<WAQIFeedData | null> {
   const cached = feedCache.get(uid);
