@@ -29,7 +29,7 @@ describe('saving a region for offline (F2-15)', () => {
     const urls = files.map((f) => f.url.replace(BASE, ''));
     expect(urls).toEqual([
       '/tiles/2026-11/kota_bogor.pmtiles', '/v/kota_bogor/manifest.json', '/v/kota_bogor/2026111716/0.bin', '/v/kota_bogor/2026111716/1.bin',
-      '/v/kota_bogor/2026111716/x2026111717.bin', '/harga/2026-11/kota_bogor.bin', '/graphs/2026-11/kota_bogor.bin', '/graphs/2026-11/kota_bogor_schools.json',
+      '/v/kota_bogor/2026111716/x2026111717.bin', '/harga/2026-11/kota_bogor.bin', '/graphs/2026-11/kota_bogor_inti.bin', '/graphs/2026-11/kota_bogor_bentuk.bin', '/graphs/2026-11/kota_bogor_schools.json',
     ]);
     expect(files[0]).toMatchObject({ into: [FIELD_CACHES.geometry], whole: true });
     expect(files[2].into).toEqual([FIELD_CACHES.cells, ROUTE_CACHE]);
@@ -47,12 +47,12 @@ describe('saving a region for offline (F2-15)', () => {
     }) as typeof fetch;
     const progress: number[] = [];
     const r = await saveRegionOffline(BASE, R, { fetchImpl, cachesImpl: fc, onProgress: (d) => progress.push(d) });
-    expect(r).toMatchObject({ files: 8, run: '2026111716' });
-    expect(r.bytes).toBe(1000 + JSON.stringify(M).length + 6 * 10);
-    expect(progress).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(r).toMatchObject({ files: 9, run: '2026111716' });
+    expect(r.bytes).toBe(1000 + JSON.stringify(M).length + 7 * 10); // F1-56: graph core and shapes are two files
+    expect(progress).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(seen.filter((u) => u.endsWith('.pmtiles'))).toHaveLength(1);
     expect(fc.store.get(FIELD_CACHES.geometry)!.has(fullKey(`${BASE}/tiles/2026-11/kota_bogor.pmtiles`))).toBe(true);
-    expect(fc.store.get(ROUTE_CACHE)!.size).toBe(7);
+    expect(fc.store.get(ROUTE_CACHE)!.size).toBe(8);
     expect(sizeLabel(4_123_456)).toBe('4,1 MB');
   });
 
@@ -99,7 +99,7 @@ describe('what is saved, read back from the caches (F2-16)', async () => {
     expect(await readSaved(BASE, R, fc)).toBeNull();
     const r = await saveRegionOffline(BASE, R, { fetchImpl: okFetch, cachesImpl: fc });
     const info = await readSaved(BASE, R, fc);
-    expect(info).toMatchObject({ run: '2026111716', bytes: r.bytes, files: 8 });
+    expect(info).toMatchObject({ run: '2026111716', bytes: r.bytes, files: 9 });
     expect(Number.isFinite(Date.parse(info!.at))).toBe(true);
   });
   it('a save cut short (no record) or an archive gone (record left) is not reported as saved', async () => {

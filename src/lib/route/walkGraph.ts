@@ -27,10 +27,13 @@ export class WalkGraph {
   readonly lenDm: Uint16Array;
   readonly cls: Uint8Array;
   readonly ci: Uint32Array;
-  private readonly sh: Uint32Array;
-  private readonly shOff: Uint32Array;
-  private readonly shPts: Int32Array;
+  // edge shapes: absent in a core pack (F1-56, graphSplit.ts) until attachShapes(); edges are then drawn as straight
+  // lines between their nodes
+  private sh: Uint32Array;
+  private shOff: Uint32Array;
+  private shPts: Int32Array;
   private readonly scale: number;
+  hasShapes: boolean;
 
   constructor(bytes: Uint8Array) {
     if (String.fromCharCode(...bytes.subarray(0, 4)) !== 'BGR1') throw new Error('not a BGR1 graph');
@@ -49,7 +52,25 @@ export class WalkGraph {
     this.lat = cols.lat as Int32Array; this.lon = cols.lon as Int32Array;
     this.off = cols.off as Uint32Array; this.target = cols.target as Uint32Array;
     this.lenDm = cols.len_dm as Uint16Array; this.cls = cols.cls as Uint8Array; this.ci = cols.ci as Uint32Array;
+    this.hasShapes = !!(cols.sh && cols.sh_off && cols.sh_pts);
+    this.sh = (cols.sh as Uint32Array) ?? new Uint32Array(0);
+    this.shOff = (cols.sh_off as Uint32Array) ?? new Uint32Array(0);
+    this.shPts = (cols.sh_pts as Int32Array) ?? new Int32Array(0);
+  }
+
+  /** Adds the edge shapes of a core pack from its BSH1 file (graphSplit.ts). Throws when they do not belong to it. */
+  attachShapes(bytes: Uint8Array): void {
+    if (String.fromCharCode(...bytes.subarray(0, 4)) !== 'BSH1') throw new Error('not a BSH1 shapes file');
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const head = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + dv.getUint32(4, true)))) as { m: number; region: string; geometry: string; columns: GraphColumn[] };
+    if (head.m !== this.m || head.region !== this.meta.region || head.geometry !== this.meta.geometry) throw new Error('shapes belong to another graph');
+    const buf = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(buf).set(bytes);
+    const cols: Record<string, Typed> = {};
+    for (const c of head.columns) cols[c.name] = new CTOR[c.dtype](buf, c.offset, c.count);
+    if (!cols.sh || !cols.sh_off || !cols.sh_pts || cols.sh.length !== this.m) throw new Error('shapes file is incomplete');
     this.sh = cols.sh as Uint32Array; this.shOff = cols.sh_off as Uint32Array; this.shPts = cols.sh_pts as Int32Array;
+    this.hasShapes = true;
   }
 
   nodeLat(u: number): number { return this.lat[u] / this.scale; }
@@ -74,6 +95,12 @@ export class WalkGraph {
    * the point count, or minus that count when xs or ys is too short (nothing written).
    */
   edgeXY(e: number, u: number, mx: number, my: number, xs: Float64Array, ys: Float64Array): number {
+    if (!this.hasShapes) {
+      if (xs.length < 2 || ys.length < 2) return -2;
+      const v = this.target[e];
+      xs[0] = this.nodeLon(u) * mx; ys[0] = this.nodeLat(u) * my; xs[1] = this.nodeLon(v) * mx; ys[1] = this.nodeLat(v) * my;
+      return 2;
+    }
     const s = this.sh[e];
     const k = s >>> 1;
     const a = this.shOff[k], b = this.shOff[k + 1];
@@ -92,6 +119,8 @@ export class WalkGraph {
   }
 
   edgeCoords(e: number, u: number): Array<[number, number]> {
+    const v0 = this.target[e];
+    if (!this.hasShapes) return [[this.nodeLon(u), this.nodeLat(u)], [this.nodeLon(v0), this.nodeLat(v0)]];
     const s = this.sh[e];
     const k = s >>> 1;
     const a = this.shOff[k], b = this.shOff[k + 1];

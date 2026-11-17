@@ -33,12 +33,19 @@ export class RouteClient {
   private readonly pending = new Map<number, { ok: (v: unknown) => void; fail: (e: Error) => void }>();
   private readonly soonWaiters = new Map<number, (soon: SoonHours) => void>();
   private readonly progress = new Map<number, (bytes: number) => void>();
+  private readonly shapeWaiters = new Map<number, (coords: Array<Array<[number, number]>>) => void>();
 
   constructor() {
     this.worker = new Worker(new URL('../../workers/route.worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (ev) => {
       const id = ev.data.id;
       if (ev.data.type === 'progress') { this.progress.get(id)?.(ev.data.bytes); return; }
+      if (ev.data.type === 'shapes') {
+        const w = this.shapeWaiters.get(id);
+        this.shapeWaiters.delete(id);
+        if (w && ev.data.ok) w(ev.data.coords);
+        return;
+      }
       if (ev.data.type === 'soon') {
         const w = this.soonWaiters.get(id);
         this.soonWaiters.delete(id);
@@ -50,16 +57,19 @@ export class RouteClient {
       this.pending.delete(id);
       this.progress.delete(id);
       if (!ev.data.soonPending) this.soonWaiters.delete(id);
+      if (!ev.data.shapesPending) this.shapeWaiters.delete(id);
       if (ev.data.ok) p.ok(ev.data); else p.fail(new Error(ev.data.error));
     };
   }
 
-  private call<T>(msg: Record<string, unknown>, onSoon?: (soon: SoonHours) => void, onProgress?: (bytes: number) => void): Promise<T> {
+  private call<T>(msg: Record<string, unknown>, onSoon?: (soon: SoonHours) => void, onProgress?: (bytes: number) => void,
+    onShapes?: (coords: Array<Array<[number, number]>>) => void): Promise<T> {
     const id = ++this.seq;
     return new Promise<T>((ok, fail) => {
       this.pending.set(id, { ok: ok as (v: unknown) => void, fail });
       if (onSoon) this.soonWaiters.set(id, onSoon);
       if (onProgress) this.progress.set(id, onProgress);
+      if (onShapes) this.shapeWaiters.set(id, onShapes);
       this.worker.postMessage({ id, ...msg });
     });
   }
@@ -74,8 +84,8 @@ export class RouteClient {
    * is active. onSoon receives the leave-later hours of the last route when they arrive after the routes (departure now).
    */
   route(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor' = 'walk', departLocal?: string | null,
-    onSoon?: (soon: SoonHours) => void) {
-    return this.call<{ routes: WalkRoute[]; ms: number; run: string; soonPending?: boolean }>({ type: 'route', from, to, mode, departLocal }, onSoon);
+    onSoon?: (soon: SoonHours) => void, onShapes?: (coords: Array<Array<[number, number]>>) => void) {
+    return this.call<{ routes: WalkRoute[]; ms: number; run: string; soonPending?: boolean; shapesPending?: boolean }>({ type: 'route', from, to, mode, departLocal }, onSoon, undefined, onShapes);
   }
 
   terminate() { this.worker.terminate(); }

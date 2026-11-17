@@ -20,7 +20,9 @@ export function regionFiles(base: string, r: RegionRef, m: ManifestLike): Region
     ...m.cells.map((c) => ({ url: `${v}/${m.run}/${c}.bin`, into: [FIELD_CACHES.cells, ROUTE_CACHE] })),
     ...(m.forecast_runs ?? []).map((f) => ({ url: `${v}/${m.run}/${f.key}`, into: [ROUTE_CACHE] })),
     { url: `${base}/harga/${r.geometry}/${r.name}.bin`, into: [FIELD_CACHES.harga, ROUTE_CACHE] },
-    { url: `${base}/graphs/${r.geometry}/${r.name}.bin`, into: [ROUTE_CACHE] },
+    // the walking graph as the router loads it since F1-56: core and shapes
+    { url: `${base}/graphs/${r.geometry}/${r.name}_inti.bin`, into: [ROUTE_CACHE] },
+    { url: `${base}/graphs/${r.geometry}/${r.name}_bentuk.bin`, into: [ROUTE_CACHE] },
     { url: `${base}/graphs/${r.geometry}/${r.name}_schools.json`, into: [ROUTE_CACHE] },
   ];
 }

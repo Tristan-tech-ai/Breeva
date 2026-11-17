@@ -47,10 +47,12 @@ describe('field upload plan', () => {
     const root = fakeField([0]);
     mkdirSync(join(root, 'graphs', '2026-11'), { recursive: true });
     writeFileSync(join(root, 'graphs', '2026-11', 'r.bin'), 'g');
+    writeFileSync(join(root, 'graphs', '2026-11', 'r_inti.bin'), 'c');
+    writeFileSync(join(root, 'graphs', '2026-11', 'r_bentuk.bin'), 's');
     const plan = planUploads(root, ['r']) as Array<Upload & { encoding?: string }>;
     const gz = plan.filter((u) => u.encoding === 'br').map((u) => u.key).sort();
-    expect(gz).toEqual(['graphs/2026-11/r.bin', 'harga/2026-11/r.bin']);
-    expect(plan.filter((u) => u.encoding).length).toBe(2);
+    expect(gz).toEqual(['graphs/2026-11/r.bin', 'graphs/2026-11/r_bentuk.bin', 'graphs/2026-11/r_inti.bin', 'harga/2026-11/r.bin']);
+    expect(plan.filter((u) => u.encoding).length).toBe(4);
     expect(plan.find((u) => u.key.endsWith('.pmtiles'))!.encoding).toBeUndefined();
   });
 

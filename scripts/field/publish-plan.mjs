@@ -5,7 +5,7 @@
  *   v/{name}/{run}/{c}.bin              public, max-age=31536000, immutable       (L1.3, runs are never overwritten)
  *   v/{name}/manifest.json              public, max-age=60, stale-while-revalidate=600 (L1.4), uploaded LAST
  *   harga/{geometry}/{name}.bin         public, max-age=86400  (from harga/{geometry}/client/{name}.bin), brotli
- *   graphs/{geometry}/{name}.bin        public, max-age=86400, brotli
+ *   graphs/{geometry}/{name}.bin        public, max-age=86400, brotli (and {name}_inti.bin, {name}_bentuk.bin: F1-56)
  *   graphs/{geometry}/{name}_schools.json  public, max-age=86400 (school zone points, F3-07)
  * inputs.json and report.json of a run stay local.
  * encoding 'br': stored brotli-compressed with Content-Encoding: br (every current browser asks for br over HTTPS and
@@ -42,6 +42,11 @@ export function planUploads(root, regions) {
     if (existsSync(harga)) out.push({ local: harga, key: `harga/${g}/${name}.bin`, cacheControl: DAILY, contentType: 'application/octet-stream', encoding: 'br' });
     const graph = join(root, 'graphs', g, `${name}.bin`);
     if (existsSync(graph)) out.push({ local: graph, key: `graphs/${g}/${name}.bin`, cacheControl: DAILY, contentType: 'application/octet-stream', encoding: 'br' });
+    // F1-56: core and shapes of the same graph (scripts/field/split-graph.mts); the single file stays for older app versions
+    for (const part of ['inti', 'bentuk']) {
+      const f = join(root, 'graphs', g, `${name}_${part}.bin`);
+      if (existsSync(f)) out.push({ local: f, key: `graphs/${g}/${name}_${part}.bin`, cacheControl: DAILY, contentType: 'application/octet-stream', encoding: 'br' });
+    }
     const schools = join(root, 'graphs', g, `${name}_schools.json`);
     if (existsSync(schools)) out.push({ local: schools, key: `graphs/${g}/${name}_schools.json`, cacheControl: DAILY, contentType: 'application/json' });
     last.push({ local: manPath, key: `v/${name}/manifest.json`, cacheControl: MANIFEST, contentType: 'application/json' });

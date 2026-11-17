@@ -10,7 +10,10 @@ export type GetBytes = (url: string, opts: { cacheFirst: boolean }) => Promise<U
 export interface RegionManifest { run: string; cells: number[]; valid_hour_local?: number; forecast_runs?: ForecastEntry[] }
 
 export interface RegionFiles {
+  /** core walking graph (F1-56: without the edge shapes, graphSplit.ts) */
   graph: Uint8Array;
+  /** where the edge shapes are; fetched after the rest, so they do not slow the first route */
+  shapesUrl: string;
   manifest: RegionManifest;
   cells: Map<number, Uint8Array>;
   /** null when the region has no harga hirup file or it failed */
@@ -20,7 +23,7 @@ export interface RegionFiles {
 }
 
 export async function loadRegionFiles(base: string, region: { name: string; geometry: string }, get: GetBytes): Promise<RegionFiles> {
-  const graphP = get(`${base}/graphs/${region.geometry}/${region.name}.bin`, { cacheFirst: true });
+  const graphP = get(graphUrls(base, region).core, { cacheFirst: true });
   const hargaP = get(`${base}/harga/${region.geometry}/${region.name}.bin`, { cacheFirst: true }).catch(() => null);
   const schoolsP = get(`${base}/graphs/${region.geometry}/${region.name}_schools.json`, { cacheFirst: false }).catch(() => null);
   graphP.catch(() => undefined); // awaited below; this only keeps an early manifest failure from leaving it unhandled
@@ -28,5 +31,11 @@ export async function loadRegionFiles(base: string, region: { name: string; geom
   const cellsP = Promise.all(manifest.cells.map(async (c) =>
     [c, await get(`${base}/v/${region.name}/${manifest.run}/${c}.bin`, { cacheFirst: true })] as const));
   const [graph, cells, harga, schools] = await Promise.all([graphP, cellsP, hargaP, schoolsP]);
-  return { graph, manifest, cells: new Map(cells), harga, schools };
+  return { graph, shapesUrl: graphUrls(base, region).shapes, manifest, cells: new Map(cells), harga, schools };
+}
+
+/** The two files of a region's walking graph (F1-56); the single BGR1 file stays for older app versions. */
+export function graphUrls(base: string, region: { name: string; geometry: string }) {
+  const dir = `${base}/graphs/${region.geometry}/${region.name}`;
+  return { core: `${dir}_inti.bin`, shapes: `${dir}_bentuk.bin` };
 }

@@ -33,6 +33,8 @@ let run = '';
 let schoolFile: SchoolFile | null = null;
 let schools: SchoolZone | null = null;
 let fieldRoot = '';
+/** Resolves once the edge shapes are attached to the graph, or failed (F1-56: the core graph routes without them). */
+let shapesReady: Promise<void> = Promise.resolve();
 let forecasts: ForecastEntry[] = [];
 let runLocalHour = -1;
 const forecastEdges = new Map<string, Promise<Float64Array>>();
@@ -60,6 +62,8 @@ async function init(base: string, region: { name: string; geometry: string }, me
   }
   let sf: SchoolFile | null = null;
   try { sf = files.schools ? JSON.parse(new TextDecoder().decode(files.schools)) as SchoolFile : null; } catch { sf = null; }
+  // the shapes only after everything a walking route needs, so they do not share the link with it
+  shapesReady = cachedBytes(files.shapesUrl, { cacheFirst: true }).then((b) => g.attachShapes(b), (e) => console.warn('[route] shapes', e));
   graph = g; index = new NodeIndex(g); no2 = n; pm25 = p; exhaust = x; harga = hi ? h : null; run = manifest.run;
   fieldMedian(n); // computed while loading, so the first route does not pay for it
   schoolFile = sf; schools = null;
@@ -129,16 +133,15 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
   const out = routes.map((r) => {
     let pmDose = 0, no2Dose = 0, hDose = 0, xDose = 0, tSum = 0;
     const coords: Array<[number, number]> = [];
-    r.edges.forEach((e, k) => {
+    r.edges.forEach((e) => {
       const tS = (g.lenDm[e] / 10) * (r.timeS / Math.max(1, r.lengthM)); // time share of the edge (route's own speeds)
       tSum += tS;
       pmDose += (Number.isFinite(pArr[e]) ? pArr[e] : 0) * tS;
       no2Dose += (Number.isFinite(nArr[e]) ? nArr[e] : 0) * tS;
       xDose += (xArr && Number.isFinite(xArr[e]) ? xArr[e] : 0) * tS;
       hDose += (hArr && Number.isFinite(hArr[e]) ? hArr[e] : 1) * tS;
-      const pts = g.edgeCoords(e, r.nodes[k]);
-      coords.push(...(k === 0 ? pts : pts.slice(1)));
     });
+    coords.push(...coordsOf(g, r));
     // mean concentration along the route (ug/m3), the honest number to compare routes by
     const o = { lengthM: Math.round(r.lengthM), timeS: Math.round(r.timeS), pm25Mean: pmDose / tSum, no2Mean: no2Dose / tSum, exhMean: xDose / tSum, coords, w: r.w,
       forecastHour: field ? field.hour : null };
@@ -147,8 +150,20 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
   return { routes: out, raw };
 }
 
+/** Polyline of a route: its edges' shapes, or straight lines between nodes while the shapes are not there yet. */
+function coordsOf(g: WalkGraph, r: { edges: number[]; nodes: number[] }): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  r.edges.forEach((e, k) => {
+    const pts = g.edgeCoords(e, r.nodes[k]);
+    out.push(...(k === 0 ? pts : pts.slice(1)));
+  });
+  return out;
+}
+
 /** Route request: the field of the departure hour, the routes, and for a departure now the next hours of the last route. */
 async function routeAt(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor', departLocal: string | null | undefined) {
+  // the school zone is found from the edge shapes: a motor route waits for them (a walking route does not)
+  if (mode === 'motor') await shapesReady;
   const at = schoolFile ? localTimeToMs(departLocal, schoolFile.tz, Date.now()) : Date.now();
   const entry = pickForecast(forecasts, departLocal, runLocalHour);
   let field: { no2: Float64Array; exhaust: Float64Array; hour: number } | undefined;
@@ -175,7 +190,7 @@ async function routeAt(from: { lat: number; lng: number }, to: { lat: number; ln
       return soon;
     };
   }
-  return { routes, soonPlan };
+  return { routes, soonPlan, raw };
 }
 
 self.onmessage = async (ev: MessageEvent) => {
@@ -187,8 +202,14 @@ self.onmessage = async (ev: MessageEvent) => {
     }
     else if (type === 'route') {
       const t0 = performance.now();
-      const { routes, soonPlan } = await routeAt(ev.data.from, ev.data.to, ev.data.mode === 'motor' ? 'motor' : 'walk', ev.data.departLocal);
-      self.postMessage({ id, ok: true, routes, ms: performance.now() - t0, run, soonPending: !!soonPlan });
+      const { routes, soonPlan, raw } = await routeAt(ev.data.from, ev.data.to, ev.data.mode === 'motor' ? 'motor' : 'walk', ev.data.departLocal);
+      const g = graph!;
+      const shapesPending = !g.hasShapes && routes.length > 0;
+      self.postMessage({ id, ok: true, routes, ms: performance.now() - t0, run, soonPending: !!soonPlan, shapesPending });
+      if (shapesPending) {
+        // the routes were drawn through their nodes: their real shapes follow as another reply with the same id
+        void shapesReady.then(() => self.postMessage(g.hasShapes ? { id, type: 'shapes', ok: true, coords: raw.map((r) => coordsOf(g, r)) } : { id, type: 'shapes', ok: false }));
+      }
       if (soonPlan) {
         // second reply with the same id: the leave-later hint for the last route
         const soon = await soonPlan().catch(() => [] as SoonHour[]);

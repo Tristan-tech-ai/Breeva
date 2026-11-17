@@ -116,6 +116,14 @@ export function useWalkRouting(
       lastShownCards = false;
       let shown: WalkRoutingState | null = null;
       let early: SoonHours | null = null;
+      // F1-56: a first route may come drawn through its nodes; its real shapes follow and replace the lines
+      const lines: L.Polyline[][] = [];
+      const onShapes = (coords: Array<Array<[number, number]>>) => {
+        if (req !== reqSeq || !shown?.routes || coords.length !== shown.routes.length) return;
+        coords.forEach((c, k) => { const ll = c.map(([lon, lat]) => [lat, lon] as L.LatLngTuple); for (const pl of lines[k] ?? []) pl.setLatLngs(ll); });
+        shown = { ...shown, routes: shown.routes.map((r, k) => ({ ...r, coords: coords[k] })) };
+        say(shown); // the same cards: the trial diary does not count it again (storage.ts, same signature within 60 s)
+      };
       const onSoon = (soon: SoonHours) => {
         if (req !== reqSeq) return; // a newer request replaced these cards
         if (!shown?.routes) { early = soon; return; }
@@ -124,7 +132,7 @@ export function useWalkRouting(
         say(shown);
       };
       init
-        .then(() => c.route({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, modeRef.current, departRef.current, onSoon))
+        .then(() => c.route({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, modeRef.current, departRef.current, onSoon, onShapes))
         .then(({ routes, ms }) => {
           const cards = routeCards(routes);
           // draw the alternatives first, then the fastest, the cleanest last (on top)
@@ -133,8 +141,10 @@ export function useWalkRouting(
           for (const k of cards.length ? order : []) {
             const ll = routes[k].coords.map(([lon, lat]) => [lat, lon] as L.LatLngTuple);
             const w = k === 0 || k === last ? 6 : 4;
-            L.polyline(ll, { color: '#ffffff', weight: w + 4, opacity: 0.95, interactive: false }).addTo(group);
-            L.polyline(ll, { color: cards[k].color, weight: w, opacity: 1, interactive: false }).addTo(group);
+            lines[k] = [
+              L.polyline(ll, { color: '#ffffff', weight: w + 4, opacity: 0.95, interactive: false }).addTo(group),
+              L.polyline(ll, { color: cards[k].color, weight: w, opacity: 1, interactive: false }).addTo(group),
+            ];
           }
           const again = fixed ? `Ketuk titik berangkat lain untuk rute baru ke ${fixed.name}.` : 'Ketuk lagi untuk rute baru.';
           shown = { status: routes.length ? `${routes.length} rute dihitung di perangkat dalam ${Math.round(ms)} ms. ${again}` : 'Tidak ada rute.', cards, ms,
