@@ -52,7 +52,7 @@ export default function HelpPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Cari bantuan…"
-            className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none"
+            className="flex-1 self-stretch min-h-6 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none"
           />
         </div>
 

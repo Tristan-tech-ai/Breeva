@@ -157,9 +157,9 @@ export default function DeveloperLandingPage() {
             <span className="jb text-[10px] tracking-widest text-emerald-400/80 border border-emerald-400/20 rounded px-1.5 py-0.5">API</span>
           </Link>
           <div className="hidden sm:flex items-center gap-7 text-[13px] text-zinc-400">
-            <a href="#endpoints" className="hover:text-emerald-300 transition">Endpoints</a>
-            <a href="#quickstart" className="hover:text-emerald-300 transition">Quickstart</a>
-            <a href="#pricing" className="hover:text-emerald-300 transition">Pricing</a>
+            <a href="#endpoints" className="inline-flex min-h-6 min-w-6 items-center justify-center hover:text-emerald-300 transition">Endpoints</a>
+            <a href="#quickstart" className="inline-flex min-h-6 min-w-6 items-center justify-center hover:text-emerald-300 transition">Quickstart</a>
+            <a href="#pricing" className="inline-flex min-h-6 min-w-6 items-center justify-center hover:text-emerald-300 transition">Pricing</a>
             <a href="/openapi.json" target="_blank" rel="noreferrer" className="hover:text-emerald-300 transition flex items-center gap-1">Reference <ArrowUpRight className="w-3 h-3" /></a>
           </div>
           <Link to={KEYS_PATH} className="group flex items-center gap-1.5 rounded-full bg-emerald-400 text-emerald-950 text-[13px] font-semibold pl-4 pr-3 py-1.5 hover:bg-emerald-300 transition shadow-[0_0_24px_-4px_rgba(52,211,153,.6)]">
@@ -384,10 +384,10 @@ console.<span className="text-sky-300">log</span>(data.cigarette_equivalent); <s
             <Lock className="w-3 h-3 ml-2 text-zinc-600" /><span className="jb text-[11px]">key-gated · rate-limited</span>
           </div>
           <div className="flex items-center gap-6 text-[13px] text-zinc-500">
-            <Link to="/" className="hover:text-emerald-300 transition">← breeva.site</Link>
-            <a href="/openapi.json" target="_blank" rel="noreferrer" className="hover:text-emerald-300 transition">OpenAPI</a>
-            <Link to="/terms" className="hover:text-emerald-300 transition">Terms</Link>
-            <a href="https://github.com/Tristan-tech-ai/Breeva" target="_blank" rel="noreferrer" aria-label="Breeva on GitHub" className="hover:text-emerald-300 transition"><Github className="w-4 h-4" aria-hidden /></a>
+            <Link to="/" className="inline-flex min-h-6 min-w-6 items-center justify-center hover:text-emerald-300 transition">← breeva.site</Link>
+            <a href="/openapi.json" target="_blank" rel="noreferrer" className="inline-flex min-h-6 min-w-6 items-center justify-center hover:text-emerald-300 transition">OpenAPI</a>
+            <Link to="/terms" className="inline-flex min-h-6 min-w-6 items-center justify-center hover:text-emerald-300 transition">Terms</Link>
+            <a href="https://github.com/Tristan-tech-ai/Breeva" target="_blank" rel="noreferrer" aria-label="Breeva on GitHub" className="inline-flex min-h-6 min-w-6 items-center justify-center hover:text-emerald-300 transition"><Github className="w-4 h-4" aria-hidden /></a>
           </div>
         </div>
       </footer>

@@ -121,7 +121,7 @@ export default function LandingPage() {
 
       {/* Navigation — with active-section indicator */}
       <nav className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-1rem)] sm:w-auto max-w-max bg-white/75 backdrop-blur-xl px-3 sm:px-5 py-2 sm:py-2.5 rounded-full flex items-center justify-between sm:justify-center gap-2 sm:gap-1 shadow-lg border border-white/60">
-        <a href="#" onClick={goTo('top')} className="flex items-center gap-1.5 min-w-0 sm:mr-3" aria-label="Breeva">
+        <a href="#" onClick={goTo('top')} className="flex min-h-6 items-center gap-1.5 min-w-0 sm:mr-3" aria-label="Breeva">
           <BreevaLogo className="h-5 w-5" />
           <span className="text-xs sm:text-sm font-extrabold text-emerald-700 whitespace-nowrap">Breeva</span>
         </a>
@@ -376,10 +376,10 @@ export default function LandingPage() {
               <div>
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Produk</h4>
                 <ul className="space-y-2.5">
-                  <li><Link to="/peta" className="text-xs text-slate-500 hover:text-emerald-700 transition-colors">Peta Udara</Link></li>
-                  <li><Link to="/paparan" className="text-xs text-slate-500 hover:text-emerald-700 transition-colors">Kalkulator Paparan</Link></li>
-                  <li><Link to="/developers" className="text-xs text-slate-500 hover:text-emerald-700 transition-colors">Developer API</Link></li>
-                  <li><a href="#solusi" onClick={goTo('solusi')} className="text-xs text-slate-500 hover:text-emerald-700 transition-colors">Mesin VAYU</a></li>
+                  <li><Link to="/peta" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Peta Udara</Link></li>
+                  <li><Link to="/paparan" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Kalkulator Paparan</Link></li>
+                  <li><Link to="/developers" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Developer API</Link></li>
+                  <li><a href="#solusi" onClick={goTo('solusi')} className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Mesin VAYU</a></li>
                 </ul>
               </div>
 
@@ -389,7 +389,7 @@ export default function LandingPage() {
                 <ul className="space-y-2.5">
                   {CITIES.map((c) => (
                     <li key={c.slug}>
-                      <Link to={`/udara/${c.slug}`} className="text-xs text-slate-500 hover:text-emerald-700 transition-colors">{c.name}</Link>
+                      <Link to={`/udara/${c.slug}`} className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">{c.name}</Link>
                     </li>
                   ))}
                 </ul>
@@ -399,9 +399,9 @@ export default function LandingPage() {
               <div>
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Perusahaan</h4>
                 <ul className="space-y-2.5">
-                  <li><Link to="/about" className="text-xs text-slate-500 hover:text-emerald-700 transition-colors">Tentang</Link></li>
-                  <li><Link to="/help" className="text-xs text-slate-500 hover:text-emerald-700 transition-colors">Bantuan</Link></li>
-                  <li><Link to="/eco-tips" className="text-xs text-slate-500 hover:text-emerald-700 transition-colors">Tips Eco</Link></li>
+                  <li><Link to="/about" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Tentang</Link></li>
+                  <li><Link to="/help" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Bantuan</Link></li>
+                  <li><Link to="/eco-tips" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Tips Eco</Link></li>
                 </ul>
               </div>
 
@@ -409,17 +409,17 @@ export default function LandingPage() {
               <div>
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Legal</h4>
                 <ul className="space-y-2.5">
-                  <li><Link to="/terms" className="text-xs text-slate-500 hover:text-emerald-700 transition-colors">Ketentuan</Link></li>
-                  <li><Link to="/privacy" className="text-xs text-slate-500 hover:text-emerald-700 transition-colors">Privasi</Link></li>
+                  <li><Link to="/terms" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Ketentuan</Link></li>
+                  <li><Link to="/privacy" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Privasi</Link></li>
                 </ul>
               </div>
             </div>
 
             <div className="pt-7 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
                 Dibuat dengan <Heart className="w-3 h-3 text-red-400 fill-red-400" /> untuk kota yang lebih bersih
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
                 <Leaf className="w-3 h-3 text-emerald-500" />
                 © {new Date().getFullYear()} Breeva. Semua hak dilindungi.
               </div>

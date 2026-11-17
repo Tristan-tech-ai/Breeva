@@ -99,10 +99,10 @@ export default function AboutPage() {
         </SectionCard>
 
         <SectionCard title="Kontak">
-          <a href="mailto:halo@breeva.site" className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400 hover:text-primary-500 transition">
+          <a href="mailto:halo@breeva.site" className="flex min-h-6 items-center gap-3 text-sm text-gray-600 dark:text-gray-400 hover:text-primary-500 transition">
             <Mail className="w-4 h-4" /> halo@breeva.site
           </a>
-          <a href="https://breeva.site" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400 hover:text-primary-500 transition mt-2.5">
+          <a href="https://breeva.site" target="_blank" rel="noopener noreferrer" className="flex min-h-6 items-center gap-3 text-sm text-gray-600 dark:text-gray-400 hover:text-primary-500 transition mt-2.5">
             <MapPin className="w-4 h-4" /> breeva.site
           </a>
         </SectionCard>
