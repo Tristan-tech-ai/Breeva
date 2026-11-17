@@ -8,11 +8,12 @@ describe('routeLoadingText', () => {
     expect(routeLoadingText(900_000, SHOW_PROGRESS_AFTER_MS - 1)).toBe(COMPUTING);
     expect(SHOW_PROGRESS_AFTER_MS).toBe(3000);
   });
-  it('after 3 s says what downloads and how much has arrived', () => {
-    const t = routeLoadingText(1_234_567, 12_000);
-    expect(t).toContain('Mengunduh peta jalan kaki wilayah ini: 1,2 MB diterima');
+  it('after 3 s says what downloads, its size on the wire (what a data plan pays) and how long it has taken', () => {
+    const t = routeLoadingText(1_201_000, 12_400);
+    expect(t).toContain('Mengunduh peta jalan kaki wilayah ini, sekali saja (sekitar 1,2 MB)');
+    expect(t).toContain('Sudah 12 detik');
     expect(t).toContain('sesudahnya tersimpan di ponsel');
-    expect(routeLoadingText(0, 5000)).toContain('0 KB diterima');
+    expect(routeLoadingText(0, 5000)).not.toContain('sekitar'); // no Content-Length: no size rather than a wrong one
   });
   it('writes sizes the Indonesian way', () => {
     expect(sizeText(350_400)).toBe('350 KB');
@@ -22,16 +23,17 @@ describe('routeLoadingText', () => {
 });
 
 describe('progressCounter', () => {
-  it('posts the running total at most every interval', () => {
+  it('sums the encoded sizes and posts at most every interval while bytes arrive', () => {
     let now = 0;
     const post = vi.fn();
-    const count = progressCounter(post, 250, () => now);
-    count(100); now = 100; count(100); now = 260; count(50); now = 300; count(10); now = 600; count(0);
-    expect(post.mock.calls.map((c) => c[0])).toEqual([100, 250, 260]);
+    const m = progressCounter(post, 250, () => now);
+    m.start(1_073_347); m.start(null); m.start(59_013);
+    m.bytes(100); now = 100; m.bytes(100); now = 260; m.bytes(50); now = 600; m.bytes(0);
+    expect(post.mock.calls.map((c) => c[0])).toEqual([1_132_360, 1_132_360]);
   });
 });
 
-describe('cachedBytes with onBytes', () => {
+describe('cachedBytes with a download meter', () => {
   const chunks = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5]), new Uint8Array([6])];
   const streamed = () => new Response(new ReadableStream<Uint8Array>({ start(c) { for (const k of chunks) c.enqueue(k); c.close(); } }));
   it('reads the whole body and reports each chunk', async () => {
@@ -40,15 +42,17 @@ describe('cachedBytes with onBytes', () => {
     expect([...out]).toEqual([1, 2, 3, 4, 5, 6]);
     expect(seen).toEqual([3, 2, 1]);
   });
-  it('counts a network download, not a cache hit', async () => {
-    const seen: number[] = [];
-    const fetchImpl = (async () => streamed()) as unknown as typeof fetch;
-    const out = await cachedBytes('/x.bin', { cacheFirst: true, fetchImpl, cache: null, onBytes: (n) => seen.push(n) });
+  it('meters a network download (Content-Length on the wire, decoded chunks), not a cache hit', async () => {
+    const starts: Array<number | null> = [], seen: number[] = [];
+    const meter = { start: (n: number | null) => starts.push(n), bytes: (n: number) => seen.push(n) };
+    const fetchImpl = (async () => { const r = streamed(); return new Response(r.body, { headers: { 'content-length': '4' } }); }) as unknown as typeof fetch;
+    const out = await cachedBytes('/x.bin', { cacheFirst: true, fetchImpl, cache: null, meter });
     expect(out.byteLength).toBe(6);
+    expect(starts).toEqual([4]);
     expect(seen.reduce((a, b) => a + b, 0)).toBe(6);
     const hit = { match: async () => new Response(new Uint8Array([9])), put: async () => {} };
-    const seen2: number[] = [];
-    await cachedBytes('/x.bin', { cacheFirst: true, fetchImpl, cache: hit, onBytes: (n) => seen2.push(n) });
-    expect(seen2).toEqual([]);
+    const starts2: Array<number | null> = [];
+    await cachedBytes('/x.bin', { cacheFirst: true, fetchImpl, cache: hit, meter: { start: (n) => starts2.push(n), bytes: () => {} } });
+    expect(starts2).toEqual([]);
   });
 });

@@ -64,7 +64,7 @@ export class RouteClient {
     });
   }
 
-  /** onProgress receives the bytes downloaded so far while the region's files load (X-W4). */
+  /** onProgress receives the encoded size of the files being downloaded while the region loads (X-W4). */
   init(region: { name: string; geometry: string }, base = fieldBase(), onProgress?: (bytes: number) => void) {
     return this.call<{ nodes: number; edges: number; run: string }>({ type: 'init', base, region }, undefined, onProgress);
   }

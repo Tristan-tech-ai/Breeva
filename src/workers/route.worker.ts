@@ -14,7 +14,7 @@ import { NodeIndex, pareto, route, type RouteResult } from '../lib/route/router'
 import { motorNode } from '../lib/route/cost';
 import { localTimeToMs, motorRouteAt, schoolEdges, type SchoolFile, type SchoolZone } from '../lib/route/schoolZone';
 import { HargaIndex } from '../lib/field/harga';
-import { cachedBytes } from '../lib/route/assets';
+import { cachedBytes, type DownloadMeter } from '../lib/route/assets';
 import { loadRegionFiles } from '../lib/route/regionFiles';
 import { progressCounter } from '../lib/route/loadProgress';
 import { decodeCell } from '../lib/field/cells';
@@ -39,9 +39,9 @@ const forecastEdges = new Map<string, Promise<Float64Array>>();
 /** NO2 of each forecast hour, kept with the hour's exhaust so its median is also computed once (F3-21). */
 const forecastNo2 = new Map<string, { x: Float64Array; no2: Float64Array }>();
 
-async function init(base: string, region: { name: string; geometry: string }, onBytes?: (n: number) => void) {
+async function init(base: string, region: { name: string; geometry: string }, meter?: DownloadMeter) {
   // every file requested at once (F1-53); the Cache API keeps them for offline use; bytes counted for the card (X-W4)
-  const files = await loadRegionFiles(base, region, (url, o) => cachedBytes(url, { ...o, onBytes }));
+  const files = await loadRegionFiles(base, region, (url, o) => cachedBytes(url, { ...o, meter }));
   const g = new WalkGraph(files.graph);
   const manifest = files.manifest;
   const cells = new Map<number, ReturnType<typeof decodeCell>>();
@@ -182,8 +182,8 @@ self.onmessage = async (ev: MessageEvent) => {
   const { id, type } = ev.data ?? {};
   try {
     if (type === 'init') {
-      const count = progressCounter((bytes) => self.postMessage({ id, type: 'progress', bytes }));
-      self.postMessage({ id, ok: true, ...(await init(ev.data.base, ev.data.region, count)) });
+      const meter = progressCounter((bytes) => self.postMessage({ id, type: 'progress', bytes }));
+      self.postMessage({ id, ok: true, ...(await init(ev.data.base, ev.data.region, meter)) });
     }
     else if (type === 'route') {
       const t0 = performance.now();

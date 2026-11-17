@@ -13,17 +13,28 @@ export function sizeText(bytes: number): string {
   return bytes < 1_000_000 ? `${nf(Math.max(0, Math.round(bytes / 1000)), 0)} KB` : `${nf(bytes / 1_000_000, 1)} MB`;
 }
 
-export function routeLoadingText(bytes: number, elapsedMs: number): string {
+/**
+ * sentBytes: the size the files travel at (sum of their Content-Length, brotli or gzip encoded), which is what a data
+ * plan pays; the decoded size is about three times larger and would overstate it. Unknown (0) leaves the size out.
+ */
+export function routeLoadingText(sentBytes: number, elapsedMs: number): string {
   if (elapsedMs < SHOW_PROGRESS_AFTER_MS) return COMPUTING;
-  return `Mengunduh peta jalan kaki wilayah ini: ${sizeText(bytes)} diterima. Pertama kali di sinyal lemah bisa hampir satu menit; sesudahnya tersimpan di ponsel.`;
+  const size = sentBytes > 0 ? ` (sekitar ${sizeText(sentBytes)})` : '';
+  return `Mengunduh peta jalan kaki wilayah ini, sekali saja${size}. Sudah ${Math.floor(elapsedMs / 1000)} detik; di sinyal lemah bisa hampir satu menit, sesudahnya tersimpan di ponsel.`;
 }
 
-/** Calls post with the running total at most every intervalMs (and never twice for the same total). */
-export function progressCounter(post: (total: number) => void, intervalMs = 250, now: () => number = () => Date.now()) {
-  let total = 0, lastAt = -Infinity, lastTotal = -1;
-  return (delta: number) => {
-    total += delta;
-    const t = now();
-    if (t - lastAt >= intervalMs && total !== lastTotal) { lastAt = t; lastTotal = total; post(total); }
+/**
+ * Download meter for the worker: start(contentLength) for each response, bytes(n) for each decoded chunk. post receives
+ * the encoded size of the responses started so far, at most every intervalMs, and only while bytes keep arriving.
+ */
+export function progressCounter(post: (sentBytes: number) => void, intervalMs = 250, now: () => number = () => Date.now()) {
+  let sent = 0, lastAt = -Infinity;
+  return {
+    start(contentLength: number | null) { if (contentLength && contentLength > 0) sent += contentLength; },
+    bytes(n: number) {
+      if (n <= 0) return;
+      const t = now();
+      if (t - lastAt >= intervalMs) { lastAt = t; post(sent); }
+    },
   };
 }
