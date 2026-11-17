@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import { waqiCredit } from '../../lib/attribution';
+import { bboxParam, coarseBbox } from '../../lib/stationBbox';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -64,13 +65,13 @@ function aqiLabel(aqi: number): string {
 async function fetchBounds(bounds: L.LatLngBounds): Promise<WAQIStation[]> {
   const sw = bounds.getSouthWest();
   const ne = bounds.getNorthEast();
-  const key = `${sw.lat.toFixed(2)},${sw.lng.toFixed(2)},${ne.lat.toFixed(2)},${ne.lng.toFixed(2)}`;
+  // only a coarse cell around the view leaves the device (F1-22); it also serves as the cache key
+  const key = bboxParam(coarseBbox({ south: sw.lat, west: sw.lng, north: ne.lat, east: ne.lng }));
 
   const cached = boundsCache.get(key);
   if (cached && Date.now() - cached.ts < BOUNDS_TTL) return cached.data;
 
-  const bboxParam = `${sw.lat},${sw.lng},${ne.lat},${ne.lng}`;
-  const resp = await fetch(`${PROXY_STATIONS}?bbox=${encodeURIComponent(bboxParam)}`);
+  const resp = await fetch(`${PROXY_STATIONS}?bbox=${encodeURIComponent(key)}`);
   if (!resp.ok) return cached?.data ?? [];
   const json = await resp.json();
   if (json.status !== 'ok') return cached?.data ?? [];
