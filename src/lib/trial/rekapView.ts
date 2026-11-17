@@ -14,7 +14,7 @@ export function rekapRows(r: Rekap): Row[] {
     { label: 'Peserta (ponsel berbeda)', value: String(r.peserta) },
     { label: `Peserta yang memakai ≥ ${G4_MIN_DAYS} hari (gerbang G4: minimal ${G4_MIN_STUDENTS})`, value: `${r.peserta_min_5_hari}: ${pass ? 'lulus' : 'belum lulus'}` },
     { label: 'Hari memakai rute per peserta', value: r.hari_per_peserta.length ? r.hari_per_peserta.join(', ') : '–' },
-    { label: 'Median pengurangan asap kendaraan yang ditawarkan rute', value: pct(r.median_pengurangan_asap_pct) },
+    { label: 'Median pengurangan asap kendaraan yang ditawarkan rute jalan kaki', value: pct(r.median_pengurangan_asap_pct) },
     { label: 'Median tambahan waktu rute itu', value: r.median_tambahan_menit == null ? '–' : `${Math.round(r.median_tambahan_menit)} menit` },
     { label: 'Moda (peserta)', value: `jalan kaki ${r.moda.jalan_kaki}, motor ${r.moda.motor}` },
     { label: 'Wilayah (peserta)', value: `Badung–Denpasar ${r.wilayah.badung_denpasar}, Kota Bogor ${r.wilayah.kota_bogor}` },

@@ -181,7 +181,9 @@ export interface Rekap {
 /**
  * The teacher's tally. A student who sends a code twice is counted once (same phone: the code with more days wins).
  * A code without days is rejected. Days count only inside the trial window; medians are per participant first, then
- * over participants.
+ * over participants. The exhaust cut and extra minutes come from walking-only days (F4-13): a motor route is chosen by
+ * the exhaust it imposes on others, so its own-dose cut is about 0 and would only dilute the walking number; motor days
+ * still count as days of use.
  */
 export function rekap(codes: string[], window: [string, string] = TRIAL_WINDOW): Rekap {
   // same phone = same random id AND same first day (a later code of one student starts on the same day; two students
@@ -200,7 +202,7 @@ export function rekap(codes: string[], window: [string, string] = TRIAL_WINDOW):
   for (const rows of best.values()) {
     const inWin = rows.filter((r) => r.day >= window[0] && r.day <= window[1]);
     days.push(inWin.length);
-    const s = summarize(inWin);
+    const s = summarize(inWin.filter((r) => (r.flags & FLAG.walk) !== 0 && (r.flags & FLAG.motor) === 0));
     if (s.medianRed != null) reds.push(s.medianRed);
     if (s.medianExtra != null) extras.push(s.medianExtra);
     const f = rows.reduce((a, r) => a | r.flags, 0);

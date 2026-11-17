@@ -88,7 +88,8 @@ describe('trial diary (F4-07)', () => {
     expect(r.peserta).toBe(3);
     expect(r.hari_per_peserta).toEqual([5, 5, 4]);
     expect(r.peserta_min_5_hari).toBe(2);
-    expect(r.median_pengurangan_asap_pct).toBe(30);
+    // walking-only days give the exhaust cut (F4-13): the motor student's 10 is left out, so the median of 30 and 50
+    expect(r.median_pengurangan_asap_pct).toBe(40);
     expect(r.moda).toEqual({ jalan_kaki: 2, motor: 1 });
     expect(r.wilayah.badung_denpasar).toBe(3);
   });
@@ -188,5 +189,23 @@ describe('diary when the phone does not allow storage (F4-11)', () => {
     expect(st.setDiaryOn(true)).toMatchObject({ saved: true, diary: { on: true } });
     expect(st.setDiaryOn(false)).toMatchObject({ saved: true, diary: { on: false } });
     delete (globalThis as { localStorage?: unknown }).localStorage;
+  });
+});
+
+describe('teacher tally with motor riders (F4-13)', () => {
+  it('motor days count as use but not in the walking exhaust cut; a mixed student gives only the walking days', () => {
+    const at = (day: string, h = 7) => new Date(`${day}T0${h}:00:00+08:00`);
+    const days = ['2026-11-26', '2026-11-27', '2026-11-28', '2026-11-29', '2026-11-30'];
+    let m = emptyDiary(11, true), x = emptyDiary(12, true);
+    for (const d of days) m = record(m, at(d), 'motor', 'kota_bogor', { red: 0, extra: 0 });
+    days.forEach((d, k) => { x = record(x, at(d), k % 2 ? 'motor' : 'walk', 'badung_denpasar', k % 2 ? { red: 0, extra: 0 } : { red: 55, extra: 1 }); });
+    const r = rekap([encode(m.id, dayRows(m)), encode(x.id, dayRows(x))]);
+    expect(r.peserta_min_5_hari).toBe(2);
+    expect(r.median_pengurangan_asap_pct).toBe(55);
+    expect(r.median_tambahan_menit).toBe(1);
+    expect(r.moda).toEqual({ jalan_kaki: 1, motor: 2 });
+    expect(r.wilayah).toEqual({ badung_denpasar: 1, kota_bogor: 1 });
+    // only motor riders: no walking number at all, not 0
+    expect(rekap([encode(m.id, dayRows(m))]).median_pengurangan_asap_pct).toBeNull();
   });
 });
