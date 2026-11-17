@@ -54,7 +54,7 @@ describe('touch targets at 320 px (F1-45)', () => {
   const src = (f: string) => readFileSync(f, 'utf8');
   it('standalone links on the trial pages and the search fields are at least 24 px tall (WCAG 2.2 2.5.8)', () => {
     expect(src('src/pages/UjiCobaPage.tsx')).toMatch(/<Link to=\{s\.link\.to\} className="mt-1 inline-block min-h-6 py-0\.5 /);
-    expect(src('src/pages/UjiCobaRekapPage.tsx')).toMatch(/<Link to="\/uji-coba" className="inline-block min-h-6 py-0\.5 /);
+    expect(src('src/pages/UjiCobaRekapPage.tsx')).toMatch(/<Link to="\/uji-coba" className="print:hidden inline-block min-h-6 py-0\.5 /);
     expect(src('src/components/map/SchoolPicker.tsx')).toMatch(/aria-label="Cari sekolah tujuan" className="min-w-0 min-h-6 /);
     const map = src('src/pages/ExploreMapPage.tsx');
     expect((map.match(/className="inline-flex min-h-6 items-center hover:text-primary-500"/g) ?? []).length).toBe(5); // footer links
@@ -77,6 +77,15 @@ describe('other public pages (F1-49)', () => {
     expect((landing.match(/className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600/g) ?? []).length).toBe(10); // footer links
     expect((dev.match(/className="hover:text-emerald-300 transition"/g) ?? []).length).toBe(0);
     expect(src('src/pages/HelpPage.tsx')).toMatch(/flex-1 self-stretch min-h-6 bg-transparent/);
+  });
+});
+
+describe('printed teacher tally (F4-15)', () => {
+  it('nav, paste box, date inputs, buttons and links stay off paper; the printed copy names the window and the date', () => {
+    const r = readFileSync('src/pages/UjiCobaRekapPage.tsx', 'utf8');
+    expect((r.match(/print:hidden/g) ?? []).length).toBe(6);
+    expect(r).toMatch(/<div className="hidden print:block">/);
+    expect(r).toMatch(/Hari dihitung \{from\} sampai \{to\} · dicetak/);
   });
 });
 
