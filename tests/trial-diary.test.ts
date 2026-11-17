@@ -209,3 +209,50 @@ describe('teacher tally with motor riders (F4-13)', () => {
     expect(rekap([encode(m.id, dayRows(m))]).median_pengurangan_asap_pct).toBeNull();
   });
 });
+
+describe('teacher tally from real exports (F4-14)', () => {
+  const at = (day: string) => new Date(`${day}T07:00:00+08:00`);
+  const days = ['2026-11-26', '2026-11-27', '2026-11-28', '2026-11-29', '2026-11-30'];
+  const codeOf = (id: number, n = 5) => {
+    let d = emptyDiary(id, true);
+    for (const day of days.slice(0, n)) d = record(d, at(day), 'walk', 'badung_denpasar', { red: 40, extra: 1 });
+    return encode(d.id, dayRows(d));
+  };
+  const [c1, c2, c3] = [codeOf(101), codeOf(102), codeOf(103, 3)];
+
+  it('Google Form CSV: commas, double quotes, an answer on two lines, a student who answered twice', () => {
+    const csv = [
+      '"Timestamp","Nomor peserta","Kode ringkasan uji coba","Kesan"',
+      `"2026/12/02 7:01:02 PM GMT+8","P01","${c1}","Rutenya ""lebih sejuk"", tapi lebih lama"`,
+      `"2026/12/02 7:05:44 PM GMT+8","P02","Kode saya:\n${c2}","-"`,
+      `"2026/12/02 8:15:10 PM GMT+8","P01","${c1}","kirim ulang"`,
+      `"2026/12/02 8:20:00 PM GMT+8","P03","${c3}",""`,
+    ].join('\r\n');
+    const r = rekap(findCodes(csv));
+    expect(r.kode_terbaca).toBe(4);
+    expect(r.kode_ditolak).toBe(0);
+    expect(r.peserta).toBe(3);
+    expect(r.hari_per_peserta).toEqual([5, 5, 3]);
+    expect(r.peserta_min_5_hari).toBe(2);
+  });
+
+  it('Excel CSV with semicolons (Indonesian locale)', () => {
+    const csv = `Nomor;Kode;Catatan\r\nP01;${c1};ok\r\nP02;${c2};\r\nP03;${c3};baru 3 hari\r\n`;
+    const r = rekap(findCodes(csv));
+    expect([r.kode_terbaca, r.kode_ditolak, r.peserta, r.peserta_min_5_hari]).toEqual([3, 0, 3, 2]);
+  });
+
+  it('WhatsApp paste: a code broken across lines is refused and counted, the others are read', () => {
+    const cut = 30;
+    const wa = [
+      `[02/12 19.02] P01: ${c1}`,
+      `[02/12 19.03] P02: ${c2.slice(0, cut)}`,
+      `${c2.slice(cut)}`,
+      `[02/12 19.05] P03: ${c3}.`,
+    ].join('\n');
+    const r = rekap(findCodes(wa));
+    expect(r.kode_terbaca).toBe(2);
+    expect(r.kode_ditolak).toBe(1);
+    expect(r.peserta).toBe(2);
+  });
+});
