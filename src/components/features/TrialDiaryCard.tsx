@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { dayRows, encode, summarize } from '../../lib/trial/diary';
+import { dayRows, encode, summarize, trialProgress } from '../../lib/trial/diary';
+import { TRIAL_DATES } from '../../lib/ujiCoba';
 import { clearDiary, loadDiary, setDiaryOn } from '../../lib/trial/storage';
 
 /**
@@ -10,7 +11,7 @@ export default function TrialDiaryCard() {
   const [diary, setDiary] = useState(loadDiary);
   const [copied, setCopied] = useState(false);
   const [asking, setAsking] = useState(false);
-  const rows = dayRows(diary), s = summarize(rows);
+  const rows = dayRows(diary), s = summarize(rows), prog = trialProgress(rows);
   const code = rows.length ? encode(diary.id, rows) : null;
   const copy = () => {
     if (!code) return;
@@ -36,6 +37,18 @@ export default function TrialDiaryCard() {
         <p className="text-[13px] text-gray-700 dark:text-gray-300">
           Catatan menyala. Hitung rute di peta seperti biasa; setiap hari kamu memakai rute akan terhitung.
         </p>
+      )}
+      {(diary.on || rows.length > 0) && (
+        <div>
+          <p className="text-[13px]">
+            <b>{Math.min(prog.inside, prog.target)} dari {prog.target} hari</b> dalam masa uji coba ({TRIAL_DATES}){prog.reached ? ': target tercapai' : ''}
+          </p>
+          <div role="progressbar" aria-label="Hari memakai rute dalam masa uji coba" aria-valuemin={0} aria-valuemax={prog.target} aria-valuenow={Math.min(prog.inside, prog.target)}
+            aria-valuetext={`${Math.min(prog.inside, prog.target)} dari ${prog.target} hari`} className="mt-1 h-2 w-full overflow-hidden rounded-full bg-teal-100 dark:bg-teal-900/50">
+            <div className="h-full rounded-full bg-teal-700" style={{ width: `${Math.round(prog.share * 100)}%` }} />
+          </div>
+          {prog.outside > 0 && <p className="mt-1 text-[12px] text-gray-600 dark:text-gray-400">{prog.outside} hari di luar masa uji coba tetap tercatat, tetapi tidak dihitung ke target.</p>}
+        </div>
       )}
       {rows.length > 0 ? (
         <>

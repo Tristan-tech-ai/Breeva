@@ -18,6 +18,9 @@ export const FLAG = { walk: 1, motor: 2, badung_denpasar: 4, kota_bogor: 8 } as 
 /** Values kept per day for its medians; days kept on the phone; days put in one code (the most recent). */
 export const PER_DAY = 40, KEEP_DAYS = 60, CODE_DAYS = 21;
 export const PREFIX = 'BRV1-';
+/** The trial window (local dates, inclusive) and the gate G4 target in days of use. */
+export const TRIAL_WINDOW: [string, string] = ['2026-11-26', '2026-12-02'];
+export const TARGET_DAYS = 5;
 const EPOCH = Date.UTC(2026, 0, 1), DAY_MS = 86_400_000;
 
 export function emptyDiary(id: number, on = false): Diary {
@@ -90,6 +93,12 @@ export function summarize(rows: DayRow[]): Summary {
     medianRed: median(red), medianExtra: median(extra),
     first: rows[0]?.day ?? null, last: rows[rows.length - 1]?.day ?? null,
   };
+}
+
+/** Progress towards the target: days of use inside the window (capped display uses the target), and days outside it. */
+export function trialProgress(rows: DayRow[], window: [string, string] = TRIAL_WINDOW, target = TARGET_DAYS) {
+  const inside = rows.filter((r) => r.day >= window[0] && r.day <= window[1]).length;
+  return { inside, outside: rows.length - inside, target, reached: inside >= target, share: Math.min(1, inside / target) };
 }
 
 function dayNumber(day: string): number {
@@ -174,7 +183,7 @@ export interface Rekap {
  * A code without days is rejected. Days count only inside the trial window; medians are per participant first, then
  * over participants.
  */
-export function rekap(codes: string[], window: [string, string] = ['2026-11-26', '2026-12-02']): Rekap {
+export function rekap(codes: string[], window: [string, string] = TRIAL_WINDOW): Rekap {
   // same phone = same random id AND same first day (a later code of one student starts on the same day; two students
   // who drew the same 16-bit id almost never also started on the same day)
   const best = new Map<string, DayRow[]>();

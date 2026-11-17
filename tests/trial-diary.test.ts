@@ -143,3 +143,22 @@ describe('teacher tally page rows (F4-09)', async () => {
     expect(windowOf('', '2026-11-26')).toBeNull();
   });
 });
+
+describe('progress towards 5 days (F4-10)', async () => {
+  const { trialProgress, TRIAL_WINDOW, TARGET_DAYS } = await import('../src/lib/trial/diary');
+  const { TRIAL_DATES } = await import('../src/lib/ujiCoba');
+  const row = (day: string) => ({ day, n: 1, flags: 1, red: 30, extra: 1 });
+  it('counts only days inside the trial window, inclusive, towards the target', () => {
+    const p = trialProgress([row('2026-11-25'), row('2026-11-26'), row('2026-11-30'), row('2026-12-02'), row('2026-12-03')]);
+    expect(p).toEqual({ inside: 3, outside: 2, target: 5, reached: false, share: 0.6 });
+    const full = trialProgress(['2026-11-26', '2026-11-27', '2026-11-28', '2026-11-29', '2026-11-30', '2026-12-01'].map(row));
+    expect(full.reached).toBe(true);
+    expect(full.share).toBe(1);
+    expect(trialProgress([]).inside).toBe(0);
+  });
+  it('the window, the target and the dates shown to students agree', () => {
+    expect(TRIAL_WINDOW).toEqual(['2026-11-26', '2026-12-02']);
+    expect(TARGET_DAYS).toBe(5);
+    expect(TRIAL_DATES).toBe('26 November–2 Desember 2026');
+  });
+});
