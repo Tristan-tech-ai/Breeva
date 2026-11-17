@@ -124,3 +124,22 @@ describe('trial diary on the phone (F4-07)', () => {
     expect(st.noteRouteLookup(cards, 'walk', from)).toBe(false);
   });
 });
+
+describe('teacher tally page rows (F4-09)', async () => {
+  const { rekapRows, windowOf } = await import('../src/lib/trial/rekapView');
+  it('shows gate G4 as passed only from 15 students with at least 5 days', () => {
+    const base = rekap([]);
+    const rows = rekapRows({ ...base, peserta: 16, peserta_min_5_hari: 15, hari_per_peserta: [7, 5], median_pengurangan_asap_pct: 31.5, median_tambahan_menit: 2.5, kode_terbaca: 16, kode_ditolak: 2 });
+    const g4 = rows.find((r) => r.label.includes('G4'))!;
+    expect(g4.value).toBe('15: lulus');
+    expect(rows.find((r) => r.label.startsWith('Median pengurangan'))!.value).toBe('32%');
+    expect(rows.find((r) => r.label.startsWith('Kode terbaca'))!.value).toMatch(/16 \(2 ditolak/);
+    expect(rekapRows({ ...base, peserta_min_5_hari: 14 }).find((r) => r.label.includes('G4'))!.value).toBe('14: belum lulus');
+    expect(rekapRows(base).find((r) => r.label.startsWith('Median pengurangan'))!.value).toBe('–');
+  });
+  it('accepts only an ordered date window', () => {
+    expect(windowOf('2026-11-26', '2026-12-02')).toEqual(['2026-11-26', '2026-12-02']);
+    expect(windowOf('2026-12-02', '2026-11-26')).toBeNull();
+    expect(windowOf('', '2026-11-26')).toBeNull();
+  });
+});

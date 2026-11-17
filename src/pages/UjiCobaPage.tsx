@@ -42,6 +42,7 @@ export default function UjiCobaPage() {
         </ol>
         <p className="text-[13px] text-gray-600 dark:text-gray-400">{PRIVACY}</p>
         <p className="text-[13px]"><a href={PRINT_SHEET.href} download className="font-semibold text-teal-700 dark:text-teal-300 underline underline-offset-2">{PRINT_SHEET.label}</a> (untuk guru: satu halaman, langkah yang sama dengan halaman ini)</p>
+        <p className="text-[13px]"><Link to="/uji-coba/rekap" className="font-semibold text-teal-700 dark:text-teal-300 underline underline-offset-2">Rekap kode ringkasan siswa</Link> (untuk guru, di akhir uji coba: tempel jawaban kuesioner, hitungan dibuat di perangkat)</p>
         <section className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <Suspense fallback={<div style={{ width: 132, height: 132 }} aria-hidden />}>
             <QrImage value={url} size={132} alt="Kode QR halaman uji coba Breeva" />
