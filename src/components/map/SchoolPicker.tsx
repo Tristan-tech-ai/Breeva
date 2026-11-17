@@ -46,7 +46,7 @@ export default function SchoolPicker({ region, value, onChange }: { region: Fiel
       <label className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
         <GraduationCap className="w-4 h-4 shrink-0 text-teal-700 dark:text-teal-300" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ke sekolah: ketik nama sekolah (mis. SMA Negeri 1)"
-          aria-label="Cari sekolah tujuan" className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-gray-400" />
+          aria-label="Cari sekolah tujuan" className="min-w-0 min-h-6 flex-1 bg-transparent text-xs outline-none placeholder:text-gray-400" />
       </label>
       {failed && <p className="text-[11px] text-amber-700">Daftar sekolah belum tersedia untuk wilayah ini.</p>}
       {q && list && hits.length === 0 && (

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
@@ -45,5 +46,17 @@ describe('accessible names (F1-42)', () => {
     expect(html).not.toMatch(/aria-controls="search-results-list"/);
     expect(html).not.toMatch(/aria-owns="search-results-list"/);
     expect(html).toMatch(/<button[^>]*aria-label="Saring tempat: Semua"/);
+  });
+});
+
+describe('touch targets at 320 px (F1-45)', () => {
+  // the trial pages read window while rendering, so their link classes are checked in the source
+  const src = (f: string) => readFileSync(f, 'utf8');
+  it('standalone links on the trial pages and the search fields are at least 24 px tall (WCAG 2.2 2.5.8)', () => {
+    expect(src('src/pages/UjiCobaPage.tsx')).toMatch(/<Link to=\{s\.link\.to\} className="mt-1 inline-block min-h-6 py-0\.5 /);
+    expect(src('src/pages/UjiCobaRekapPage.tsx')).toMatch(/<Link to="\/uji-coba" className="inline-block min-h-6 py-0\.5 /);
+    expect(src('src/components/map/SchoolPicker.tsx')).toMatch(/aria-label="Cari sekolah tujuan" className="min-w-0 min-h-6 /);
+    const search = renderToStaticMarkup(h(SearchBar, { filterChips: [], activeFilter: 'all', onFilterChange: () => {} } as never));
+    expect(search).toMatch(/<input[^>]*id="search-input"[^>]*class="[^"]*self-stretch/);
   });
 });

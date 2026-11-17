@@ -35,7 +35,7 @@ export default function UjiCobaPage() {
               <div className="min-w-0">
                 <p className="text-sm font-semibold">{s.title}</p>
                 <p className="text-[13px] text-gray-700 dark:text-gray-300">{s.body}</p>
-                {s.link && <Link to={s.link.to} className="mt-1 inline-block text-[13px] font-semibold text-teal-700 dark:text-teal-300 underline underline-offset-2">{s.link.label}</Link>}
+                {s.link && <Link to={s.link.to} className="mt-1 inline-block min-h-6 py-0.5 text-[13px] font-semibold text-teal-700 dark:text-teal-300 underline underline-offset-2">{s.link.label}</Link>}
               </div>
             </li>
           ))}

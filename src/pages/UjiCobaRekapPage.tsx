@@ -70,7 +70,7 @@ export default function UjiCobaRekapPage() {
           asap adalah yang ditawarkan rute paling sedikit asap kendaraan dibanding rute tercepat, bukan dosis yang terukur;
           apakah siswa benar-benar lewat rute itu ditanyakan di kuesioner. Kode dari ponsel yang sama dihitung sekali.
         </p>
-        <Link to="/uji-coba" className="inline-block text-[13px] font-semibold text-teal-700 dark:text-teal-300 underline underline-offset-2">Kembali ke panduan uji coba</Link>
+        <Link to="/uji-coba" className="inline-block min-h-6 py-0.5 text-[13px] font-semibold text-teal-700 dark:text-teal-300 underline underline-offset-2">Kembali ke panduan uji coba</Link>
       </main>
     </div>
   );
