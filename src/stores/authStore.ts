@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { safeLocalStorage } from '../lib/safeStorage';
 import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { useSettingsStore } from './settingsStore';
@@ -473,7 +474,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'breeva-auth-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeLocalStorage), // blocked site data must not stop the app from starting
       partialize: (state) => ({
         // Only persist minimal data — session is managed by Supabase
         profile: state.profile,
