@@ -13,6 +13,16 @@ describe('student trial guide', () => {
     expect(PRIVACY).toMatch(/tidak meminta nama, akun, atau lokasi rumah/);
   });
 
+  it('uses the words the app shows today (F4-04, 17 Nov): exhaust, not NO2; the school-zone cost; the link carries the start', () => {
+    const all = STEPS.map((s) => s.body).join(' ');
+    expect(all).not.toMatch(/NO₂|NO2/);
+    expect(STEPS[0].body).toMatch(/asap kendaraan/);
+    expect(STEPS[0].body).toMatch(/Kota Bogor/);
+    expect(STEPS[3].body).toMatch(/paling sedikit asap kendaraan/);
+    expect(STEPS[4].body).toMatch(/zona sekolah/);
+    expect(STEPS[5].body).toMatch(/memuat titik berangkatmu/);
+  });
+
   it('the QR code encodes the guide address', async () => {
     expect(trialUrl('https://breeva.site/')).toBe('https://breeva.site/uji-coba');
     const svg = await QRCode.toString(trialUrl('https://breeva.site'), { type: 'svg' });
