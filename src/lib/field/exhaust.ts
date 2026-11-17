@@ -27,7 +27,13 @@ export const EMISSION_G_PER_KM = { nox: 1.2, pm25: 0.08 } as const;
 
 export const RECEPTOR_HEIGHT_M = 1.5;
 export const SOURCE_HEIGHT_M = 0.5;
-export const MIN_WIND_MS = 0.5;
+/**
+ * Lowest wind used, m/s. CALINE-3 user's guide section 8.1.6 lists U >= 1 m/s as the input limit (the Gaussian form
+ * neglects along-wind diffusion, which stops being true below it), and ISC3 vol. II section 1.1.3 does not let the
+ * wind fall below 1.0 m/s either; both are the sources of the initial mixing and the urban sigma_z used here.
+ * (Was 0.5 until 17 Nov 2026: night values on Bogor's toll and trunk roads reached 1,000 ug/m3 NOx at 0.54 m/s.)
+ */
+export const MIN_WIND_MS = 1.0;
 export const CUTOFF_M = 500;
 /** Minor roads counted per receptor (nearest by midpoint); every major road within the cut-off is counted. */
 export const MINOR_CAP = 40;
@@ -96,6 +102,85 @@ export function lineKernel(xy: ArrayLike<number>, windMs: number, s: Stability, 
     }
   }
   return sum / (2 * Math.PI * u);
+}
+
+/** Road classes whose two directions OpenStreetMap often maps as two separate one-way lines (a dual carriageway). */
+const SPLIT_CLASSES = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary']);
+const TWIN_MAX_M = 50;
+const TWIN_COS = -0.8; // directions at least ~143 degrees apart
+
+/**
+ * Share of a road class's traffic that one line carries: 0.5 for one half of a dual carriageway, otherwise 1.
+ *
+ * The traffic estimate is per road class, so without this both one-way halves of a split road each got the whole
+ * road's volume and the corridor counted twice. OSM draws each half in its driving direction, so a half is found by
+ * geometry alone: a line of the same class running the opposite way within 50 m of points at 20, 50 and 80 % of its
+ * length (two of three needed; one for lines under 40 m), measured perpendicular to the other line so that the next
+ * piece of the same road, which meets it end to end, is never taken for its twin. A real one-way street with no twin
+ * keeps its full volume. Limitation: two separate two-way roads of the same class drawn in opposite directions within
+ * 50 m of each other would also be halved (no one-way tag in the pack to tell them apart).
+ */
+export function splitCarriagewayShare(coords: number[][][], highway: string[]): Float64Array {
+  const share = new Float64Array(coords.length).fill(1);
+  const cell = (lat: number, lon: number) => `${Math.floor(lat / CELL_DEG)}:${Math.floor(lon / CELL_DEG)}`;
+  const grid = new Map<string, number[]>();
+  const cand: number[] = [];
+  coords.forEach((c, k) => {
+    if (!SPLIT_CLASSES.has(highway[k]) || c.length < 2) return;
+    cand.push(k);
+    const seen = new Set<string>();
+    for (let i = 0; i < c.length; i++) {
+      const steps = i + 1 < c.length ? Math.max(1, Math.ceil(Math.hypot((c[i + 1][0] - c[i][0]) * M_LON_EQ, (c[i + 1][1] - c[i][1]) * M_LAT) / 100)) : 1;
+      for (let q = 0; q < steps; q++) {
+        const f = q / steps, lat = c[i][1] + (i + 1 < c.length ? f * (c[i + 1][1] - c[i][1]) : 0), lon = c[i][0] + (i + 1 < c.length ? f * (c[i + 1][0] - c[i][0]) : 0);
+        const key = cell(lat, lon);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const a = grid.get(key);
+        if (a) a.push(k); else grid.set(key, [k]);
+      }
+    }
+  });
+  for (const k of cand) {
+    const c = coords[k];
+    const mLon = M_LON_EQ * Math.cos((c[0][1] * Math.PI) / 180);
+    const segLen: number[] = [];
+    let total = 0;
+    for (let i = 0; i + 1 < c.length; i++) { const l = Math.hypot((c[i + 1][0] - c[i][0]) * mLon, (c[i + 1][1] - c[i][1]) * M_LAT); segLen.push(l); total += l; }
+    if (total < 1) continue;
+    const fracs = total < 40 ? [0.5] : [0.2, 0.5, 0.8];
+    let hits = 0;
+    for (const f of fracs) {
+      // point at fraction f of the length, and the unit direction of its piece
+      let want = f * total, i = 0;
+      while (i < segLen.length - 1 && want > segLen[i]) { want -= segLen[i]; i++; }
+      const t = segLen[i] > 0 ? want / segLen[i] : 0;
+      const lon = c[i][0] + t * (c[i + 1][0] - c[i][0]), lat = c[i][1] + t * (c[i + 1][1] - c[i][1]);
+      const dx = ((c[i + 1][0] - c[i][0]) * mLon) / (segLen[i] || 1), dy = ((c[i + 1][1] - c[i][1]) * M_LAT) / (segLen[i] || 1);
+      const ci = Math.floor(lat / CELL_DEG), cj = Math.floor(lon / CELL_DEG);
+      let hit = false;
+      for (let di = -1; di <= 1 && !hit; di++) for (let dj = -1; dj <= 1 && !hit; dj++) {
+        for (const j of grid.get(`${ci + di}:${cj + dj}`) ?? []) {
+          if (j === k || highway[j] !== highway[k]) continue;
+          const b = coords[j];
+          for (let s = 0; s + 1 < b.length; s++) {
+            const ax = (b[s][0] - lon) * mLon, ay = (b[s][1] - lat) * M_LAT, bx = (b[s + 1][0] - lon) * mLon, by = (b[s + 1][1] - lat) * M_LAT;
+            const ex = bx - ax, ey = by - ay, el = Math.hypot(ex, ey);
+            if (el < 0.5) continue;
+            const u = -(ax * ex + ay * ey) / (el * el);
+            // the perpendicular foot must fall on the other line, not beyond either of its two ends
+            if (u < 0 || u > 1 || (s === 0 && u <= 0) || (s === b.length - 2 && u >= 1)) continue;
+            if (Math.hypot(ax + u * ex, ay + u * ey) > TWIN_MAX_M) continue;
+            if ((dx * ex + dy * ey) / el <= TWIN_COS) { hit = true; break; }
+          }
+          if (hit) break;
+        }
+      }
+      if (hit) hits++;
+    }
+    if (hits >= (fracs.length === 1 ? 1 : 2)) share[k] = 0.5;
+  }
+  return share;
 }
 
 export interface ExhaustSource {

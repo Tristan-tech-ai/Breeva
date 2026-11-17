@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CUTOFF_M, EMISSION_G_PER_KM, exhaustAt, initialSigmaZ, isMajor, lineKernel, mixingHalfWidth, urbanSigmaZ,
-  type ExhaustSource, type Stability,
+  CUTOFF_M, EMISSION_G_PER_KM, MIN_WIND_MS, exhaustAt, initialSigmaZ, isMajor, lineKernel, mixingHalfWidth,
+  splitCarriagewayShare, urbanSigmaZ, type ExhaustSource, type Stability,
 } from '../src/lib/field/exhaust';
 
 /** A straight north-south road of the given length, seen from a receptor d metres to its east. */
@@ -29,8 +29,16 @@ describe('dispersion formulas from the primary sources', () => {
     expect(mixingHalfWidth(null)).toBe(5);
     // W2 = 10 m, u = 2 m/s: TR = 5 s, SGZ1 = 2.35 m, times (60/30)^0.2
     expect(initialSigmaZ(10, 2)).toBeCloseTo(2.35 * Math.pow(2, 0.2), 6);
-    // a calm hour is treated as 0.5 m/s
-    expect(initialSigmaZ(10, 0)).toBe(initialSigmaZ(10, 0.5));
+    // a calm hour is treated as 1 m/s (CALINE-3 section 8.1.6, ISC3 vol. II section 1.1.3)
+    expect(MIN_WIND_MS).toBe(1);
+    expect(initialSigmaZ(10, 0)).toBe(initialSigmaZ(10, 1));
+    expect(initialSigmaZ(10, 0.5)).toBe(initialSigmaZ(10, 1));
+  });
+
+  it('a calm night is not more than the 1 m/s night: no 1/u blow-up below the floor', () => {
+    const xy = straight(20);
+    expect(lineKernel(xy, 0.3, 'F', HALF_W)).toBe(lineKernel(xy, 1, 'F', HALF_W));
+    expect(lineKernel(xy, 2, 'F', HALF_W)).toBeLessThan(lineKernel(xy, 1, 'F', HALF_W));
   });
 
   it('road classes: tertiary and above are major', () => {
@@ -106,6 +114,47 @@ describe('exhaustAt: many roads, many receptors', () => {
     const src = [road(0, 2000, true), road(150, 20, false)];
     const [onRoad, lane] = exhaustAt(src, [at(0), at(150)], met);
     expect(onRoad.nox / lane.nox).toBeGreaterThan(3);
+  });
+});
+
+describe('dual carriageways: each one-way half carries half the class volume', () => {
+  const lat0 = -6.58, lon0 = 106.8, mLon = 111320 * Math.cos((lat0 * Math.PI) / 180);
+  // a line from (x0, y0) to (x1, y1) in metres east/north of the origin, cut into 40 m pieces
+  const line = (x0: number, y0: number, x1: number, y1: number): number[][] => {
+    const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / 40));
+    return Array.from({ length: n + 1 }, (_, i) => [lon0 + (x0 + ((x1 - x0) * i) / n) / mLon, lat0 + (y0 + ((y1 - y0) * i) / n) / 110574]);
+  };
+
+  it('two opposite one-way lines 20 m apart are both halves; a lone one-way street keeps its volume', () => {
+    const s = splitCarriagewayShare(
+      [line(0, -400, 0, 400), line(20, 400, 20, -400), line(800, -400, 800, 400)],
+      ['trunk', 'trunk', 'trunk'],
+    );
+    expect(Array.from(s)).toEqual([0.5, 0.5, 1]);
+  });
+
+  it('the next piece of the same road, meeting end to end in the opposite drawing direction, is not a twin', () => {
+    const s = splitCarriagewayShare([line(0, 0, 0, 300), line(0, 600, 0, 300)], ['primary', 'primary']);
+    expect(Array.from(s)).toEqual([1, 1]);
+  });
+
+  it('needs the same class, opposite directions and at most 50 m between them', () => {
+    expect(Array.from(splitCarriagewayShare([line(0, -300, 0, 300), line(20, 300, 20, -300)], ['trunk', 'residential']))).toEqual([1, 1]);
+    expect(Array.from(splitCarriagewayShare([line(0, -300, 0, 300), line(20, -300, 20, 300)], ['trunk', 'trunk']))).toEqual([1, 1]);
+    expect(Array.from(splitCarriagewayShare([line(0, -300, 0, 300), line(70, 300, 70, -300)], ['trunk', 'trunk']))).toEqual([1, 1]);
+    // residential streets are never split in the traffic estimate
+    expect(Array.from(splitCarriagewayShare([line(0, -300, 0, 300), line(20, 300, 20, -300)], ['residential', 'residential']))).toEqual([1, 1]);
+  });
+
+  it('a split road gives about the same kerbside exhaust as the same road drawn as one two-way line', () => {
+    const met = () => ({ wind: 2, stability: 'D' as Stability });
+    const src = (coords: number[][], veh: number): ExhaustSource => ({ coords, vehPerHour: veh, mod: 1, halfW: 6.5, major: true });
+    const halves = [line(-10, -1500, -10, 1500), line(10, 1500, 10, -1500)];
+    const share = splitCarriagewayShare(halves, ['trunk', 'trunk']);
+    const receptor = [{ lat: lat0, lon: lon0 + 60 / mLon }];
+    const split = exhaustAt(halves.map((c, k) => src(c, 2000 * share[k])), receptor, met)[0].nox;
+    const single = exhaustAt([src(line(0, -1500, 0, 1500), 2000)], receptor, met)[0].nox;
+    expect(Math.abs(split / single - 1)).toBeLessThan(0.15);
   });
 });
 

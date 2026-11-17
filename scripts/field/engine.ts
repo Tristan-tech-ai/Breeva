@@ -5,7 +5,7 @@
 import { buildMultiSourceDeltas, computeRoadAQIv2, pm25ToAQI, type RoadRow } from '../../api/vayu/road-aqi.js';
 import { buildInterpolator, type BaselineCorners, type BaselineData } from '../../api/vayu/_baseline.js';
 import { caline4CanyonFactor, pasquillClass } from '../../api/vayu/_caline4.js';
-import { exhaustAt, isMajor, mixingHalfWidth, type ExhaustSource } from '../../src/lib/field/exhaust.js';
+import { exhaustAt, isMajor, mixingHalfWidth, splitCarriagewayShare, type ExhaustSource } from '../../src/lib/field/exhaust.js';
 import type { RoadPack } from './pack.js';
 import type { CellValue } from './cells.js';
 import { OrdinaryKriging } from './kriging.js';
@@ -43,12 +43,15 @@ export const CLASS_FACTOR: Record<string, number> = {
 
 /** Exhaust sources of a pack at one hour: vehicles per hour = class estimate x hour curve x class factor x congestion. */
 export function exhaustSources(rows: RoadRow[], coordsOf: (k: number) => number[][], diurnal: number, congestion?: Record<number, number>): ExhaustSource[] {
+  const coords = rows.map((_, k) => coordsOf(k));
+  // one half of a dual carriageway carries half the class volume (otherwise the corridor is counted twice)
+  const share = splitCarriagewayShare(coords, rows.map((r) => r.highway || 'residential'));
   return rows.map((r, k) => {
     const highway = r.highway || 'residential';
     const factor = r.ai_pollution_factor ?? CLASS_FACTOR[highway] ?? 0.25;
     return {
-      coords: coordsOf(k),
-      vehPerHour: (r.traffic_base_estimate ?? 100) * (r.traffic_calibration_factor || 1) * diurnal * factor * (congestion?.[k] ?? 1),
+      coords: coords[k],
+      vehPerHour: (r.traffic_base_estimate ?? 100) * (r.traffic_calibration_factor || 1) * diurnal * factor * share[k] * (congestion?.[k] ?? 1),
       mod: caline4CanyonFactor(r.canyon_ratio, r.micro_class),
       halfW: mixingHalfWidth(r.width),
       major: isMajor(highway),
