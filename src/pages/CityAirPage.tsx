@@ -33,8 +33,10 @@ export default function CityAirPage() {
   return (
     <div className="gradient-mesh-bg min-h-screen pb-16">
       <Seo
-        title={`Kualitas Udara ${city.name} Hari Ini — AQI per Jalan | Breeva`}
-        description={`Pantau kualitas udara (AQI) dan PM2.5 per ruas jalan di ${city.name}, ${city.region}, real-time. ${city.blurb} Temukan rute jalan kaki paling bersih — gratis di Breeva.`}
+        title={`Kualitas Udara ${city.name} Hari Ini | Breeva`}
+        description={city.perRoad
+          ? `Asap kendaraan dan kualitas udara per ruas jalan di Badung–Denpasar, dihitung ulang tiap jam. ${city.blurb} Rute jalan kaki dengan asap paling sedikit — gratis di Breeva.`
+          : `Kualitas udara ${city.name}, ${city.region}, per jam. ${city.blurb} Peta per ruas jalan baru tersedia di Badung–Denpasar dan Kota Bogor — gratis di Breeva.`}
         path={`/udara/${city.slug}`}
       />
 
@@ -55,9 +57,10 @@ export default function CityAirPage() {
             Kualitas udara {city.name} hari ini
           </h2>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-            {city.blurb} Breeva memetakan AQI (Indeks Kualitas Udara) dan PM2.5 untuk <b>tiap ruas jalan</b> di {city.name}
-            {' '}secara real-time lewat mesin VAYU, lalu mencarikan rute jalan kaki paling bersih. Geser peta untuk melihat
-            warna polusi per jalan; bebas dipakai tanpa akun.
+            {city.blurb}{' '}
+            {city.perRoad
+              ? <>Breeva menghitung ulang asap kendaraan dan kualitas udara untuk <b>tiap ruas jalan</b> di Badung–Denpasar setiap jam, lalu mencarikan rute jalan kaki dengan asap paling sedikit, dihitung di ponselmu. Geser peta untuk melihat warna per jalan; bebas dipakai tanpa akun.</>
+              : <>Untuk {city.name}, Breeva saat ini menampilkan kualitas udara kota per jam (kartu di bawah peta). Peta per ruas jalan dan rute di ponsel baru tersedia di Badung–Denpasar dan Kota Bogor; kota lain menyusul bertahap begitu punya titik ukur. Bebas dipakai tanpa akun.</>}
           </p>
         </header>
 
@@ -72,11 +75,17 @@ export default function CityAirPage() {
 
         {/* Quick facts */}
         <div className="grid grid-cols-3 gap-3">
-          {[
-            { Icon: Wind, label: 'AQI per jalan', val: 'Real-time' },
-            { Icon: Route, label: 'Rute bersih', val: '3 opsi' },
-            { Icon: Gauge, label: 'Paparan PM2.5', val: 'Per rute' },
-          ].map((f) => (
+          {(city.perRoad
+            ? [
+              { Icon: Wind, label: 'Asap kendaraan per jalan', val: 'Tiap jam' },
+              { Icon: Route, label: 'Rute', val: 'Di ponsel' },
+              { Icon: Gauge, label: 'Akun', val: 'Tidak perlu' },
+            ]
+            : [
+              { Icon: Wind, label: 'Kualitas udara kota', val: 'Tiap jam' },
+              { Icon: Route, label: 'Peta per ruas jalan', val: 'Menyusul' },
+              { Icon: Gauge, label: 'Akun', val: 'Tidak perlu' },
+            ]).map((f) => (
             <div key={f.label} className="glass-card p-3 text-center">
               <f.Icon className="w-4 h-4 text-primary-500 mx-auto mb-1" />
               <p className="text-sm font-bold text-gray-900 dark:text-white">{f.val}</p>
@@ -94,7 +103,7 @@ export default function CityAirPage() {
           </Link>
           <Link to="/peta" className="glass-card p-4 flex items-center gap-3 hover:ring-1 hover:ring-primary-400/40 transition">
             <MapPin className="w-5 h-5 text-primary-500 shrink-0" />
-            <span className="flex-1"><span className="block text-sm font-semibold text-gray-900 dark:text-white">Peta udara langsung</span><span className="block text-[11px] text-gray-500 dark:text-gray-400">Semua kota dalam satu peta</span></span>
+            <span className="flex-1"><span className="block text-sm font-semibold text-gray-900 dark:text-white">Peta udara langsung</span><span className="block text-[11px] text-gray-500 dark:text-gray-400">Per ruas jalan: Badung–Denpasar dan Kota Bogor</span></span>
             <ArrowRight className="w-4 h-4 text-gray-400" />
           </Link>
         </section>

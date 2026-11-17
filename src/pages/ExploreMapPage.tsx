@@ -64,8 +64,8 @@ const ROAD_MODES: [RoadDisplayMode, string][] = [['traffic', 'Asap kendaraan'], 
 const RAMP = 'linear-gradient(90deg,#00E400,#FFFF00,#FF7E00,#FF0000,#8F3F97,#7E0023)';
 
 const HOW = [
-  { Icon: Wind, title: 'AQI per ruas jalan', desc: 'Mesin VAYU mengkalibrasi kualitas udara untuk tiap segmen jalan — bukan satu angka untuk seluruh kota.' },
-  { Icon: Route, title: 'Rute sadar-polusi', desc: 'Tiga pilihan rute — Bersih, Seimbang, Cepat — masing-masing diberi skor udara dan estimasi paparan.' },
+  { Icon: Wind, title: 'Asap kendaraan per ruas jalan', desc: 'Dihitung ulang tiap jam dari lalu lintas, angin, dan sensor warga untuk tiap ruas jalan di Badung–Denpasar dan Kota Bogor, bukan satu angka untuk seluruh kota.' },
+  { Icon: Route, title: 'Rute yang jujur', desc: 'Rute tercepat dan rute paling sedikit asap, dengan menit tambahan dan persen asap yang berkurang; rute motor juga menunjukkan asap yang ditimbulkan bagi orang lain.' },
   { Icon: Gauge, title: 'Dosis paparan nyata', desc: 'Hitung PM2.5 yang benar-benar kamu hirup berdasarkan usia, aktivitas, dan moda perjalanan.' },
 ];
 
@@ -129,8 +129,8 @@ export default function ExploreMapPage() {
   return (
     <div className="gradient-mesh-bg min-h-screen pb-16">
       <Seo
-        title="Peta Udara Langsung — AQI per Jalan & Rute Bersih Indonesia | Breeva"
-        description="Peta kualitas udara (AQI) real-time per ruas jalan untuk Jakarta, Bali, Bandung, Surabaya & kota Indonesia. Temukan rute jalan kaki paling bersih dan hitung paparan PM2.5 — gratis, tanpa login."
+        title="Peta Udara Langsung — Asap Kendaraan per Jalan & Rute Bersih | Breeva"
+        description="Peta asap kendaraan dan kualitas udara per ruas jalan untuk Badung–Denpasar dan Kota Bogor, dihitung ulang tiap jam; rute jalan kaki dengan asap paling sedikit dihitung di ponsel. Kota lain: kualitas udara kota. Gratis, tanpa login."
         path="/peta"
       />
 

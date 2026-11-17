@@ -363,7 +363,7 @@ console.<span className="text-sky-300">log</span>(data.cigarette_equivalent); <s
         <motion.div {...fade()} className="relative overflow-hidden rounded-3xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/10 via-[#0a0f0e] to-[#0a0f0e] p-10 sm:p-14 text-center">
           <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 h-64 w-[640px] rounded-full bg-emerald-500/20 blur-[100px]" />
           <h2 className="relative text-3xl sm:text-5xl font-extrabold tracking-tight text-white">Build something that breathes.</h2>
-          <p className="relative mt-4 text-zinc-400 max-w-lg mx-auto">Grab a free key and ship your first clean-air feature today.</p>
+          <p className="relative mt-4 text-zinc-400 max-w-lg mx-auto">New API keys are paused while our sign-in service is being moved. The map, routes and open data on breeva.site stay free to use without an account.</p>
           <div className="relative mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link to={KEYS_PATH} className="group inline-flex items-center gap-2 rounded-full bg-emerald-400 text-emerald-950 font-semibold px-7 py-3 hover:bg-emerald-300 transition shadow-[0_0_32px_-6px_rgba(52,211,153,.7)]">
               <KeyRound className="w-4 h-4" /> Get your API key <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition" />

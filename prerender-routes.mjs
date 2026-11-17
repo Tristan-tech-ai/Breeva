@@ -54,14 +54,14 @@ const NAV = [
 
 // Public crawlable city pages (/udara/:slug). MUST mirror src/lib/cities.ts.
 const CITIES = [
-  { slug: 'jakarta',    name: 'Jakarta',    region: 'DKI Jakarta',             blurb: 'Ibu kota dengan lalu lintas padat — Breeva memetakan AQI per ruas jalan agar kamu bisa memilih jalur paling bersih.' },
-  { slug: 'bandung',    name: 'Bandung',    region: 'Jawa Barat',              blurb: 'Cekungan Bandung membuat polusi mudah terperangkap; lihat kualitas udara per jalan dan rute teduh.' },
-  { slug: 'surabaya',   name: 'Surabaya',   region: 'Jawa Timur',              blurb: 'Kota industri & pelabuhan — pantau PM2.5 dan NO₂ per ruas jalan secara real-time.' },
-  { slug: 'bali',       name: 'Bali',       region: 'Bali (Denpasar–Badung)',  blurb: 'Dari Denpasar hingga Canggu — udara relatif bersih, tapi jalan ramai tetap punya hotspot polusi.' },
-  { slug: 'semarang',   name: 'Semarang',   region: 'Jawa Tengah',             blurb: 'Pesisir utara Jawa — cek AQI per jalan sebelum berjalan kaki atau bersepeda.' },
-  { slug: 'yogyakarta', name: 'Yogyakarta', region: 'DI Yogyakarta',           blurb: 'Kota pelajar & wisata — temukan rute jalan kaki paling bersih di sekitar Malioboro dan kampus.' },
-  { slug: 'solo',       name: 'Solo',       region: 'Jawa Tengah (Surakarta)', blurb: 'Surakarta — pantau kualitas udara per ruas jalan dan paparan PM2.5 harianmu.' },
-  { slug: 'malang',     name: 'Malang',     region: 'Jawa Timur',              blurb: 'Kota sejuk di kaki gunung — bandingkan udara antar jalan dan pilih jalur tersehat.' },
+  { slug: 'jakarta',    name: 'Jakarta',    region: 'DKI Jakarta',             blurb: 'Ibu kota dengan lalu lintas padat.' },
+  { slug: 'bandung',    name: 'Bandung',    region: 'Jawa Barat',              blurb: 'Cekungan Bandung membuat polusi mudah terperangkap.' },
+  { slug: 'surabaya',   name: 'Surabaya',   region: 'Jawa Timur',              blurb: 'Kota industri dan pelabuhan di pesisir utara Jawa Timur.' },
+  { slug: 'bali',       name: 'Bali',       region: 'Bali (Denpasar–Badung)',  blurb: 'Dari Denpasar hingga Canggu — udara relatif bersih, tapi jalan ramai tetap punya hotspot polusi.', perRoad: true },
+  { slug: 'semarang',   name: 'Semarang',   region: 'Jawa Tengah',             blurb: 'Kota pesisir utara Jawa Tengah.' },
+  { slug: 'yogyakarta', name: 'Yogyakarta', region: 'DI Yogyakarta',           blurb: 'Kota pelajar dan wisata.' },
+  { slug: 'solo',       name: 'Solo',       region: 'Jawa Tengah (Surakarta)', blurb: 'Surakarta, Jawa Tengah.' },
+  { slug: 'malang',     name: 'Malang',     region: 'Jawa Timur',              blurb: 'Kota sejuk di kaki gunung.' },
 ];
 
 const placeJsonLd = (c) => `<script type="application/ld+json">${JSON.stringify({
@@ -76,10 +76,10 @@ const placeJsonLd = (c) => `<script type="application/ld+json">${JSON.stringify(
 const HELP_FAQS = [
   ['Bagaimana cara memulai jalan?', 'Buka peta (tab Beranda), cari atau ketuk tujuan, lalu tap "Mulai" pada kartu rute. Breeva melacak jalanmu dan memberi EcoPoin saat selesai.'],
   ['Apa itu EcoPoin?', 'EcoPoin adalah hadiah yang kamu dapat dari berjalan kaki dan memilih rute bersih. Tukarkan di merchant ramah lingkungan untuk diskon & perk.'],
-  ['Beda rute bersih dan rute cepat?', 'Rute bersih menghindari area berudara buruk dan mengutamakan jalur hijau. Bisa sedikit lebih jauh, tapi udaranya lebih sehat dan EcoPoin-nya lebih banyak.'],
-  ['Kenapa warna rute di peta berbeda?', 'Hijau = Rute Bersih (udara terbaik), Biru = Seimbang, Oranye = Cepat. Tiap rute punya jarak, durasi, dan kualitas udara yang berbeda.'],
-  ['Apa itu AQI dan dari mana datanya?', 'AQI (Indeks Kualitas Udara) menunjukkan seberapa bersih udara. Breeva memakai mesin VAYU yang mengkalibrasi AQI per-ruas jalan (dengan baseline data satelit & Open-Meteo). Makin rendah AQI, makin bersih.'],
-  ['Bisa pakai moda transportasi lain?', 'Bisa! Breeva mendukung Jalan kaki, Sepeda, Motor, dan Mobil. Jalan kaki & sepeda memberi EcoPoin terbanyak karena nol emisi.'],
+  ['Beda rute bersih dan rute cepat?', 'Rute paling sedikit asap menghindari jalan ramai; kartunya menyebut berapa persen asap kendaraan yang kamu hirup berkurang dan berapa menit tambahannya dibanding rute tercepat.'],
+  ['Kenapa warna rute di peta berbeda?', 'Setiap rute punya warna sendiri di peta dan di kartunya. Kartu menyebut jarak, menit, dan asap kendaraan rata-rata di rute itu.'],
+  ['Apa itu AQI dan dari mana datanya?', 'Udara latar ditampilkan sebagai ISPU dari PM2,5, dari CAMS (lewat Open-Meteo) dan sensor warga. Asap kendaraan per ruas jalan dihitung dari perkiraan lalu lintas, angin, dan rumus sebaran panduan EPA (Badung–Denpasar dan Kota Bogor). Makin rendah, makin bersih.'],
+  ['Bisa pakai moda transportasi lain?', 'Rute di ponsel tersedia untuk jalan kaki dan motor. Rute motor juga menunjukkan asap yang ditimbulkan bagi orang lain (harga hirup) dan menghindari gang serta jalan kecil di depan sekolah pada jam sekolah.'],
   ['Bagaimana EcoPoin dihitung?', 'EcoPoin dihitung dari jarak jalan kaki yang terverifikasi, ditambah bonus dari misi harian dan pencapaian. Moda bermotor memberi poin lebih sedikit.'],
   ['Di mana menukar EcoPoin?', 'Buka tab Hadiah untuk melihat voucher dari merchant. Ketuk voucher untuk menukarnya dengan saldo EcoPoin-mu.'],
   ['Apakah data lokasi saya privat?', 'Ya. Lokasi dipakai untuk navigasi dan AQI di sekitarmu, dan tidak dijual atau dibagikan ke pihak ketiga untuk iklan. Lihat Kebijakan Privasi untuk detail.'],
@@ -110,15 +110,15 @@ const ROUTES = [
     description: 'Breeva memetakan kualitas udara per-jalan, menemukan rute jalan kaki paling bersih, dan menghitung paparan PM2.5 — platform navigasi udara untuk kota Indonesia.',
     body: page('Tentang Breeva', [
       'Breeva membuat kualitas udara <b>terlihat di setiap ruas jalan</b>, lalu mengubah jalan kaki menjadi pilihan yang cerdas, sehat, dan bermanfaat. Tujuan kami: menurunkan paparan polusi & emisi kota dengan memandu warga ke rute paling bersih dan memberi penghargaan atas tiap langkah rendah-emisi.',
-      'Cara kerja: (1) lihat AQI per jalan dari mesin VAYU, (2) pilih satu dari tiga rute — Bersih, Seimbang, atau Cepat — lengkap dengan skor udara & estimasi paparan, lalu (3) jalan, pantau paparan PM2.5, dan kumpulkan EcoPoin, level, serta pencapaian.',
-      'Fitur utama: peta AQI per-ruas kalibrasi VAYU, rute bersih sadar-polusi, EcoPoin & level, Kalkulator Paparan (dosis PM2.5 per rute), papan peringkat (Desa → Nasional), dan merchant eco. Gratis sebagai PWA di browser. Kontak: halo@breeva.site.',
+      'Cara kerja: (1) lihat asap kendaraan per ruas jalan (Badung–Denpasar dan Kota Bogor, dihitung ulang tiap jam), (2) bandingkan rute tercepat dan rute paling sedikit asap, dihitung di ponselmu, lalu (3) jalan, pantau paparan PM2.5, dan kumpulkan EcoPoin, level, serta pencapaian.',
+      'Fitur utama: peta asap kendaraan per ruas jalan, rute jalan kaki dan motor di ponsel, EcoPoin & level, Kalkulator Paparan (dosis PM2.5 per rute), papan peringkat (Desa → Nasional), dan merchant eco. Gratis sebagai PWA di browser. Kontak: halo@breeva.site.',
       'Breeva adalah aplikasi web navigasi udara bersih di <b>breeva.site</b> — bukan pemurni udara TCL "Breeva" A3WW, dan bukan proyek "VAYU" lain; "VAYU" di sini adalah mesin kualitas udara per-jalan internal Breeva. Kode sumber terbuka: <a href="https://github.com/Tristan-tech-ai/Breeva" style="color:#059669">github.com/Tristan-tech-ai/Breeva</a>.',
     ], NAV),
   },
   {
     file: 'paparan.html', path: '/paparan',
     title: 'Kalkulator Paparan Udara — Breeva',
-    description: 'Hitung dosis PM2.5 yang Anda hirup di sebuah rute: laju napas per usia & aktivitas, perbandingan ambang WHO, dan setara rokok. Berbasis engine AQI per-jalan Breeva.',
+    description: 'Hitung dosis PM2.5 yang Anda hirup di sebuah rute: laju napas per usia & aktivitas, perbandingan ambang WHO, dan setara rokok. Berbasis peta per ruas jalan Breeva.',
     body: page('Kalkulator Paparan Udara', [
       'Kalkulator Paparan Breeva memperkirakan <b>dosis PM2.5 yang kamu hirup</b> (dalam mikrogram) di sebuah rute, berdasarkan usia (anak/dewasa/lansia) dan aktivitas atau moda transport (jalan, lari, sepeda, motor, mobil, transportasi umum) yang menentukan laju napas dan intake.',
       'Hasilnya dibandingkan dengan <b>pedoman WHO 2021 untuk PM2.5 rata-rata 24 jam (15 µg/m³)</b> dan dinyatakan sebagai <b>setara batang rokok</b>, di mana sekitar 660 µg PM2.5 terhirup ≈ 1 batang rokok (Pope 2009). Kalkulator memisahkan paparan lalu lintas yang bisa dihindari dari paparan latar.',
@@ -127,11 +127,11 @@ const ROUTES = [
   },
   {
     file: 'peta.html', path: '/peta',
-    title: 'Peta Udara Langsung — AQI per Jalan & Rute Bersih Indonesia | Breeva',
-    description: 'Peta kualitas udara (AQI) real-time per ruas jalan untuk Jakarta, Bali, Bandung, Surabaya & kota Indonesia. Temukan rute jalan kaki paling bersih dan hitung paparan PM2.5 — gratis, tanpa login.',
+    title: 'Peta Udara Langsung — Asap Kendaraan per Jalan & Rute Bersih | Breeva',
+    description: 'Peta asap kendaraan dan kualitas udara per ruas jalan untuk Badung–Denpasar dan Kota Bogor, dihitung ulang tiap jam; rute jalan kaki dengan asap paling sedikit dihitung di ponsel. Kota lain: kualitas udara kota. Gratis, tanpa login.',
     body: page('Kualitas udara per jalan, langsung di peta', [
-      'Breeva memetakan AQI (Indeks Kualitas Udara) untuk <b>tiap ruas jalan</b> di kota-kota Indonesia secara real-time — memakai mesin VAYU yang mengkalibrasi data sensor, satelit, dan dispersi lalu lintas. Bukan satu angka untuk seluruh kota, tapi warna polusi per segmen jalan.',
-      'Cara kerja: (1) lihat AQI per jalan di peta, (2) pilih satu dari tiga rute — Bersih, Seimbang, atau Cepat — yang masing-masing diberi skor udara, lalu (3) hitung dosis PM2.5 yang benar-benar kamu hirup lewat Kalkulator Paparan. Warna: hijau = baik (0–50), kuning = sedang (51–100), oranye/merah = tidak sehat (101–200), ungu = sangat buruk (201+).',
+      'Breeva menghitung ulang setiap jam asap kendaraan dan kualitas udara untuk <b>tiap ruas jalan</b> di Badung–Denpasar dan Kota Bogor, dari perkiraan lalu lintas, angin, sensor warga, dan udara latar CAMS. Bukan satu angka untuk seluruh kota, tapi warna per ruas jalan. Kota lain menyusul bertahap begitu punya titik ukur.',
+      'Cara kerja: (1) lihat asap kendaraan per jalan di peta, (2) bandingkan rute tercepat dan rute paling sedikit asap, dengan menit tambahan dan persen asap yang berkurang, lalu (3) hitung dosis PM2.5 yang kamu hirup lewat Kalkulator Paparan. Warna: hijau = baik (0–50), kuning = sedang (51–100), oranye/merah = tidak sehat (101–200), ungu = sangat buruk (201+).',
       'Lihat udara per kota: <a href="/udara/jakarta" style="color:#059669">Jakarta</a>, <a href="/udara/bandung" style="color:#059669">Bandung</a>, <a href="/udara/surabaya" style="color:#059669">Surabaya</a>, <a href="/udara/bali" style="color:#059669">Bali</a>, <a href="/udara/semarang" style="color:#059669">Semarang</a>, <a href="/udara/yogyakarta" style="color:#059669">Yogyakarta</a>, <a href="/udara/solo" style="color:#059669">Solo</a>, <a href="/udara/malang" style="color:#059669">Malang</a>. Bebas dipakai tanpa akun.',
     ], NAV),
   },
@@ -188,12 +188,16 @@ const ROUTES = [
 for (const c of CITIES) {
   ROUTES.push({
     file: `udara-${c.slug}.html`, path: `/udara/${c.slug}`,
-    title: `Kualitas Udara ${c.name} Hari Ini — AQI per Jalan | Breeva`,
-    description: `Pantau kualitas udara (AQI) dan PM2.5 per ruas jalan di ${c.name}, ${c.region}, real-time. ${c.blurb} Temukan rute jalan kaki paling bersih — gratis di Breeva.`,
+    title: `Kualitas Udara ${c.name} Hari Ini | Breeva`,
+    description: c.perRoad
+      ? `Asap kendaraan dan kualitas udara per ruas jalan di Badung–Denpasar, dihitung ulang tiap jam. ${c.blurb} Rute jalan kaki dengan asap paling sedikit — gratis di Breeva.`
+      : `Kualitas udara ${c.name}, ${c.region}, per jam. ${c.blurb} Peta per ruas jalan baru tersedia di Badung–Denpasar dan Kota Bogor — gratis di Breeva.`,
     extraJsonLd: placeJsonLd(c),
     body: page(`Kualitas udara ${c.name} hari ini`, [
-      `${c.blurb} Breeva memetakan AQI (Indeks Kualitas Udara) dan PM2.5 untuk <b>tiap ruas jalan</b> di ${c.name} secara real-time lewat mesin VAYU, lalu mencarikan rute jalan kaki paling bersih.`,
-      `Geser peta untuk melihat warna polusi per jalan di ${c.name}: hijau = baik (0–50), kuning = sedang (51–100), oranye/merah = tidak sehat (101–200), ungu = sangat buruk (201+). Hitung juga dosis PM2.5 yang kamu hirup di Kalkulator Paparan. Bebas dipakai tanpa akun.`,
+      c.perRoad
+        ? `${c.blurb} Breeva menghitung ulang asap kendaraan dan kualitas udara untuk <b>tiap ruas jalan</b> di Badung–Denpasar setiap jam, lalu mencarikan rute jalan kaki dengan asap paling sedikit, dihitung di ponselmu.`
+        : `${c.blurb} Untuk ${c.name}, Breeva saat ini menampilkan kualitas udara kota per jam. Peta per ruas jalan dan rute di ponsel baru tersedia di Badung–Denpasar dan Kota Bogor; kota lain menyusul bertahap begitu punya titik ukur.`,
+      `Hitung juga dosis PM2.5 yang kamu hirup di Kalkulator Paparan. Bebas dipakai tanpa akun.`,
     ], [{ href: '/peta', label: 'Peta Udara Langsung' }, ...NAV]),
   });
 }

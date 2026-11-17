@@ -14,7 +14,7 @@ const stats = [
 ];
 
 const steps = [
-  { n: '1', Icon: Wind, title: 'Lihat AQI per jalan', desc: 'Peta menampilkan kualitas udara terkini di tiap ruas jalan dari mesin VAYU.' },
+  { n: '1', Icon: Wind, title: 'Lihat asap kendaraan per jalan', desc: 'Peta menampilkan asap kendaraan dan kualitas udara per ruas jalan, dihitung ulang tiap jam (Badung–Denpasar dan Kota Bogor).' },
   { n: '2', Icon: Route, title: 'Pilih rute terbersih', desc: 'Tiga opsi rute — Bersih, Seimbang, Cepat — lengkap dengan skor udara & estimasi paparan.' },
   { n: '3', Icon: Leaf, title: 'Jalan & kumpulkan EcoPoin', desc: 'Lacak jalanmu, pantau paparan PM2.5, dan raih EcoPoin, level, serta pencapaian.' },
 ];

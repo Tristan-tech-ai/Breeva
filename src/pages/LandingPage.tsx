@@ -110,7 +110,7 @@ export default function LandingPage() {
     <div className="bg-white min-h-screen text-slate-900">
       <Seo
         title="Breeva — Navigasi Udara Bersih & Rute Sehat"
-        description="Temukan rute jalan kaki paling bersih dengan AQI per-jalan real-time, prakiraan 24 jam, dan kalkulator paparan PM2.5. Kumpulkan EcoPoints di setiap langkah."
+        description="Asap kendaraan per ruas jalan dihitung ulang tiap jam (Badung–Denpasar dan Kota Bogor), rute jalan kaki dengan asap paling sedikit, dan kalkulator paparan PM2.5. Tanpa akun."
         path="/"
       />
       {!reducedMotion && (
@@ -207,14 +207,14 @@ export default function LandingPage() {
             <Overline icon={Shield} color="text-emerald-600">Solusi</Overline>
             <h2 className={H2}>Kenalkan <span className="text-emerald-600">VAYU</span> — Otak Udara Kotamu</h2>
             <p className={LEAD}>
-              Mesin VAYU mengkalibrasi AQI di setiap ruas jalan dari baseline satelit (Open-Meteo) yang
-              dipadukan referensi sensor — mengestimasi PM2.5 &amp; NO₂ per segmen, lengkap dengan tingkat keyakinan.
+              Breeva menghitung asap kendaraan tiap ruas jalan dari perkiraan lalu lintas, angin, dan rumus sebaran
+              panduan EPA, di atas udara latar dari CAMS (Open-Meteo) dan sensor warga, lengkap dengan rentang ketidakpastian.
             </p>
             <div className="grid sm:grid-cols-3 gap-3">
               {([
-                [MapPinned, 'AQI per-jalan', 'Peta kualitas udara real-time, akurat hingga tiap ruas jalan.', 'bg-emerald-100 text-emerald-600'],
-                [Route, 'Rute Bersih · Seimbang · Cepat', 'Tiga pilihan rute (hijau, biru, oranye) dengan skor udara & paparan.', 'bg-sky-100 text-sky-600'],
-                [CloudSun, 'Prakiraan 24 Jam', 'Rencanakan jalan di jam dengan udara paling bersih.', 'bg-amber-100 text-amber-600'],
+                [MapPinned, 'Per ruas jalan', 'Dihitung ulang tiap jam; akurasinya diuji terbuka di halaman Validasi.', 'bg-emerald-100 text-emerald-600'],
+                [Route, 'Rute di ponsel', 'Rute tercepat dan rute paling sedikit asap, dengan menit tambahan dan persen asap yang berkurang.', 'bg-sky-100 text-sky-600'],
+                [CloudSun, 'Jam berangkat', 'Prakiraan beberapa jam ke depan untuk memilih jam berangkat dengan asap lebih sedikit.', 'bg-amber-100 text-amber-600'],
               ] as [LucideIcon, string, string, string][]).map(([Icon, title, desc, tint], i) => (
                 <FeatureCard key={title} icon={Icon} title={title} desc={desc} tint={tint} i={i} />
               ))}
@@ -288,15 +288,15 @@ export default function LandingPage() {
             <Overline icon={Radio} color="text-cyan-600">Sains</Overline>
             <h2 className={H2}>Dibangun di Atas <span className="text-cyan-600">Sains Nyata</span></h2>
             <p className={LEAD}>
-              Pipeline data Breeva memadukan baseline satelit (Open-Meteo), referensi stasiun sensor, dan
-              kalibrasi machine-learning per ruas jalan — disertai tingkat keyakinan dan model paparan PM2.5
+              Data Breeva memadukan udara latar CAMS (Open-Meteo), sensor warga yang disebar dengan kriging, jarak
+              pandang bandara, dan rumus sebaran gas buang per ruas jalan — disertai rentang ketidakpastian dan model paparan PM2.5
               yang dibandingkan ke ambang WHO (15 µg/m³) dan setara batang rokok (ilustratif, bukan klaim medis).
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {([
                 [Satellite, 'Baseline Satelit'],
                 [Radar, 'Referensi Sensor'],
-                [BrainCircuit, 'Kalibrasi ML'],
+                [BrainCircuit, 'Sebaran EPA'],
                 [BarChart3, 'Model Paparan'],
               ] as [LucideIcon, string][]).map(([Icon, label]) => (
                 <div key={label} className="text-center p-4 rounded-2xl bg-cyan-50 border border-cyan-100">
