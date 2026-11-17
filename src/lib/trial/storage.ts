@@ -4,6 +4,7 @@
  */
 import { FIELD_REGIONS } from '../field/source';
 import { emptyDiary, lookupFromCards, record, type Diary, type Mode, type Region } from './diary';
+import { isMemoryStorage } from '../storageShim';
 
 export const KEY = 'breeva.ujiCoba.catatan.v1';
 
@@ -43,7 +44,8 @@ export function saveDiary(d: Diary): boolean {
  */
 export function setDiaryOn(on: boolean): { diary: Diary; saved: boolean } {
   const d = { ...loadDiary(), on };
-  const saved = saveDiary(d) && loadDiary().on === on;
+  // storage kept in memory only (browser refused web storage, F1-36) would lose the diary on reload: not saved
+  const saved = !isMemoryStorage() && saveDiary(d) && loadDiary().on === on;
   return { diary: saved ? d : { ...d, on: false }, saved };
 }
 

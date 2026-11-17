@@ -1,3 +1,4 @@
+import './lib/storageShim' // first: a browser that refuses web storage must not stop the app from starting (F1-36)
 import { StrictMode, Component, type ReactNode, type ErrorInfo } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
