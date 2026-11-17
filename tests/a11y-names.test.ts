@@ -74,7 +74,7 @@ describe('other public pages (F1-49)', () => {
     expect(dev).toMatch(/aria-label="Breeva on GitHub"/);
     expect((dev.match(/<pre (?!tabIndex=\{0\})/g) ?? []).length).toBe(0);
     expect(landing).not.toMatch(/flex items-center gap-1\.5 text-xs text-slate-400/); // the two notes on the light panel
-    expect((landing.match(/className="inline-flex min-h-6 items-center text-xs text-slate-600/g) ?? []).length).toBe(10); // footer links
+    expect((landing.match(/className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600/g) ?? []).length).toBe(10); // footer links
     expect((dev.match(/className="hover:text-emerald-300 transition"/g) ?? []).length).toBe(0);
     expect(src('src/pages/HelpPage.tsx')).toMatch(/flex-1 self-stretch min-h-6 bg-transparent/);
   });

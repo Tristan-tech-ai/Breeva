@@ -376,10 +376,10 @@ export default function LandingPage() {
               <div>
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Produk</h4>
                 <ul className="space-y-2.5">
-                  <li><Link to="/peta" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Peta Udara</Link></li>
-                  <li><Link to="/paparan" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Kalkulator Paparan</Link></li>
-                  <li><Link to="/developers" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Developer API</Link></li>
-                  <li><a href="#solusi" onClick={goTo('solusi')} className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Mesin VAYU</a></li>
+                  <li><Link to="/peta" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Peta Udara</Link></li>
+                  <li><Link to="/paparan" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Kalkulator Paparan</Link></li>
+                  <li><Link to="/developers" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Developer API</Link></li>
+                  <li><a href="#solusi" onClick={goTo('solusi')} className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Mesin VAYU</a></li>
                 </ul>
               </div>
 
@@ -389,7 +389,7 @@ export default function LandingPage() {
                 <ul className="space-y-2.5">
                   {CITIES.map((c) => (
                     <li key={c.slug}>
-                      <Link to={`/udara/${c.slug}`} className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">{c.name}</Link>
+                      <Link to={`/udara/${c.slug}`} className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">{c.name}</Link>
                     </li>
                   ))}
                 </ul>
@@ -399,9 +399,9 @@ export default function LandingPage() {
               <div>
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Perusahaan</h4>
                 <ul className="space-y-2.5">
-                  <li><Link to="/about" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Tentang</Link></li>
-                  <li><Link to="/help" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Bantuan</Link></li>
-                  <li><Link to="/eco-tips" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Tips Eco</Link></li>
+                  <li><Link to="/about" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Tentang</Link></li>
+                  <li><Link to="/help" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Bantuan</Link></li>
+                  <li><Link to="/eco-tips" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Tips Eco</Link></li>
                 </ul>
               </div>
 
@@ -409,8 +409,8 @@ export default function LandingPage() {
               <div>
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Legal</h4>
                 <ul className="space-y-2.5">
-                  <li><Link to="/terms" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Ketentuan</Link></li>
-                  <li><Link to="/privacy" className="inline-flex min-h-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Privasi</Link></li>
+                  <li><Link to="/terms" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Ketentuan</Link></li>
+                  <li><Link to="/privacy" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Privasi</Link></li>
                 </ul>
               </div>
             </div>
