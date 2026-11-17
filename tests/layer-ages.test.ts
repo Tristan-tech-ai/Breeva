@@ -20,7 +20,11 @@ describe('age of each layer of the map', () => {
     expect(layerAges(bogor, new Date('2026-11-16T14:40:00Z'))!.background).toBe('Udara latar: model global (belum ada sensor di wilayah ini)');
     const old = layerAges(m, new Date('2026-11-16T17:00:00Z'))!;
     expect(old.stale).toBe(true);
-    expect(old.exhaust.startsWith('Data lama.')).toBe(true);
+    // 14:21Z -> 17:00Z is 2 h 39 min: says how long ago, and no longer calls that hour's wind current
+    expect(old.exhaust).toBe('Data lama, dihitung 3 jam lalu. Asap kendaraan: jam 22.00 (angin dan pola lalu lintas jam itu, bukan sekarang)');
+    expect(old.exhaust).not.toMatch(/saat ini/);
+    expect(layerAges(m, new Date('2026-11-16T15:50:00Z'))!.exhaust).toMatch(/^Data lama, dihitung 89 menit lalu\./);
+    expect(layerAges(m, new Date('2026-11-19T14:21:21Z'))!.exhaust).toMatch(/^Data lama, dihitung 3 hari lalu\./);
     expect(layerAges({ run: '2026111614' }, new Date())).toBeNull();
   });
 });

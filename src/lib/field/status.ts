@@ -50,6 +50,13 @@ export interface LayerAges { exhaust: string; background: string; stale: boolean
 
 const hh = (h: number) => `${String(((h % 24) + 24) % 24).padStart(2, '0')}.00`;
 
+/** "25 menit", "89 menit", "3 jam", "2 hari": how long ago, in whole units (minutes below 2 hours). */
+export function agoWords(min: number): string {
+  if (min < 120) return `${Math.max(1, Math.round(min))} menit`; // "1 jam" for 89 min would understate it
+  if (min < 48 * 60) return `${Math.round(min / 60)} jam`;
+  return `${Math.round(min / 1440)} hari`;
+}
+
 /**
  * Age of each layer of the field in plain words (task F5-15): the exhaust part is computed for the run's own hour
  * (current wind, that hour's traffic curve); the background comes from the citizen sensors' last complete hour
@@ -72,5 +79,8 @@ export function layerAges(m: LayeredManifest | null | undefined, now: Date): Lay
   } else {
     background = 'Udara latar: model global (belum ada sensor di wilayah ini)';
   }
-  return { exhaust: stale ? `Data lama. ${exhaust}` : exhaust, background, stale };
+  if (!stale) return { exhaust, background, stale };
+  // old data (e.g. a phone offline since then): say how old, and do not call that hour's wind "current"
+  const oldExhaust = `Data lama, dihitung ${agoWords(s.age_min ?? 0)} lalu. Asap kendaraan: jam ${hh(m.valid_hour_local)} (angin dan pola lalu lintas jam itu, bukan sekarang)`;
+  return { exhaust: oldExhaust, background, stale };
 }
