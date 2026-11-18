@@ -1,6 +1,6 @@
-import { randomFrom, randomBetween, jitter, generateIndonesianPhone, randomFloat } from '../utils/helpers';
+import { randomBetween, jitter, generateIndonesianPhone, randomFloat } from '../utils/helpers';
 import { CITY_LOCATIONS, type City } from '../data/city-locations';
-import { ALL_MERCHANT_TEMPLATES, type MerchantTemplate } from '../data/merchant-templates';
+import { ALL_MERCHANT_TEMPLATES } from '../data/merchant-templates';
 
 export interface MerchantSeedData {
   name: string;

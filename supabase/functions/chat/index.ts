@@ -44,6 +44,7 @@ Tips: air is worst at rush hour (07:00–09:00 & 17:00–19:00); routes near par
 AQI bands: 0–50 Good, 51–100 Moderate, 101–150 Unhealthy for sensitive groups, 151+ Unhealthy.`;
 
 // deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildSystemPrompt(context: any): string {
   const locale = context?.locale === 'id' ? 'id' : 'en';
   const lang = locale === 'id' ? 'Bahasa Indonesia' : 'English';
@@ -92,6 +93,7 @@ const TOOLS = [
 ];
 
 // deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildContents(messages: any[], toolResult: any): unknown[] {
   const trimmed = Array.isArray(messages) ? messages.slice(-12) : [];
   const contents: unknown[] = trimmed
@@ -147,9 +149,11 @@ function transformStream(upstream: ReadableStream<Uint8Array>): ReadableStream<U
             let chunk: unknown;
             try { chunk = JSON.parse(payload); } catch { continue; }
             // deno-lint-ignore no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const cand = (chunk as any)?.candidates?.[0];
             const parts = cand?.content?.parts ?? [];
             // deno-lint-ignore no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             for (const part of parts as any[]) {
               if (typeof part.text === 'string' && part.text) send(controller, 'token', { t: part.text });
               else if (part.functionCall) send(controller, 'tool_call', { name: part.functionCall.name, args: part.functionCall.args ?? {} });

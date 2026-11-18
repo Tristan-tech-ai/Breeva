@@ -24,9 +24,9 @@ declare module 'idb' {
     transaction(storeNames: keyof TSchema | string, mode?: 'readonly' | 'readwrite'): IDBPTransaction;
     getAll(storeName: keyof TSchema | string): Promise<unknown[]>;
     getAllFromIndex(storeName: keyof TSchema | string, indexName: string, query?: unknown): Promise<unknown[]>;
-    get(storeName: keyof TSchema | string, key: unknown): Promise<any>;
+    get(storeName: keyof TSchema | string, key: unknown): Promise<unknown>;
     put(storeName: keyof TSchema | string, value: unknown): Promise<unknown>;
-    add(storeName: keyof TSchema | string, value: unknown): Promise<any>;
+    add(storeName: keyof TSchema | string, value: unknown): Promise<IDBValidKey>;
     delete(storeName: keyof TSchema | string, key: unknown): Promise<void>;
   }
 

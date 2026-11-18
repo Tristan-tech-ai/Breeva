@@ -148,7 +148,7 @@ export async function putAqiCache(key: string, payload: unknown): Promise<void> 
 
 export async function getAqiCache<T>(key: string): Promise<T | null> {
   const db = await getOfflineDb();
-  const row = await db.get('aqi-cache', key);
+  const row = (await db.get('aqi-cache', key)) as AQICacheEntry | undefined;
   if (!row) return null;
   if (Date.now() - row.cachedAt > AQI_TTL_MS) return null;
   return row.payload as T;
@@ -169,7 +169,7 @@ export async function addPendingAction(action: Omit<PendingAction, 'id' | 'creat
     ...action,
     createdAt: Date.now(),
     retryCount: 0,
-  });
+  }) as Promise<number>;
 }
 
 export async function listPendingActions(): Promise<PendingAction[]> {
@@ -184,7 +184,7 @@ export async function removePendingAction(id: number): Promise<void> {
 
 export async function bumpPendingActionRetry(id: number): Promise<void> {
   const db = await getOfflineDb();
-  const current = await db.get('pending-actions', id);
+  const current = (await db.get('pending-actions', id)) as PendingAction | undefined;
   if (!current) return;
   await db.put('pending-actions', {
     ...current,

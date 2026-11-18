@@ -32,23 +32,20 @@ const isFresh = args.includes('--fresh');
 const onlyFlag = args.find((a) => a.startsWith('--only='));
 const onlyTable = onlyFlag?.split('=')[1]?.toLowerCase();
 
-const SEEDER_ORDER = [
-  'users',
-  'merchants',
-  'rewards',
-  'walks',
-  'reports',
-  'redemptions',
-  'transactions',
-  'reviews',
-  'settings',
-  'saved_places',
-  'quests',
-  'achievements',
-  'leaderboard',
-] as const;
-
-type SeederName = (typeof SEEDER_ORDER)[number];
+type SeederName =
+  | 'users'
+  | 'merchants'
+  | 'rewards'
+  | 'walks'
+  | 'reports'
+  | 'redemptions'
+  | 'transactions'
+  | 'reviews'
+  | 'settings'
+  | 'saved_places'
+  | 'quests'
+  | 'achievements'
+  | 'leaderboard';
 
 function shouldRun(name: SeederName): boolean {
   if (!onlyTable) return true;

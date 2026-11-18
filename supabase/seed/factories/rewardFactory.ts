@@ -1,4 +1,4 @@
-import { randomBetween, randomDateStr, randomFrom } from '../utils/helpers';
+import { randomBetween, randomDateStr } from '../utils/helpers';
 import { REWARD_TEMPLATES, type RewardTemplate } from '../data/merchant-templates';
 
 export interface RewardSeedData {

@@ -1,4 +1,4 @@
-import { randomBetween, randomFrom, randomTimestamp } from '../utils/helpers';
+import { randomBetween, randomFrom } from '../utils/helpers';
 import { WALK_ROUTES } from '../data/walk-routes';
 import type { City } from '../data/city-locations';
 

@@ -1,4 +1,4 @@
-import { randomBetween, randomDate, randomDateStr } from '../utils/helpers';
+import { randomBetween, randomDateStr } from '../utils/helpers';
 import { INDONESIAN_NAMES, DEMO_CREDENTIALS, type NameEntry } from '../data/indonesian-names';
 
 export interface UserSeedData {
