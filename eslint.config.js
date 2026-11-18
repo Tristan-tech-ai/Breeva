@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // generated model weights (vayu/ml/export_forecast24_weights.py): the long literals are written by the exporter
+  globalIgnores(['dist', 'api/vayu/_forecast24_weights.ts']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

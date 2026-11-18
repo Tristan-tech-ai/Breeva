@@ -73,9 +73,6 @@ if (
   throw new Error('Missing all of GEMINI_API_KEYS, GROQ_API_KEYS, CEREBRAS_API_KEYS, LOCAL_VLLM_URL');
 }
 
-// Backwards-compat alias (some helpers reference KEYS — kept for stagger calc)
-const KEYS = GEMINI_KEYS;
-
 function arg(name: string, dflt: string): string {
   const a = process.argv.find((x) => x.startsWith(`--${name}=`));
   return a ? a.split('=').slice(1).join('=') : dflt;
@@ -174,8 +171,6 @@ const GEMINI_MODELS_DEFAULT: ModelSpec[] =
       : GEMINI_KEYS.length > 6
         ? GEMINI_MODELS_LITE
         : GEMINI_MODELS_FULL;
-
-const MODELS: ModelSpec[] = GEMINI_MODELS_DEFAULT;  // legacy alias
 
 function keysFor(provider: ProviderName): string[] {
   if (provider === 'gemini') return GEMINI_KEYS;
@@ -278,17 +273,6 @@ function saveState(): void {
 
 const state = loadState();
 const lastCallAt = new Map<string, number>();
-
-function pickModel(keyIdx: number): ModelSpec | null {
-  const k = String(keyIdx);
-  for (const m of MODELS) {
-    if (state.disabled[k]?.includes(m.id)) continue;
-    const used = state.usage[k]?.[m.id] ?? 0;
-    if (used >= m.rpd) continue;
-    return m;
-  }
-  return null;
-}
 
 function markUsed(k: string, model: string): void {
   state.usage[k] ??= {};
