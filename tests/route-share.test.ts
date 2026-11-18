@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { parseRouteLink, routeLink } from '../src/lib/route/share';
+import { parseRouteLink, parseViewLink, routeLink } from '../src/lib/route/share';
+
+describe('view links', () => {
+  it('reads ?pusat=lat,lng,zoom and defaults the zoom to 15', () => {
+    expect(parseViewLink('?pusat=-6.59660,106.80470,17')).toEqual({ lat: -6.5966, lng: 106.8047, zoom: 17 });
+    expect(parseViewLink('?pusat=-8.65,115.21')).toEqual({ lat: -8.65, lng: 115.21, zoom: 15 });
+  });
+  it('rejects malformed or out-of-range views', () => {
+    expect(parseViewLink('?pusat=-6.5,106.8,25')).toBeNull();
+    expect(parseViewLink('?pusat=95,106.8')).toBeNull();
+    expect(parseViewLink('?pusat=abc')).toBeNull();
+    expect(parseViewLink('?wilayah=kota_bogor')).toBeNull();
+  });
+});
 
 describe('route links', () => {
   it('round-trips a motor route with a departure time', () => {

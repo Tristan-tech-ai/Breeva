@@ -60,6 +60,7 @@ import type { POI } from '../lib/poi-api';
 import type { PollutantType, RoadDisplayMode, SavedPlace } from '../types';
 import type { RoadLayerMeta } from '../components/map/RoadPollutionLayer';
 import { FIELD_REGIONS, pickRegion, rememberRegion } from '../lib/field/source';
+import { parseViewLink } from '../lib/route/share';
 import { deviceRouteAsRoute, deviceRouteStart, fieldRegionOf, routeModeFor, transportFor } from '../lib/route/appRoute';
 import { pm25ToAQISimple } from '../lib/api';
 import { walkEcoPoints } from '../lib/walkPoints';
@@ -146,6 +147,8 @@ export default function HomePage() {
   // the <html> class in lockstep, so no DOM polling is needed.
   const isDark = useIsDark();
   const [showWalkComplete, setShowWalkComplete] = useState(false);
+  // ?pusat=lat,lng,zoom: the zoom of that view (the store starts at its centre)
+  const [startZoom] = useState(() => parseViewLink(window.location.search)?.zoom);
   // Road colours are on by default: the map is the product (F1-02).
   const [showAQIOverlay, setShowAQIOverlay] = useState(true);
   const [showAQIStations, setShowAQIStations] = useState(false);
@@ -301,6 +304,7 @@ export default function HomePage() {
           routeDest={routeDest}
           routeDepart={depart}
           routeStart={routeStart}
+          initialZoom={startZoom}
         />
       </Suspense>
 

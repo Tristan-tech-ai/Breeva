@@ -166,6 +166,8 @@ interface LeafletMapProps {
    * effect makes the map fly there from the old centre, loading tiles at every zoom on the way (F1-13).
    */
   initialCenter?: Coordinate;
+  /** Zoom the map is created at (default 15); with initialCenter from a ?pusat= view link. */
+  initialZoom?: number;
 }
 
 // ── Inner map controller ─────────────────────────────────────────────
@@ -628,6 +630,7 @@ export default function LeafletMap({
   routeStart = null,
   wheelNeedsModifier = false,
   initialCenter,
+  initialZoom = 15,
 }: LeafletMapProps) {
   const { center: storeCenter } = useMapStore();
   const [center] = useState<Coordinate>(() => initialCenter ?? storeCenter);
@@ -657,7 +660,7 @@ export default function LeafletMap({
     >
       <MapContainer
         center={[center.lat, center.lng]}
-        zoom={15}
+        zoom={initialZoom}
         style={{ width: '100%', height: '100%', position: 'relative', zIndex: 0 }}
         zoomControl={false}
         attributionControl

@@ -6,6 +6,9 @@
  * set, CARTO Voyager is used with ?key=. Without it the standard OpenStreetMap tiles are used, which the OSMF tile
  * policy allows for interactive viewing with visible attribution and no prefetching or offline use
  * (https://operations.osmfoundation.org/policies/tiles/).
+ *
+ * The OSM standard style colours roads by class and draws its own POI icons, which clash with Breeva's coloured roads
+ * and POI layer (Tristan, 18 Nov 2026), so the OSM tiles are muted with a CSS class (basemap-muted, basemap-dark).
  */
 
 export type MapStyle = 'voyager' | 'osm' | 'satellite';
@@ -29,6 +32,6 @@ export function basemap(style: MapStyle, dark: boolean, cartoKey = (import.meta.
       attribution: CARTO_ATTR, subdomains: 'abcd',
     };
   }
-  // OSM has no dark style; darken the light tiles with a CSS filter instead.
-  return { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: OSM_ATTR, className: dark ? 'basemap-dark' : undefined };
+  // OSM has no dark style and no muted style: grey out (and in dark mode invert) the standard tiles with a CSS filter.
+  return { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: OSM_ATTR, className: dark ? 'basemap-dark' : 'basemap-muted' };
 }

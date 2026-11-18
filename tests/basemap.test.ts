@@ -9,8 +9,11 @@ describe('basemap', () => {
     expect(b.url).not.toMatch(/cartocdn/);
   });
 
-  it('darkens OSM tiles with a CSS class in dark mode', () => {
+  it('mutes OSM tiles with a CSS class (grey in light mode, inverted grey in dark mode)', () => {
+    expect(basemap('voyager', false, '').className).toBe('basemap-muted');
+    expect(basemap('osm', false, '').className).toBe('basemap-muted');
     expect(basemap('voyager', true, '').className).toBe('basemap-dark');
+    expect(basemap('satellite', false, '').className).toBeUndefined();
   });
 
   it('uses CARTO with the key when one is configured', () => {

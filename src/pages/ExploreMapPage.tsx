@@ -18,7 +18,7 @@ import type { PollutantType, RoadDisplayMode } from '../types';
 import { ISPU_CATEGORIES } from '../lib/ispu';
 import { FIELD_REGIONS, pickRegion, rememberRegion } from '../lib/field/source';
 import FieldAgeNote from '../components/map/FieldAgeNote';
-import { parseDestLink, parseRouteLink } from '../lib/route/share';
+import { parseDestLink, parseRouteLink, parseViewLink } from '../lib/route/share';
 import { locationStart } from '../lib/route/appRoute';
 import { parseDepart } from '../lib/route/depart';
 import { totalModeNote } from '../lib/roadColors';
@@ -78,7 +78,9 @@ export default function ExploreMapPage() {
   const [link] = useState(() => parseRouteLink(location.search));
   // ?sekolah=lat,lng,name (from /prioritas): routing on with that destination (F1-14)
   const [destParam] = useState(() => parseDestLink(location.search));
-  const anchor = link ? link.from : destParam;
+  // ?pusat=lat,lng,zoom opens the map at that view (QA screenshots, demo links)
+  const [view] = useState(() => parseViewLink(location.search));
+  const anchor = link ? link.from : destParam ?? view;
   const startRegion = anchor
     ? FIELD_REGIONS.find((r) => r.bounds[0][0] <= anchor.lat && anchor.lat <= r.bounds[1][0] && r.bounds[0][1] <= anchor.lng && anchor.lng <= r.bounds[1][1]) ?? pickRegion(null)
     : pickRegion(new URLSearchParams(location.search).get('wilayah'));
@@ -117,12 +119,12 @@ export default function ExploreMapPage() {
   // Start where coloured roads exist: with the static field, its first region (Badung-Denpasar); otherwise Jakarta.
   // No geolocation prompt.
   useEffect(() => {
-    const start = FIELD_STATIC ? startRegion.home : { lat: -6.2088, lng: 106.8456 };
+    const start = view && !link && !destParam ? { lat: view.lat, lng: view.lng } : FIELD_STATIC ? startRegion.home : { lat: -6.2088, lng: 106.8456 };
     // a region named by the link (?wilayah, a route or a school) is also where the app map starts next time (F1-52)
     if (FIELD_STATIC && regionFromLink) rememberRegion(startRegion.name);
     useMapStore.getState().setCenter(start);
     void useMapStore.getState().fetchAreaReading(start);
-  }, [startRegion, regionFromLink]);
+  }, [startRegion, regionFromLink, view, link, destParam]);
 
   const useMyLocation = () => {
     setLocated(true);
@@ -226,7 +228,7 @@ export default function ExploreMapPage() {
         {/* Interactive map (progressive enhancement) */}
         <div className="relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg" style={{ height: 'min(58vh, 480px)' }}>
           <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
-            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} walkRouting={walkMode} onWalkRouting={setWalkState} routeMode={routeMode} routeLink={link} routeDest={schoolDest} routeDepart={depart} routeStart={walkMode ? fromHere.start : null} wheelNeedsModifier initialCenter={FIELD_STATIC ? startRegion.home : undefined} />
+            <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} walkRouting={walkMode} onWalkRouting={setWalkState} routeMode={routeMode} routeLink={link} routeDest={schoolDest} routeDepart={depart} routeStart={walkMode ? fromHere.start : null} wheelNeedsModifier initialCenter={view && !link && !destParam ? view : FIELD_STATIC ? startRegion.home : undefined} initialZoom={view && !link && !destParam ? view.zoom : undefined} />
           </Suspense>
 
           {/* Search overlay */}
@@ -247,7 +249,7 @@ export default function ExploreMapPage() {
 
           {/* Use-my-location (opt-in) */}
           {!located && (
-            <button onClick={useMyLocation} className="absolute right-3 top-[4.25rem] z-[500] flex items-center gap-1.5 rounded-full bg-white/95 dark:bg-gray-900/90 px-3 py-2 text-xs font-semibold text-primary-600 dark:text-primary-400 shadow-lg ring-1 ring-black/5">
+            <button onClick={useMyLocation} className="absolute right-3 top-[4.25rem] z-[500] flex items-center gap-1.5 rounded-full bg-white/95 dark:bg-gray-900/90 px-3 py-2 text-xs font-semibold text-primary-700 dark:text-primary-300 shadow-lg ring-1 ring-black/5">
               <Crosshair className="w-3.5 h-3.5" /> Pakai lokasiku
             </button>
           )}

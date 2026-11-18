@@ -37,6 +37,16 @@ export function parseDestLink(search: string): DestLink | null {
   return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && name ? { lat, lng, name } : null;
 }
 
+/** A map view link (?pusat=lat,lng[,zoom]): the map opens there, e.g. to show one street at zoom 17. Zoom 3-19, default 15. */
+export interface ViewLink { lat: number; lng: number; zoom: number }
+
+export function parseViewLink(search: string): ViewLink | null {
+  const m = /^(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)(?:,(\d{1,2}))?$/.exec((new URLSearchParams(search).get('pusat') ?? '').trim());
+  if (!m) return null;
+  const lat = Number(m[1]), lng = Number(m[2]), zoom = m[3] ? Number(m[3]) : 15;
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && zoom >= 3 && zoom <= 19 ? { lat, lng, zoom } : null;
+}
+
 /** Link to a route on the map page at origin + path (5 decimals, about 1 m). */
 export function routeLink(originPath: string, l: RouteLink, departLocal?: string | null): string {
   const f = (p: LatLng) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;

@@ -809,9 +809,13 @@
   transform: scale(1.1);
 }
 
-/* OpenStreetMap has no dark style: darken the light basemap tiles in dark mode (src/lib/basemap.ts). */
+/* OpenStreetMap standard tiles colour roads and draw POI icons; grey them out so only Breeva's colours carry meaning
+   (src/lib/basemap.ts). Dark mode also inverts them, as OSM has no dark style. */
+.basemap-muted {
+  filter: saturate(0.1) contrast(0.72) brightness(1.14);
+}
 .basemap-dark {
-  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
+  filter: invert(1) hue-rotate(180deg) saturate(0.15) brightness(0.9) contrast(0.85);
 }
 
 /* Data attribution (src/lib/attribution.ts) must stay visible on the map; keep it compact. */

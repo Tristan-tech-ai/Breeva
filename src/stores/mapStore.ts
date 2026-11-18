@@ -21,8 +21,11 @@ import { searchGoogleMaps } from '../lib/searchapi';
 import { relabelScoredRoutes } from '../lib/routeLabels';
 import { readFieldArea } from '../lib/field/areaClient';
 import { startRegionHere } from '../lib/field/source';
+import { parseViewLink } from '../lib/route/share';
 
 const FIELD_STATIC_STORE = import.meta.env.VITE_FIELD_STATIC === 'true';
+// ?pusat=lat,lng,zoom: the app map opens at that view (QA screenshots of one street, demo links)
+const START_VIEW = (() => { try { return parseViewLink(globalThis.location?.search ?? ''); } catch { return null; } })();
 
 export interface SearchResult {
   name: string;
@@ -126,7 +129,7 @@ const loadRecentSearches = (): SearchResult[] => {
 
 export const useMapStore = create<MapState>()((set, get) => ({
   // Initial centre: with the static field, a region whose roads have colour (F1-52); without it, Jakarta as before.
-  center: FIELD_STATIC_STORE ? startRegionHere().home : { lat: -6.2088, lng: 106.8456 },
+  center: START_VIEW ? { lat: START_VIEW.lat, lng: START_VIEW.lng } : FIELD_STATIC_STORE ? startRegionHere().home : { lat: -6.2088, lng: 106.8456 },
   zoom: 15,
   userLocation: null,
   isLocating: false,
