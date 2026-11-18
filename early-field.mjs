@@ -4,6 +4,8 @@
 // falls back to its own requests when they fail.
 // F1-57: a route link (?rute=) starts the region's core walking graph instead, the biggest file of a first route; it is
 // cacheable (max-age 1 day), so the route worker's own request for the same URL is served from that download.
+// Starting the route's other files too (harga, schools, manifest, cells) was measured and gave nothing on 3G (18 Nov:
+// 33,7 s against 33,6 s with the core graph alone, which still finishes last), so they are left to the worker.
 
 /**
  * Field regions (name, geometry and bounds [[south, west], [north, east]]) as written in src/lib/field/source.ts, so the
@@ -41,10 +43,8 @@ export function earlyFieldScript(base, regions, mode = 'peta') {
       + `if(c.length===2&&c[0]!==''&&c[1]!==''&&isFinite(la)&&isFinite(ln))P.push([la,ln])}if(u.length!==2||P.length!==2)return;`
       + `var n=function(g,p){return g[0][0]<=p[0]&&p[0]<=g[1][0]&&g[0][1]<=p[1]&&p[1]<=g[1][1]};`
       + `var x=function(u){return fetch(u).catch(function(){})};`
-      + `for(var j=0;j<R.length;j++)if(n(R[j].bounds,P[0])){if(n(R[j].bounds,P[1])){var g=R[j].geometry,N=R[j].name,d=b+'/graphs/'+g+'/'+N;`
-      + `x(d+'_inti.bin');x(b+'/harga/'+g+'/'+N+'.bin');x(d+'_schools.json');if(q.get('moda')==='motor')x(d+'_bentuk.bin');`
-      + `fetch(b+'/v/'+N+'/manifest.json').then(function(y){if(!y.ok)throw 0;return y.json()}).then(function(m){`
-      + `for(var k=0;k<m.cells.length;k++)x(b+'/v/'+N+'/'+m.run+'/'+m.cells[k]+'.bin')}).catch(function(){})}return}return}`
+      + `for(var j=0;j<R.length;j++)if(n(R[j].bounds,P[0])){if(n(R[j].bounds,P[1])){var d=b+'/graphs/'+R[j].geometry+'/'+R[j].name;`
+      + `x(d+'_inti.bin');if(q.get('moda')==='motor')x(d+'_bentuk.bin')}return}return}`
     : `if(q.has('rute'))return;`;
   return `<script>(function(){try{var q=new URLSearchParams(location.search),R=${R},b=${B};${route}if(q.has('sekolah'))return;`
     + `var w=q.get('wilayah'),r=null;function f(n){for(var i=0;i<R.length;i++)if(R[i].name===n)return R[i];return null}${pick}`
