@@ -31,7 +31,7 @@ describe('student trial guide', () => {
     expect(STEPS[1].body).toMatch(/Simpan Badung–Denpasar untuk tanpa internet/);
     expect(STEPS[1].link?.to).toBe('/status');
     expect(STEPS[1].body).toMatch(/sekitar 19 detik/);
-    expect(STEPS[1].body).toMatch(/sekitar 7 detik/);
+    expect(STEPS[1].body).toMatch(/sekitar 5 detik/); // P-54: kunjungan2_3g_f157 (rute 4,7 s)
   });
 
   it('the QR code encodes the guide address', async () => {
