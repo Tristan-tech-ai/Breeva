@@ -4,10 +4,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { chooseStartRegion, defaultFetch, earlyHeaderSource, fetchManifest, FIELD_REGIONS, takeEarly } from '../src/lib/field/source';
 // @ts-expect-error plain ES module used by the build (prerender-routes.mjs)
 import { atHeadStart, earlyFieldScript, parseRegions } from '../early-field.mjs';
+import { graphUrls } from '../src/lib/route/regionFiles';
+import { parseRouteLink } from '../src/lib/route/share';
 
 // F1-54: peta.html starts the region manifest and the PMTiles header with the HTML; the app takes them once.
 const BASE = 'https://cdn.example.net';
-const regions = parseRegions(readFileSync('src/lib/field/source.ts', 'utf8')) as Array<{ name: string; geometry: string }>;
+const regions = parseRegions(readFileSync('src/lib/field/source.ts', 'utf8')) as Array<{ name: string; geometry: string; bounds: number[][] }>;
 
 /** Runs the inline script in a fake page; returns the URLs it fetched and the __fieldEarly it left. */
 function runScript(search: string, o: { mode?: 'peta' | 'app'; path?: string; stored?: string | null; tz?: string } = {}) {
@@ -28,7 +30,7 @@ function runScript(search: string, o: { mode?: 'peta' | 'app'; path?: string; st
 
 describe('the inline script of peta.html', () => {
   it('lists the same regions as FIELD_REGIONS', () => {
-    expect(regions).toEqual(FIELD_REGIONS.map(({ name, geometry }) => ({ name, geometry })));
+    expect(regions).toEqual(FIELD_REGIONS.map(({ name, geometry, bounds }) => ({ name, geometry, bounds })));
   });
   it('is left out of a build without a CDN field base', () => {
     expect(earlyFieldScript('', regions)).toBe('');
@@ -44,9 +46,28 @@ describe('the inline script of peta.html', () => {
     expect(b.early?.name).toBe('kota_bogor');
     expect(b.calls[1].url).toBe(`${BASE}/tiles/2026-11/kota_bogor.pmtiles`);
   });
-  it('does nothing for route and school links (their region and bandwidth belong to the route)', () => {
-    expect(runScript('?rute=-8.6,115.2~-8.7,115.3').calls).toEqual([]);
+  it('does nothing for school links', () => {
     expect(runScript('?sekolah=-6.6,106.8,SMA').calls).toEqual([]);
+  });
+  it('starts only the core walking graph of a route link, for the region WalkRouteLayer would route in (F1-57)', () => {
+    // WalkRouteLayer: the first region whose bounds hold the start, and only when they also hold the end
+    const inside = (r: (typeof FIELD_REGIONS)[number], p: { lat: number; lng: number }) =>
+      r.bounds[0][0] <= p.lat && p.lat <= r.bounds[1][0] && r.bounds[0][1] <= p.lng && p.lng <= r.bounds[1][1];
+    const links = [
+      '?rute=-8.66978,115.21564~-8.67768,115.23378', '?rute=-8.66330,115.23670~-8.64614,115.21886&moda=motor&berangkat=07:00',
+      '?rute=-6.56830,106.77044~-6.54559,106.78964&moda=motor&berangkat=06:45', '?rute=-8.82,115.08~-8.56,115.3',
+      '?rute=-8.66978,115.21564~-6.54559,106.78964', '?rute=-7.25,112.75~-7.26,112.76', '?rute=-8.67,115.21',
+      '?rute=a,b~c,d', '?rute=,~,', '?rute=-8.67,115.21~-8.66,115.22~-8.65,115.23',
+    ];
+    for (const search of links) {
+      const link = parseRouteLink(search);
+      const region = link && FIELD_REGIONS.find((r) => inside(r, link.from));
+      const want = region && inside(region, link!.to) ? [graphUrls(BASE, region).core] : [];
+      expect(runScript(search).calls.map((c) => c.url), search).toEqual(want);
+    }
+    expect(runScript(links[0]).calls[0].url).toBe(`${BASE}/graphs/2026-11/badung_denpasar_inti.bin`);
+    expect(runScript(links[2]).calls[0].url).toBe(`${BASE}/graphs/2026-11/kota_bogor_inti.bin`);
+    expect(runScript(links[0]).early).toBeUndefined(); // no field requests: the map field waits for the route (F1-53)
   });
 });
 
