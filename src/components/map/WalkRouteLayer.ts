@@ -110,7 +110,7 @@ export function useWalkRouting(
         const t0 = Date.now();
         init = c.init({ name: region.name, geometry: region.geometry }, undefined, (bytes) => {
           if (req === reqSeq && !lastShownCards) say({ status: routeLoadingText(bytes, Date.now() - t0), cards: [] });
-        });
+        }, departRef.current);
         ready.set(region.name, init);
       }
       lastShownCards = false;

@@ -23,12 +23,15 @@ export interface RegionFiles {
   schools: Uint8Array | null;
 }
 
-export async function loadRegionFiles(base: string, region: { name: string; geometry: string }, get: GetBytes): Promise<RegionFiles> {
+export async function loadRegionFiles(base: string, region: { name: string; geometry: string }, get: GetBytes,
+  /** called as soon as the manifest is read, before the graph and cells arrive (F1-64) */
+  onManifest?: (m: RegionManifest) => void): Promise<RegionFiles> {
   const graphP = get(graphUrls(base, region).core, { cacheFirst: true }).then(decodeCore);
   const hargaP = get(`${base}/harga/${region.geometry}/${region.name}.bin`, { cacheFirst: true }).catch(() => null);
   const schoolsP = get(`${base}/graphs/${region.geometry}/${region.name}_schools.json`, { cacheFirst: false }).catch(() => null);
   graphP.catch(() => undefined); // awaited below; this only keeps an early manifest failure from leaving it unhandled
   const manifest = JSON.parse(new TextDecoder().decode(await get(`${base}/v/${region.name}/manifest.json`, { cacheFirst: false }))) as RegionManifest;
+  onManifest?.(manifest);
   const cellsP = Promise.all(manifest.cells.map(async (c) =>
     [c, await get(`${base}/v/${region.name}/${manifest.run}/${c}.bin`, { cacheFirst: true })] as const));
   const [graph, cells, harga, schools] = await Promise.all([graphP, cellsP, hargaP, schoolsP]);

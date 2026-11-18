@@ -4,6 +4,7 @@
  * exhaust.
  */
 import type { WalkGraph } from './walkGraph';
+import { pickForecast, type ForecastEntry } from '../field/forecast';
 
 /** Exhaust per edge from a forecast file decoded per cell (decodeExhaust); edges without a road stay NaN. */
 export function edgeExhaust(g: Pick<WalkGraph, 'm' | 'road'>, byCell: Map<number, Float32Array>): Float64Array {
@@ -68,4 +69,16 @@ export async function startThenWait<T>(start: (() => Promise<T>) | null, wait: P
   await wait;
   if (!p) return null;
   try { return await p; } catch { return null; }
+}
+
+/**
+ * The forecast file a route leaving at departLocal will need, or null (F1-64): the worker asks for it as soon as the
+ * manifest is read, beside the graph, instead of after the graph and shapes (jalur_kritis_3g_f165_2026-11-18.json:
+ * requested at 30,7 s, card at 33,8 s). The same URL exhaustOf() reads.
+ */
+export function forecastPrefetchUrl(base: string, regionName: string, m: { run: string; forecast_runs?: ForecastEntry[]; valid_hour_local?: number },
+  departLocal: string | null | undefined): string | null {
+  if (!departLocal || !Array.isArray(m.forecast_runs)) return null;
+  const entry = pickForecast(m.forecast_runs, departLocal, m.valid_hour_local ?? -1);
+  return entry ? `${base}/v/${regionName}/${m.run}/${entry.key}` : null;
 }

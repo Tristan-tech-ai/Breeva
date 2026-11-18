@@ -21,7 +21,7 @@ import { loadRegionFiles } from '../lib/route/regionFiles';
 import { progressCounter } from '../lib/route/loadProgress';
 import { decodeCell } from '../lib/field/cells';
 import { decodeExhaust, pickForecast, SOON_HOURS, type ForecastEntry } from '../lib/field/forecast';
-import { edgeExhaust, meanAlong, no2AtHour, startThenWait, type SoonHour } from '../lib/route/departForecast';
+import { edgeExhaust, forecastPrefetchUrl, meanAlong, no2AtHour, startThenWait, type SoonHour } from '../lib/route/departForecast';
 import { fieldMedian } from '../lib/route/fieldMedian';
 
 const SPEED = 1.3; // m/s
@@ -43,9 +43,13 @@ const forecastEdges = new Map<string, Promise<Float64Array>>();
 /** NO2 of each forecast hour, kept with the hour's exhaust so its median is also computed once (F3-21). */
 const forecastNo2 = new Map<string, { x: Float64Array; no2: Float64Array }>();
 
-async function init(base: string, region: { name: string; geometry: string }, meter?: DownloadMeter) {
+async function init(base: string, region: { name: string; geometry: string }, meter?: DownloadMeter, departLocal?: string | null) {
   // every file requested at once (F1-53); the Cache API keeps them for offline use; bytes counted for the card (X-W4)
-  const files = await loadRegionFiles(base, region, (url, o) => cachedBytes(url, { ...o, meter }));
+  const files = await loadRegionFiles(base, region, (url, o) => cachedBytes(url, { ...o, meter }), (m) => {
+    // F1-64: the departure hour's forecast comes down beside the graph, not after it
+    const url = forecastPrefetchUrl(base, region.name, m, departLocal);
+    if (url) cachedBytes(url, { cacheFirst: true }).catch(() => undefined);
+  });
   const g = new WalkGraph(files.graph);
   const manifest = files.manifest;
   const cells = new Map<number, ReturnType<typeof decodeCell>>();
@@ -200,7 +204,7 @@ self.onmessage = async (ev: MessageEvent) => {
   try {
     if (type === 'init') {
       const meter = progressCounter((bytes) => self.postMessage({ id, type: 'progress', bytes }));
-      self.postMessage({ id, ok: true, ...(await init(ev.data.base, ev.data.region, meter)) });
+      self.postMessage({ id, ok: true, ...(await init(ev.data.base, ev.data.region, meter, ev.data.departLocal)) });
     }
     else if (type === 'route') {
       const t0 = performance.now();
