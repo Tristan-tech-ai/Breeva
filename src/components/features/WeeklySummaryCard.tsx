@@ -30,7 +30,7 @@ export default function WeeklySummaryCard({ distanceKm, walks, co2Kg, streak, po
       <div className="bg-gradient-to-br from-primary-500 via-emerald-500 to-teal-600 p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs font-bold text-white/80 uppercase tracking-wider">This Week</h3>
-          <button
+          <button aria-label="Bagikan"
             onClick={handleShare}
             className="p-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition text-white"
           >

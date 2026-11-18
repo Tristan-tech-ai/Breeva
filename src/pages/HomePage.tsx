@@ -812,7 +812,7 @@ export default function HomePage() {
                 <h3 className="text-sm font-bold text-gray-900 dark:text-white">
                   Pilih rute
                 </h3>
-                <button
+                <button aria-label="Tutup"
                   onClick={clearDestination}
                   className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                 >

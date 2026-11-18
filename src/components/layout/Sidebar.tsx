@@ -154,7 +154,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           >
             {/* User Header */}
             <div className="gradient-primary p-5 pt-12">
-              <button
+              <button aria-label="Tutup"
                 onClick={onClose}
                 className="absolute top-4 right-4 p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white dark:bg-gray-900/10 transition"
               >

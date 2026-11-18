@@ -167,7 +167,7 @@ export default function EcoImpactPage() {
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-base font-semibold text-gray-900 dark:text-white">Eco Impact</h1>
-        <button onClick={handleShareImpact} className="text-primary-500 p-1">
+        <button aria-label="Bagikan" onClick={handleShareImpact} className="text-primary-500 p-1">
           <Share2 className="w-5 h-5" />
         </button>
       </div>

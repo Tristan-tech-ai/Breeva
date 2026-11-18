@@ -60,16 +60,16 @@ export default function PWAInstallBanner() {
           <Download className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-900 dark:text-white">Install Breeva</p>
-          <p className="text-[10px] text-gray-500 dark:text-gray-400">Add to home screen for the best experience</p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-white">Pasang Breeva</p>
+          <p className="text-[10px] text-gray-500 dark:text-gray-400">Buka dari layar utama seperti aplikasi, juga tanpa internet</p>
         </div>
         <button
           onClick={install}
           className="gradient-primary text-white text-xs font-semibold px-4 py-2 rounded-xl flex-shrink-0"
         >
-          Install
+          Pasang
         </button>
-        <button onClick={dismiss} className="text-gray-400 p-1 flex-shrink-0">
+        <button aria-label="Tutup" onClick={dismiss} className="text-gray-400 p-1 flex-shrink-0">
           <X size={16} />
         </button>
       </motion.div>

@@ -77,7 +77,7 @@ export default function RewardRedemptionModal({ reward, onClose, onSuccess }: Pr
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">
               {step === 'success' ? 'Redeemed!' : 'Redeem Reward'}
             </h3>
-            <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
+            <button aria-label="Tutup" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
               <X size={20} />
             </button>
           </div>

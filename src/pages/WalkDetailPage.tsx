@@ -370,7 +370,7 @@ ${points}
         {/* Replay Controls */}
         {routeCoords.length >= 3 && (
           <div className="flex items-center justify-center gap-3">
-            <button onClick={resetReplay} className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500">
+            <button aria-label="Ulangi dari awal" onClick={resetReplay} className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500">
               <RotateCcw size={16} />
             </button>
             <button

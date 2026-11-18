@@ -128,7 +128,7 @@ export default function OnboardingTour({ tourId, steps, delay = 1500 }: Onboardi
             className="fixed z-[10000] rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-200 dark:border-gray-700 p-4"
             style={tooltipStyle}
           >
-            <button
+            <button aria-label="Tutup"
               onClick={completeTour}
               className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             >
@@ -155,7 +155,7 @@ export default function OnboardingTour({ tourId, steps, delay = 1500 }: Onboardi
 
               <div className="flex items-center gap-2">
                 {currentStep > 0 && (
-                  <button
+                  <button aria-label="Sebelumnya"
                     onClick={prev}
                     className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                   >

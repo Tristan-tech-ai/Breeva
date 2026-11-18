@@ -117,7 +117,7 @@ export default function MapLayersSheet({
                 </div>
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">Map Layers</h2>
               </div>
-              <button
+              <button aria-label="Tutup"
                 onClick={onClose}
                 className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition"
               >

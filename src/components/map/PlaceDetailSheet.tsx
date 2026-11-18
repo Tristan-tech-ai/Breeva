@@ -233,7 +233,7 @@ export default function PlaceDetailSheet({
                   </p>
                 )}
               </div>
-              <button
+              <button aria-label="Tutup"
                 onClick={onClose}
                 className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0 mt-0.5"
               >
