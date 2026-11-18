@@ -6,7 +6,7 @@ import { ensureVectorGrid } from './RoadMvtLayer';
 import { weightFor } from '../../lib/roadColors';
 import { fieldColor } from '../../lib/field/color';
 import { FIELD_DRAWN_EVENT, FIELD_REGIONS, FieldSource, overzoomPoints, type Box } from '../../lib/field/source';
-import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS, routeSettled } from '../../lib/field/firstDraw';
+import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS, regionGate, routeSettled } from '../../lib/field/firstDraw';
 import { HARGA_COLORS } from '../../lib/field/harga';
 import { popupHtml } from '../../lib/field/popup';
 import { nearestFeature, tileFraction, unitsPerPixel, type TileFeature } from '../../lib/field/tap';
@@ -27,7 +27,7 @@ export function useFieldLayer(
   enabled: boolean,
   pollutant: PollutantType = 'aqi',
   displayMode: RoadDisplayMode = 'total',
-  /** a route link is open: the other regions also wait for its first route (F1-53) */
+  /** a route link is open: every region, the one in view too (F1-63), waits for its first route (F1-53) */
   waitRoute = false,
 ): RoadLayerMeta | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,7 +83,7 @@ export function useFieldLayer(
         const LG = L as any;
         const Proto = LG.VectorGrid.Protobuf;
         for (const [k, region] of ordered.entries()) {
-          if (k > 0) await othersGo;
+          await regionGate(k, waitRoute, othersGo); // F1-63: on a route link even the region in view waits for the route
           if (cancelled) return;
           const src = new FieldSource(region);
           try { await src.init(k === 0 ? view : undefined); } catch (e) { console.warn('[field]', region.name, e); if (k === 0) failFirst(); continue; }

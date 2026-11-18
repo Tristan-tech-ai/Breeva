@@ -57,3 +57,14 @@ export function routeSettled(target: Target = window, ms = ROUTE_FALLBACK_MS): P
     target.addEventListener(ROUTE_SETTLED_EVENT, go);
   });
 }
+
+/**
+ * What the field layer waits for before loading region k (F1-63): the other regions wait for othersGo (the first coloured
+ * roads, and on a route link also the first route); on a route link the region in view also waits for the route, since its
+ * road tiles (about 240 KB in Badung–Denpasar) otherwise share a slow 3G link with the walking graph the route card needs
+ * (jalur_kritis_3g_2026-11-18.json: the graph finished last, at 29,9 s, while the tiles came in).
+ */
+export function regionGate(k: number, waitRoute: boolean, othersGo: Promise<void>, settled: () => Promise<void> = routeSettled): Promise<void> {
+  if (k > 0) return othersGo;
+  return waitRoute ? settled() : Promise.resolve();
+}
