@@ -27,11 +27,10 @@ export function parseRegions(sourceText) {
  * any other path asks for nothing. School links ask for nothing. A route link on /peta (mode 'peta') asks only for the
  * core walking graph of the region holding both ends, chosen as WalkRouteLayer does (the first region whose bounds hold
  * the start, and only when they also hold the end); the map field waits for the route there anyway (F1-53). A motor link
- * also asks for the edge shapes, which a motor route waits for (school zone, F1-60); with opts.workerUrl a route link also
- * asks for the route worker's script (F1-65). The header
+ * also asks for the edge shapes, which a motor route waits for (school zone, F1-60). The header
  * request mirrors pmtiles FetchSource: bytes 0-16383, a weak ETag dropped.
  */
-export function earlyFieldScript(base, regions, mode = 'peta', opts = {}) {
+export function earlyFieldScript(base, regions, mode = 'peta') {
   if (!/^https:\/\/[^\s"'<>]+$/.test(base || '') || !regions.length) return '';
   const R = JSON.stringify(regions);
   const B = JSON.stringify(base.replace(/\/$/, ''));
@@ -39,15 +38,13 @@ export function earlyFieldScript(base, regions, mode = 'peta', opts = {}) {
     ? `var p=location.pathname,s=null,z='';if(p==='/'){r=f(w)||R[0]}else if(p==='/home'){try{s=localStorage.getItem('breeva_field_region')}catch(_){}`
       + `try{z=Intl.DateTimeFormat().resolvedOptions().timeZone||''}catch(_){}r=f(w)||f(s)||((z==='Asia/Jakarta'||z==='Asia/Pontianak')?f('kota_bogor'):null)||R[0]}else return;`
     : `r=f(w)||R[0];`;
-  // F1-65: the route worker's own script (a same-origin, immutable asset), so the worker starts from the HTTP cache
-  const W = /^\/assets\/route\.worker-[A-Za-z0-9_-]+\.js$/.test(opts.workerUrl || '') ? `x(${JSON.stringify(opts.workerUrl)});` : '';
   const route = mode === 'peta'
     ? `if(q.has('rute')){var u=(q.get('rute')||'').split('~'),P=[];for(var i=0;i<u.length;i++){var c=u[i].split(','),la=+c[0],ln=+c[1];`
       + `if(c.length===2&&c[0]!==''&&c[1]!==''&&isFinite(la)&&isFinite(ln))P.push([la,ln])}if(u.length!==2||P.length!==2)return;`
       + `var n=function(g,p){return g[0][0]<=p[0]&&p[0]<=g[1][0]&&g[0][1]<=p[1]&&p[1]<=g[1][1]};`
       + `var x=function(u){return fetch(u).catch(function(){})};`
       + `for(var j=0;j<R.length;j++)if(n(R[j].bounds,P[0])){if(n(R[j].bounds,P[1])){var d=b+'/graphs/'+R[j].geometry+'/'+R[j].name;`
-      + `x(d+'_inti2.bin');if(q.get('moda')==='motor')x(d+'_bentuk2.bin');${W}}return}return}`
+      + `x(d+'_inti2.bin');if(q.get('moda')==='motor')x(d+'_bentuk2.bin')}return}return}`
     : `if(q.has('rute'))return;`;
   return `<script>(function(){try{var q=new URLSearchParams(location.search),R=${R},b=${B};${route}if(q.has('sekolah'))return;`
     + `var w=q.get('wilayah'),r=null;function f(n){for(var i=0;i<R.length;i++)if(R[i].name===n)return R[i];return null}${pick}`
