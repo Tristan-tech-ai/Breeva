@@ -2,10 +2,12 @@
  * Save one whole region for use without internet (task F2-15, for the offline demo at the final). Pressed by the user,
  * never automatic: it downloads the region's own field files once (PMTiles geometry whole, the value cells, forecasts
  * and harga of the run now published, the walking graph and schools) and puts them in the caches the service worker and
- * the router read. The OpenStreetMap basemap is not saved (its tile policy forbids bulk downloading).
+ * the router read. Breeva's own basemap of the region is saved too (F1-68); the OpenStreetMap raster is not (its tile
+ * policy forbids bulk downloading).
  */
 import { FIELD_CACHES, fullKey } from './fieldCache';
 import { ROUTE_CACHE } from '../route/assets';
+import { basemapUrl } from '../basemapVector';
 
 export interface RegionRef { name: string; geometry: string }
 interface ManifestLike { run: string; cells: number[]; forecast_runs?: Array<{ key: string }> }
@@ -16,6 +18,8 @@ export function regionFiles(base: string, r: RegionRef, m: ManifestLike): Region
   const v = `${base}/v/${r.name}`;
   return [
     { url: `${base}/tiles/${r.geometry}/${r.name}.pmtiles`, into: [FIELD_CACHES.geometry], whole: true },
+    // F1-68: Breeva's own basemap of the region (street names, buildings, water), so the saved map is not a blank page
+    { url: basemapUrl(base, r.name), into: [FIELD_CACHES.geometry], whole: true },
     { url: `${v}/manifest.json`, into: [FIELD_CACHES.manifest, ROUTE_CACHE] },
     ...m.cells.map((c) => ({ url: `${v}/${m.run}/${c}.bin`, into: [FIELD_CACHES.cells, ROUTE_CACHE] })),
     ...(m.forecast_runs ?? []).map((f) => ({ url: `${v}/${m.run}/${f.key}`, into: [ROUTE_CACHE] })),

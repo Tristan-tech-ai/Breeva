@@ -26,6 +26,8 @@ const net = (calls: string[], online = true) => async (r: Request) => {
 describe('offline field files (F2-12)', () => {
   it('names the CloudFront field files and nothing of the app itself', () => {
     expect(fieldKind(new URL(`${CF}/tiles/2026-11/kota_bogor.pmtiles`), OWN)).toBe('geometry');
+    expect(fieldKind(new URL(`${CF}/tiles/basemap/2026-11-17/kota_bogor.pmtiles`), OWN)).toBe('geometry'); // F1-68
+    expect(fieldKind(new URL(`${CF}/tiles/other/a/b/c.pmtiles`), OWN)).toBeNull();
     expect(fieldKind(new URL(`${CF}/v/kota_bogor/manifest.json`), OWN)).toBe('manifest');
     expect(fieldKind(new URL(`${CF}/v/kota_bogor/2026111714/3.bin`), OWN)).toBe('cells');
     expect(fieldKind(new URL(`${CF}/harga/2026-11/badung_denpasar.bin`), OWN)).toBe('harga');

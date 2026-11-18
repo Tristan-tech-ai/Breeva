@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, useMap, useMapEvents } from 'react-leaflet';
+import BasemapLayer from './VectorBasemap';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-rotate';
@@ -666,7 +667,7 @@ export default function LeafletMap({
         attributionControl
         {...({ rotate: true, rotateControl: false, touchRotate: false, bearing: 0 } as Record<string, unknown>)}
       >
-        {baseOn && <TileLayer key={base.url + (base.className ?? '')} url={base.url} attribution={base.attribution} className={base.className} {...(base.subdomains ? { subdomains: base.subdomains } : {})} />}
+        {baseOn && <BasemapLayer raster={base} dark={isDarkMode} vector={FIELD_STATIC && mapStyle !== 'satellite'} />}
         {onViewChange && <ViewReporter onViewChange={onViewChange} />}
         {wheelNeedsModifier && <WheelGuard />}
         <MapController

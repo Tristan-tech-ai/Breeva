@@ -34,7 +34,7 @@ export default function HomeStatCards() {
         </span>
         <span className="text-[19px] font-extrabold leading-none tabular-nums text-primary-700 dark:text-primary-300">
           <AnimatedNumber value={done} />
-          <span className="text-gray-400 dark:text-gray-500">/{total}</span>
+          <span className="text-gray-500 dark:text-gray-400">/{total}</span>
         </span>
         <span className="mt-1 text-[10.5px] font-medium text-gray-500 dark:text-gray-400">Misi</span>
         <span className="sr-only">selesai. Buka misi.</span>

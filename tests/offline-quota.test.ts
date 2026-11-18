@@ -28,7 +28,7 @@ describe('estimateDownload', () => {
     const n = regionFiles(BASE, R, M).length;
     expect(e.files).toBe(n);
     expect(e.known).toBe(n - 2); // manifest and school points have no Content-Length here
-    expect(e.sent).toBe(2_000_000 + 1000 * (n - 3));
+    expect(e.sent).toBe(2 * 2_000_000 + 1000 * (n - 4)); // two PMTiles: road geometry and the basemap (F1-68)
     expect(methods.filter((x) => x === 'HEAD')).toHaveLength(n); // no file body is downloaded to estimate
   });
 });
