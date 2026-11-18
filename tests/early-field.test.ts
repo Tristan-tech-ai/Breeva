@@ -12,7 +12,7 @@ const BASE = 'https://cdn.example.net';
 const regions = parseRegions(readFileSync('src/lib/field/source.ts', 'utf8')) as Array<{ name: string; geometry: string; bounds: number[][] }>;
 
 /** Runs the inline script in a fake page; returns the URLs it fetched and the __fieldEarly it left. */
-function runScript(search: string, o: { mode?: 'peta' | 'app'; path?: string; stored?: string | null; tz?: string } = {}) {
+function runScript(search: string, o: { mode?: 'peta' | 'app'; path?: string; stored?: string | null; tz?: string; workerUrl?: string } = {}) {
   const calls: Array<{ url: string; init?: { cache?: string; headers?: Record<string, string> } }> = [];
   const win: Record<string, unknown> = {};
   const fetch = (url: string, init?: { cache?: string; headers?: Record<string, string> }) => {
@@ -21,7 +21,7 @@ function runScript(search: string, o: { mode?: 'peta' | 'app'; path?: string; st
       ? { ok: true, status: 200, json: () => Promise.resolve({ run: 'r', cells: [3, 7] }), headers: { get: () => null } }
       : { ok: true, status: 206, arrayBuffer: () => Promise.resolve(new ArrayBuffer(4)), headers: { get: (h: string) => (h === 'ETag' ? 'W/"weak"' : null) } });
   };
-  const code = (earlyFieldScript(BASE, regions, o.mode ?? 'peta') as string).replace(/^<script>|<\/script>$/g, '');
+  const code = (earlyFieldScript(BASE, regions, o.mode ?? 'peta', { workerUrl: o.workerUrl }) as string).replace(/^<script>|<\/script>$/g, '');
   const localStorage = { getItem: (k: string) => (k === 'breeva_field_region' ? o.stored ?? null : null) };
   const Intl = { DateTimeFormat: () => ({ resolvedOptions: () => ({ timeZone: o.tz ?? 'Asia/Makassar' }) }) };
   runInNewContext(code, { URLSearchParams, location: { search, pathname: o.path ?? '/peta' }, fetch, window: win, Error, localStorage, Intl });
@@ -79,6 +79,22 @@ describe('the inline script of peta.html', () => {
     expect(runScript(links[0]).early).toBeUndefined(); // no map field requests: the map field waits for the route (F1-53)
     expect(runScript(links[0]).calls.length).toBe(1); // the core graph only (F1-59: the other files gave nothing)
     expect(runScript(links[1]).calls.length).toBe(2); // a motor link also asks for the edge shapes
+  });
+});
+
+describe('the route worker script on route links (F1-65)', () => {
+  const W = '/assets/route.worker--Z5n5-9A.js';
+  it('is asked for with the core graph of a route link, and only then', () => {
+    const urls = runScript('?rute=-8.66978,115.21564~-8.67768,115.23378', { workerUrl: W }).calls.map((c) => c.url);
+    expect(urls).toEqual([`${BASE}/graphs/2026-11/badung_denpasar_inti2.bin`, W]);
+    expect(runScript('', { workerUrl: W }).calls.map((c) => c.url)).not.toContain(W);
+    expect(runScript('?rute=-7.25,112.75~-7.26,112.76', { workerUrl: W }).calls).toEqual([]); // outside every region: no route
+    expect(runScript('?rute=-8.66978,115.21564~-8.67768,115.23378', { mode: 'app', path: '/home', workerUrl: W }).calls).toEqual([]);
+  });
+  it('accepts only a hashed asset path', () => {
+    for (const bad of ['https://evil.example/w.js', '/assets/route.worker.js', "/assets/route.worker-x');alert(1);('.js"]) {
+      expect(runScript('?rute=-8.66978,115.21564~-8.67768,115.23378', { workerUrl: bad }).calls.map((c) => c.url)).toEqual([`${BASE}/graphs/2026-11/badung_denpasar_inti2.bin`]);
+    }
   });
 });
 

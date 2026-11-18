@@ -18,7 +18,7 @@
 // Lives at the repo ROOT (not scripts/, which .vercelignore excludes from the Vercel build).
 // Runs from the build CWD (repo root) on both local and Vercel, so dist/ resolves via process.cwd().
 
-import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, rmSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { appPreloadScript, preloadFiles, preloadTags, referencedAssets } from './preload-links.mjs';
 import { atHeadStart, earlyFieldScript, parseRegions } from './early-field.mjs';
@@ -244,7 +244,10 @@ for (const r of ROUTES) {
   }
   if (r.earlyField) {
     const regions = parseRegions(readFileSync(join(process.cwd(), 'src/lib/field/source.ts'), 'utf8'));
-    const tag = process.env.VITE_FIELD_STATIC === 'true' ? earlyFieldScript(process.env.VITE_FIELD_BASE ?? '', regions) : '';
+    // F1-65: the route worker's file name, so a route link can start it with the HTML
+    const worker = readdirSync(join(DIST, 'assets')).filter((f) => /^route\.worker-[A-Za-z0-9_-]+\.js$/.test(f));
+    if (worker.length !== 1) { console.error(`[prerender] ${r.file}: expected one route worker script, found ${worker.length}`); process.exit(1); }
+    const tag = process.env.VITE_FIELD_STATIC === 'true' ? earlyFieldScript(process.env.VITE_FIELD_BASE ?? '', regions, 'peta', { workerUrl: `/assets/${worker[0]}` }) : '';
     // before the stylesheet: an inline script after it would wait for it (F1-56)
     if (tag) html = atHeadStart(html, tag);
     console.log(`[prerender] ${r.file}: early field ${tag ? `on (${regions.map((g) => g.name).join(', ')})` : 'off (no VITE_FIELD_STATIC or CDN base in this build)'}`);
