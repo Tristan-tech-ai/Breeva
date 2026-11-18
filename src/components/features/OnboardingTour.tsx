@@ -69,10 +69,12 @@ export default function OnboardingTour({ tourId, steps, delay = 1500 }: Onboardi
   }, [active, currentStep, steps]);
 
   useEffect(() => {
-    positionTooltip();
+    // measure on the next frame (the target has laid out), not synchronously inside the effect
+    const raf = requestAnimationFrame(positionTooltip);
     window.addEventListener('resize', positionTooltip);
     window.addEventListener('scroll', positionTooltip, true);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener('resize', positionTooltip);
       window.removeEventListener('scroll', positionTooltip, true);
     };
