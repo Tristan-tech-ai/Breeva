@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { estimateDownload, estimateText, regionFiles, saveRegionOffline, savedText, wireSize } from '../src/lib/pwa/offlineRegion';
 
@@ -59,5 +60,13 @@ describe('texts', () => {
     expect(estimateText({ sent: 2_400_000, known: 18 })).toContain('Perkiraan unduhan sekitar 2,4 MB');
     expect(estimateText({ sent: 0, known: 0 })).toBe('');
     expect(estimateText(null)).toBe('');
+  });
+});
+
+describe('the /status intro (X-W23)', () => {
+  it('names no fixed download size: the sizes change with the files (18 Nov: 3,5 and 7 MB were stale after F1-61)', () => {
+    const src = readFileSync('src/pages/StatusPage.tsx', 'utf8');
+    expect(src).not.toMatch(/[0-9],?[0-9]* MB untuk (Kota Bogor|Badung)/);
+    expect(src).toContain('perkiraan unduhannya tertulis di bawah tiap tombol');
   });
 });

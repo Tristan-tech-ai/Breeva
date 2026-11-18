@@ -86,7 +86,7 @@ export default function StatusPage() {
           dari {FRESH_MINUTES} menit lalu.
         </p>
         <p className="text-[13px] text-gray-600 dark:text-gray-400">
-          Untuk peragaan tanpa internet: tekan "Simpan … untuk tanpa internet" sekali sambil online (sekitar 3,5 MB untuk Kota Bogor, 7 MB untuk Badung–Denpasar).
+          Untuk peragaan tanpa internet: tekan "Simpan … untuk tanpa internet" sekali sambil online (perkiraan unduhannya tertulis di bawah tiap tombol).
           Angkanya tetap jam yang tersimpan.
         </p>
         <ul className="space-y-2">
