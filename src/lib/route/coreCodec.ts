@@ -16,10 +16,10 @@ import { readContainer, writeContainer } from './graphSplit';
 interface Section { name: string; offset: number; length: number }
 interface CoreHeader { base: Record<string, unknown> & { columns: Array<{ name: string; dtype: string; count: number }> }; n: number; m: number; ex: number; sections: Section[] }
 
-const zz = (v: number) => ((v << 1) ^ (v >> 31)) >>> 0;
-const unzz = (v: number) => (v >>> 1) ^ -(v & 1);
+export const zz = (v: number) => ((v << 1) ^ (v >> 31)) >>> 0;
+export const unzz = (v: number) => (v >>> 1) ^ -(v & 1);
 
-function putVarints(vals: ArrayLike<number>): Uint8Array {
+export function putVarints(vals: ArrayLike<number>): Uint8Array {
   const out = new Uint8Array(vals.length * 5);
   let k = 0;
   for (let i = 0; i < vals.length; i++) {
@@ -30,7 +30,7 @@ function putVarints(vals: ArrayLike<number>): Uint8Array {
   return out.slice(0, k);
 }
 
-function getVarints(b: Uint8Array, count: number): Uint32Array {
+export function getVarints(b: Uint8Array, count: number): Uint32Array {
   const out = new Uint32Array(count);
   let k = 0;
   for (let i = 0; i < count; i++) {
@@ -42,11 +42,11 @@ function getVarints(b: Uint8Array, count: number): Uint32Array {
   return out;
 }
 
-const bytesOf = (a: ArrayBufferView) => new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+export const bytesOf = (a: ArrayBufferView) => new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
 const copyAs = <T>(C: new (b: ArrayBuffer) => T, b: Uint8Array): T => C === (Uint8Array as unknown) ? (b.slice() as unknown as T) : new C(b.slice().buffer);
 
 /** The partner of each reverse edge (source > target): the k-th edge back from the target, k its rank among the parallels. */
-function partners(off: Uint32Array, target: Uint32Array, n: number): Int32Array {
+export function partners(off: ArrayLike<number>, target: ArrayLike<number>, n: number): Int32Array {
   const p = new Int32Array(target.length).fill(-1);
   for (let u = 0; u < n; u++) {
     for (let e = off[u]; e < off[u + 1]; e++) {

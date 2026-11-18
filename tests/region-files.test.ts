@@ -37,7 +37,7 @@ describe('loadRegionFiles', () => {
     n.releaseAll(); await tick(); n.releaseAll();
     const f = await p;
     expect(new TextDecoder().decode(f.graph)).toBe('/f/graphs/2026-11/r_inti2.bin');
-    expect(f.shapesUrl).toBe('/f/graphs/2026-11/r_bentuk.bin'); // not asked for yet: after the rest (F1-56)
+    expect(f.shapesUrl).toBe('/f/graphs/2026-11/r_bentuk2.bin'); // not asked for yet: after the rest (F1-56)
     expect(n.asked.some((u) => u.includes('_bentuk'))).toBe(false);
     expect([...f.cells.keys()]).toEqual([0, 2]);
     expect(f.harga).not.toBeNull(); expect(f.schools).not.toBeNull();

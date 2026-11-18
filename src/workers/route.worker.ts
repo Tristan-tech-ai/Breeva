@@ -10,6 +10,7 @@
  * Replies { id, ok: true, ... } or { id, ok: false, error }.
  */
 import { sameRoute } from '../lib/route/sameRoute';
+import { decodeShapes } from '../lib/route/shapeCodec';
 import { WalkGraph } from '../lib/route/walkGraph';
 import { NodeIndex, pareto, route, type RouteResult } from '../lib/route/router';
 import { motorNode } from '../lib/route/cost';
@@ -64,7 +65,7 @@ async function init(base: string, region: { name: string; geometry: string }, me
   let sf: SchoolFile | null = null;
   try { sf = files.schools ? JSON.parse(new TextDecoder().decode(files.schools)) as SchoolFile : null; } catch { sf = null; }
   // the shapes only after everything a walking route needs, so they do not share the link with it
-  shapesReady = cachedBytes(files.shapesUrl, { cacheFirst: true }).then((b) => g.attachShapes(b), (e) => console.warn('[route] shapes', e));
+  shapesReady = cachedBytes(files.shapesUrl, { cacheFirst: true }).then((b) => g.attachShapes(decodeShapes(b, g)), (e) => console.warn('[route] shapes', e));
   graph = g; index = new NodeIndex(g); no2 = n; pm25 = p; exhaust = x; harga = hi ? h : null; run = manifest.run;
   fieldMedian(n); // computed while loading, so the first route does not pay for it
   schoolFile = sf; schools = null;

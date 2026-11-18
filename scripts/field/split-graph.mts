@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { decodeCore, encodeCore } from '../../src/lib/route/coreCodec';
 import { splitGraph } from '../../src/lib/route/graphSplit';
+import { decodeShapes, encodeShapes } from '../../src/lib/route/shapeCodec';
 import { WalkGraph } from '../../src/lib/route/walkGraph';
 
 const arg = (n: string, d: string) => { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : d; };
@@ -35,6 +36,19 @@ for (const name of arg('region', 'badung_denpasar,kota_bogor').split(',')) {
   if (back.length !== core.length || back.some((v, i) => v !== core[i])) throw new Error(`${name}: BGC1 core does not decode to the BGR1 core`);
   writeFileSync(join(dir, `${name}_inti.bin`), core);
   writeFileSync(join(dir, `${name}_inti2.bin`), core2);
+  // F1-62: the smaller shapes form must give every edge the same polyline
+  const shapes2 = encodeShapes(shapes, k);
+  const k2 = new WalkGraph(core);
+  k2.attachShapes(decodeShapes(shapes2, k2));
+  let bad2 = 0;
+  for (let u = 0; u < g.n; u++) {
+    for (let e = g.off[u]; e < g.off[u + 1]; e++) {
+      const a = g.edgeCoords(e, u), b = k2.edgeCoords(e, u);
+      if (a.length !== b.length || a.some(([x, y], j) => x !== b[j][0] || y !== b[j][1])) bad2++;
+    }
+  }
+  if (bad2) throw new Error(`${name}: ${bad2} edges differ with the BSC1 shapes`);
   writeFileSync(join(dir, `${name}_bentuk.bin`), shapes);
-  console.log(JSON.stringify({ name, full: full.byteLength, inti: core.byteLength, inti2: core2.byteLength, bentuk: shapes.byteLength, edges: g.m, edges_same: true }));
+  writeFileSync(join(dir, `${name}_bentuk2.bin`), shapes2);
+  console.log(JSON.stringify({ name, full: full.byteLength, inti: core.byteLength, inti2: core2.byteLength, bentuk2: shapes2.byteLength, bentuk: shapes.byteLength, edges: g.m, edges_same: true }));
 }

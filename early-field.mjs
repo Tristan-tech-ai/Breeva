@@ -44,7 +44,7 @@ export function earlyFieldScript(base, regions, mode = 'peta') {
       + `var n=function(g,p){return g[0][0]<=p[0]&&p[0]<=g[1][0]&&g[0][1]<=p[1]&&p[1]<=g[1][1]};`
       + `var x=function(u){return fetch(u).catch(function(){})};`
       + `for(var j=0;j<R.length;j++)if(n(R[j].bounds,P[0])){if(n(R[j].bounds,P[1])){var d=b+'/graphs/'+R[j].geometry+'/'+R[j].name;`
-      + `x(d+'_inti2.bin');if(q.get('moda')==='motor')x(d+'_bentuk.bin')}return}return}`
+      + `x(d+'_inti2.bin');if(q.get('moda')==='motor')x(d+'_bentuk2.bin')}return}return}`
     : `if(q.has('rute'))return;`;
   return `<script>(function(){try{var q=new URLSearchParams(location.search),R=${R},b=${B};${route}if(q.has('sekolah'))return;`
     + `var w=q.get('wilayah'),r=null;function f(n){for(var i=0;i<R.length;i++)if(R[i].name===n)return R[i];return null}${pick}`

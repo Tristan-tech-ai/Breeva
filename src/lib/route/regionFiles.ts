@@ -36,10 +36,10 @@ export async function loadRegionFiles(base: string, region: { name: string; geom
 }
 
 /**
- * The two files of a region's walking graph (F1-56). The core is the smaller BGC1 form (F1-61, coreCodec.ts); the BGR1
- * core (_inti.bin) and the single BGR1 file stay for older app versions.
+ * The two files of a region's walking graph (F1-56), in their smaller forms: the core BGC1 (F1-61, coreCodec.ts) and the
+ * shapes BSC1 (F1-62, shapeCodec.ts). _inti.bin, _bentuk.bin and the single BGR1 file stay for older app versions.
  */
 export function graphUrls(base: string, region: { name: string; geometry: string }) {
   const dir = `${base}/graphs/${region.geometry}/${region.name}`;
-  return { core: `${dir}_inti2.bin`, shapes: `${dir}_bentuk.bin` };
+  return { core: `${dir}_inti2.bin`, shapes: `${dir}_bentuk2.bin` };
 }
