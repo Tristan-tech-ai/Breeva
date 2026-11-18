@@ -66,11 +66,33 @@ export function lerpColor(stops: [number, string][], v: number): string {
 const MAJOR = new Set(['motorway', 'trunk', 'motorway_link', 'trunk_link']);
 const PRIMARY = new Set(['primary', 'primary_link', 'secondary', 'secondary_link']);
 /** Width by class, scaled with zoom: z12 thin, z16 thick, grows past 16. */
+/** A lane or residential street (not a major or primary road): most of a town's network. */
+export function isMinorRoad(highway: string): boolean {
+  return !MAJOR.has(highway) && !PRIMARY.has(highway);
+}
+
+// F1-70: lanes stay thin until the user zooms in, so at z15 the town is not a mesh of colour (Tristan, 18 Nov 2026)
+const MINOR_STOPS: Array<[number, number]> = [[13, 0.4], [14, 0.5], [15, 0.9], [16, 1.4], [17, 2.0], [18, 2.4], [19, 2.6]];
+
 export function weightFor(highway: string, zoom: number): number {
+  if (isMinorRoad(highway)) {
+    if (zoom <= MINOR_STOPS[0][0]) return MINOR_STOPS[0][1];
+    for (let i = 1; i < MINOR_STOPS.length; i++) {
+      const [z1, w1] = MINOR_STOPS[i];
+      const [z0, w0] = MINOR_STOPS[i - 1];
+      if (zoom <= z1) return w0 + ((w1 - w0) * (zoom - z0)) / (z1 - z0);
+    }
+    return MINOR_STOPS[MINOR_STOPS.length - 1][1];
+  }
   const t = Math.max(0, (zoom - 12) / 4);
-  const lo = MAJOR.has(highway) ? 1.6 : PRIMARY.has(highway) ? 1.1 : 0.6;
-  const hi = MAJOR.has(highway) ? 6 : PRIMARY.has(highway) ? 4 : 2.2;
+  const lo = MAJOR.has(highway) ? 1.6 : 1.1;
+  const hi = MAJOR.has(highway) ? 6 : 4;
   return lo + (hi - lo) * Math.min(t, 1.75);
+}
+
+/** Line opacity of a coloured road: lanes are quieter below z16 so the main roads read first. */
+export function opacityFor(highway: string, zoom: number, base: number): number {
+  return isMinorRoad(highway) && zoom < 16 ? Math.min(base, 0.6) : base;
 }
 
 export function aqiBand(aqi: number): { label: string; color: string } {

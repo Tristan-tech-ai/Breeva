@@ -3,7 +3,7 @@ import L from 'leaflet';
 import type { PollutantType, RoadDisplayMode } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { ensureVectorGrid } from './RoadMvtLayer';
-import { weightFor } from '../../lib/roadColors';
+import { weightFor, opacityFor } from '../../lib/roadColors';
 import { fieldColor } from '../../lib/field/color';
 import { FIELD_DRAWN_EVENT, FIELD_REGIONS, FieldSource, overzoomPoints, type Box } from '../../lib/field/source';
 import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS, regionGate, routeSettled } from '../../lib/field/firstDraw';
@@ -144,7 +144,7 @@ export function useFieldLayer(
                 }
                 return {
                   color, weight: weightFor(highway, zoom),
-                  opacity: v.ood ? 0.5 : src.isStale() ? 0.55 : 0.9, lineCap: 'round', lineJoin: 'round',
+                  opacity: opacityFor(highway, zoom, v.ood ? 0.5 : src.isStale() ? 0.55 : 0.9), lineCap: 'round', lineJoin: 'round',
                 };
               },
             },

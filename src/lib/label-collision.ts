@@ -191,14 +191,13 @@ let prevLabeledIds = new Set<string>();
 
 // ── Zoom label budget ────────────────────────────────────────────────
 
-function maxLabels(zoom: number, isFiltered: boolean): number {
-  if (isFiltered) return 200; // Show as many labels as possible when filtered
-  if (zoom < 15) return 0;
-  if (zoom < 16) return 15;
-  if (zoom < 17) return 30;
-  if (zoom < 18) return 60;
-  if (zoom < 19) return 100;
-  return 150;
+/** Labels per view (F1-70): at most 12, so names stay readable over the coloured roads. */
+export function maxLabels(zoom: number, isFiltered: boolean): number {
+  if (zoom < 15) return isFiltered ? 6 : 0;
+  if (isFiltered) return 12;
+  if (zoom < 16) return 6;
+  if (zoom < 17) return 9;
+  return 12;
 }
 
 // ── Direction preference ─────────────────────────────────────────────

@@ -233,21 +233,24 @@ const ROOT_ICON_MAP: Record<string, string> = {
 const PRIORITY_MAP: Record<string, number> = {
   // Tier 1 — z14: essential services
   'healthcare.hospital': 14,
-  'service.vehicle.fuel': 14,
-  'accommodation.hotel': 14,
-  'service.financial.atm': 14,
-  'service.financial.bank': 14,
-  'service.police': 14,
+  // F1-70: with complete POI packs, landmarks first; banks, ATMs, restaurants and cafes from z17
+  'commercial.shopping_mall': 15,
+  'commercial.marketplace': 15,
+  'service.vehicle.fuel': 15,
+  'accommodation.hotel': 16,
+  'service.financial.atm': 17,
+  'service.financial.bank': 17,
+  'service.police': 16,
 
   // Tier 2 — z15: important
-  'religion': 15,
+  'religion': 16,
   'education.university': 15,
   'entertainment.museum': 15,
   'leisure.park': 15,
-  'commercial.supermarket': 15,
-  'catering.restaurant': 15,
-  'catering.cafe': 15,
-  'healthcare.pharmacy': 15,
+  'commercial.supermarket': 16,
+  'catering.restaurant': 17,
+  'catering.cafe': 17,
+  'healthcare.pharmacy': 16,
   'national_park': 15,
   'tourism.sights': 15,
   'tourism.attraction': 15,
@@ -270,7 +273,7 @@ const PRIORITY_MAP: Record<string, number> = {
 
 // Root category default priority
 const ROOT_PRIORITY: Record<string, number> = {
-  healthcare: 14,
+  healthcare: 16, // F1-70: hospitals stay at 14 (PRIORITY_MAP); dentists and the like no longer flood z14-15
   accommodation: 15,
   religion: 15,
   leisure: 16,

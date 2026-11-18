@@ -12,7 +12,7 @@ import { POICanvasLayer, type ComputeResult } from './POICanvasLayer';
 
 // ── Category filter → Geoapify categories ────────────────────────────
 
-export const FILTER_CATEGORIES: Record<string, { geoapify: string; foursquare: string }> = {
+const FILTER_CATEGORIES: Record<string, { geoapify: string; foursquare: string }> = {
   restaurant: { geoapify: 'catering.restaurant,catering.fast_food', foursquare: '13065' },
   cafe: { geoapify: 'catering.cafe,catering.coffee_shop', foursquare: '13032,13034' },
   hotel: { geoapify: 'accommodation.hotel,accommodation.guest_house,accommodation.hostel', foursquare: '19014' },
@@ -125,7 +125,7 @@ export default function POILayer({
         id: f.id,
         screenX: 0, screenY: 0, // filled below
         name: f.poi.name,
-        priority: showAll ? 0 : priority,
+        priority,
         markerSize: markerPx,
       });
       const pt = map.latLngToContainerPoint([f.lat, f.lng]);
@@ -133,7 +133,7 @@ export default function POILayer({
       candidates[candidates.length - 1].screenY = pt.y;
     }
     diagStart('label-collision');
-    const placements = resolveLabels(candidates, currentZoom, showAll);
+    const placements = resolveLabels(candidates, currentZoom, !!ctx.activeFilter);
     diagEnd('label-collision', { candidates: candidates.length, placed: placements.size });
 
     return {

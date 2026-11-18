@@ -1,6 +1,7 @@
 import Supercluster from 'supercluster';
 import type { POI } from './poi-api';
 import { resolvePriority, merchantPriority } from './poi-icons';
+import { thinPoints } from './poiThin';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -38,7 +39,7 @@ const index = new Supercluster<PointProps, Record<string, never>>({
 // never spawn hundreds of DOM markers. The most-important POIs (merchants, low priority
 // number) are kept; the long tail stays clustered / reappears as you zoom in. Mirrors how
 // Google shows labels for key places + clusters the rest, staying interactive + smooth.
-const MAX_RENDER_POINTS = 120;
+// F1-70: marker budget and spacing live in poiThin.ts (pure, tested in node)
 
 let loadedSerial = -1;
 let loadedZoom = -1;
@@ -104,7 +105,8 @@ export function getVisibleFeatures(
   north: number,
   zoom: number,
 ): ClusterFeature[] {
-  const raw = index.getClusters([west, south, east, north], Math.floor(zoom));
+  // above the index's maxZoom Supercluster returns every point unclustered; thinPoints spaces them instead
+  const raw = index.getClusters([west, south, east, north], 21);
   const clusters: ClusterFeature[] = [];
   const points: Array<ClusterPoint & { _priority: number }> = [];
 
@@ -133,12 +135,6 @@ export function getVisibleFeatures(
     }
   }
 
-  // Cap individual markers to the render budget — keep the most-important (lowest
-  // priority number; merchants rank highest). Clusters are always kept (they expand on tap).
-  if (points.length > MAX_RENDER_POINTS) {
-    points.sort((a, b) => a._priority - b._priority);
-    points.length = MAX_RENDER_POINTS;
-  }
-
-  return [...clusters, ...points]; // points carry a harmless extra _priority field
+  // the most important markers, spaced apart, at most MAX_RENDER_POINTS (F1-70); no cluster bubbles
+  return [...clusters, ...thinPoints(points, zoom)]; // points carry a harmless extra _priority field
 }
