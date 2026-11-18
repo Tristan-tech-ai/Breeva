@@ -21,7 +21,7 @@ import { loadRegionFiles } from '../lib/route/regionFiles';
 import { progressCounter } from '../lib/route/loadProgress';
 import { decodeCell } from '../lib/field/cells';
 import { decodeExhaust, pickForecast, SOON_HOURS, type ForecastEntry } from '../lib/field/forecast';
-import { edgeExhaust, meanAlong, no2AtHour, type SoonHour } from '../lib/route/departForecast';
+import { edgeExhaust, meanAlong, no2AtHour, startThenWait, type SoonHour } from '../lib/route/departForecast';
 import { fieldMedian } from '../lib/route/fieldMedian';
 
 const SPEED = 1.3; // m/s
@@ -165,18 +165,17 @@ function coordsOf(g: WalkGraph, r: { edges: number[]; nodes: number[] }): Array<
 
 /** Route request: the field of the departure hour, the routes, and for a departure now the next hours of the last route. */
 async function routeAt(from: { lat: number; lng: number }, to: { lat: number; lng: number }, mode: 'walk' | 'motor', departLocal: string | null | undefined) {
-  // the school zone is found from the edge shapes: a motor route waits for them (a walking route does not)
-  if (mode === 'motor') await shapesReady;
-  const at = schoolFile ? localTimeToMs(departLocal, schoolFile.tz, Date.now()) : Date.now();
   const entry = pickForecast(forecasts, departLocal, runLocalHour);
+  // the school zone is found from the edge shapes: a motor route waits for them (a walking route does not); the
+  // departure hour's forecast file comes down meanwhile (F1-64)
+  const x = await startThenWait(entry && no2 && exhaust ? () => exhaustOf(entry) : null, mode === 'motor' ? shapesReady : Promise.resolve());
+  const at = schoolFile ? localTimeToMs(departLocal, schoolFile.tz, Date.now()) : Date.now();
   let field: { no2: Float64Array; exhaust: Float64Array; hour: number } | undefined;
-  if (entry && no2 && exhaust) {
-    try {
-      const x = await exhaustOf(entry);
-      let f = forecastNo2.get(entry.key);
-      if (!f || f.x !== x) { f = { x, no2: no2AtHour(no2, exhaust, x) }; forecastNo2.set(entry.key, f); }
-      field = { no2: f.no2, exhaust: x, hour: entry.local_hour };
-    } catch { field = undefined; } // forecast file unavailable: the run's own hour, labelled as such by forecastHour null
+  // forecast file unavailable: the run's own hour, labelled as such by forecastHour null
+  if (entry && no2 && exhaust && x) {
+    let f = forecastNo2.get(entry.key);
+    if (!f || f.x !== x) { f = { x, no2: no2AtHour(no2, exhaust, x) }; forecastNo2.set(entry.key, f); }
+    field = { no2: f.no2, exhaust: x, hour: entry.local_hour };
   }
   const { routes, raw } = routeBetween(from, to, mode, at, field);
   // a departure now: the next hours of the cleanest route are worked out after the routes are sent (F3-18), because

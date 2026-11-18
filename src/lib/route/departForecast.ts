@@ -55,3 +55,17 @@ export function bestSoon(nowMean: number, soon: readonly SoonHour[], minGain = 0
   const pct = Math.round((1 - best.exhMean / nowMean) * 100);
   return best.exhMean <= nowMean * (1 - minGain) ? { hour: best, pct } : null;
 }
+
+/**
+ * Starts a download, then waits for something else, then gives the download's result (null when there is none or it
+ * failed). F1-64: a motor route waits for the edge shapes, and the departure hour's forecast file used to be asked for
+ * only after them (36,2 -> 39,1 s on a slow 3G link, jalur_kritis_3g_2026-11-18.json); started first, both come down
+ * together.
+ */
+export async function startThenWait<T>(start: (() => Promise<T>) | null, wait: Promise<unknown>): Promise<T | null> {
+  const p = start ? start() : null;
+  p?.catch(() => undefined); // awaited below; this keeps an early failure from going unhandled meanwhile
+  await wait;
+  if (!p) return null;
+  try { return await p; } catch { return null; }
+}
