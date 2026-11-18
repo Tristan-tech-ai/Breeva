@@ -4,6 +4,7 @@
  * 2 s of latency before any byte arrives. Only the cells wait, because their names come from the manifest.
  */
 import type { ForecastEntry } from '../field/forecast';
+import { decodeCore } from './coreCodec';
 
 export type GetBytes = (url: string, opts: { cacheFirst: boolean }) => Promise<Uint8Array>;
 
@@ -23,7 +24,7 @@ export interface RegionFiles {
 }
 
 export async function loadRegionFiles(base: string, region: { name: string; geometry: string }, get: GetBytes): Promise<RegionFiles> {
-  const graphP = get(graphUrls(base, region).core, { cacheFirst: true });
+  const graphP = get(graphUrls(base, region).core, { cacheFirst: true }).then(decodeCore);
   const hargaP = get(`${base}/harga/${region.geometry}/${region.name}.bin`, { cacheFirst: true }).catch(() => null);
   const schoolsP = get(`${base}/graphs/${region.geometry}/${region.name}_schools.json`, { cacheFirst: false }).catch(() => null);
   graphP.catch(() => undefined); // awaited below; this only keeps an early manifest failure from leaving it unhandled
@@ -34,8 +35,11 @@ export async function loadRegionFiles(base: string, region: { name: string; geom
   return { graph, shapesUrl: graphUrls(base, region).shapes, manifest, cells: new Map(cells), harga, schools };
 }
 
-/** The two files of a region's walking graph (F1-56); the single BGR1 file stays for older app versions. */
+/**
+ * The two files of a region's walking graph (F1-56). The core is the smaller BGC1 form (F1-61, coreCodec.ts); the BGR1
+ * core (_inti.bin) and the single BGR1 file stay for older app versions.
+ */
 export function graphUrls(base: string, region: { name: string; geometry: string }) {
   const dir = `${base}/graphs/${region.geometry}/${region.name}`;
-  return { core: `${dir}_inti.bin`, shapes: `${dir}_bentuk.bin` };
+  return { core: `${dir}_inti2.bin`, shapes: `${dir}_bentuk.bin` };
 }

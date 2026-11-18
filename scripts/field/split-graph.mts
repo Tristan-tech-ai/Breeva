@@ -1,11 +1,13 @@
 /**
- * Splits each region's walking graph (BGR1) into <name>_inti.bin and <name>_bentuk.bin next to it (F1-56,
+ * Splits each region's walking graph (BGR1) into <name>_inti.bin (and its smaller BGC1 form <name>_inti2.bin, F1-61)
+ * and <name>_bentuk.bin next to it (F1-56,
  * src/lib/route/graphSplit.ts), and checks the split: the core read back routes on the same arrays, the shapes attached
  * give every edge the same polyline as the full graph.
  *   npx tsx scripts/field/split-graph.mts [--root D:/breeva-ml-data/field] [--region a,b]
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { decodeCore, encodeCore } from '../../src/lib/route/coreCodec';
 import { splitGraph } from '../../src/lib/route/graphSplit';
 import { WalkGraph } from '../../src/lib/route/walkGraph';
 
@@ -27,7 +29,12 @@ for (const name of arg('region', 'badung_denpasar,kota_bogor').split(',')) {
     }
   }
   if (bad) throw new Error(`${name}: ${bad} edges differ after attaching the shapes`);
+  // F1-61: the smaller core form must give the core back byte for byte
+  const core2 = encodeCore(core);
+  const back = decodeCore(core2);
+  if (back.length !== core.length || back.some((v, i) => v !== core[i])) throw new Error(`${name}: BGC1 core does not decode to the BGR1 core`);
   writeFileSync(join(dir, `${name}_inti.bin`), core);
+  writeFileSync(join(dir, `${name}_inti2.bin`), core2);
   writeFileSync(join(dir, `${name}_bentuk.bin`), shapes);
-  console.log(JSON.stringify({ name, full: full.byteLength, inti: core.byteLength, bentuk: shapes.byteLength, edges: g.m, edges_same: true }));
+  console.log(JSON.stringify({ name, full: full.byteLength, inti: core.byteLength, inti2: core2.byteLength, bentuk: shapes.byteLength, edges: g.m, edges_same: true }));
 }

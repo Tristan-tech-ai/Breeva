@@ -74,8 +74,8 @@ describe('the inline script of peta.html', () => {
       expect(run.calls.map((c) => c.url).sort(), search).toEqual(want.sort());
       expect(run.calls.every((c) => c.init === undefined), search).toBe(true); // plain requests, like the worker's
     }
-    expect(runScript(links[0]).calls[0].url).toBe(`${BASE}/graphs/2026-11/badung_denpasar_inti.bin`);
-    expect(runScript(links[2]).calls[0].url).toBe(`${BASE}/graphs/2026-11/kota_bogor_inti.bin`);
+    expect(runScript(links[0]).calls[0].url).toBe(`${BASE}/graphs/2026-11/badung_denpasar_inti2.bin`);
+    expect(runScript(links[2]).calls[0].url).toBe(`${BASE}/graphs/2026-11/kota_bogor_inti2.bin`);
     expect(runScript(links[0]).early).toBeUndefined(); // no map field requests: the map field waits for the route (F1-53)
     expect(runScript(links[0]).calls.length).toBe(1); // the core graph only (F1-59: the other files gave nothing)
     expect(runScript(links[1]).calls.length).toBe(2); // a motor link also asks for the edge shapes

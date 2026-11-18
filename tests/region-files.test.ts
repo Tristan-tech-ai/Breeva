@@ -29,14 +29,14 @@ describe('loadRegionFiles', () => {
     const n = network();
     const p = loadRegionFiles('/f', region, n.get);
     await tick();
-    expect(n.asked.sort()).toEqual(['/f/graphs/2026-11/r_inti.bin', '/f/graphs/2026-11/r_schools.json', '/f/harga/2026-11/r.bin', '/f/v/r/manifest.json']);
+    expect(n.asked.sort()).toEqual(['/f/graphs/2026-11/r_inti2.bin', '/f/graphs/2026-11/r_schools.json', '/f/harga/2026-11/r.bin', '/f/v/r/manifest.json']);
     n.release('manifest.json');
     await tick(); await tick();
     // the cells follow the manifest at once, while the graph is still on its way
     expect(n.asked.filter((u) => u.includes('/2026111800/'))).toEqual(['/f/v/r/2026111800/0.bin', '/f/v/r/2026111800/2.bin']);
     n.releaseAll(); await tick(); n.releaseAll();
     const f = await p;
-    expect(new TextDecoder().decode(f.graph)).toBe('/f/graphs/2026-11/r_inti.bin');
+    expect(new TextDecoder().decode(f.graph)).toBe('/f/graphs/2026-11/r_inti2.bin');
     expect(f.shapesUrl).toBe('/f/graphs/2026-11/r_bentuk.bin'); // not asked for yet: after the rest (F1-56)
     expect(n.asked.some((u) => u.includes('_bentuk'))).toBe(false);
     expect([...f.cells.keys()]).toEqual([0, 2]);
@@ -52,7 +52,7 @@ describe('loadRegionFiles', () => {
   });
 
   it('fails when the graph or the manifest fails', async () => {
-    for (const bad of ['graphs/2026-11/r_inti.bin', 'manifest.json']) {
+    for (const bad of ['graphs/2026-11/r_inti2.bin', 'manifest.json']) {
       const n = network(undefined, [bad]);
       const outcome = loadRegionFiles('/f', region, n.get).then(() => null, (e: Error) => e.message);
       for (let i = 0; i < 4; i++) { await tick(); n.releaseAll(); }

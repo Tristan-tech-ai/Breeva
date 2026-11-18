@@ -43,7 +43,7 @@ export function planUploads(root, regions) {
     const graph = join(root, 'graphs', g, `${name}.bin`);
     if (existsSync(graph)) out.push({ local: graph, key: `graphs/${g}/${name}.bin`, cacheControl: DAILY, contentType: 'application/octet-stream', encoding: 'br' });
     // F1-56: core and shapes of the same graph (scripts/field/split-graph.mts); the single file stays for older app versions
-    for (const part of ['inti', 'bentuk']) {
+    for (const part of ['inti', 'inti2', 'bentuk']) { // inti2: the smaller core (F1-61); inti stays for older app versions
       const f = join(root, 'graphs', g, `${name}_${part}.bin`);
       if (existsSync(f)) out.push({ local: f, key: `graphs/${g}/${name}_${part}.bin`, cacheControl: DAILY, contentType: 'application/octet-stream', encoding: 'br' });
     }
