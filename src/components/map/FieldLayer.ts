@@ -6,7 +6,7 @@ import { ensureVectorGrid } from './RoadMvtLayer';
 import { weightFor, opacityFor } from '../../lib/roadColors';
 import { fieldColor } from '../../lib/field/color';
 import { FIELD_DRAWN_EVENT, FIELD_REGIONS, FieldSource, overzoomPoints, type Box } from '../../lib/field/source';
-import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS, regionGate, routeSettled } from '../../lib/field/firstDraw';
+import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS, regionGate, routeSettled, markFieldDrawn } from '../../lib/field/firstDraw';
 import { HARGA_COLORS } from '../../lib/field/harga';
 import { popupHtml } from '../../lib/field/popup';
 import { nearestFeature, tileFraction, unitsPerPixel, type TileFeature } from '../../lib/field/tap';
@@ -74,7 +74,7 @@ export function useFieldLayer(
     let markDrawn: () => void = () => {};
     const firstDrawn = new Promise<void>((resolve) => { markDrawn = resolve; setTimeout(resolve, FIRST_DRAW_FALLBACK_MS); });
     // the first region cannot be drawn: release the base map and the other regions at once
-    const failFirst = () => { if (drawn) return; drawn = true; markDrawn(); window.dispatchEvent(new Event(FIELD_FAILED_EVENT)); };
+    const failFirst = () => { if (drawn) return; drawn = true; markDrawn(); markFieldDrawn(window); window.dispatchEvent(new Event(FIELD_FAILED_EVENT)); };
     // what the region in view does not need yet (other regions, harga files) waits for this
     const othersGo = waitRoute ? Promise.all([firstDrawn, routeSettled()]).then(() => undefined) : firstDrawn;
     ensureVectorGrid()
@@ -158,7 +158,7 @@ export function useFieldLayer(
             // tiles are in but no value yet: wait for the cell requests; if none arrived, the region failed
             if (!src.hasCells()) { if (k === 0) void src.cellsSettled().then(() => { if (!src.hasCells()) failFirst(); }); return; }
             drawn = true;
-            setTimeout(() => { markDrawn(); window.dispatchEvent(new Event(FIELD_DRAWN_EVENT)); }, 50);
+            setTimeout(() => { markDrawn(); markFieldDrawn(window); window.dispatchEvent(new Event(FIELD_DRAWN_EVENT)); }, 50);
           });
           layer.addTo(map);
           created.push(layer);

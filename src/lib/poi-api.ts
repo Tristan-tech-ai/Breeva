@@ -3,6 +3,7 @@ import { diagLog } from './poi-diagnostics';
 import { basemapRegion } from './basemapVector';
 import { fieldBase } from './field/source';
 import { loadPoiPack, poisInRect } from './poiPack';
+import { afterFirstDraw } from './field/firstDraw';
 
 // F1-69: inside a field region the POIs come from the region's pack (Overture + OSM, every named place), not Geoapify
 const POI_PACKS = import.meta.env.VITE_FIELD_STATIC === 'true';
@@ -208,6 +209,7 @@ export async function getPOIsInRect(
   const region = POI_PACKS ? basemapRegion((bounds.south + bounds.north) / 2, (bounds.west + bounds.east) / 2, 0) : null;
   if (region) {
     try {
+      await afterFirstDraw(); // the coloured map first: the pack (up to 0.6 MB) must not compete with it on 3G
       const all = await loadPoiPack(fieldBase(), region);
       return { pois: poisInRect(all, bounds, categories && categories.length > 0 ? categories.join(',') : undefined), error: null };
     } catch (e) {

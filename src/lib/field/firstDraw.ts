@@ -28,6 +28,22 @@ type Target = Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
  * files, since the route is what the visitor opened the link for); or after ms. Returns a cleanup that removes the
  * listeners and the timer.
  */
+const drawnOn = new WeakSet<object>();
+
+/** Called with the field events: later callers of afterFirstDraw on this target need not wait (F1-69). */
+export function markFieldDrawn(target: Target = window): void {
+  drawnOn.add(target);
+}
+
+/**
+ * Resolves once the field has drawn (or failed, or the fallback time passed); at once if it already did. Downloads that
+ * are not needed for the coloured map (the POI pack) wait for this so they do not compete on a slow link.
+ */
+export function afterFirstDraw(target: Target = window, ms?: number): Promise<void> {
+  if (drawnOn.has(target)) return Promise.resolve();
+  return new Promise((resolve) => { onFirstDraw(resolve, target, ms); });
+}
+
 export function onFirstDraw(cb: () => void, target: Target = window, ms?: number, waitRoute = false): () => void {
   let done = false;
   let drawn = false;
