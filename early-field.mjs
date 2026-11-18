@@ -24,7 +24,8 @@ export function parseRegions(sourceText) {
  * chooseStartRegion (?wilayah, the region last used on this device, Kota Bogor for a WIB phone, else the first);
  * any other path asks for nothing. School links ask for nothing. A route link on /peta (mode 'peta') asks only for the
  * core walking graph of the region holding both ends, chosen as WalkRouteLayer does (the first region whose bounds hold
- * the start, and only when they also hold the end); the map field waits for the route there anyway (F1-53). The header
+ * the start, and only when they also hold the end); the map field waits for the route there anyway (F1-53). A motor link
+ * also asks for the edge shapes, which a motor route waits for (school zone, F1-60). The header
  * request mirrors pmtiles FetchSource: bytes 0-16383, a weak ETag dropped.
  */
 export function earlyFieldScript(base, regions, mode = 'peta') {
@@ -41,7 +42,7 @@ export function earlyFieldScript(base, regions, mode = 'peta') {
       + `var n=function(g,p){return g[0][0]<=p[0]&&p[0]<=g[1][0]&&g[0][1]<=p[1]&&p[1]<=g[1][1]};`
       + `var x=function(u){return fetch(u).catch(function(){})};`
       + `for(var j=0;j<R.length;j++)if(n(R[j].bounds,P[0])){if(n(R[j].bounds,P[1])){var g=R[j].geometry,N=R[j].name,d=b+'/graphs/'+g+'/'+N;`
-      + `x(d+'_inti.bin');x(b+'/harga/'+g+'/'+N+'.bin');x(d+'_schools.json');`
+      + `x(d+'_inti.bin');x(b+'/harga/'+g+'/'+N+'.bin');x(d+'_schools.json');if(q.get('moda')==='motor')x(d+'_bentuk.bin');`
       + `fetch(b+'/v/'+N+'/manifest.json').then(function(y){if(!y.ok)throw 0;return y.json()}).then(function(m){`
       + `for(var k=0;k<m.cells.length;k++)x(b+'/v/'+N+'/'+m.run+'/'+m.cells[k]+'.bin')}).catch(function(){})}return}return}`
     : `if(q.has('rute'))return;`;

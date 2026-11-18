@@ -65,10 +65,11 @@ describe('the inline script of peta.html', () => {
       // exactly the URLs the route worker asks for (regionFiles.ts), so its requests are served from these downloads
       const want: string[] = [];
       if (region && inside(region, link!.to)) {
-        await loadRegionFiles(BASE, region, async (url) => {
+        const files = await loadRegionFiles(BASE, region, async (url) => {
           want.push(url);
           return new TextEncoder().encode(url.endsWith('manifest.json') ? JSON.stringify({ run: 'r', cells: [3, 7] }) : 'x');
         });
+        if (link!.mode === 'motor') want.push(files.shapesUrl); // a motor route waits for the edge shapes (F1-60)
       }
       const run = runScript(search);
       await new Promise((r) => setTimeout(r, 0)); // the cells follow the manifest
@@ -79,6 +80,7 @@ describe('the inline script of peta.html', () => {
     expect(runScript(links[2]).calls[0].url).toBe(`${BASE}/graphs/2026-11/kota_bogor_inti.bin`);
     expect(runScript(links[0]).early).toBeUndefined(); // no map field requests: the map field waits for the route (F1-53)
     expect(runScript(links[0]).calls.length).toBe(4); // graph core, harga, schools, manifest; the cells after it
+    expect(runScript(links[1]).calls.length).toBe(5); // a motor link also asks for the edge shapes
   });
 });
 
