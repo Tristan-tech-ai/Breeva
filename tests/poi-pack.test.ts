@@ -1,0 +1,63 @@
+import { describe, expect, it } from 'vitest';
+import { decodePoiPack, loadPoiPack, poiPackUrl, poisInRect, type PoiPackFile } from '../src/lib/poiPack';
+
+// F1-69: one POI source per field region (Overture places + OSM), read from a static pack instead of Geoapify (which
+// returned at most 100 places per view).
+const PACK: PoiPackFile = {
+  format: 'breeva_poi', v: 1, region: 'kota_bogor', release: '2026-10-21.0',
+  cats: ['catering.cafe', 'education.school', 'service.financial.atm'],
+  pois: [
+    ['Kopi Tuku', 0, -659500, 10680400, 'Jl. Pajajaran'],
+    ['SMA Negeri 1 Bogor', 1, -659000, 10679900, ''],
+    ['ATM BCA', 2, -660000, 10680000, ''],
+    ['Kafe jauh', 0, -650000, 10670000, ''],
+  ],
+};
+
+describe('POI packs', () => {
+  it('serves one pack per region under tiles/poi/<release>/', () => {
+    expect(poiPackUrl('https://cdn.test', 'kota_bogor')).toBe('https://cdn.test/tiles/poi/2026-10-21.0/kota_bogor.json');
+  });
+
+  it('decodes names, categories with their parents, coordinates and addresses', () => {
+    const p = decodePoiPack(PACK);
+    expect(p).toHaveLength(4);
+    expect(p[0]).toMatchObject({ name: 'Kopi Tuku', category: 'catering', subcategory: 'catering.cafe', coordinate: { lat: -6.595, lng: 106.804 }, address: 'Jl. Pajajaran' });
+    expect(p[0].types).toEqual(['catering.cafe', 'catering']);
+    expect(p[1].address).toBeUndefined();
+    expect(new Set(p.map((x) => x.id)).size).toBe(4);
+    expect(() => decodePoiPack({ ...PACK, v: 2 } as unknown as PoiPackFile)).toThrow();
+  });
+
+  it('keeps the places inside the box, all of them without a category filter (no 100 limit)', () => {
+    const p = decodePoiPack(PACK);
+    const box = { south: -6.61, west: 106.79, north: -6.58, east: 106.81 };
+    expect(poisInRect(p, box).map((x) => x.name)).toEqual(['Kopi Tuku', 'SMA Negeri 1 Bogor', 'ATM BCA']);
+    const many = { ...PACK, pois: Array.from({ length: 500 }, (_, i) => ['Warung ' + i, 0, -659500, 10680400, ''] as [string, number, number, number, string]) };
+    expect(poisInRect(decodePoiPack(many), box)).toHaveLength(500);
+  });
+
+  it('filters by Geoapify-style category lists, matching children of a listed category', () => {
+    const p = decodePoiPack(PACK);
+    const box = { south: -6.61, west: 106.79, north: -6.58, east: 106.81 };
+    expect(poisInRect(p, box, 'catering.cafe,catering.coffee_shop').map((x) => x.name)).toEqual(['Kopi Tuku']);
+    expect(poisInRect(p, box, 'catering').map((x) => x.name)).toEqual(['Kopi Tuku']);
+    expect(poisInRect(p, box, 'service.financial.atm,service.financial.bank').map((x) => x.name)).toEqual(['ATM BCA']);
+    expect(poisInRect(p, box, 'religion')).toEqual([]);
+  });
+
+  it('loads a pack once per page, cache first, and tries again after a failure', async () => {
+    let calls = 0;
+    const body = new TextEncoder().encode(JSON.stringify(PACK));
+    const ok = (async (_u: string, o: { cacheFirst: boolean }) => { calls++; expect(o.cacheFirst).toBe(true); return body; }) as never;
+    const a = await loadPoiPack('https://a.test', 'kota_bogor', ok);
+    const b = await loadPoiPack('https://a.test', 'kota_bogor', ok);
+    expect(a).toBe(b);
+    expect(calls).toBe(1);
+    let fails = 0;
+    const bad = (async () => { fails++; throw new Error('offline'); }) as never;
+    await expect(loadPoiPack('https://b.test', 'kota_bogor', bad)).rejects.toThrow('offline');
+    await expect(loadPoiPack('https://b.test', 'kota_bogor', bad)).rejects.toThrow('offline');
+    expect(fails).toBe(2);
+  });
+});

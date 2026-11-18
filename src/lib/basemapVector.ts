@@ -13,7 +13,7 @@ import { FIELD_REGIONS } from './field/source';
 export const BASEMAP_BUILD = '2026-11-17';
 /** Highest zoom stored in the files; deeper zooms reuse z14 data (overzoom). */
 export const BASEMAP_MAX_DATA_ZOOM = 14;
-export const BASEMAP_ATTRIBUTION = '<a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+export const BASEMAP_ATTRIBUTION = '<a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>; tempat: <a href="https://overturemaps.org">Overture Maps</a> (Meta, Microsoft, Foursquare dkk.)';
 
 export function basemapUrl(base: string, region: string): string {
   return `${base}/tiles/basemap/${BASEMAP_BUILD}/${region}.pmtiles`;

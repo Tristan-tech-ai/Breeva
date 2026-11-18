@@ -8,6 +8,7 @@
 import { FIELD_CACHES, fullKey } from './fieldCache';
 import { ROUTE_CACHE } from '../route/assets';
 import { basemapUrl } from '../basemapVector';
+import { poiPackUrl } from '../poiPack';
 
 export interface RegionRef { name: string; geometry: string }
 interface ManifestLike { run: string; cells: number[]; forecast_runs?: Array<{ key: string }> }
@@ -20,6 +21,8 @@ export function regionFiles(base: string, r: RegionRef, m: ManifestLike): Region
     { url: `${base}/tiles/${r.geometry}/${r.name}.pmtiles`, into: [FIELD_CACHES.geometry], whole: true },
     // F1-68: Breeva's own basemap of the region (street names, buildings, water), so the saved map is not a blank page
     { url: basemapUrl(base, r.name), into: [FIELD_CACHES.geometry], whole: true },
+    // F1-69: the region's places (POI layer and search) without internet
+    { url: poiPackUrl(base, r.name), into: [ROUTE_CACHE] },
     { url: `${v}/manifest.json`, into: [FIELD_CACHES.manifest, ROUTE_CACHE] },
     ...m.cells.map((c) => ({ url: `${v}/${m.run}/${c}.bin`, into: [FIELD_CACHES.cells, ROUTE_CACHE] })),
     ...(m.forecast_runs ?? []).map((f) => ({ url: `${v}/${m.run}/${f.key}`, into: [ROUTE_CACHE] })),

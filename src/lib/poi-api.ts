@@ -1,5 +1,11 @@
 import type { Coordinate } from '../types';
 import { diagLog } from './poi-diagnostics';
+import { basemapRegion } from './basemapVector';
+import { fieldBase } from './field/source';
+import { loadPoiPack, poisInRect } from './poiPack';
+
+// F1-69: inside a field region the POIs come from the region's pack (Overture + OSM, every named place), not Geoapify
+const POI_PACKS = import.meta.env.VITE_FIELD_STATIC === 'true';
 
 // POIs are fetched via our server proxy (/api/searchapi?provider=geoapify) so the
 // Geoapify key stays server-side (out of the client bundle) and popular tiles are
@@ -199,6 +205,15 @@ export async function getPOIsInRect(
   bounds: TileBounds,
   categories?: string[],
 ): Promise<{ pois: POI[]; error: string | null }> {
+  const region = POI_PACKS ? basemapRegion((bounds.south + bounds.north) / 2, (bounds.west + bounds.east) / 2, 0) : null;
+  if (region) {
+    try {
+      const all = await loadPoiPack(fieldBase(), region);
+      return { pois: poisInRect(all, bounds, categories && categories.length > 0 ? categories.join(',') : undefined), error: null };
+    } catch (e) {
+      diagLog('POI pack failed, Geoapify instead', { region, error: String(e) });
+    }
+  }
   const cats = categories && categories.length > 0
     ? categories.join(',')
     : DEFAULT_CATEGORIES;
