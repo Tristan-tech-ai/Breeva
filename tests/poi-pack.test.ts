@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodePoiPack, loadPoiPack, poiPackUrl, poisInRect, type PoiPackFile } from '../src/lib/poiPack';
+import { decodePoiPack, loadPoiPack, normName, poiPackUrl, poisInRect, searchPoiPack, type PoiPackFile } from '../src/lib/poiPack';
 
 // F1-69: one POI source per field region (Overture places + OSM), read from a static pack instead of Geoapify (which
 // returned at most 100 places per view).
@@ -59,5 +59,21 @@ describe('POI packs', () => {
     await expect(loadPoiPack('https://b.test', 'kota_bogor', bad)).rejects.toThrow('offline');
     await expect(loadPoiPack('https://b.test', 'kota_bogor', bad)).rejects.toThrow('offline');
     expect(fails).toBe(2);
+  });
+
+  it('searches names offline: start of name, then start of a word, then anywhere; nearest first within a rank (F1-71)', () => {
+    const p = decodePoiPack(PACK);
+    expect(normName('Kopi TUKU - Pajajaran')).toBe('kopi tuku pajajaran');
+    expect(searchPoiPack(p, 'kopi tuku').map((x) => x.name)).toEqual(['Kopi Tuku']);
+    expect(searchPoiPack(p, 'TUKU').map((x) => x.name)).toEqual(['Kopi Tuku']);
+    expect(searchPoiPack(p, 'bca').map((x) => x.name)).toEqual(['ATM BCA']);
+    expect(searchPoiPack(p, 'k')).toEqual([]); // one letter is too little
+    const hotel = decodePoiPack({ ...PACK, pois: [['Swissbel Hotel Bogor', 0, -659500, 10680400, '']] });
+    expect(searchPoiPack(hotel, 'Swiss-Belhotel').map((x) => x.name)).toEqual(['Swissbel Hotel Bogor']); // spaces differ between sources
+    const two = decodePoiPack({ ...PACK, pois: [['Kafe Jauh', 0, -650000, 10670000, ''], ['Kafe Dekat', 0, -659500, 10680400, '']] });
+    expect(searchPoiPack(two, 'kafe', { lat: -6.595, lng: 106.804 }).map((x) => x.name)).toEqual(['Kafe Dekat', 'Kafe Jauh']);
+    expect(searchPoiPack(two, 'kafe', undefined, 1)).toHaveLength(1);
+    const twice = decodePoiPack({ ...PACK, pois: [['Museum Bali', 0, -865800, 11521600, ''], ['Museum Bali', 0, -865850, 11521650, ''], ['Museum Bali', 0, -870000, 11520000, '']] });
+    expect(searchPoiPack(twice, 'museum bali')).toHaveLength(2); // the same place mapped twice shows once; one 5 km away stays
   });
 });

@@ -22,6 +22,9 @@ import { relabelScoredRoutes } from '../lib/routeLabels';
 import { readFieldArea } from '../lib/field/areaClient';
 import { startRegionHere } from '../lib/field/source';
 import { parseViewLink } from '../lib/route/share';
+import { basemapRegion } from '../lib/basemapVector';
+import { fieldBase } from '../lib/field/source';
+import { loadPoiPack, searchPoiPack } from '../lib/poiPack';
 
 const FIELD_STATIC_STORE = import.meta.env.VITE_FIELD_STATIC === 'true';
 // ?pusat=lat,lng,zoom: the app map opens at that view (QA screenshots of one street, demo links)
@@ -253,6 +256,23 @@ export const useMapStore = create<MapState>()((set, get) => ({
     set({ isSearching: true });
     const { userLocation } = get();
 
+    // F1-71: inside a field region the region's own places answer first, also without internet
+    const anchor = userLocation || get().center;
+    const region = FIELD_STATIC_STORE ? basemapRegion(anchor.lat, anchor.lng) : null;
+    let local: SearchResult[] = [];
+    if (region) {
+      try {
+        local = searchPoiPack(await loadPoiPack(fieldBase(), region), query, anchor).map((p) => ({
+          name: p.name, coordinate: p.coordinate, address: p.address, category: p.subcategory, types: p.types,
+        }));
+        if (local.length) set({ searchResults: local });
+      } catch { /* no pack: the web search below still answers */ }
+    }
+    const withLocal = (remote: SearchResult[]): SearchResult[] => {
+      const near = (a: SearchResult, b: SearchResult) => Math.abs(a.coordinate.lat - b.coordinate.lat) < 0.0005 && Math.abs(a.coordinate.lng - b.coordinate.lng) < 0.0005;
+      return [...local, ...remote.filter((r) => !local.some((l) => near(l, r)))];
+    };
+
     // Try Google Maps via SearchAPI first (richest data)
     let googleResults: SearchResult[] = [];
     try {
@@ -279,7 +299,7 @@ export const useMapStore = create<MapState>()((set, get) => ({
 
     // If Google returned enough results, use them directly
     if (googleResults.length >= 3) {
-      set({ searchResults: googleResults, isSearching: false });
+      set({ searchResults: withLocal(googleResults), isSearching: false });
       return;
     }
 
@@ -292,9 +312,9 @@ export const useMapStore = create<MapState>()((set, get) => ({
         const key = `${p.coordinate.lat.toFixed(4)},${p.coordinate.lng.toFixed(4)}`;
         if (!seen.has(key)) { merged.push(p); seen.add(key); }
       }
-      set({ searchResults: merged, isSearching: false });
+      set({ searchResults: withLocal(merged), isSearching: false });
     } catch {
-      set({ searchResults: googleResults, isSearching: false });
+      set({ searchResults: withLocal(googleResults), isSearching: false });
     }
   },
 

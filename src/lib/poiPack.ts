@@ -42,6 +42,42 @@ export function poisInRect(pois: POI[], b: { south: number; west: number; north:
     && (!wanted.length || (p.types ?? []).some((t) => wanted.some((w) => t === w || t.startsWith(w + '.')))));
 }
 
+/** Lowercase, without accents and punctuation, single spaces ("Kopi TUKU - Pajajaran" -> "kopi tuku pajajaran"). */
+export function normName(s: string): string {
+  return s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/**
+ * Places of a pack whose name matches the query (F1-71): the whole name starting with it first, then a word starting
+ * with it, then the text anywhere, then the text without spaces; within a rank the nearest to `near` first. Works without internet once the pack is
+ * saved with the region.
+ */
+export function searchPoiPack(pois: POI[], query: string, near?: { lat: number; lng: number }, max = 8): POI[] {
+  const q = normName(query);
+  if (q.length < 2) return [];
+  const qc = q.replace(/ /g, '');
+  const scored: Array<{ p: POI; rank: number; d: number }> = [];
+  for (const p of pois) {
+    const n = normName(p.name);
+    const nc = n.replace(/ /g, '');
+    // spaces differ between sources ("Swiss-Belhotel" and "Swissbel Hotel"): compare without spaces as well
+    const rank = n.startsWith(q) || nc.startsWith(qc) ? 0 : (' ' + n).includes(' ' + q) ? 1 : n.includes(q) ? 2 : nc.includes(qc) ? 3 : -1;
+    if (rank < 0) continue;
+    const d = near ? (p.coordinate.lat - near.lat) ** 2 + ((p.coordinate.lng - near.lng) * Math.cos((near.lat * Math.PI) / 180)) ** 2 : 0;
+    scored.push({ p, rank, d });
+  }
+  scored.sort((a, b) => a.rank - b.rank || a.d - b.d || a.p.name.length - b.p.name.length);
+  // one result per place: the same name within about 300 m is the same place mapped twice (two sources or two features)
+  const out: POI[] = [];
+  for (const { p } of scored) {
+    if (out.length >= max) break;
+    const n = normName(p.name);
+    if (out.some((o) => normName(o.name) === n && Math.abs(o.coordinate.lat - p.coordinate.lat) < 0.003 && Math.abs(o.coordinate.lng - p.coordinate.lng) < 0.003)) continue;
+    out.push(p);
+  }
+  return out;
+}
+
 const loaded = new Map<string, Promise<POI[]>>();
 
 /** The decoded pack of a region, once per page (cache first, so a saved region works offline). */
