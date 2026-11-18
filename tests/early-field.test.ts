@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { chooseStartRegion, defaultFetch, earlyHeaderSource, fetchManifest, FIELD_REGIONS, takeEarly } from '../src/lib/field/source';
 // @ts-expect-error plain ES module used by the build (prerender-routes.mjs)
 import { atHeadStart, earlyFieldScript, parseRegions } from '../early-field.mjs';
-import { graphUrls } from '../src/lib/route/regionFiles';
+import { loadRegionFiles } from '../src/lib/route/regionFiles';
 import { parseRouteLink } from '../src/lib/route/share';
 
 // F1-54: peta.html starts the region manifest and the PMTiles header with the HTML; the app takes them once.
@@ -18,7 +18,7 @@ function runScript(search: string, o: { mode?: 'peta' | 'app'; path?: string; st
   const fetch = (url: string, init?: { cache?: string; headers?: Record<string, string> }) => {
     calls.push({ url, init });
     return Promise.resolve(url.endsWith('manifest.json')
-      ? { ok: true, status: 200, json: () => Promise.resolve({ run: 'r' }), headers: { get: () => null } }
+      ? { ok: true, status: 200, json: () => Promise.resolve({ run: 'r', cells: [3, 7] }), headers: { get: () => null } }
       : { ok: true, status: 206, arrayBuffer: () => Promise.resolve(new ArrayBuffer(4)), headers: { get: (h: string) => (h === 'ETag' ? 'W/"weak"' : null) } });
   };
   const code = (earlyFieldScript(BASE, regions, o.mode ?? 'peta') as string).replace(/^<script>|<\/script>$/g, '');
@@ -49,7 +49,7 @@ describe('the inline script of peta.html', () => {
   it('does nothing for school links', () => {
     expect(runScript('?sekolah=-6.6,106.8,SMA').calls).toEqual([]);
   });
-  it('starts only the core walking graph of a route link, for the region WalkRouteLayer would route in (F1-57)', () => {
+  it('starts the route files of a route link, for the region WalkRouteLayer would route in (F1-57, F1-59)', async () => {
     // WalkRouteLayer: the first region whose bounds hold the start, and only when they also hold the end
     const inside = (r: (typeof FIELD_REGIONS)[number], p: { lat: number; lng: number }) =>
       r.bounds[0][0] <= p.lat && p.lat <= r.bounds[1][0] && r.bounds[0][1] <= p.lng && p.lng <= r.bounds[1][1];
@@ -62,12 +62,23 @@ describe('the inline script of peta.html', () => {
     for (const search of links) {
       const link = parseRouteLink(search);
       const region = link && FIELD_REGIONS.find((r) => inside(r, link.from));
-      const want = region && inside(region, link!.to) ? [graphUrls(BASE, region).core] : [];
-      expect(runScript(search).calls.map((c) => c.url), search).toEqual(want);
+      // exactly the URLs the route worker asks for (regionFiles.ts), so its requests are served from these downloads
+      const want: string[] = [];
+      if (region && inside(region, link!.to)) {
+        await loadRegionFiles(BASE, region, async (url) => {
+          want.push(url);
+          return new TextEncoder().encode(url.endsWith('manifest.json') ? JSON.stringify({ run: 'r', cells: [3, 7] }) : 'x');
+        });
+      }
+      const run = runScript(search);
+      await new Promise((r) => setTimeout(r, 0)); // the cells follow the manifest
+      expect(run.calls.map((c) => c.url).sort(), search).toEqual(want.sort());
+      expect(run.calls.every((c) => c.init === undefined), search).toBe(true); // plain requests, like the worker's
     }
     expect(runScript(links[0]).calls[0].url).toBe(`${BASE}/graphs/2026-11/badung_denpasar_inti.bin`);
     expect(runScript(links[2]).calls[0].url).toBe(`${BASE}/graphs/2026-11/kota_bogor_inti.bin`);
-    expect(runScript(links[0]).early).toBeUndefined(); // no field requests: the map field waits for the route (F1-53)
+    expect(runScript(links[0]).early).toBeUndefined(); // no map field requests: the map field waits for the route (F1-53)
+    expect(runScript(links[0]).calls.length).toBe(4); // graph core, harga, schools, manifest; the cells after it
   });
 });
 

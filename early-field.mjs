@@ -39,7 +39,11 @@ export function earlyFieldScript(base, regions, mode = 'peta') {
     ? `if(q.has('rute')){var u=(q.get('rute')||'').split('~'),P=[];for(var i=0;i<u.length;i++){var c=u[i].split(','),la=+c[0],ln=+c[1];`
       + `if(c.length===2&&c[0]!==''&&c[1]!==''&&isFinite(la)&&isFinite(ln))P.push([la,ln])}if(u.length!==2||P.length!==2)return;`
       + `var n=function(g,p){return g[0][0]<=p[0]&&p[0]<=g[1][0]&&g[0][1]<=p[1]&&p[1]<=g[1][1]};`
-      + `for(var j=0;j<R.length;j++)if(n(R[j].bounds,P[0])){if(n(R[j].bounds,P[1]))fetch(b+'/graphs/'+R[j].geometry+'/'+R[j].name+'_inti.bin').catch(function(){});return}return}`
+      + `var x=function(u){return fetch(u).catch(function(){})};`
+      + `for(var j=0;j<R.length;j++)if(n(R[j].bounds,P[0])){if(n(R[j].bounds,P[1])){var g=R[j].geometry,N=R[j].name,d=b+'/graphs/'+g+'/'+N;`
+      + `x(d+'_inti.bin');x(b+'/harga/'+g+'/'+N+'.bin');x(d+'_schools.json');`
+      + `fetch(b+'/v/'+N+'/manifest.json').then(function(y){if(!y.ok)throw 0;return y.json()}).then(function(m){`
+      + `for(var k=0;k<m.cells.length;k++)x(b+'/v/'+N+'/'+m.run+'/'+m.cells[k]+'.bin')}).catch(function(){})}return}return}`
     : `if(q.has('rute'))return;`;
   return `<script>(function(){try{var q=new URLSearchParams(location.search),R=${R},b=${B};${route}if(q.has('sekolah'))return;`
     + `var w=q.get('wilayah'),r=null;function f(n){for(var i=0;i<R.length;i++)if(R[i].name===n)return R[i];return null}${pick}`
