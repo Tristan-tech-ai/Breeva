@@ -17,6 +17,8 @@ export interface WalkRoute {
   school?: 'off' | 'kept' | 'lifted-near-ends';
   /** Motor routes while the school zone is on: this route against the same kind of route without the zone. */
   schoolCost?: { extraM: number; extraS: number; changed: boolean };
+  /** Motor 'dua-angka' route: the emergency (fastest) search found this same route, so only one card is shown. */
+  sameAsFastest?: boolean;
 }
 
 export type SoonHours = NonNullable<WalkRoute['soon']>;

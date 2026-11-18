@@ -9,6 +9,7 @@
  *     second reply { id, type: 'soon', ok: true, soon } sent after the routes (the route reply says soonPending)
  * Replies { id, ok: true, ... } or { id, ok: false, error }.
  */
+import { sameRoute } from '../lib/route/sameRoute';
 import { WalkGraph } from '../lib/route/walkGraph';
 import { NodeIndex, pareto, route, type RouteResult } from '../lib/route/router';
 import { motorNode } from '../lib/route/cost';
@@ -104,7 +105,7 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
   if (s < 0 || t < 0) throw new Error('titik di luar jaringan jalan wilayah ini');
   const nArr = field?.no2 ?? no2, pArr = pm25, hArr = harga, xArr = field?.exhaust ?? exhaust;
   let routes: Array<RouteResult & { kind?: 'dua-angka' | 'darurat'; school?: 'off' | 'kept' | 'lifted-near-ends';
-    schoolCost?: { extraM: number; extraS: number; changed: boolean } }>;
+    schoolCost?: { extraM: number; extraS: number; changed: boolean }; sameAsFastest?: boolean }>;
   if (mode === 'motor') {
     const inp = { no2: nArr, harga: hArr ?? undefined };
     const zone = schoolZone(g);
@@ -120,9 +121,9 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
     };
     const zoneOn = two.school !== 'off';
     const twoCost = zoneOn ? costOf(two.route, false) : undefined;
-    // fastest (emergency) first, like the walking list; the same route twice is shown once
-    routes = emer.route.edges.join(',') === two.route.edges.join(',')
-      ? [{ ...two.route, kind: 'dua-angka', school: two.school, schoolCost: twoCost }]
+    // fastest (emergency) first, like the walking list; the same route twice is shown once, and the card says so (F1-58)
+    routes = sameRoute(emer.route, two.route)
+      ? [{ ...two.route, kind: 'dua-angka', school: two.school, schoolCost: twoCost, sameAsFastest: true }]
       : [{ ...emer.route, kind: 'darurat', school: emer.school, schoolCost: emer.school !== 'off' ? costOf(emer.route, true) : undefined },
         { ...two.route, kind: 'dua-angka', school: two.school, schoolCost: twoCost }];
   } else {
@@ -145,7 +146,8 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
     // mean concentration along the route (ug/m3), the honest number to compare routes by
     const o = { lengthM: Math.round(r.lengthM), timeS: Math.round(r.timeS), pm25Mean: pmDose / tSum, no2Mean: no2Dose / tSum, exhMean: xDose / tSum, coords, w: r.w,
       forecastHour: field ? field.hour : null };
-    return mode === 'motor' ? { ...o, kind: r.kind, hargaMean: hDose / tSum, school: r.school, schoolCost: r.schoolCost } : o;
+    return mode === 'motor' ? { ...o, kind: r.kind, hargaMean: hDose / tSum, school: r.school, schoolCost: r.schoolCost,
+      ...(r.sameAsFastest ? { sameAsFastest: true } : {}) } : o;
   });
   return { routes: out, raw };
 }

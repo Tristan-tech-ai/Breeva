@@ -25,6 +25,8 @@ export interface RouteCard {
   schoolNote: string | null;
   /** Motor routes during school hours: the minutes and metres the zone adds, or that it changes nothing. */
   schoolCost: string | null;
+  /** Motor routes: the emergency route is this same route, so it has no card of its own (F1-58). */
+  sameNote: string | null;
 }
 
 export const SCHOOL_NOTES = {
@@ -52,6 +54,8 @@ export function schoolCostText(cost: { extraM: number; extraS: number; changed: 
   const parts = [min >= 1 ? `${min} menit` : 'kurang dari 1 menit', m >= 50 ? `${m.toLocaleString('id-ID')} m` : null].filter(Boolean);
   return `Zona sekolah menambah ${parts.join(' dan ')} dibanding rute tanpa zona`;
 }
+
+export const SAME_AS_FASTEST = 'Rute darurat (paling cepat) sama dengan rute ini pada jam ini, jadi hanya satu rute yang tampil';
 
 /** Fastest orange, cleanest teal, the rest slate: none of them an ISPU colour (Sedang is blue), drawn on a white casing. */
 export const ROUTE_COLORS = { fastest: '#c2410c', cleanest: '#0f766e', other: '#475569' } as const;
@@ -95,6 +99,7 @@ export function routeCards(routes: WalkRoute[]): RouteCard[] {
       harga: r.hargaMean != null ? Math.round(r.hargaMean * 100) / 100 : null,
       schoolNote: r.school === 'kept' || r.school === 'lifted-near-ends' ? SCHOOL_NOTES[r.school] : null,
       schoolCost: r.school === 'kept' || r.school === 'lifted-near-ends' ? schoolCostText(r.schoolCost) : null,
+      sameNote: r.kind === 'dua-angka' && r.sameAsFastest ? SAME_AS_FASTEST : null,
       km: (r.lengthM / 1000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       minutes: Math.max(1, Math.round(r.timeS / 60)),
       no2: Math.round(r.no2Mean * 10) / 10, pm25: Math.round(r.pm25Mean * 10) / 10,
@@ -119,6 +124,7 @@ export function announceRoutes(cards: RouteCard[], status: string): string {
     `${c.label}: ${c.km} km, ${c.minutes} menit.`,
     c.headline ? `${c.headline.replace(/\.$/, '')}.` : '',
     c.schoolCost ? `${c.schoolCost.replace(/\.$/, '')}.` : '',
+    c.sameNote ? `${c.sameNote}.` : '',
     c.soonHint ? `${c.soonHint.replace(/\.$/, '')}.` : '',
   ].filter(Boolean).join(' '));
   return `${cards.length} rute. ${parts.join(' ')}`;
