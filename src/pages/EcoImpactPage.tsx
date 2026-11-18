@@ -276,7 +276,7 @@ export default function EcoImpactPage() {
               </div>
             </div>
             <div className="h-44">
-              <Suspense fallback={<div className="h-full flex flex-col gap-2 p-2 animate-pulse"><div className="flex items-end gap-1.5 flex-1">{[...Array(7)].map((_, i) => <div key={i} className="flex-1 rounded-t bg-gray-200 dark:bg-gray-700" style={{ height: `${20 + Math.random() * 60}%` }} />)}</div><div className="flex justify-between">{[...Array(7)].map((_, i) => <div key={i} className="w-6 h-2 rounded bg-gray-100 dark:bg-gray-800" />)}</div></div>}>
+              <Suspense fallback={<div className="h-full flex flex-col gap-2 p-2 animate-pulse"><div className="flex items-end gap-1.5 flex-1">{[...Array(7)].map((_, i) => <div key={i} className="flex-1 rounded-t bg-gray-200 dark:bg-gray-700" style={{ height: `${20 + ((i * 37) % 60)}%` }} />)}</div><div className="flex justify-between">{[...Array(7)].map((_, i) => <div key={i} className="w-6 h-2 rounded bg-gray-100 dark:bg-gray-800" />)}</div></div>}>
                 <LazyCharts data={weeklyData} tab={chartTab} />
               </Suspense>
             </div>
