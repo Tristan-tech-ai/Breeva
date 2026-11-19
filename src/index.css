@@ -835,6 +835,11 @@
   bottom: var(--sheet-h, 0px);
   transition: bottom 0.3s ease;
 }
+/* ...and keeps clear of the round buttons at the right edge (right-4 + 40 px wide), whatever the sheet's height */
+.home-map .leaflet-bottom.leaflet-right .leaflet-control-attribution {
+  margin-right: 64px;
+  max-width: calc(100% - 80px);
+}
 /* X-W52: on /peta the route button sits at the bottom left; the attribution wraps to its right instead of under it
    (button: left 12 px + about 150 px wide; 172 px leaves a gap) */
 .peta-tombol-kiri .leaflet-bottom.leaflet-right .leaflet-control-attribution {

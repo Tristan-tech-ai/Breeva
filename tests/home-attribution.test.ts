@@ -27,4 +27,10 @@ describe('home map attribution above the bottom sheet', () => {
     expect(HOME).toMatch(/'--sheet-h': sheetLift\(bottomSheetState\)/);
     expect(CSS).toMatch(/\.home-map \.leaflet-bottom \{\s*bottom: var\(--sheet-h, 0px\);/);
   });
+
+  it('leaves room for the round buttons at the right edge', () => {
+    const m = /\.home-map \.leaflet-bottom\.leaflet-right \.leaflet-control-attribution \{\s*margin-right: (\d+)px;/.exec(CSS);
+    expect(m).not.toBeNull();
+    expect(Number(m![1])).toBeGreaterThanOrEqual(16 + 40 + 4); // right-4 and the 40 px button
+  });
 });
