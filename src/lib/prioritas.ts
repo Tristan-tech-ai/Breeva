@@ -12,7 +12,72 @@ export interface DaftarPrioritas {
   wilayah: string; tanggal: string; zona: string; dibuat: string; jumlah: number; urutan: string;
   jam_kegiatan: Record<string, number[]>; mesin: string; cams_harian: number; ruas: number; geometri: string;
   ringkasan: { lalin_di_atas_1: number; lalin_di_atas_0_5: number; pm25_median: number; asap_median?: number; asap_p90?: number };
+  /** facilities in the OpenStreetMap table, those left out (courses, adult education) and the merged points (X-W88, X-W90) */
+  sumber_jumlah?: number;
+  dikeluarkan?: Array<{ id: string; nama: string; jenis: string; alasan: string }>;
+  digabung?: Array<{ tetap: string; nama: string; digabung: Array<{ id: string; nama: string; alasan: string }> }>;
+  /** order against a list computed for another day (X-W89) */
+  stabilitas?: { banding_tanggal: string; fasilitas_sama: number; spearman: number; sepuluh_teratas_sama: number };
   fasilitas: Fasilitas[];
+}
+
+/** The first Monday-Friday after the local date of `nowLocal` (a Date whose UTC fields hold local time), at 00:00 UTC. */
+export function nextSchoolDay(nowLocal: Date): Date {
+  const d = new Date(Date.UTC(nowLocal.getUTCFullYear(), nowLocal.getUTCMonth(), nowLocal.getUTCDate() + 1));
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1);
+  return d;
+}
+
+/** Ranks with ties averaged (1-based). */
+function ranks(x: number[]): number[] {
+  const idx = x.map((v, i) => [v, i] as const).sort((a, b) => a[0] - b[0]);
+  const r = new Array<number>(x.length);
+  for (let i = 0; i < idx.length;) {
+    let j = i;
+    while (j + 1 < idx.length && idx[j + 1][0] === idx[i][0]) j++;
+    for (let k = i; k <= j; k++) r[idx[k][1]] = (i + j) / 2 + 1;
+    i = j + 1;
+  }
+  return r;
+}
+
+/** Spearman rank correlation (Pearson correlation of the tie-averaged ranks). */
+export function spearman(a: number[], b: number[]): number {
+  if (a.length !== b.length || a.length < 2) return NaN;
+  const ra = ranks(a), rb = ranks(b);
+  const m = (a.length + 1) / 2;
+  let num = 0, da = 0, db = 0;
+  for (let i = 0; i < a.length; i++) { num += (ra[i] - m) * (rb[i] - m); da += (ra[i] - m) ** 2; db += (rb[i] - m) ** 2; }
+  return num / Math.sqrt(da * db);
+}
+
+/** How many of the first n of one order are among the first n of the other. */
+export function topOverlap(a: string[], b: string[], n: number): number {
+  const top = new Set(b.slice(0, n));
+  return a.slice(0, n).filter((x) => top.has(x)).length;
+}
+
+/** How the OpenStreetMap table became the list: courses and adult education left out, gates and repeated points merged. */
+export function saringTeks(d: Pick<DaftarPrioritas, 'sumber_jumlah' | 'jumlah' | 'dikeluarkan' | 'digabung'>): string {
+  const keluar = d.dikeluarkan?.length ?? 0;
+  const gabung = (d.digabung ?? []).reduce((n, m) => n + m.digabung.length, 0);
+  const ribu = (n: number) => n.toLocaleString('id-ID');
+  const bagian = [
+    keluar ? `${ribu(keluar)} tempat kursus, bimbel, dan perguruan tinggi tidak dihitung sebagai sekolah` : '',
+    gabung ? `${ribu(gabung)} titik gerbang atau bangunan ganda digabung ke fasilitasnya` : '',
+  ].filter(Boolean);
+  return `Dari ${ribu(d.sumber_jumlah ?? d.jumlah)} titik OpenStreetMap jadi ${ribu(d.jumlah)} fasilitas: ${bagian.join('; ')}.`;
+}
+
+/** The date line of the list: the school day it was computed for, and how little the order moves between days. */
+export function tanggalDaftar(d: Pick<DaftarPrioritas, 'tanggal' | 'zona' | 'stabilitas'>): string {
+  const hari = (t: string) => new Date(`${t}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const base = `Contoh hari sekolah: ${hari(d.tanggal)} (${d.zona}), dengan prakiraan angin hari itu dan pola lalu lintas jam kegiatan.`;
+  const s = d.stabilitas;
+  if (!s || !Number.isFinite(s.spearman)) return base;
+  const kata = s.spearman >= 0.9 ? 'Urutan hampir tidak bergantung pada cuaca harian' : 'Urutan ikut berubah dengan cuaca harian';
+  return `${base} ${kata}: dibanding daftar ${hari(s.banding_tanggal)}, korelasi peringkat ` +
+    `${fmt(s.spearman, 2)} dan ${s.sepuluh_teratas_sama} dari 10 teratas sama.`;
 }
 
 export const JENIS: Record<string, string> = {

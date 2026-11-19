@@ -18,6 +18,8 @@ import { pasquillClass } from '../../api/vayu/_caline4.js';
 import { exhaustAt, urbanStability, type Stability } from '../../src/lib/field/exhaust.js';
 import { RoadPack } from './pack.js';
 import { exhaustSources, makeInterp, roadRow, type FieldInputs } from './engine.js';
+import { courseReason, mergeFacilities } from './facility-clean.js';
+import { nextSchoolDay, spearman, topOverlap } from '../../src/lib/prioritas.js';
 
 function arg(name: string, def?: string): string {
   const i = process.argv.indexOf(`--${name}`);
@@ -58,16 +60,21 @@ export const ACTIVITY_HOURS: Record<string, number[]> = {
 
 const t0 = Date.now();
 const pack = new RoadPack(new Uint8Array(readFileSync(arg('pack'))));
-const fac = parseCsv(readFileSync(arg('facilities'), 'utf8'));
+// Tutoring centres, courses and adult education mapped as schools leave the list, each with its reason (X-W88).
+const facAll = parseCsv(readFileSync(arg('facilities'), 'utf8'));
+const dikeluarkan = facAll.filter((f) => courseReason(f.nama, f.jenis))
+  .map((f) => ({ id: `${f.t}/${f.id}`, nama: f.nama, jenis: f.jenis, alasan: courseReason(f.nama, f.jenis)! }));
+const fac = facAll.filter((f) => !courseReason(f.nama, f.jenis));
 const region = arg('region');
 const tz = Number(arg('tz'));
 const name = arg('name');
 const outPath = arg('out');
 
-// Open-Meteo forecast fetched once per URL with 48 hourly steps; each forecast hour is an index into the same arrays.
+// Open-Meteo forecast fetched once per URL with 120 hourly steps (both APIs answer 120, checked 20 Nov 2026); each forecast hour is an index into the same arrays.
+const FORECAST_HOURS = 120;
 const memo = new Map<string, string>();
 const memoFetch = (async (url: string) => {
-  const u = String(url).replace(/forecast_hours=\d+/, 'forecast_hours=48');
+  const u = String(url).replace(/forecast_hours=\d+/, `forecast_hours=${FORECAST_HOURS}`);
   if (!memo.has(u)) {
     const r = await fetch(u);
     if (!r.ok) throw new Error(`Open-Meteo ${r.status}`);
@@ -78,12 +85,15 @@ const memoFetch = (async (url: string) => {
 
 const now = new Date();
 const nowLocal = new Date(now.getTime() + tz * 3600_000);
-const tomorrow = new Date(Date.UTC(nowLocal.getUTCFullYear(), nowLocal.getUTCMonth(), nowLocal.getUTCDate() + 1));
+// The list is for a school day: the first Monday-Friday from tomorrow on (X-W89; a Saturday is not a school day for most
+// schools). Monday after a Friday run is at most 4 days ahead, inside the 120-hour forecast fetched above.
+const tomorrow = nextSchoolDay(nowLocal);
 const dateLocal = tomorrow.toISOString().slice(0, 10);
 const month = tomorrow.getUTCMonth() + 1;
 // forecast offset (hours from the current UTC hour) of local hour h tomorrow
 const startUtcHour = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours());
 const fhOf = (h: number) => Math.round((tomorrow.getTime() + (h - tz) * 3600_000 - startUtcHour) / 3600_000);
+if (fhOf(0) < 0 || fhOf(23) >= FORECAST_HOURS) throw new Error(`school day ${tomorrow.toISOString().slice(0, 10)} outside the forecast`);
 
 const [w, s, e, n] = pack.meta.bbox;
 const camsDaily = await fetchCamsDailyMean((s + n) / 2, (w + e) / 2, region, dateLocal);
@@ -135,7 +145,7 @@ for (const h of neededHours) {
 }
 
 const round = (x: number, d = 1) => Math.round(x * 10 ** d) / 10 ** d;
-const items = fac.map((f, k) => {
+const computed = fac.map((f, k) => {
   const hours = ACTIVITY_HOURS[f.jenis] ?? ACTIVITY_HOURS.school;
   const vals = hours.map((h) => perHour.get(h)![k]);
   const mean = (sel: (v: HourVal) => number) => vals.reduce((a, v) => a + sel(v), 0) / vals.length;
@@ -148,6 +158,8 @@ const items = fac.map((f, k) => {
     pm25_puncak: round(peak.v), jam_puncak: peak.h, pi95: round(mean((v) => v.pi_half)),
   };
 });
+// A gate mapped as its own point and one facility mapped as several buildings become one entry, at its most exposed point (X-W90).
+const { items, merges: digabung } = mergeFacilities(computed);
 // Ranked by vehicle exhaust (traffic NOx) during activity hours: it is resolved facility by facility and is what road and
 // school measures can change. Totals are shown, but their 95% interval (about +-23 ug/m3) is wider than the spread of
 // totals between facilities, so totals cannot order them.
@@ -156,6 +168,20 @@ const asap = items.map((it) => it.no2_lalin).sort((a, b) => a - b);
 const q = (p: number) => asap[Math.min(asap.length - 1, Math.floor(p * asap.length))];
 const rankIn: Record<string, number> = {};
 const ranked = items.map((it, j) => ({ peringkat: j + 1, peringkat_kelas: (rankIn[it.kelas] = (rankIn[it.kelas] ?? 0) + 1), ...it }));
+
+// X-W89: how much the order depends on the day's weather. Against an earlier list (--banding), over the facilities in
+// both: Spearman correlation of the exhaust values and how many of the first ten stay in the first ten.
+const bandingPath = process.argv.includes('--banding') ? arg('banding') : null;
+const stabilitas = bandingPath ? (() => {
+  const old = JSON.parse(readFileSync(bandingPath, 'utf8')) as { tanggal: string; fasilitas: Array<{ id: string; no2_lalin: number }> };
+  const prev = new Map(old.fasilitas.map((f) => [f.id, f.no2_lalin]));
+  const both = ranked.filter((f) => prev.has(f.id));
+  return {
+    banding_tanggal: old.tanggal, fasilitas_sama: both.length,
+    spearman: round(spearman(both.map((f) => f.no2_lalin), both.map((f) => prev.get(f.id)!)), 3),
+    sepuluh_teratas_sama: topOverlap(both.map((f) => f.id), [...both].sort((a, b) => prev.get(b.id)! - prev.get(a.id)!).map((f) => f.id), 10),
+  };
+})() : null;
 
 const out = {
   wilayah: name, tanggal: dateLocal, zona: `UTC+${tz}`, dibuat: new Date().toISOString(),
@@ -170,6 +196,9 @@ const out = {
   mesin: 'VAYU v2.2: latar CAMS (Open-Meteo, prakiraan per jam) + asap kendaraan iso1 (semua jalan besar dalam 500 m dan 40 jalan kecil terdekat, angin segala arah, minimal 1 m/s, jalan dua jalur dibagi dua)',
   cams_harian: round(camsDaily, 2), ruas: pack.n, geometri: pack.meta.geometry,
   detik: (Date.now() - t0) / 1000,
+  // the source table, what left it and what was merged, so every count can be traced back to OpenStreetMap
+  sumber_jumlah: facAll.length, dikeluarkan, digabung,
+  ...(stabilitas ? { stabilitas } : {}),
   fasilitas: ranked,
 };
 mkdirSync(dirname(outPath), { recursive: true });

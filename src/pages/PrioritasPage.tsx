@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, School, Stethoscope, Search, Info, MapPin } from 'lucide-react';
 import { Seo } from '../components/Seo';
-import { fmt, indicativeNote, JALAN, JENIS, PAGE_SIZE, PRIORITAS_REGIONS, pickPrioritasRegion, rentangJam, saringUrut, type DaftarPrioritas, type Saring } from '../lib/prioritas';
+import { fmt, indicativeNote, JALAN, JENIS, PAGE_SIZE, PRIORITAS_REGIONS, pickPrioritasRegion, rentangJam, saringTeks, saringUrut, tanggalDaftar, type DaftarPrioritas, type Saring } from '../lib/prioritas';
 import { CAMS_NOTICE, OPEN_METEO_LINK } from '../lib/attribution';
 import { destLink } from '../lib/route/share';
 import { simulasiLine, type SimulasiFile } from '../lib/simulasi';
@@ -79,8 +79,10 @@ export default function PrioritasPage() {
           </p>
           {data && (
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Perkiraan untuk {new Date(`${data.tanggal}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} ({data.zona}),
-              dihitung {new Date(data.dibuat).toLocaleString('id-ID')} dari {data.ruas.toLocaleString('id-ID')} ruas jalan.
+              {tanggalDaftar(data)} Dihitung {new Date(data.dibuat).toLocaleString('id-ID')} dari {data.ruas.toLocaleString('id-ID')} ruas jalan.
+              {data.sumber_jumlah != null && data.sumber_jumlah > data.jumlah && (
+                <> {saringTeks(data)}</>
+              )}
               {data.ringkasan.asap_median != null && data.ringkasan.asap_p90 != null
                 ? <> Asap kendaraan pada jam kegiatan: median {fmt(data.ringkasan.asap_median)} µg/m³; sepersepuluh fasilitas di atas {fmt(data.ringkasan.asap_p90)} µg/m³.</>
                 : <> {data.ringkasan.lalin_di_atas_1} fasilitas mendapat lebih dari 1 µg/m³ PM2,5 dari lalu lintas sekitar; {data.ringkasan.lalin_di_atas_0_5} lebih dari 0,5 µg/m³.</>}
