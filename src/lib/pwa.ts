@@ -12,8 +12,8 @@ export function initPwaLifecycle() {
     onOfflineReady() {
       dispatchPwaStatus({
         kind: 'offline-ready',
-        title: 'Offline mode ready',
-        message: 'App shell dan cache inti Breeva sudah siap dipakai saat koneksi putus.',
+        title: 'Siap dibuka tanpa internet',
+        message: 'Aplikasi tetap terbuka saat koneksi putus. Untuk peta dan rute tanpa internet, simpan wilayahnya.',
         autoHideMs: 3200,
       })
     },
@@ -24,8 +24,8 @@ export function initPwaLifecycle() {
       dispatchPwaStatus({
         kind: 'update-available',
         title: 'Versi baru Breeva siap',
-        message: 'Akan aktif otomatis saat kamu membuka ulang aplikasi — atau refresh sekarang.',
-        actionLabel: 'Refresh sekarang',
+        message: 'Aktif sendiri saat aplikasi dibuka lagi, atau muat ulang sekarang.',
+        actionLabel: 'Muat ulang sekarang',
         action: () => (updateSW as UpdateSwFn)(true),
       })
     },
@@ -41,7 +41,7 @@ export function initPwaLifecycle() {
     dispatchPwaStatus({
       kind: 'installed',
       title: 'Breeva terpasang',
-      message: 'Aplikasi sudah ditambahkan ke perangkat ini dan siap dipakai seperti app native.',
+      message: 'Aplikasi sudah ditambahkan ke perangkat ini dan bisa dibuka seperti aplikasi lain.',
       autoHideMs: 3200,
     })
   })
