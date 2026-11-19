@@ -85,7 +85,7 @@ export default function HomeStatCards() {
           {rank ? <AnimatedNumber value={rank} prefix="#" /> : '—'}
         </span>
         <span className="mt-1 text-[10.5px] font-medium text-gray-500 dark:text-gray-400">Peringkat</span>
-        <span className="mt-1.5 text-[9px] font-semibold text-violet-500/80 dark:text-violet-400/80">
+        <span className="mt-1.5 text-[10px] font-semibold text-violet-700 dark:text-violet-300">
           {rank ? 'minggu ini' : 'Mulai jalan!'}
         </span>
         <span className="sr-only">Buka papan peringkat.</span>
