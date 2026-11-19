@@ -22,8 +22,8 @@ export default function RunningValidation({ region = 'badung_denpasar', label = 
   return (
     <section className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 text-sm space-y-1">
       <h2 className="font-semibold">Uji berjalan di peta hidup ({label})</h2>
-      {!f && <p className="text-gray-500">Memuat…</p>}
-      {(f === 'failed' || (f && !s)) && <p className="text-gray-500">Belum ada jam yang diuji.</p>}
+      {!f && <p className="text-gray-500 dark:text-gray-400">Memuat…</p>}
+      {(f === 'failed' || (f && !s)) && <p className="text-gray-500 dark:text-gray-400">Belum ada jam yang diuji.</p>}
       {s && (
         <>
           <p>
@@ -61,7 +61,7 @@ export default function RunningValidation({ region = 'badung_denpasar', label = 
               </>
             );
           })()}
-          <p className="text-[11px] text-gray-500">Sumber: v/{region}/validation_recent.json, run terakhir {s.last_run}.</p>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400">Sumber: v/{region}/validation_recent.json, run terakhir {s.last_run}.</p>
         </>
       )}
     </section>

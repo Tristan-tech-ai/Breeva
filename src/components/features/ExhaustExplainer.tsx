@@ -28,7 +28,7 @@ export default function ExhaustExplainer() {
         <p className="text-[12px] text-gray-600 dark:text-gray-300">Contoh dari rumus yang sama dengan peta: jalan lurus 2.250 kendaraan per jam, angin 2 m/s.</p>
         <table className="mt-1 w-full text-[12px]">
           <thead>
-            <tr className="text-left text-gray-500"><th className="font-medium py-1">Jarak dari jalan</th>{DISTANCES.map((d) => <th key={d} className="font-medium">{d === 0 ? 'di jalan' : `${d} m`}</th>)}</tr>
+            <tr className="text-left text-gray-500 dark:text-gray-400"><th className="font-medium py-1">Jarak dari jalan</th>{DISTANCES.map((d) => <th key={d} className="font-medium">{d === 0 ? 'di jalan' : `${d} m`}</th>)}</tr>
           </thead>
           <tbody>
             <tr><td className="py-1">Asap kendaraan (µg/m³ NOx)</td>{profile.map((c, k) => <td key={DISTANCES[k]} className="tabular-nums">{c.toLocaleString('id-ID', { maximumFractionDigits: c < 10 ? 1 : 0 })}</td>)}</tr>
@@ -50,7 +50,7 @@ export default function ExhaustExplainer() {
         </ul>
         <p className="mt-1 text-[13px]">Rencana uji: berjalan menyusuri jalan besar dan gang dengan sensor, lalu membandingkan selisihnya dengan peta.</p>
       </div>
-      <ul className="text-[11px] text-gray-500 space-y-0.5">
+      <ul className="text-[11px] text-gray-500 dark:text-gray-400 space-y-0.5">
         {SOURCES.map((s) => <li key={s.href}><a className="underline underline-offset-2" href={s.href} target="_blank" rel="noreferrer">{s.label}</a></li>)}
       </ul>
     </section>
