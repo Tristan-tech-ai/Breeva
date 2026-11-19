@@ -233,7 +233,7 @@ export default function LoginPage() {
                           className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
                             view === v
                               ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                              : 'text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100'
                           }`}
                         >
                           {v === 'login' ? 'Masuk' : 'Daftar'}

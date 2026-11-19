@@ -621,7 +621,7 @@ export default function HomePage() {
                   >
                     <GraduationCap className="w-5 h-5 shrink-0" />
                     Ke sekolah
-                    <span className="ml-auto text-[11px] font-medium text-teal-700/80 dark:text-teal-300/80">rute bersih di perangkat</span>
+                    <span className="ml-auto text-[11px] font-medium text-teal-700 dark:text-teal-300">rute bersih di perangkat</span>
                   </button>
                   {schoolOpen && (
                     <div className="mt-2 space-y-2">
