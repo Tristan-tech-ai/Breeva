@@ -397,6 +397,15 @@
   .glass-modal  { background: rgba(255, 255, 255, 0.99); }
 }
 
+/* X-W56: the map's own colour before and between tiles is the basemap's land colour, not Leaflet's grey #ddd (a grey
+   square among drawn tiles, a bright flash in dark mode); VectorBasemap sets the flavour's exact colour inline */
+html .leaflet-container {
+  background-color: #ffffff;
+}
+html.dark .leaflet-container {
+  background-color: #1f1f1f;
+}
+
 /* Leaflet overrides */
 .leaflet-container {
   font-family: var(--font-sans) !important;

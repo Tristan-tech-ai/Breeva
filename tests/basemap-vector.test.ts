@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DARK, LIGHT, WHITE } from '@protomaps/basemaps';
 import { labelRules, paintRules } from 'protomaps-leaflet';
-import { basemapRegion, basemapUrl, breevaFlavor, withoutPoiLabels } from '../src/lib/basemapVector';
+import { readFileSync } from 'node:fs';
+import { basemapRegion, basemapUrl, breevaFlavor, pendingTileColor, withoutPoiLabels } from '../src/lib/basemapVector';
 
 // F1-68: Breeva's basemap has one neutral road colour and no POIs (Tristan, 18 Nov 2026: basemap road colours and POI
 // icons clashed with Breeva's own).
@@ -40,5 +41,17 @@ describe('vector basemap', () => {
     expect(withoutPoiLabels([{ dataLayer: 'pois' }, { dataLayer: 'roads' }])).toEqual([{ dataLayer: 'roads' }]);
     expect(paintRules(breevaFlavor(WHITE, false)).some((r) => r.dataLayer === 'roads')).toBe(true);
     expect(labelRules(LIGHT, 'id').some((r) => r.dataLayer === 'pois')).toBe(false);
+  });
+
+  it('shows the land colour, not Leaflet grey, where a tile is still loading (X-W56)', () => {
+    expect(pendingTileColor(breevaFlavor(WHITE, false))).toBe('#ffffff');
+    expect(pendingTileColor(breevaFlavor(DARK, true))).toBe('#1f1f1f');
+    expect(pendingTileColor({ earth: '', background: '#123456' })).toBe('#123456');
+    const src = readFileSync('src/components/map/VectorBasemap.tsx', 'utf8');
+    expect(src).toMatch(/box\.style\.backgroundColor = pendingTileColor\(flavor\)/);
+    expect(src).toMatch(/style\.backgroundColor = restoreBg/); // and put back when the vector basemap goes
+    const css = readFileSync('src/index.css', 'utf8');
+    expect(css).toMatch(/html \.leaflet-container \{\s*background-color: #ffffff;/);
+    expect(css).toMatch(/html\.dark \.leaflet-container \{\s*background-color: #1f1f1f;/);
   });
 });

@@ -44,6 +44,15 @@ export function breevaFlavor(baseFlavor: Flavor, dark: boolean): Flavor {
   return f;
 }
 
+/**
+ * X-W56: the map container's colour while basemap tiles are still on their way. Leaflet's default (#ddd) made a pending
+ * tile a grey square among drawn ones (the dense city centre has the biggest tiles and comes last); the land colour of
+ * the flavour makes it read as the same map.
+ */
+export function pendingTileColor(f: Pick<Flavor, 'earth' | 'background'>): string {
+  return f.earth || f.background;
+}
+
 /** Label rules without the POI layer: Breeva draws its own POIs (one source, F1-69). */
 export function withoutPoiLabels<T extends { dataLayer: string }>(rules: T[]): T[] {
   return rules.filter((r) => r.dataLayer !== 'pois');

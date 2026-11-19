@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import type L from 'leaflet';
 import { TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import type { Basemap } from '../../lib/basemap';
-import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_DATA_ZOOM, basemapRegion, basemapUrl, breevaFlavor, withoutPoiLabels } from '../../lib/basemapVector';
+import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_DATA_ZOOM, basemapRegion, basemapUrl, breevaFlavor, pendingTileColor, withoutPoiLabels } from '../../lib/basemapVector';
 import { fieldBase } from '../../lib/field/source';
 import { readAheadHeader, sharedRangeSource } from '../../lib/cachedRangeSource';
 
@@ -27,6 +27,7 @@ export default function BasemapLayer({ raster, dark, vector }: { raster: Basemap
   useEffect(() => {
     if (!useVector || !region) return;
     let layer: L.Layer | null = null;
+    let restoreBg: string | null = null;
     let cancelled = false;
     const src = sharedRangeSource(basemapUrl(fieldBase(), region));
     readAheadHeader(src); // the header downloads while the modules load (X-W51)
@@ -43,12 +44,20 @@ export default function BasemapLayer({ raster, dark, vector }: { raster: Basemap
         attribution: BASEMAP_ATTRIBUTION,
       });
       const gl = l as unknown as L.GridLayer;
+      // tiles still loading show the land colour, not Leaflet's grey (X-W56)
+      const box = map.getContainer();
+      restoreBg = box.style.backgroundColor;
+      box.style.backgroundColor = pendingTileColor(flavor);
       gl.addTo(map);
       // under every overlay (the coloured roads and the route live in their own panes)
       gl.setZIndex(0);
       layer = gl;
     }).catch(() => { if (!cancelled) setFailed(true); });
-    return () => { cancelled = true; layer?.remove(); };
+    return () => {
+      cancelled = true;
+      layer?.remove();
+      if (restoreBg !== null) map.getContainer().style.backgroundColor = restoreBg;
+    };
   }, [useVector, region, dark, map]);
 
   if (useVector) return null;
