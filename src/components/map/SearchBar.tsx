@@ -137,7 +137,7 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
         <div className="w-6 flex items-center justify-center flex-shrink-0">
           {isSearching && <Loader2 className="w-4 h-4 text-primary-500 animate-spin" />}
           {searchQuery && !isSearching && (
-            <button
+            <button aria-label="Hapus pencarian"
               onClick={() => {
                 clearSearch();
                 inputRef.current?.focus();

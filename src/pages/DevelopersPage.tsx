@@ -109,7 +109,8 @@ export default function DevelopersPage() {
     setLoading(false);
   }, [user]);
 
-  useEffect(() => { load(); }, [load]);
+  // load on the next microtask, not synchronously inside the effect (react-hooks/set-state-in-effect)
+  useEffect(() => { void Promise.resolve().then(load); }, [load]);
 
   const handleCopy = async (text: string, id: string) => {
     try {
@@ -160,7 +161,7 @@ export default function DevelopersPage() {
       <NoIndex />
       {/* Header */}
       <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between safe-area-top">
-        <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
+        <button aria-label="Kembali" onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-base font-semibold text-gray-900 dark:text-white">API Keys</h1>
@@ -192,7 +193,7 @@ export default function DevelopersPage() {
           <div className="mt-3 flex items-center gap-2 rounded-xl bg-gray-900 dark:bg-black/50 px-3 py-2">
             <Terminal className="w-3.5 h-3.5 text-gray-400 shrink-0" />
             <code className="text-[11px] text-gray-200 font-mono truncate flex-1">{BASE_URL}</code>
-            <button onClick={() => handleCopy(BASE_URL, 'base')} className="text-gray-400 hover:text-white transition shrink-0">
+            <button aria-label={copied === 'base' ? 'Tersalin' : 'Salin'} onClick={() => handleCopy(BASE_URL, 'base')} className="text-gray-400 hover:text-white transition shrink-0">
               {copied === 'base' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
           </div>

@@ -285,7 +285,7 @@ export default function MerchantDashboardPage() {
     return (
       <div className="gradient-mesh-bg min-h-screen">
         <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1"><ChevronLeft className="w-6 h-6" /></button>
+          <button aria-label="Kembali" onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1"><ChevronLeft className="w-6 h-6" /></button>
           <h1 className="text-base font-semibold text-gray-900 dark:text-white">Merchant Dashboard</h1>
         </div>
         <div className="px-4 pt-6"><SkeletonList rows={5} /></div>
@@ -299,7 +299,7 @@ export default function MerchantDashboardPage() {
   return (
     <div className="gradient-mesh-bg min-h-screen pb-8">
       <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1"><ChevronLeft className="w-6 h-6" /></button>
+        <button aria-label="Kembali" onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1"><ChevronLeft className="w-6 h-6" /></button>
         <div className="flex-1 min-w-0">
           <h1 className="text-base font-semibold text-gray-900 dark:text-white truncate">{merchant.name}</h1>
           <p className="text-xs text-gray-500 dark:text-gray-400">Dashboard</p>
@@ -559,7 +559,7 @@ export default function MerchantDashboardPage() {
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl p-5 space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-gray-900 dark:text-white">{editingId ? 'Edit Reward' : 'New Reward'}</h3>
-                <button onClick={() => setShowRewardForm(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+                <button aria-label="Tutup" onClick={() => setShowRewardForm(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
               </div>
               <input type="text" placeholder="Reward title *" value={rewardForm.title} onChange={e => setRewardForm(f => ({ ...f, title: e.target.value }))} className="glass-input w-full px-4 py-3 text-sm text-gray-900 dark:text-white placeholder-gray-400" />
               <textarea placeholder="Description" value={rewardForm.description} onChange={e => setRewardForm(f => ({ ...f, description: e.target.value }))} rows={2} className="glass-input w-full px-4 py-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 resize-none" />
@@ -584,7 +584,7 @@ export default function MerchantDashboardPage() {
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl p-5 space-y-3 shadow-2xl max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-gray-900 dark:text-white">Edit Profile</h3>
-                <button onClick={() => setShowProfile(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+                <button aria-label="Tutup" onClick={() => setShowProfile(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
               </div>
               <p className="text-[11px] text-gray-400">Material changes (name, category, address) are re-checked before going live.</p>
               {([['name', 'Business name *'], ['category', 'Category'], ['address', 'Address'], ['phone', 'Phone'], ['website', 'Website'], ['instagram', 'Instagram'], ['whatsapp', 'WhatsApp']] as const).map(([key, label]) => (

@@ -315,7 +315,7 @@ export default function SavedPlacesPage() {
             placeholder="Cari tempat tersimpan…"
             className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none"
           />
-          {query && <button onClick={() => setQuery('')}><X className="w-4 h-4 text-gray-400" /></button>}
+          {query && <button aria-label="Tutup" onClick={() => setQuery('')}><X className="w-4 h-4 text-gray-400" /></button>}
         </div>
 
         {/* Sort */}

@@ -142,7 +142,7 @@ function StoryViewer({ story, onClose, onNext, onPrev, hasNext, hasPrev }: {
       </div>
 
       {/* Close */}
-      <button
+      <button aria-label="Tutup"
         onClick={(e) => { e.stopPropagation(); onClose(); }}
         className="absolute top-8 right-3 z-10 text-white/80 hover:text-white p-1"
       >

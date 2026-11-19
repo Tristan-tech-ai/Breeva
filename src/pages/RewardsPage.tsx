@@ -663,7 +663,7 @@ export default function RewardsPage() {
               <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl p-6 text-center safe-area-bottom">
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="text-base font-bold text-gray-900 dark:text-white truncate">{selectedVoucher.reward?.title || 'Voucher'}</h3>
-                  <button onClick={() => setSelectedVoucher(null)} className="p-1 text-gray-400 hover:text-gray-600 shrink-0"><X size={20} /></button>
+                  <button aria-label="Tutup" onClick={() => setSelectedVoucher(null)} className="p-1 text-gray-400 hover:text-gray-600 shrink-0"><X size={20} /></button>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{selectedVoucher.merchant?.name} · show this to the cashier</p>
                 <div className="bg-white p-3 rounded-2xl shadow-sm inline-block">

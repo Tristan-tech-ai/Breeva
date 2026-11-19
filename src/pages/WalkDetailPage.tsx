@@ -325,7 +325,7 @@ ${points}
     <div className="gradient-mesh-bg min-h-screen pb-24">
       {/* Header */}
       <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between safe-area-top">
-        <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
+        <button aria-label="Kembali" onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-base font-semibold text-gray-900 dark:text-white">Walk Detail</h1>
@@ -373,7 +373,7 @@ ${points}
             <button aria-label="Ulangi dari awal" onClick={resetReplay} className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500">
               <RotateCcw size={16} />
             </button>
-            <button
+            <button aria-label={isPlaying ? 'Jeda' : 'Putar'}
               onClick={isPlaying ? pauseReplay : startReplay}
               className="p-3 rounded-full gradient-primary text-white shadow-md"
             >

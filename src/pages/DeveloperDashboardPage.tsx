@@ -240,7 +240,7 @@ export default function DeveloperDashboardPage() {
       <NoIndex />
       {/* Header */}
       <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between safe-area-top">
-        <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1"><ChevronLeft className="w-6 h-6" /></button>
+        <button aria-label="Kembali" onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1"><ChevronLeft className="w-6 h-6" /></button>
         <h1 className="text-base font-semibold text-gray-900 dark:text-white">API Dashboard</h1>
         <Link to="/developers/keys" className="text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline">Keys</Link>
       </div>
@@ -264,7 +264,7 @@ export default function DeveloperDashboardPage() {
             </p>
             <div className="mt-3 flex items-center gap-2 rounded-xl bg-gray-900 dark:bg-black/60 px-3 py-2.5">
               <code className="text-[11px] sm:text-xs text-green-300 font-mono break-all flex-1">{freshKey}</code>
-              <button onClick={copyKey} className="text-gray-400 hover:text-white transition shrink-0">
+              <button aria-label={copied ? 'Tersalin' : 'Salin'} onClick={copyKey} className="text-gray-400 hover:text-white transition shrink-0">
                 {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
               </button>
             </div>

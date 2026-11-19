@@ -97,7 +97,7 @@ export default function MerchantRegisterPage() {
     return (
       <div className="gradient-mesh-bg min-h-screen">
         <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between">
-          <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
+          <button aria-label="Kembali" onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <h1 className="text-base font-semibold text-gray-900 dark:text-white">Register Merchant</h1>
@@ -131,7 +131,7 @@ export default function MerchantRegisterPage() {
   return (
     <div className="gradient-mesh-bg min-h-screen">
       <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between">
-        <button onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
+        <button aria-label="Kembali" onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-base font-semibold text-gray-900 dark:text-white">Register Merchant</h1>

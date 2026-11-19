@@ -879,13 +879,13 @@ export default function PlaceDetailSheet({
                         </div>
                         {allPhotos.length > 1 && (
                           <>
-                            <button
+                            <button aria-label="Foto sebelumnya"
                               onClick={() => setPhotoIdx((i) => (i - 1 + allPhotos.length) % allPhotos.length)}
                               className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 dark:bg-gray-900/90 flex items-center justify-center shadow-md"
                             >
                               <ChevronLeft className="w-4 h-4 text-gray-700 dark:text-gray-300" />
                             </button>
-                            <button
+                            <button aria-label="Foto berikutnya"
                               onClick={() => setPhotoIdx((i) => (i + 1) % allPhotos.length)}
                               className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 dark:bg-gray-900/90 flex items-center justify-center shadow-md"
                             >
