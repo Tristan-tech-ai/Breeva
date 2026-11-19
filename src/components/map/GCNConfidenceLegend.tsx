@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 
 interface Props {
   gcnCount: number;
@@ -9,10 +8,8 @@ export function GCNConfidenceLegend({ gcnCount, totalCount }: Props) {
   const pct = totalCount > 0 ? Math.round((gcnCount / totalCount) * 100) : 0;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="pointer-events-none absolute bottom-32 right-4 z-[600] rounded-lg border border-gray-200 bg-white/90 p-3 text-xs shadow-lg backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800/90"
+    <div
+      className="anim-naik pointer-events-none absolute bottom-32 right-4 z-[600] rounded-lg border border-gray-200 bg-white/90 p-3 text-xs shadow-lg backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800/90"
     >
       <div className="mb-1 font-semibold text-gray-900 dark:text-gray-100">
         Spatial AI Reasoning
@@ -30,6 +27,6 @@ export function GCNConfidenceLegend({ gcnCount, totalCount }: Props) {
           GraphSAGE 3-layer · per-road residual
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

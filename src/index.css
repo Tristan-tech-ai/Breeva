@@ -397,6 +397,17 @@
   .glass-modal  { background: rgba(255, 255, 255, 0.99); }
 }
 
+/* X-W62: entrance animations of the /peta components in CSS (framer-motion stays off the route link's first load) */
+@keyframes breeva-turun { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes breeva-naik { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes breeva-buka { from { opacity: 0; } to { opacity: 1; } }
+.anim-turun { animation: breeva-turun 0.15s ease-out both; }
+.anim-naik { animation: breeva-naik 0.2s ease-out both; }
+.anim-buka { animation: breeva-buka 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .anim-turun, .anim-naik, .anim-buka { animation: none; }
+}
+
 /* X-W56: the map's own colour before and between tiles is the basemap's land colour, not Leaflet's grey #ddd (a grey
    square among drawn tiles, a bright flash in dark mode); VectorBasemap sets the flavour's exact colour inline */
 html .leaflet-container {

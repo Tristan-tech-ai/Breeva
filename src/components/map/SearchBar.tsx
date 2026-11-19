@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, MapPin, Clock, Loader2, Star, SlidersHorizontal } from 'lucide-react';
 import { useMapStore } from '../../stores/mapStore';
 import type { POI } from '../../lib/poi-api';
@@ -169,14 +168,10 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
       </div>
 
       {/* Filter dropdown panel */}
-      <AnimatePresence>
-        {filterOpen && hasFilter && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.15 }}
-            className="absolute top-full left-0 right-0 mt-2 z-50 rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-100 dark:border-gray-800 p-3"
+      {/* CSS drop-in instead of framer-motion (X-W62) */}
+      {filterOpen && hasFilter && (
+          <div
+            className="anim-turun absolute top-full left-0 right-0 mt-2 z-50 rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-100 dark:border-gray-800 p-3"
           >
             <div className="grid grid-cols-4 gap-2">
               {filterChips!.map(chip => {
@@ -205,19 +200,13 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
                 );
               })}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+      )}
 
       {/* Dropdown */}
-      <AnimatePresence>
-        {showDropdown && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.15 }}
-            className="absolute top-full left-0 right-0 mt-2 z-50 max-h-[60vh] overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-100 dark:border-gray-800"
+      {showDropdown && (
+          <div
+            className="anim-turun absolute top-full left-0 right-0 mt-2 z-50 max-h-[60vh] overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-100 dark:border-gray-800"
             id="search-results-list"
             role="listbox"
           >
@@ -348,9 +337,8 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
                 ))}
               </div>
             )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+      )}
     </div>
   );
 }

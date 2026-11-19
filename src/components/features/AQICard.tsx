@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Wind, Droplets, CloudSun, Activity, Info, ShieldCheck, Clock } from 'lucide-react';
 import type { AirQualityData } from '../../types';
 import { ispuRounded, pm25Category, sensitiveAdvice } from '../../lib/ispu';
@@ -45,8 +44,7 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
   const expanded = level !== 'glance';
 
   return (
-    <motion.div
-      layout
+    <div
       onClick={cycle}
       className={`group relative cursor-pointer select-none overflow-hidden rounded-2xl border border-gray-200/70 bg-white/85 shadow-sm backdrop-blur-xl transition-shadow hover:shadow-md dark:border-gray-700/30 dark:bg-gray-900/80 ${className}`}
     >
@@ -111,22 +109,16 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
           )}
         </div>
 
-        <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }} className="flex-shrink-0 text-gray-400 dark:text-gray-500">
+        <div className={`flex-shrink-0 text-gray-400 transition-transform duration-200 dark:text-gray-500${expanded ? ' rotate-180' : ''}`}>
           <ChevronDown size={18} strokeWidth={2.2} aria-hidden />
-        </motion.div>
+        </div>
         <span className="sr-only">Ketuk untuk {expanded ? 'tutup' : 'detail'}.</span>
       </div>
 
       {/* Detail / Expert */}
-      <AnimatePresence initial={false}>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden"
-          >
+      {/* CSS fade instead of framer-motion: keeps vendor-motion off the route link's first load (X-W62) */}
+      {expanded && (
+          <div className="anim-buka overflow-hidden">
             <div className="border-t border-gray-100 px-4 pb-4 pt-3 dark:border-gray-800/50">
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
                 Rincian polutan
@@ -187,10 +179,9 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
                 Ketuk untuk {level === 'detail' ? 'data mentah →' : 'tutup'}
               </p>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+          </div>
+      )}
+    </div>
   );
 }
 

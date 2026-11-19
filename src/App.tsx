@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './components/auth/AuthProvider';
@@ -15,6 +15,8 @@ const HomePage = lazy(() => import('./pages/HomePage'));
 const AppOverlays = lazy(() => import('./components/AppOverlays'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 import RootRoute from './components/auth/RootRoute';
+import { afterFirstDraw } from './lib/field/firstDraw';
+import { OVERLAYS_FALLBACK_MS, overlaysWait } from './lib/overlaysWait';
 
 // Lazy load: all other pages for fast initial load
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
@@ -79,6 +81,23 @@ function KeyboardShortcutsProvider({ children }: { children: React.ReactNode }) 
   return <>{children}</>;
 }
 
+/** The app-wide overlays; on a map page only after the first field draw (X-W62, lib/overlaysWait.ts). */
+function OverlaysWhenReady() {
+  const [on, setOn] = useState(() => !overlaysWait(window.location.pathname));
+  useEffect(() => {
+    if (on) return;
+    let live = true;
+    void afterFirstDraw(window, OVERLAYS_FALLBACK_MS).then(() => { if (live) setOn(true); });
+    return () => { live = false; };
+  }, [on]);
+  if (!on) return null;
+  return (
+    <Suspense fallback={null}>
+      <AppOverlays />
+    </Suspense>
+  );
+}
+
 function App() {
   useEffect(() => {
     const flagKey = 'breeva:chunk-reload-once';
@@ -123,9 +142,7 @@ function App() {
           <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-primary-500 focus:text-white focus:shadow-lg">
             Skip to main content
           </a>
-          <Suspense fallback={null}>
-            <AppOverlays />
-          </Suspense>
+          <OverlaysWhenReady />
           <Toaster
             position="top-center"
             toastOptions={{
