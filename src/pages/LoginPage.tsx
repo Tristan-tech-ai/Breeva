@@ -47,7 +47,7 @@ export default function LoginPage() {
   };
 
   const strengthScore = getPasswordStrength(password);
-  const strengthLabel = ['', 'Weak', 'Weak', 'Fair', 'Strong', 'Very Strong'][strengthScore] || '';
+  const strengthLabel = ['', 'Lemah', 'Lemah', 'Cukup', 'Kuat', 'Sangat kuat'][strengthScore] || '';
   const strengthColor = ['', 'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-primary-500', 'bg-emerald-500'][strengthScore] || '';
   const strengthTextColor = ['', 'text-red-500', 'text-orange-500', 'text-amber-500', 'text-primary-500', 'text-emerald-500'][strengthScore] || '';
 
@@ -65,17 +65,17 @@ export default function LoginPage() {
       if (!ok) setIsSubmitting(false);
     } else {
       if (!fullName.trim()) {
-        setError('Please enter your full name');
+        setError('Isi nama lengkapmu');
         setIsSubmitting(false);
         return;
       }
       if (password !== confirmPassword) {
-        setError('Passwords do not match');
+        setError('Kata sandi tidak sama');
         setIsSubmitting(false);
         return;
       }
       if (strengthScore < 3) {
-        setError('Password is too weak. Use at least 8 characters with uppercase, numbers, or symbols.');
+        setError('Kata sandi terlalu lemah. Pakai minimal 8 karakter dengan huruf besar, angka, atau simbol.');
         setIsSubmitting(false);
         return;
       }
@@ -88,7 +88,7 @@ export default function LoginPage() {
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetEmail.trim()) {
-      setError('Please enter your email');
+      setError('Isi emailmu');
       return;
     }
     setIsSubmitting(true);
@@ -150,18 +150,18 @@ export default function LoginPage() {
             </div>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-4">
-              Transform your walks into rewards
+              Pilih jalan dengan asap kendaraan paling sedikit
             </h2>
             <p className="text-lg text-gray-600 dark:text-gray-400 leading-relaxed">
-              Walk eco-friendly routes, earn EcoPoints, and redeem them at sustainable merchants near you.
+              Peta asap kendaraan per ruas jalan untuk Badung–Denpasar dan Kota Bogor, rute yang dihitung di ponselmu, dan EcoPoints untuk setiap jalan kaki.
             </p>
 
             {/* Stats */}
             <div className="mt-12 grid grid-cols-3 gap-6">
               {[
-                { label: 'Active Walkers', value: '1,000+' },
-                { label: 'CO₂ Saved', value: '2.5 tons' },
-                { label: 'EcoPoints Shared', value: '500K+' },
+                { label: 'peta asap kendaraan', value: 'Per ruas' },
+                { label: 'dihitung ulang di cloud', value: 'Tiap jam' },
+                { label: 'peta dan rute untuk tamu', value: 'Tanpa akun' },
               ].map((stat) => (
                 <div key={stat.label} className="glass-card p-4">
                   <div className="text-xl font-bold text-primary-600 dark:text-primary-400">
@@ -236,17 +236,17 @@ export default function LoginPage() {
                               : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                           }`}
                         >
-                          {v === 'login' ? 'Sign In' : 'Sign Up'}
+                          {v === 'login' ? 'Masuk' : 'Daftar'}
                         </button>
                       ))}
                     </div>
 
                     <div className="text-center mb-6">
                       <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                        {view === 'login' ? 'Welcome back' : 'Create account'}
+                        {view === 'login' ? 'Selamat datang kembali' : 'Buat akun'}
                       </h2>
                       <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
-                        {view === 'login' ? 'Sign in to continue earning rewards' : 'Start your eco-walking journey'}
+                        {view === 'login' ? 'Masuk untuk melanjutkan EcoPoints-mu' : 'Mulai jalan kaki lewat udara yang lebih bersih'}
                       </p>
                     </div>
 
@@ -276,7 +276,7 @@ export default function LoginPage() {
                             transition={{ duration: 0.2 }}
                           >
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                              Full Name
+                              Nama lengkap
                             </label>
                             <div className="relative">
                               <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-gray-400" />
@@ -284,7 +284,7 @@ export default function LoginPage() {
                                 type="text"
                                 value={fullName}
                                 onChange={(e) => setFullName(e.target.value)}
-                                placeholder="John Doe"
+                                placeholder="Nama lengkap"
                                 className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition"
                                 required
                               />
@@ -314,7 +314,7 @@ export default function LoginPage() {
                       {/* Password */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                          Password
+                          Kata sandi
                         </label>
                         <div className="relative">
                           <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-gray-400" />
@@ -370,7 +370,7 @@ export default function LoginPage() {
                         )}
                       </div>
 
-                      {/* Confirm Password (signup only) */}
+                      {/* ulangi kata sandi (hanya saat daftar) */}
                       <AnimatePresence>
                         {view === 'signup' && (
                           <motion.div
@@ -380,7 +380,7 @@ export default function LoginPage() {
                             transition={{ duration: 0.2 }}
                           >
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                              Confirm Password
+                              Ulangi kata sandi
                             </label>
                             <div className="relative">
                               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-gray-400" />
@@ -409,7 +409,7 @@ export default function LoginPage() {
                               )}
                             </div>
                             {confirmPassword && confirmPassword !== password && (
-                              <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+                              <p className="text-xs text-red-500 mt-1">Kata sandi tidak sama</p>
                             )}
                           </motion.div>
                         )}
@@ -423,7 +423,7 @@ export default function LoginPage() {
                             onClick={() => switchView('forgot-password')}
                             className="text-sm text-primary-500 hover:text-primary-600 dark:hover:text-primary-400 font-medium transition"
                           >
-                            Forgot password?
+                            Lupa kata sandi?
                           </button>
                         </div>
                       )}
@@ -437,10 +437,10 @@ export default function LoginPage() {
                         {isSubmitting ? (
                           <div className="flex items-center justify-center gap-2">
                             <div className="w-4.5 h-4.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            <span>{view === 'login' ? 'Signing in...' : 'Sending verification...'}</span>
+                            <span>{view === 'login' ? 'Masuk...' : 'Mengirim verifikasi...'}</span>
                           </div>
                         ) : (
-                          view === 'login' ? 'Sign In' : 'Create Account'
+                          view === 'login' ? 'Masuk' : 'Buat akun'
                         )}
                       </button>
                     </form>
@@ -448,7 +448,7 @@ export default function LoginPage() {
                     {/* Divider */}
                     <div className="my-6 flex items-center gap-3">
                       <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                      <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wider">or</span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wider">atau</span>
                       <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
                     </div>
 
@@ -464,11 +464,11 @@ export default function LoginPage() {
                         <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                       </svg>
-                      <span>Continue with Google</span>
+                      <span>Lanjut dengan Google</span>
                     </button>
 
                     <p className="mt-5 text-center text-xs text-gray-400 dark:text-gray-500 leading-relaxed">
-                      Your data is encrypted and secure. We never share your information.
+                      Koneksi terenkripsi; data akunmu tidak kami bagikan.
                     </p>
                   </motion.div>
                 )}
@@ -481,16 +481,16 @@ export default function LoginPage() {
                       className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mb-4 transition"
                     >
                       <ArrowLeft className="w-4 h-4" />
-                      Back to login
+                      Kembali ke halaman masuk
                     </button>
 
                     <div className="text-center mb-6">
                       <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-900/40 dark:to-amber-800/30 flex items-center justify-center">
                         <Lock className="w-7 h-7 text-amber-600 dark:text-amber-400" />
                       </div>
-                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Reset password</h2>
+                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Atur ulang kata sandi</h2>
                       <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">
-                        Enter your email and we'll send you a link to reset your password.
+                        Masukkan emailmu, kami kirim tautan untuk mengatur ulang kata sandi.
                       </p>
                     </div>
 
@@ -534,9 +534,9 @@ export default function LoginPage() {
                         {isSubmitting ? (
                           <div className="flex items-center justify-center gap-2">
                             <div className="w-4.5 h-4.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            <span>Sending...</span>
+                            <span>Mengirim...</span>
                           </div>
-                        ) : 'Send Reset Link'}
+                        ) : 'Kirim tautan atur ulang'}
                       </button>
                     </form>
                   </motion.div>
@@ -549,19 +549,19 @@ export default function LoginPage() {
                       <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/40 dark:to-primary-800/30 flex items-center justify-center">
                         <Mail className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                       </div>
-                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Check your email</h2>
+                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Cek emailmu</h2>
                       <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">
-                        We sent a password reset link to
+                        Kami mengirim tautan atur ulang ke
                       </p>
                       <p className="font-semibold text-gray-700 dark:text-gray-300 mb-6">{resetEmail}</p>
                       <p className="text-xs text-gray-400 dark:text-gray-500 mb-6">
-                        Didn't get the email? Check your spam folder or try again.
+                        Tidak menerima email? Cek folder spam atau coba lagi.
                       </p>
                       <button
                         onClick={() => switchView('login')}
                         className="w-full py-3 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold shadow-lg shadow-primary-500/25 transition-all duration-200"
                       >
-                        Back to Sign In
+                        Kembali ke halaman masuk
                       </button>
                     </div>
                   </motion.div>
@@ -571,13 +571,13 @@ export default function LoginPage() {
 
             {/* Terms & Privacy */}
             <p className="mt-6 text-center text-xs text-gray-400 dark:text-gray-500">
-              By continuing, you agree to our{' '}
+              Dengan melanjutkan, kamu menyetujui{' '}
               <a href="/terms" className="text-primary-500 hover:underline">
-                Terms of Service
+                Ketentuan Layanan
               </a>{' '}
-              and{' '}
+              dan{' '}
               <a href="/privacy" className="text-primary-500 hover:underline">
-                Privacy Policy
+                Kebijakan Privasi
               </a>
             </p>
           </motion.div>
