@@ -13,6 +13,12 @@ export default function VerifyEmailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [verified, setVerified] = useState(false);
+  // the clock for the expiry countdown, read from state (not Date.now() while rendering) and ticked each second
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   // Resend cooldown timer
   useEffect(() => {
@@ -32,9 +38,9 @@ export default function VerifyEmailPage() {
   }
 
   // Check if OTP expired
-  const isExpired = pendingVerification ? Date.now() > pendingVerification.expiresAt : false;
+  const isExpired = pendingVerification ? now > pendingVerification.expiresAt : false;
   const timeLeft = pendingVerification
-    ? Math.max(0, Math.floor((pendingVerification.expiresAt - Date.now()) / 1000))
+    ? Math.max(0, Math.floor((pendingVerification.expiresAt - now) / 1000))
     : 0;
   const minutesLeft = Math.floor(timeLeft / 60);
   const secondsLeft = timeLeft % 60;

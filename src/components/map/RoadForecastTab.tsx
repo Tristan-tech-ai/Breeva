@@ -29,32 +29,31 @@ interface Props {
 }
 
 export function RoadForecastTab({ osmWayId }: Props) {
-  const [data, setData] = useState<ForecastResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // The answer is kept with the road it belongs to, so loading is derived rather than set in the effect.
+  const [result, setResult] = useState<{ id: number; data: ForecastResponse | null; error: string | null } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     fetch(`/api/vayu/road-forecast?osm_way_id=${osmWayId}&h=24`)
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return (await r.json()) as ForecastResponse;
       })
       .then((d) => {
-        if (!cancelled) setData(d);
+        if (!cancelled) setResult({ id: osmWayId, data: d, error: null });
       })
       .catch((e) => {
-        if (!cancelled) setError(String(e?.message ?? e));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setResult({ id: osmWayId, data: null, error: String(e?.message ?? e) });
       });
     return () => {
       cancelled = true;
     };
   }, [osmWayId]);
+
+  const current = result && result.id === osmWayId ? result : null;
+  const loading = current === null;
+  const error = current?.error ?? null;
+  const data = current?.data ?? null;
 
   if (loading) {
     return <div className="p-4 text-sm text-gray-500">Loading forecast…</div>;

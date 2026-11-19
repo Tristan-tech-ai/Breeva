@@ -118,11 +118,12 @@ function HeatmapTooltip({ anchor, value, date, unit }: {
   unit: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ x: number; y: number; below: boolean; ready: boolean }>({ x: 0, y: 0, below: false, ready: false });
+  const [pos, setPos] = useState<{ x: number; y: number; below: boolean; w: number; at: string }>({ x: 0, y: 0, below: false, w: 100, at: '' });
+  // Shown only once measured for THIS anchor (the position remembers which anchor it was measured for).
+  const at = `${anchor.top},${anchor.left},${anchor.width}`;
+  const ready = pos.at === at;
 
   useEffect(() => {
-    // Reset ready on anchor change so we measure before showing
-    setPos(p => ({ ...p, ready: false }));
     // Use rAF to ensure the DOM is painted before measuring
     const raf = requestAnimationFrame(() => {
       const el = ref.current;
@@ -142,7 +143,7 @@ function HeatmapTooltip({ anchor, value, date, unit }: {
         ? anchor.top + anchor.width + 6
         : anchor.top - tipH - 6;
 
-      setPos({ x, y, below, ready: true });
+      setPos({ x, y, below, w: tipW, at: `${anchor.top},${anchor.left},${anchor.width}` });
     });
     return () => cancelAnimationFrame(raf);
   }, [anchor.top, anchor.left, anchor.width]);
@@ -153,13 +154,13 @@ function HeatmapTooltip({ anchor, value, date, unit }: {
     : `${value} ${value === 1 ? unit.replace(/s$/, '') : unit} on ${formattedDate}`;
 
   // Compute arrow left relative to tooltip
-  const arrowLeft = Math.max(8, Math.min(anchor.left + anchor.width / 2 - pos.x - 4, (ref.current?.offsetWidth ?? 100) - 16));
+  const arrowLeft = Math.max(8, Math.min(anchor.left + anchor.width / 2 - pos.x - 4, pos.w - 16)); // width measured with the position (no ref read while rendering)
 
   return createPortal(
     <div
       ref={ref}
       className="fixed z-[9999] pointer-events-none"
-      style={{ left: pos.x, top: pos.y, opacity: pos.ready ? 1 : 0, transition: 'opacity 0.1s' }}
+      style={{ left: pos.x, top: pos.y, opacity: ready ? 1 : 0, transition: 'opacity 0.1s' }}
     >
       <div className="relative text-white text-[11px] leading-tight font-medium px-3 py-2 rounded-md shadow-xl whitespace-nowrap" style={{ backgroundColor: '#1b1f23' }}>
         {label}

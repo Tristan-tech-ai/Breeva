@@ -1,6 +1,6 @@
 /** Deterministic gradient (135°) derived from a seed string — used for entities
  *  that have no avatar (regions, categories, achievements). */
-export function emblemGradient(seed: string): { backgroundImage: string } {
+function emblemGradient(seed: string): { backgroundImage: string } {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) % 360;
   return { backgroundImage: `linear-gradient(135deg, hsl(${h} 68% 56%), hsl(${(h + 38) % 360} 70% 44%))` };

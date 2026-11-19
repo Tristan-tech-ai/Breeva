@@ -30,23 +30,26 @@ interface NarrativeResponse {
 }
 
 export function RoadInfoPanel({ osmWayId, className = '' }: { osmWayId: number; className?: string }) {
-  const [data, setData] = useState<NarrativeResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // The answer is kept with the road it belongs to, so loading is derived rather than set in the effect.
+  const [result, setResult] = useState<{ id: number; data: NarrativeResponse | null; error: string | null } | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
+    let alive = true;
     fetch(`/api/vayu/road-aqi?osm_way_id=${osmWayId}`)
       .then(async r => {
         if (r.status === 404) return null;
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((d: NarrativeResponse | null) => setData(d))
-      .catch(e => setError(String(e)))
-      .finally(() => setLoading(false));
+      .then((d: NarrativeResponse | null) => { if (alive) setResult({ id: osmWayId, data: d, error: null }); })
+      .catch(e => { if (alive) setResult({ id: osmWayId, data: null, error: String(e) }); });
+    return () => { alive = false; };
   }, [osmWayId]);
+
+  const current = result && result.id === osmWayId ? result : null;
+  const loading = current === null;
+  const error = current?.error ?? null;
+  const data = current?.data ?? null;
 
   if (loading) {
     return (

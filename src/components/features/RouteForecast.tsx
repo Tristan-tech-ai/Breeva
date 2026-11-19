@@ -49,33 +49,26 @@ function aqiLabel(aqi: number): string {
 }
 
 export function RouteForecast({ lat, lng, cellId, className = '' }: RouteForecastProps) {
-  const [data, setData] = useState<ForecastResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // The answer is kept with the query it belongs to, so loading and the no-location error are derived, not set in the effect.
+  const query = cellId ? `cell_id=${encodeURIComponent(cellId)}` : lat != null && lng != null ? `lat=${lat}&lng=${lng}` : null;
+  const [result, setResult] = useState<{ query: string; data: ForecastResponse | null; error: string | null } | null>(null);
 
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (cellId) params.set('cell_id', cellId);
-    else if (lat != null && lng != null) {
-      params.set('lat', String(lat));
-      params.set('lng', String(lng));
-    } else {
-      setError('No location provided');
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
+    if (query === null) return;
+    let alive = true;
     // 2026-05-26: forecast endpoint merged into /api/vayu/aqi (Hobby quota
     // consolidation, plan 09 Action C). Dispatch via ?forecast_hours=24.
-    params.set('forecast_hours', '24');
-    fetch(`/api/vayu/aqi?${params.toString()}`)
+    fetch(`/api/vayu/aqi?${query}&forecast_hours=24`)
       .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
-      .then((d: ForecastResponse) => setData(d))
-      .catch(e => setError(String(e)))
-      .finally(() => setLoading(false));
-  }, [cellId, lat, lng]);
+      .then((d: ForecastResponse) => { if (alive) setResult({ query, data: d, error: null }); })
+      .catch(e => { if (alive) setResult({ query, data: null, error: String(e) }); });
+    return () => { alive = false; };
+  }, [query]);
+
+  const current = result && result.query === query ? result : null;
+  const loading = query !== null && current === null;
+  const error = query === null ? 'No location provided' : current?.error ?? null;
+  const data = current?.data ?? null;
 
   if (loading) {
     return (

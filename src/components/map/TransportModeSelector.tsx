@@ -5,7 +5,8 @@ import { useMapStore } from '../../stores/mapStore';
 import { TRANSPORT_MODES } from '../../lib/api';
 import { co2SavedGramsForMode } from '../../lib/metrics';
 import type { TransportMode } from '../../types';
-import VehicleNudgeModal, { isVehicleNudgeDismissed } from '../features/VehicleNudgeModal';
+import VehicleNudgeModal from '../features/VehicleNudgeModal';
+import { isVehicleNudgeDismissed } from '../../lib/vehicleNudge';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
   Footprints,

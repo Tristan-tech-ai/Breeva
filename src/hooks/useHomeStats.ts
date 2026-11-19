@@ -30,10 +30,7 @@ export function useHomeStats(): HomeStats {
   });
 
   useEffect(() => {
-    if (!userId) {
-      setStats((s) => ({ ...s, loading: false }));
-      return;
-    }
+    if (!userId) return; // signed out: nothing to load (loading is reported false below)
     let cancelled = false;
     (async () => {
       const day = wibToday();
@@ -71,5 +68,5 @@ export function useHomeStats(): HomeStats {
     };
   }, [userId]);
 
-  return stats;
+  return userId ? stats : { ...stats, loading: false };
 }

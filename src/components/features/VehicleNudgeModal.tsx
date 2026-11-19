@@ -2,17 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Footprints, Leaf } from 'lucide-react';
 import { TRANSPORT_MODES } from '../../lib/api';
-
-const DISMISS_KEY = 'breeva_vehicle_nudge_dismissed';
-
-/** Whether the user has chosen "jangan tampilkan lagi" for the no-carbon nudge. */
-export function isVehicleNudgeDismissed(): boolean {
-  try {
-    return localStorage.getItem(DISMISS_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
+import { VEHICLE_NUDGE_DISMISS_KEY as DISMISS_KEY } from '../../lib/vehicleNudge';
 
 interface Props {
   /** The motorized mode that triggered the nudge, or null when hidden. */

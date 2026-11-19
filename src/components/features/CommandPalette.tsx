@@ -35,20 +35,22 @@ export default function CommandPalette() {
   const [query, setQuery] = useState('');
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const openRef = useRef(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const onFocusSearch = () => setOpen(true);
+    // a fresh search each time the palette opens (reset here, not in an effect on `open`)
+    const onFocusSearch = () => {
+      if (!openRef.current) { setQuery(''); setSelectedIdx(0); }
+      setOpen(true);
+    };
     window.addEventListener('breeva:focus-search', onFocusSearch);
     return () => window.removeEventListener('breeva:focus-search', onFocusSearch);
   }, []);
 
   useEffect(() => {
-    if (open) {
-      setQuery('');
-      setSelectedIdx(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    openRef.current = open;
+    if (open) setTimeout(() => inputRef.current?.focus(), 50);
   }, [open]);
 
   const filtered = useMemo(() => {
@@ -58,10 +60,6 @@ export default function CommandPalette() {
       c.label.toLowerCase().includes(q) ||
       c.keywords.some(k => k.includes(q))
     );
-  }, [query]);
-
-  useEffect(() => {
-    setSelectedIdx(0);
   }, [query]);
 
   const runCommand = (cmd: Command) => {
@@ -107,7 +105,7 @@ export default function CommandPalette() {
                 <input
                   ref={inputRef}
                   value={query}
-                  onChange={e => setQuery(e.target.value)}
+                  onChange={e => { setQuery(e.target.value); setSelectedIdx(0); }}
                   onKeyDown={onKeyDown}
                   placeholder="Search commands..."
                   className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white placeholder:text-gray-400 outline-none"
