@@ -1,17 +1,11 @@
 import { useRef, useEffect, type ReactNode } from 'react';
 import { motion, useMotionValue, useTransform, useAnimate, type PanInfo } from 'framer-motion';
 import { useMapStore } from '../../stores/mapStore';
+import { SHEET_HEIGHTS } from '../../lib/sheetHeights';
 
 interface BottomSheetProps {
   children: ReactNode;
 }
-
-const SHEET_HEIGHTS = {
-  hidden: 0,
-  peek: 28,
-  half: 50,
-  full: 88,
-};
 
 export default function BottomSheet({ children }: BottomSheetProps) {
   const { bottomSheetState, setBottomSheetState } = useMapStore();

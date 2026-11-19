@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef, lazy, Suspense } from 'react';
+import { useEffect, useState, useRef, lazy, Suspense, type CSSProperties } from 'react';
+import { sheetLift } from '../lib/sheetHeights';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -117,6 +118,7 @@ export default function HomePage() {
     clearDestination,
     setDestination,
     setBottomSheetState,
+    bottomSheetState,
     setCenter,
     center,
   } = useMapStore();
@@ -280,7 +282,8 @@ export default function HomePage() {
   const formatDistance = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-950">
+    // home-map + --sheet-h: the map attribution sits above the bottom sheet, not under it (X-W54)
+    <div className="home-map relative h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-950" style={{ '--sheet-h': sheetLift(bottomSheetState) } as CSSProperties}>
       {/* Map (lazy — defers leaflet out of the main entry; base layer paints under the skeleton) */}
       <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
         <LeafletMap
