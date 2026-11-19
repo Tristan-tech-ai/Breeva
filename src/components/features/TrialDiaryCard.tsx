@@ -26,8 +26,9 @@ export default function TrialDiaryCard() {
       {!diary.on ? (
         <>
           <p className="text-[13px] text-gray-700 dark:text-gray-300">
-            Nyalakan supaya ponselmu mencatat hari-hari kamu memakai rute di Breeva. Yang dicatat hanya tanggal, moda, dan
-            angka perbandingan rute (berapa persen asap kendaraan berkurang, berapa menit tambahannya), tanpa lokasi.
+            Nyalakan supaya ponselmu mencatat hari-hari kamu memakai rute di Breeva. Yang dicatat hanya tanggal, berapa rute yang
+            dilihat, moda, wilayah, dan angka perbandingan rute (berapa persen asap kendaraan berkurang, berapa menit tambahannya),
+            ditambah satu nomor acak ponsel supaya kodenya dihitung sekali; tanpa lokasi dan tanpa nama.
             Catatan tinggal di ponselmu sampai kamu menyalin kodenya untuk guru.
           </p>
           <button onClick={() => turn(true)} className={`${btn} bg-teal-700 text-white`}>

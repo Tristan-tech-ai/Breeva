@@ -71,7 +71,8 @@ export default function UjiCobaRekapPage() {
           </section>
         )}
         <p className="text-[12px] text-gray-600 dark:text-gray-400">
-          Kode hanya memuat tanggal, moda, wilayah, dan angka perbandingan rute; tidak memuat nama atau lokasi. Pengurangan
+          Kode hanya memuat tanggal, berapa rute yang dilihat, moda, wilayah, angka perbandingan rute, dan satu nomor acak ponsel;
+          tidak memuat nama atau lokasi. Pengurangan
           asap adalah yang ditawarkan rute paling sedikit asap kendaraan dibanding rute tercepat, bukan dosis yang terukur;
           apakah siswa benar-benar lewat rute itu ditanyakan di kuesioner. Kode dari ponsel yang sama dihitung sekali.
         </p>

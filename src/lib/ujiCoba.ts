@@ -16,7 +16,7 @@ export const STEPS: Step[] = [
   { title: 'Simpan rutemu', body: 'Tekan "Salin tautan rute" dan simpan tautannya. Tautan itu memuat titik berangkatmu, jadi bagikan hanya ke guru. Guru juga bisa membagikan tautan rute ke kelas.' },
 ];
 
-export const PRIVACY = 'Uji coba ini tidak meminta nama, akun, atau lokasi rumah. Rute dihitung di ponselmu sendiri; catatan uji coba hanya menyimpan tanggal, moda, dan angka perbandingan rute, dan baru keluar dari ponselmu bila kamu menyalin kodenya.';
+export const PRIVACY = 'Uji coba ini tidak meminta nama, akun, atau lokasi rumah. Rute dihitung di ponselmu sendiri; catatan uji coba hanya menyimpan tanggal, berapa rute yang dilihat, moda, wilayah, angka perbandingan rute, dan satu nomor acak ponsel (supaya kode dari ponsel yang sama dihitung sekali), dan baru keluar dari ponselmu bila kamu menyalin kodenya.';
 
 /** The printable A4 sheet of the same steps (public/panduan-uji-coba.pdf, built from these strings; task F4-05/F4-06). */
 export const PRINT_SHEET = { label: 'Unduh lembar A4 untuk dicetak', href: '/panduan-uji-coba.pdf' };
