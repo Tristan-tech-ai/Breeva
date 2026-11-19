@@ -315,6 +315,7 @@ function RegionRowItem({ r, metric }: { r: RegionRow; metric: Metric }) {
 /** Virtualized list of people (ranks 4+). */
 function PeopleList({ rows, metric }: { rows: UserRow[]; metric: Metric }) {
   const parentRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual returns functions the React Compiler cannot memoise; this list is not compiled
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,

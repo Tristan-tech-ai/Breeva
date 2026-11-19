@@ -54,7 +54,6 @@ export default function PlaceDetailSheet({
 
   useEffect(() => {
     if (!poi) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- resets and loading flags follow the open place and tab; one render each, no loop
       setDetails(null);
       setPhotos([]);
       setReviews([]);
@@ -100,6 +99,7 @@ export default function PlaceDetailSheet({
     })();
 
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the place id: a new object for the same place must not fetch again
   }, [poi?.id]);
 
   // Lazy-load photos only when Photos tab is opened
@@ -107,9 +107,9 @@ export default function PlaceDetailSheet({
     if (activeTab !== 'photos' || photos.length > 0 || !poi) return;
     const gid = resolvedIdRef.current;
     if (!gid) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- resets and loading flags follow the open place and tab; one render each, no loop
     setLoadingPhotos(true);
     getGooglePlacePhotos(gid).then(setPhotos).finally(() => setLoadingPhotos(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loads once per place and tab; the loaded photos must not trigger another load
   }, [activeTab, poi?.id]);
 
   // Lazy-load reviews only when Reviews tab is opened
@@ -117,9 +117,9 @@ export default function PlaceDetailSheet({
     if (activeTab !== 'reviews' || reviews.length > 0 || !poi) return;
     const gid = resolvedIdRef.current;
     if (!gid) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- resets and loading flags follow the open place and tab; one render each, no loop
     setLoadingReviews(true);
     getGooglePlaceReviews(gid).then((data) => setReviews(data.reviews || [])).finally(() => setLoadingReviews(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loads once per place and tab; the loaded reviews must not trigger another load
   }, [activeTab, poi?.id]);
 
   if (!poi) return null;

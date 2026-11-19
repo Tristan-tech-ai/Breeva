@@ -73,7 +73,8 @@ export function useRoadMvtLayer(
   const layerRef = useRef<any>(null);
   // Keep the current mode readable by the (long-lived) style closure without recreating the layer
   const modeRef = useRef<{ pollutant: PollutantType; displayMode: RoadDisplayMode }>({ pollutant, displayMode });
-  modeRef.current = { pollutant, displayMode };
+  // updated after render (not during it), and declared before the effects below so they read the new mode
+  useEffect(() => { modeRef.current = { pollutant, displayMode }; }, [pollutant, displayMode]);
   // Create / destroy the layer (mode changes are a redraw, not a recreate)
   useEffect(() => {
     if (!map || !enabled) {
@@ -139,7 +140,6 @@ export function useRoadMvtLayer(
       layerRef.current?.remove?.();
       layerRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, enabled]);
 
   // Switch color mode: redraw, which re-runs the style closure (tiles are CDN/browser-cached, so cheap).

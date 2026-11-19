@@ -187,6 +187,7 @@ export default function POILayer({
 
   // ── Create the canvas layer once ──────────────────────────────────
   useEffect(() => {
+    const pool = merchantPoolRef.current; // created once (useRef above); the cleanup empties the same map
     const layer = new POICanvasLayer();
     layer.onPointTap = (poi) => onPlaceSelectRef.current?.(poi);
     layer.onClusterTap = (lat, lng, ez) => map.flyTo([lat, lng], ez, { duration: 0.4 });
@@ -197,7 +198,6 @@ export default function POILayer({
     return () => {
       layer.detach();
       layerRef.current = null;
-      const pool = merchantPoolRef.current;
       for (const m of pool.values()) m.remove();
       pool.clear();
     };

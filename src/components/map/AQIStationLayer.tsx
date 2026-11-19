@@ -226,20 +226,21 @@ export function useAQIStationLayer(map: L.Map, visible: boolean): void {
   }, [update]);
 
   useEffect(() => {
+    const group = groupRef.current; // created once (useRef above); the cleanup uses the same group
     if (visible) {
-      groupRef.current.addTo(map);
+      group.addTo(map);
       update();
       map.on('moveend', schedule);
     } else {
-      groupRef.current.clearLayers();
-      groupRef.current.remove();
+      group.clearLayers();
+      group.remove();
       map.off('moveend', schedule);
     }
 
     return () => {
       map.off('moveend', schedule);
-      groupRef.current.clearLayers();
-      groupRef.current.remove();
+      group.clearLayers();
+      group.remove();
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [visible, map, update, schedule]);

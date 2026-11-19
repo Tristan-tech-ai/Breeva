@@ -10,6 +10,7 @@ import { useAuthStore } from '../stores/authStore';
 import { formatDistance, formatDuration, formatNumber } from '../lib/utils';
 import { useDistanceUnit } from '../stores/settingsStore';
 import { basemap } from '../lib/basemap';
+import { walkRouteCoords } from '../lib/walkRoute';
 
 const WALK_BASE = basemap('voyager', false);
 
@@ -76,22 +77,9 @@ export default function WalkDetailPage() {
 
       if (data) {
         setWalk(data);
-        if (data.route_polyline) {
-          try {
-            const parsed = JSON.parse(data.route_polyline);
-            if (Array.isArray(parsed) && parsed.length >= 2) {
-              setRouteCoords(parsed.map((p: { lat: number; lng: number } | [number, number]) =>
-                Array.isArray(p) ? p as [number, number] : [p.lat, p.lng]
-              ));
-            }
-          } catch { /* noop */ }
-        }
-        if (!routeCoords.length && data.origin_lat && data.destination_lat) {
-          setRouteCoords([
-            [data.origin_lat, data.origin_lng],
-            [data.destination_lat, data.destination_lng],
-          ]);
-        }
+        // saved route first, straight line only as the fallback (walkRoute.ts)
+        const coords = walkRouteCoords(data);
+        if (coords.length) setRouteCoords(coords);
       }
       setIsLoading(false);
     })();
