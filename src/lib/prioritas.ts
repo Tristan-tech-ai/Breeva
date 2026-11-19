@@ -77,7 +77,7 @@ export function tanggalDaftar(d: Pick<DaftarPrioritas, 'tanggal' | 'zona' | 'sta
   if (!s || !Number.isFinite(s.spearman)) return base;
   const kata = s.spearman >= 0.9 ? 'Urutan hampir tidak bergantung pada cuaca harian' : 'Urutan ikut berubah dengan cuaca harian';
   return `${base} ${kata}: dibanding daftar ${hari(s.banding_tanggal)}, korelasi peringkat ` +
-    `${fmt(s.spearman, 2)} dan ${s.sepuluh_teratas_sama} dari 10 teratas sama.`;
+    `${fmt(s.spearman, 3)} dan ${s.sepuluh_teratas_sama} dari 10 teratas sama.`;
 }
 
 export const JENIS: Record<string, string> = {

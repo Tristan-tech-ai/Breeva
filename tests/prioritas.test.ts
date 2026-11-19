@@ -77,7 +77,7 @@ describe('banner of an indicative region (F1-27)', async () => {
     const line = tanggalDaftar({ tanggal: '2026-11-21', zona: 'UTC+8', stabilitas: { banding_tanggal: '2026-11-18', fasilitas_sama: 471, spearman: 0.994, sepuluh_teratas_sama: 8 } });
     expect(line).toMatch(/^Contoh hari sekolah: Sabtu, 21 November 2026 \(UTC\+8\)/);
     expect(line).toContain('hampir tidak bergantung pada cuaca harian');
-    expect(line).toContain('0,99 dan 8 dari 10 teratas sama');
+    expect(line).toContain('0,994 dan 8 dari 10 teratas sama');
     expect(tanggalDaftar({ tanggal: '2026-11-21', zona: 'UTC+7', stabilitas: { banding_tanggal: '2026-11-18', fasilitas_sama: 9, spearman: 0.5, sepuluh_teratas_sama: 2 } }))
       .toContain('ikut berubah dengan cuaca harian');
     expect(tanggalDaftar({ tanggal: '2026-11-21', zona: 'UTC+7' })).not.toMatch(/korelasi/);
