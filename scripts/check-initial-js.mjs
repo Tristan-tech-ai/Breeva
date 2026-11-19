@@ -8,7 +8,8 @@ import { readFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 
 const dist = process.argv[2] ?? 'dist';
-const budget = Number(process.argv[3] ?? 180 * 1024);
+// 180 KB as the papers count it (1 KB = 1000 bytes; before 20 Nov this was 180 KiB = 184,320 bytes)
+const budget = Number(process.argv[3] ?? 180_000);
 const html = readFileSync(`${dist}/index.html`, 'utf8');
 const files = [...new Set([...html.matchAll(/(?:src|href)="(\/assets\/[^"]+\.js)"/g)].map((m) => m[1]))];
 if (!files.length) { console.error('no script in dist/index.html'); process.exit(1); }
