@@ -97,7 +97,7 @@ export default function StatusPage() {
                 <div className="flex items-center gap-2">
                   <span aria-hidden className={`h-2.5 w-2.5 rounded-full ${!s ? 'bg-gray-300' : s.ok ? 'bg-teal-600' : 'bg-amber-500'}`} />
                   <span className="text-sm font-semibold">{r.label}</span>
-                  {s?.run && <span className="ml-auto text-[11px] tabular-nums text-gray-500">run {s.run}</span>}
+                  {s?.run && <span className="ml-auto text-[11px] tabular-nums text-gray-500 dark:text-gray-400">run {s.run}</span>}
                 </div>
                 <p className="mt-1 text-[13px] text-gray-700 dark:text-gray-300">{s ? statusText(s) : 'Memuat…'}</p>
                 {s?.computed_at && (
