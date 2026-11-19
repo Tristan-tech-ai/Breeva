@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodePoiPack, loadPoiPack, normName, poiPackUrl, poisInRect, searchPoiPack, type PoiPackFile } from '../src/lib/poiPack';
+import { decodePoiPack, loadPoiPack, normName, poiCategoryLabel, poiPackUrl, poisInRect, searchPoiPack, type PoiPackFile } from '../src/lib/poiPack';
 
 // F1-69: one POI source per field region (Overture places + OSM), read from a static pack instead of Geoapify (which
 // returned at most 100 places per view).
@@ -75,5 +75,16 @@ describe('POI packs', () => {
     expect(searchPoiPack(two, 'kafe', undefined, 1)).toHaveLength(1);
     const twice = decodePoiPack({ ...PACK, pois: [['Museum Bali', 0, -865800, 11521600, ''], ['Museum Bali', 0, -865850, 11521650, ''], ['Museum Bali', 0, -870000, 11520000, '']] });
     expect(searchPoiPack(twice, 'museum bali')).toHaveLength(2); // the same place mapped twice shows once; one 5 km away stays
+  });
+
+  it('labels categories in Indonesian for search results, most specific first', () => {
+    expect(poiCategoryLabel('catering.cafe')).toBe('Kafe');
+    expect(poiCategoryLabel('catering.restaurant')).toBe('Rumah makan');
+    expect(poiCategoryLabel('religion.place_of_worship.hinduism')).toBe('Pura');
+    expect(poiCategoryLabel('service.vehicle.fuel')).toBe('SPBU');
+    expect(poiCategoryLabel('healthcare.hospital')).toBe('Rumah sakit');
+    expect(poiCategoryLabel('healthcare.clinic')).toBe('Klinik');
+    expect(poiCategoryLabel('something.else')).toBe('Tempat');
+    expect(poiCategoryLabel(undefined)).toBe('Tempat');
   });
 });

@@ -42,6 +42,32 @@ export function poisInRect(pois: POI[], b: { south: number; west: number; north:
     && (!wanted.length || (p.types ?? []).some((t) => wanted.some((w) => t === w || t.startsWith(w + '.')))));
 }
 
+// Indonesian names of the pack categories, for search results and place cards (most specific first)
+const LABELS: Array<[string, string]> = [
+  ['catering.fast_food', 'Makanan cepat saji'], ['catering.cafe', 'Kafe'], ['catering.bar', 'Bar'], ['catering', 'Rumah makan'],
+  ['accommodation.hotel', 'Hotel'], ['accommodation', 'Penginapan'],
+  ['commercial.supermarket', 'Swalayan'], ['commercial.convenience', 'Minimarket'], ['commercial.shopping_mall', 'Mal'],
+  ['commercial.department_store', 'Toserba'], ['commercial.marketplace', 'Pasar'], ['commercial.clothing', 'Toko pakaian'],
+  ['commercial.electronics', 'Toko elektronik'], ['commercial.food_and_drink', 'Toko makanan'], ['commercial', 'Toko'],
+  ['religion.place_of_worship.islam', 'Masjid atau musala'], ['religion.place_of_worship.hinduism', 'Pura'],
+  ['religion.place_of_worship.christianity', 'Gereja'], ['religion.place_of_worship.buddhism', 'Vihara atau klenteng'], ['religion', 'Tempat ibadah'],
+  ['service.financial.atm', 'ATM'], ['service.financial.bank', 'Bank'], ['service.vehicle.fuel', 'SPBU'], ['service.police', 'Polisi'],
+  ['education.kindergarten', 'TK atau PAUD'], ['education.university', 'Kampus'], ['education.college', 'Kampus'],
+  ['education.library', 'Perpustakaan'], ['education', 'Sekolah'],
+  ['healthcare.hospital', 'Rumah sakit'], ['healthcare.pharmacy', 'Apotek'], ['healthcare.dentist', 'Dokter gigi'], ['healthcare', 'Klinik'],
+  ['leisure.playground', 'Taman bermain'], ['leisure.fitness', 'Pusat kebugaran'], ['leisure.swimming', 'Kolam renang'],
+  ['leisure.sport', 'Tempat olahraga'], ['leisure', 'Taman'],
+  ['entertainment.museum', 'Museum'], ['entertainment.cinema', 'Bioskop'], ['entertainment', 'Hiburan'],
+  ['tourism.sights', 'Situs bersejarah'], ['tourism', 'Tempat wisata'], ['public_transport', 'Halte atau terminal'],
+];
+
+/** Indonesian label of a category path ("catering.cafe" -> "Kafe"); "Tempat" when unknown. */
+export function poiCategoryLabel(cat: string | undefined): string {
+  if (!cat) return 'Tempat';
+  const hit = LABELS.find(([k]) => cat === k || cat.startsWith(k + '.'));
+  return hit ? hit[1] : 'Tempat';
+}
+
 /** Lowercase, without accents and punctuation, single spaces ("Kopi TUKU - Pajajaran" -> "kopi tuku pajajaran"). */
 export function normName(s: string): string {
   return s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();

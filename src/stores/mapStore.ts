@@ -24,7 +24,7 @@ import { startRegionHere } from '../lib/field/source';
 import { parseViewLink } from '../lib/route/share';
 import { basemapRegion } from '../lib/basemapVector';
 import { fieldBase } from '../lib/field/source';
-import { loadPoiPack, searchPoiPack } from '../lib/poiPack';
+import { loadPoiPack, poiCategoryLabel, searchPoiPack } from '../lib/poiPack';
 
 const FIELD_STATIC_STORE = import.meta.env.VITE_FIELD_STATIC === 'true';
 // ?pusat=lat,lng,zoom: the app map opens at that view (QA screenshots of one street, demo links)
@@ -263,7 +263,7 @@ export const useMapStore = create<MapState>()((set, get) => ({
     if (region) {
       try {
         local = searchPoiPack(await loadPoiPack(fieldBase(), region), query, anchor).map((p) => ({
-          name: p.name, coordinate: p.coordinate, address: p.address, category: p.subcategory, types: p.types,
+          name: p.name, coordinate: p.coordinate, address: p.address, category: poiCategoryLabel(p.types?.[0]), types: p.types,
         }));
         if (local.length) set({ searchResults: local });
       } catch { /* no pack: the web search below still answers */ }
@@ -273,7 +273,21 @@ export const useMapStore = create<MapState>()((set, get) => ({
       return [...local, ...remote.filter((r) => !local.some((l) => near(l, r)))];
     };
 
-    // Try Google Maps via SearchAPI first (richest data)
+    // Inside a field region the places come from the region's open pack; addresses from the ORS geocoder. No Google
+    // results there: Google content may not be stored or shown on a non-Google map, and SearchAPI returned shops far away
+    // (Jakarta, Bandung) for a Bogor search (Tristan, 18 Nov 2026).
+    if (region) {
+      if (local.length >= 3) { set({ searchResults: local, isSearching: false }); return; }
+      try {
+        const { places } = await searchPlaces(query, anchor);
+        set({ searchResults: withLocal(places), isSearching: false });
+      } catch {
+        set({ searchResults: local, isSearching: false });
+      }
+      return;
+    }
+
+    // Outside the field regions: Google Maps via SearchAPI first (richest data)
     let googleResults: SearchResult[] = [];
     try {
       const gResults = await searchGoogleMaps(query, userLocation || undefined);
