@@ -859,6 +859,25 @@ html.dark .leaflet-container .leaflet-control-attribution a {
   color: #7dd3fc;
 }
 
+/* X-W67: the zoom buttons follow dark mode too (Leaflet draws them white with black signs) */
+html.dark .leaflet-bar {
+  border-color: #9ca3af;
+}
+html.dark .leaflet-bar a,
+html.dark .leaflet-bar a:hover,
+html.dark .leaflet-bar a:focus {
+  background-color: #1f2937;
+  border-bottom-color: #9ca3af;
+  color: #f3f4f6;
+}
+html.dark .leaflet-bar a:hover {
+  background-color: #374151;
+}
+html.dark .leaflet-bar a.leaflet-disabled {
+  background-color: #111827;
+  color: #9ca3af;
+}
+
 /* X-W54: on /home the bottom sheet covers the bottom of the map; its controls (the data attribution) ride above it */
 .home-map .leaflet-bottom {
   bottom: var(--sheet-h, 0px);
