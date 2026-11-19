@@ -44,7 +44,7 @@ export function rangeKey(url: string, range: [number, number]): string {
   return `${url.split('?')[0]}?__bytes=${range[0]}-${range[1]}`;
 }
 
-type CacheLike = Pick<Cache, 'match' | 'put' | 'keys' | 'delete'>;
+export type CacheLike = Pick<Cache, 'match' | 'put' | 'keys' | 'delete'>;
 
 // whole archives read once per service-worker life: a map pans through dozens of tiles, each a range of the same file
 const wholeMemo = new Map<string, Promise<ArrayBuffer | null>>();
