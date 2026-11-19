@@ -9,7 +9,7 @@ import { TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import type { Basemap } from '../../lib/basemap';
 import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_DATA_ZOOM, basemapRegion, basemapUrl, breevaFlavor, withoutPoiLabels } from '../../lib/basemapVector';
 import { fieldBase } from '../../lib/field/source';
-import { CachedRangeSource } from '../../lib/cachedRangeSource';
+import { readAheadHeader, sharedRangeSource } from '../../lib/cachedRangeSource';
 
 export default function BasemapLayer({ raster, dark, vector }: { raster: Basemap; dark: boolean; vector: boolean }) {
   const map = useMap();
@@ -28,12 +28,14 @@ export default function BasemapLayer({ raster, dark, vector }: { raster: Basemap
     if (!useVector || !region) return;
     let layer: L.Layer | null = null;
     let cancelled = false;
+    const src = sharedRangeSource(basemapUrl(fieldBase(), region));
+    readAheadHeader(src); // the header downloads while the modules load (X-W51)
     void Promise.all([import('protomaps-leaflet'), import('@protomaps/basemaps'), import('pmtiles')]).then(([pl, pb, pm]) => {
       if (cancelled) return;
       const flavor = breevaFlavor(dark ? pb.DARK : pb.WHITE, dark);
       const l = pl.leafletLayer({
         // ranges kept in Cache Storage by the page itself, also before the service worker controls it (X-W40)
-        url: new pm.PMTiles(new CachedRangeSource(basemapUrl(fieldBase(), region))) as unknown as string,
+        url: new pm.PMTiles(src) as unknown as string,
         paintRules: pl.paintRules(flavor),
         labelRules: withoutPoiLabels(pl.labelRules(flavor, 'id')),
         backgroundColor: flavor.background,
