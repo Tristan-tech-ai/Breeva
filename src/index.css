@@ -830,3 +830,8 @@
   border-radius: 6px;
   padding: 2px 6px;
 }
+/* X-W52: on /peta the route button sits at the bottom left; the attribution wraps to its right instead of under it
+   (button: left 12 px + about 150 px wide; 172 px leaves a gap) */
+.peta-tombol-kiri .leaflet-bottom.leaflet-right .leaflet-control-attribution {
+  max-width: calc(100% - 172px);
+}
