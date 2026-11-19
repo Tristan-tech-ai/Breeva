@@ -39,7 +39,7 @@ export default function ValidasiPage() {
       </header>
       <main className="max-w-4xl mx-auto px-4 pt-5 space-y-6">
         {gagal && <p className="text-sm text-amber-700">Data validasi tidak dapat dimuat.</p>}
-        {!v && !gagal && <p className="text-sm text-gray-500">Memuat…</p>}
+        {!v && !gagal && <p className="text-sm text-gray-500 dark:text-gray-400">Memuat…</p>}
         {v && (
           <>
             <section className="space-y-2">
@@ -61,7 +61,7 @@ export default function ValidasiPage() {
                       const { flags, passed } = epaFlags(r, v.standard);
                       return (
                         <tr key={r.id} className="border-t border-gray-200 dark:border-gray-800">
-                          <td className="px-3 py-2">{r.label}{r.n ? <span className="block text-[11px] text-gray-500">n = {r.n.toLocaleString('id-ID')} hari-lokasi · {r.source}</span> : <span className="block text-[11px] text-gray-500">{r.source}</span>}</td>
+                          <td className="px-3 py-2">{r.label}{r.n ? <span className="block text-[11px] text-gray-500 dark:text-gray-400">n = {r.n.toLocaleString('id-ID')} hari-lokasi · {r.source}</span> : <span className="block text-[11px] text-gray-500 dark:text-gray-400">{r.source}</span>}</td>
                           {cell(flags.nrmse, `${num(r.nrmse_pct, 1)}%`)}
                           {cell(flags.r2, num(r.r2))}
                           {cell(flags.slope, num(r.slope))}
@@ -82,13 +82,13 @@ export default function ValidasiPage() {
                 <h2 className="font-semibold">Per jam (Bali)</h2>
                 <p>NRMSE {num(v.hourly.nrmse_pct, 1)}% (RMSE {num(v.hourly.rmse, 1)} µg/m³): per jam belum akurat.</p>
                 <p>Rentang 95% memuat {pct(v.hourly.pi95_coverage_calibrated)} nilai yang disembunyikan setelah kalibrasi (sebelumnya {pct(v.hourly.pi95_coverage_before)}); lebar median {num(v.hourly.pi95_median_width, 1)} µg/m³.</p>
-                <p className="text-[11px] text-gray-500">{v.hourly.source}</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">{v.hourly.source}</p>
               </div>
               <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 text-sm space-y-1">
                 <h2 className="font-semibold">Kota tanpa stasiun</h2>
                 <p>Galat per jam: model global {num(v.city_hourly_rmse.global_model, 1)} → dengan kalibrasi dan jarak pandang bandara {num(v.city_hourly_rmse.calibrated_with_visibility, 1)} µg/m³.</p>
                 <p>Pada bulan yang tidak dilatih (Sep–Okt) angkanya tetap: {num(v.time_split_calibration.time_and_loco, 1)} lawan {num(v.time_split_calibration.loco_sep_oct, 1)}; tanpa musim asap Palembang {num(v.time_split_calibration.without_palembang, 1)} (model global {num(v.time_split_calibration.cams_without_palembang, 1)}).</p>
-                <p className="text-[11px] text-gray-500">{v.city_hourly_rmse.source} · {v.time_split_calibration.source}</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">{v.city_hourly_rmse.source} · {v.time_split_calibration.source}</p>
               </div>
             </section>
 
@@ -104,12 +104,12 @@ export default function ValidasiPage() {
                 <p className="text-xs text-gray-600 dark:text-gray-400">Terukur di tempat lain:</p>
                 <ul className="space-y-1">
                   {v.roadside.measured.map((m) => (
-                    <li key={m.id}>{measuredLine(m)}<span className="block text-[11px] text-gray-500">{m.sumber}</span></li>
+                    <li key={m.id}>{measuredLine(m)}<span className="block text-[11px] text-gray-500 dark:text-gray-400">{m.sumber}</span></li>
                   ))}
                 </ul>
                 <p>{v.roadside.correction.note} Kota Bogor jam 22.00: 99% ruas di bawah {num(v.roadside.correction.bogor_night_p99_before, 0)} → {num(v.roadside.correction.bogor_night_p99_after, 0)} µg/m³, tertinggi {num(v.roadside.correction.bogor_night_max_before, 0)} → {num(v.roadside.correction.bogor_night_max_after, 0)}{v.roadside.correction.night_city ? <>; dengan malam kota netral {num(v.roadside.correction.night_city.p99_after, 0)} dan {num(v.roadside.correction.night_city.max_after, 0)}</> : null}.</p>
                 <p className="text-amber-800 dark:text-amber-300">{v.roadside.limits}</p>
-                <p className="text-[11px] text-gray-500">{v.roadside.measured_source} · {v.roadside.correction.source}</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">{v.roadside.measured_source} · {v.roadside.correction.source}</p>
               </section>
             )}
 
@@ -120,12 +120,12 @@ export default function ValidasiPage() {
                   <li key={r.name} className="rounded-xl border border-gray-200 dark:border-gray-800 p-3">
                     <span className="font-semibold">{r.name}</span>
                     {r.before != null && r.after != null ? <> : {num(r.before)} → {num(r.after)} ({r.unit})</> : <> : {r.unit}</>}
-                    <span className="block text-[11px] text-gray-500">{r.source}</span>
+                    <span className="block text-[11px] text-gray-500 dark:text-gray-400">{r.source}</span>
                   </li>
                 ))}
               </ul>
             </section>
-            <p className="text-[11px] text-gray-500">Dibangun {new Date(v.built_at).toLocaleString('id-ID')} dari berkas validasi; kode dan skrip uji ada di repositori Breeva.</p>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400">Dibangun {new Date(v.built_at).toLocaleString('id-ID')} dari berkas validasi; kode dan skrip uji ada di repositori Breeva.</p>
           </>
         )}
       </main>
