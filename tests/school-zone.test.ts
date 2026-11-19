@@ -116,6 +116,16 @@ describe('school points and notes', () => {
     expect(pts).toEqual([[-8.1, 115.1], [-8.2, 115.2]]);
   });
 
+  it('a tutoring centre or course tagged as a school makes no zone; a school with a level in its name does (X-W93)', () => {
+    const pts = schoolPoints([
+      { lat: -8.64794, lon: 115.19524, tags: { amenity: 'school', name: 'Primagama Buluh Indah Denpasar' } },
+      { lat: -6.55804, lon: 106.77255, tags: { amenity: 'school', name: 'English First Taman Yasmin' } },
+      { lat: -8.5, lon: 115.5, tags: { amenity: 'school', name: 'SMK/SMA Pembangunan & Akademi Akuntansi Denpasar' } },
+      { lat: -8.6, lon: 115.6, tags: { amenity: 'kindergarten', name: 'TK Negeri Motekar' } },
+    ]);
+    expect(pts).toEqual([[-8.5, 115.5], [-8.6, 115.6]]);
+  });
+
   it('route cards say what the school zone did', () => {
     const base = { lengthM: 1000, timeS: 200, pm25Mean: 20, no2Mean: 15, coords: [], w: 0 };
     const cards = routeCards([{ ...base, kind: 'darurat', school: 'lifted-near-ends' }, { ...base, kind: 'dua-angka', school: 'kept' }, { ...base, school: 'off' }]);

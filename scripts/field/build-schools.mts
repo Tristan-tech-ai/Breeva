@@ -12,6 +12,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BUILD_REGIONS } from './regions.js';
 import { SCHOOL_HOURS, SCHOOL_RADIUS_M, type SchoolFile } from '../../src/lib/route/schoolZone.js';
+import { courseReason } from './facility-clean.js';
 
 interface Element { lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }
 
@@ -28,6 +29,8 @@ export function schoolEntries(elements: Element[]): SchoolEntryRaw[] {
     const p: [number, number] = [Number(lat.toFixed(5)), Number(lon.toFixed(5))];
     const k = p.join(',');
     const name = (el.tags?.name ?? '').trim();
+    // tutoring centres, courses and adult education tagged as schools make no breathing zone (X-W93, same rule as the priority list)
+    if (courseReason(name, a)) continue;
     const had = at.get(k);
     if (!had) at.set(k, { p, name, kind: a });
     else if (!had.name && name) had.name = name;

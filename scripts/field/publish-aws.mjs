@@ -2,7 +2,7 @@
 /**
  * Upload the current field of each region to the breeva-field bucket (infra/aws/breeva-field.yaml), manifest last.
  *
- *   node scripts/field/publish-aws.mjs --bucket breeva-field-<account> [--root D:/breeva-ml-data/field] [--region a,b] [--dry] [--with-runs]
+ *   node scripts/field/publish-aws.mjs --bucket breeva-field-<account> [--root D:/breeva-ml-data/field] [--region a,b] [--dry] [--with-runs] [--only <key text>]
  *
  * Since 16 Nov the hourly Lambda (stack breeva-builder) owns v/: runs and manifests are skipped unless --with-runs,
  * so a local manifest never replaces a newer one in the bucket. Tiles, harga hirup, graphs and school points go up.
@@ -21,7 +21,9 @@ if (!bucket || !/^breeva-/.test(bucket)) throw new Error('--bucket must be a bre
 const root = arg('root', 'D:/breeva-ml-data/field');
 const regions = arg('region', 'badung_denpasar,kota_bogor').split(',');
 const withRuns = process.argv.includes('--with-runs');
-const plan = planUploads(root, regions).filter((u) => withRuns || !u.key.startsWith('v/'));
+// --only <text>: upload just the keys that contain it (X-W93: the two school-zone files, without re-sending tiles and graphs)
+const only = arg('only');
+const plan = planUploads(root, regions).filter((u) => (withRuns || !u.key.startsWith('v/')) && (!only || u.key.includes(only)));
 const tmp = mkdtempSync(join(tmpdir(), 'breeva-publish-'));
 for (const u of plan) {
   // brotli entries go up compressed with Content-Encoding: br (publish-plan.mjs says which)
