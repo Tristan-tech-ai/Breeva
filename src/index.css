@@ -839,6 +839,15 @@ html.dark .leaflet-container {
   border-radius: 6px;
   padding: 2px 6px;
 }
+/* X-W57: in dark mode the attribution box is dark too (Leaflet's default is white at 80%, a light patch on a dark map) */
+html.dark .leaflet-container .leaflet-control-attribution {
+  background: rgba(17, 24, 39, 0.85);
+  color: #d1d5db;
+}
+html.dark .leaflet-container .leaflet-control-attribution a {
+  color: #7dd3fc;
+}
+
 /* X-W54: on /home the bottom sheet covers the bottom of the map; its controls (the data attribution) ride above it */
 .home-map .leaflet-bottom {
   bottom: var(--sheet-h, 0px);
