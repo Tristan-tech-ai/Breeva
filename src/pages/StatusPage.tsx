@@ -117,7 +117,7 @@ export default function StatusPage() {
                   if (sv?.state === 'done') return (
                     <div className="mt-2" aria-live="polite">
                       <p className="text-[12px] text-teal-800 dark:text-teal-300">
-                        {savedText(sv, new Date(sv.at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }))} Peta dan rute {r.label} jalan tanpa internet dengan angka jam itu; peta dasar tidak ikut tersimpan.
+                        {savedText(sv, new Date(sv.at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }))} Peta, peta dasar, tempat, dan rute {r.label} jalan tanpa internet dengan angka jam itu.
                       </p>
                       <button onClick={() => save(r)} className="mt-1 min-h-8 rounded-full px-2 text-[12px] font-semibold text-teal-800 dark:text-teal-200 underline underline-offset-2">Simpan ulang (angka jam terbaru)</button>
                     </div>
