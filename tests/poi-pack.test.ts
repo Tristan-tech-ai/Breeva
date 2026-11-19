@@ -16,7 +16,7 @@ const PACK: PoiPackFile = {
 
 describe('POI packs', () => {
   it('serves one pack per region under tiles/poi/<release>/', () => {
-    expect(poiPackUrl('https://cdn.test', 'kota_bogor')).toBe('https://cdn.test/tiles/poi/2026-10-21.0/kota_bogor.json');
+    expect(poiPackUrl('https://cdn.test', 'kota_bogor')).toBe('https://cdn.test/tiles/poi/2026-10-21.1/kota_bogor.json');
   });
 
   it('decodes names, categories with their parents, coordinates and addresses', () => {

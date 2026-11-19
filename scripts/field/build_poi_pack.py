@@ -27,7 +27,9 @@ MIN_CONFIDENCE = 0.6
 DEDUPE_M = 30.0
 MERGE_M = 50.0  # the same name from OSM and Overture within this distance is one place (OSM kept)
 MIN_CONFIDENCE_PUBLIC = 0.5  # Overture rates many schools, mosques and clinics low; a public-facility name keeps them
-OVERPASS = "https://overpass-api.de/api/interpreter"
+# Overpass endpoints tried in turn (the main one answers 502 when busy); answers are kept next to the pack (OSM_CACHE)
+OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter",
+            "https://maps.mail.ru/osm/tools/overpass/api/interpreter"]
 # same bounds as src/lib/field/source.ts FIELD_REGIONS, plus 0.02 degrees (the basemap margin)
 REGIONS = {
     "badung_denpasar": (-8.82 - 0.02, 115.08 - 0.02, -8.56 + 0.02, 115.30 + 0.02),
@@ -148,16 +150,23 @@ def osm_places(s, w, n, e):
     leis = 'nwr[name][leisure~"^(park|playground|garden|fitness_centre|sports_centre|swimming_pool)$"]'
     q = (f"[out:json][timeout:180];(nwr[name][amenity]{box};nwr[name][shop]{box};nwr[name][tourism]{box};"
          f"{leis}{box};nwr[name][healthcare]{box};);out center tags;")
-    req = urllib.request.Request(OVERPASS, data=urllib.parse.urlencode({"data": q}).encode(), headers={"User-Agent": "breeva-poi-pack/1.0"})
+    import os
+    cache = os.path.join(OUT, f"osm_{s}_{w}_{n}_{e}.json".replace("-", "m"))
     js = None
-    for attempt in range(4):
+    if os.path.exists(cache) and os.environ.get("POI_OSM_SEGAR") != "1":
+        js = json.load(open(cache, encoding="utf-8"))
+        print("osm dari cache", cache, flush=True)
+    for attempt in range(6 if js is None else 0):
+        url = OVERPASS[attempt % len(OVERPASS)]
+        req = urllib.request.Request(url, data=urllib.parse.urlencode({"data": q}).encode(), headers={"User-Agent": "breeva-poi-pack/1.0"})
         try:
             with urllib.request.urlopen(req, timeout=240) as r:
                 js = json.load(r)
+            json.dump(js, open(cache, "w", encoding="utf-8"))
             break
-        except Exception as ex:  # Overpass is busy at times: wait and retry
-            print("overpass", attempt + 1, str(ex)[:120], flush=True)
-            time.sleep(20 * (attempt + 1))
+        except Exception as ex:  # Overpass is busy at times: next endpoint, then wait
+            print("overpass", attempt + 1, url.split("/")[2], str(ex)[:100], flush=True)
+            time.sleep(10 * (attempt + 1))
     if js is None:
         raise SystemExit("Overpass tidak menjawab")
     out = []
@@ -172,6 +181,27 @@ def osm_places(s, w, n, e):
         addr = " ".join(x for x in [tags.get("addr:street", ""), tags.get("addr:housenumber", "")] if x).strip()
         out.append({"name": name, "cat": cat, "lat": lat, "lng": lng, "addr": addr, "confidence": 2.0, "src": "osm", "ds": ["OpenStreetMap"]})
     return out
+
+
+# X-W41: institutions whose name ends with ANOTHER city were mislocated in the source (e.g. "RS. Hosana Medika Bekasi" in
+# Bogor, "Universitas Pasundan (UNPAS) Bandung" in Bali). Only hospitals/clinics, schools/campuses and places of worship;
+# food names ("Bakso Malang") and fuel stations ("SPBU Pandak Bandung", a village in Tabanan) are kept, and so is any name
+# that also names the region itself ("Prodi Kebidanan Bogor Poltekkes Kemenkes Bandung").
+OTHER_CITY = {
+    "kota_bogor": r"bekasi|jakarta|tangerang|depok|bandung|surabaya|semarang|yogyakarta|jogja|medan|denpasar|cikarang|karawang|sukabumi|cianjur|makassar|malang",
+    "badung_denpasar": r"jakarta|surabaya|bandung|bogor|bekasi|tangerang|depok|medan|semarang|yogyakarta|jogja|malang|makassar|banyuwangi",
+}
+OWN_NAME = {"kota_bogor": r"bogor", "badung_denpasar": r"denpasar|badung|bali|kuta|sanur"}
+INSTITUTION = ("healthcare", "education", "religion")
+
+
+def mislocated(region, name, cat):
+    if not cat.startswith(INSTITUTION):
+        return False
+    n = name.strip().lower()
+    if re.search(r"\b(" + OWN_NAME[region] + r")\b", n):
+        return False
+    return bool(re.search(r"(?:^|[\s,(])(" + OTHER_CITY[region] + r")(?:\s+(?:timur|barat|selatan|utara|pusat|raya))?\)?\s*$", n))
 
 
 def norm(name):
@@ -230,6 +260,9 @@ def main():
         osm = osm_places(s, w, n, e)
         before = n_overture + len(osm)
         keep = dedupe(dedupe(keep) + osm, MERGE_M)
+        n_before_city = len(keep)
+        dropped_city = [r["name"] for r in keep if mislocated(region, r["name"], r["cat"])]
+        keep = [r for r in keep if not mislocated(region, r["name"], r["cat"])]
         cats = sorted({r["cat"] for r in keep})
         ci = {c: i for i, c in enumerate(cats)}
         keep.sort(key=lambda r: (r["lat"], r["lng"]))
@@ -251,6 +284,7 @@ def main():
             per_cat[r["cat"]] = per_cat.get(r["cat"], 0) + 1
         summary["regions"][region] = {"overture_total": total, "overture_kept": n_overture, "osm": len(osm), "kept_before_dedupe": before,
                                       "kept": len(keep), "from_osm": sum(1 for r in keep if r["src"] == "osm"),
+                                      "before_city_rule": n_before_city, "dropped_other_city": dropped_city,
                                       "per_category": dict(sorted(per_cat.items(), key=lambda kv: -kv[1])), "providers": providers}
         print(f"{region}: Overture {total} -> {n_overture}, OSM {len(osm)}, gabungan sesudah dedupe {len(keep)} ({time.time() - t0:.0f} s)", flush=True)
     with open(f"{OUT}/ringkasan.json", "w", encoding="utf-8") as f:

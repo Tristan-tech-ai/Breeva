@@ -28,7 +28,7 @@ describe('saving a region for offline (F2-15)', () => {
     const files = regionFiles(BASE, R, M);
     const urls = files.map((f) => f.url.replace(BASE, ''));
     expect(urls).toEqual([
-      '/tiles/2026-11/kota_bogor.pmtiles', '/tiles/basemap/2026-11-17/kota_bogor.pmtiles', '/tiles/poi/2026-10-21.0/kota_bogor.json', '/v/kota_bogor/manifest.json', '/v/kota_bogor/2026111716/0.bin', '/v/kota_bogor/2026111716/1.bin',
+      '/tiles/2026-11/kota_bogor.pmtiles', '/tiles/basemap/2026-11-17/kota_bogor.pmtiles', '/tiles/poi/2026-10-21.1/kota_bogor.json', '/v/kota_bogor/manifest.json', '/v/kota_bogor/2026111716/0.bin', '/v/kota_bogor/2026111716/1.bin',
       '/v/kota_bogor/2026111716/x2026111717.bin', '/harga/2026-11/kota_bogor.bin', '/graphs/2026-11/kota_bogor_inti2.bin', '/graphs/2026-11/kota_bogor_bentuk2.bin', '/graphs/2026-11/kota_bogor_schools.json',
     ]);
     expect(files[0]).toMatchObject({ into: [FIELD_CACHES.geometry], whole: true });

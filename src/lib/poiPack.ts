@@ -7,7 +7,8 @@
 import type { POI } from './poi-api';
 import { ROUTE_CACHE, cachedBytes } from './route/assets';
 
-export const POI_RELEASE = '2026-10-21.0';
+// .1 = pack revision 19 Nov (X-W41: mislocated institutions dropped); Overture release 2026-10-21.0
+export const POI_RELEASE = '2026-10-21.1';
 export const POI_ATTRIBUTION = 'Tempat: <a href="https://overturemaps.org">Overture Maps</a> (Meta, Microsoft, Foursquare, AllThePlaces dkk.) dan &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 /** One pack as stored: [name, category index, lat*1e5, lng*1e5, address]. */
