@@ -88,7 +88,10 @@ export function searchPoiPack(pois: POI[], query: string, near?: { lat: number; 
     const n = normName(p.name);
     const nc = n.replace(/ /g, '');
     // spaces differ between sources ("Swiss-Belhotel" and "Swissbel Hotel"): compare without spaces as well
-    const rank = n.startsWith(q) || nc.startsWith(qc) ? 0 : (' ' + n).includes(' ' + q) ? 1 : n.includes(q) ? 2 : nc.includes(qc) ? 3 : -1;
+    // rank 4 (X-W47): the query is the full name with words the source left out, e.g. "Inna Bali Heritage" for the hotel
+    // the source lists as "Inna Bali" (Jalan Veteran 3); only names of two words or more, so "Bali" alone never matches.
+    const rank = n.startsWith(q) || nc.startsWith(qc) ? 0 : (' ' + n).includes(' ' + q) ? 1 : n.includes(q) ? 2 : nc.includes(qc) ? 3
+      : n.includes(' ') && n.length >= 6 && q.startsWith(n + ' ') ? 4 : -1;
     if (rank < 0) continue;
     const d = near ? (p.coordinate.lat - near.lat) ** 2 + ((p.coordinate.lng - near.lng) * Math.cos((near.lat * Math.PI) / 180)) ** 2 : 0;
     scored.push({ p, rank, d });

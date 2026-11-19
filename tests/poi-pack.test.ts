@@ -77,6 +77,14 @@ describe('POI packs', () => {
     expect(searchPoiPack(twice, 'museum bali')).toHaveLength(2); // the same place mapped twice shows once; one 5 km away stays
   });
 
+  it('finds a place by its full name when the source lists a shorter one, never by one common word (X-W47)', () => {
+    const inna = decodePoiPack({ ...PACK, pois: [['Inna Bali', 0, -865459, 11521690, 'Jalan Veteran 3'], ['Bali', 0, -865000, 11521000, ''], ['Inna Bali Beach Resort', 0, -869781, 11525388, '']] });
+    expect(searchPoiPack(inna, 'Inna Bali Heritage').map((x) => x.name)).toEqual(['Inna Bali']);
+    expect(searchPoiPack(inna, 'inna bali').map((x) => x.name)).toEqual(['Inna Bali', 'Inna Bali Beach Resort']); // a name match still ranks first
+    expect(searchPoiPack(inna, 'bali museum')).toEqual([]); // the one-word name 'Bali' is not a match for a longer query
+    expect(searchPoiPack(inna, 'inna balinese')).toEqual([]); // whole words only
+  });
+
   it('labels categories in Indonesian for search results, most specific first', () => {
     expect(poiCategoryLabel('catering.cafe')).toBe('Kafe');
     expect(poiCategoryLabel('catering.restaurant')).toBe('Rumah makan');
