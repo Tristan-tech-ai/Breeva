@@ -56,6 +56,7 @@ const ExploreMapPage = lazy(() => import('./pages/ExploreMapPage'));
 const CityAirPage = lazy(() => import('./pages/CityAirPage'));
 const DevelopersPage = lazy(() => import('./pages/DevelopersPage'));
 const DeveloperLandingPage = lazy(() => import('./pages/DeveloperLandingPage'));
+const PantauPage = lazy(() => import('./pages/PantauPage'));
 const DeveloperDashboardPage = lazy(() => import('./pages/DeveloperDashboardPage'));
 
 // Page loading fallback — content-shaped skeleton (avoids the blank flash of a bare spinner).
@@ -347,6 +348,8 @@ function App() {
 
             {/* Public priority list of schools and health facilities (no auth) */}
             <Route path="/prioritas" element={<PrioritasPage />} />
+            <Route path="/pantau" element={<PantauPage />} />
+            <Route path="/pantau/:wilayah" element={<PantauPage />} />
             <Route path="/validasi" element={<ValidasiPage />} />
             <Route path="/status" element={<StatusPage />} />
             <Route path="/uji-coba" element={<UjiCobaPage />} />
