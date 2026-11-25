@@ -25,7 +25,7 @@ describe('landing at / (N-02)', () => {
   it('the 3D landing carries the real numbers, the three doors and no invented route example', () => {
     const html = renderToStaticMarkup(h(MemoryRouter, null, h(LandingPage)));
     for (const t of ['sensor warga aktif', 'titik api, 24 jam', 'jam peta terbit', '90,7%', '−66% asap', 'Satu Peta']) expect(html).toContain(t);
-    for (const href of ['href="/peta"', 'href="/prioritas"', 'href="/pantau"']) expect(html).toContain(href);
+    for (const href of ['href="/peta"', 'href="/prioritas"', 'href="/pantau"', 'href="/pemerintah"']) expect(html).toContain(href);
     for (const gone of ['AQI 142', 'rokok', 'Tanya Vayu', '8 kota', 'twitter.com']) expect(html).not.toContain(gone);
   });
 });

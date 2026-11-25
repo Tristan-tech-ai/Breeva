@@ -301,7 +301,7 @@ export default function LandingPage() {
               {([
                 [Footprints, 'Warga', 'Rute jalan kaki dan motor dengan asap paling sedikit, juga tanpa internet.', 'bg-emerald-100 text-emerald-700', '/peta'],
                 [School, 'Sekolah dan orang tua', 'Sekolah dan puskesmas yang paling terpapar asap kendaraan pada jam kegiatannya.', 'bg-violet-100 text-violet-600', '/prioritas'],
-                [Landmark, 'Pemerintah daerah', 'Titik api, arah angin, laporan warga, grafik, dan unduhan data per wilayah.', 'bg-sky-100 text-sky-600', '/pantau'],
+                [Landmark, 'Pemerintah daerah', 'Titik api, arah angin, laporan warga, grafik, dan unduhan data per wilayah.', 'bg-sky-100 text-sky-600', '/pemerintah'],
               ] as [LucideIcon, string, string, string, string][]).map(([Icon, title, desc, tint, to], i) => (
                 <Link key={title} to={to} className="block"><FeatureCard icon={Icon} title={title} desc={desc} tint={tint} i={i} /></Link>
               ))}
@@ -410,6 +410,7 @@ export default function LandingPage() {
                   <li><Link to="/pantau/badung-denpasar" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Badung–Denpasar</Link></li>
                   <li><Link to="/pantau/kota-bogor" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Kota Bogor</Link></li>
                   <li><Link to="/validasi" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Akurasi</Link></li>
+                  <li><Link to="/pemerintah" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Untuk pemerintah</Link></li>
                 </ul>
               </div>
 
