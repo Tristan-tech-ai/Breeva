@@ -53,17 +53,18 @@ export function cariWilayah(idx: WilayahIndex, lon: number, lat: number): Wilaya
 }
 
 /** Keep the fire points inside an Indonesian kab/kota and append its slug and province code; count the rest. */
-export function tandaiWilayah(points: FirePoint[], idx: WilayahIndex): { points: FirePoint[]; luar: number; per_provinsi: Record<string, number> } {
+export function tandaiWilayah(points: FirePoint[], idx: WilayahIndex): { points: FirePoint[]; luar: number; luar_points: FirePoint[]; per_provinsi: Record<string, number> } {
   const out: FirePoint[] = [];
   const per: Record<string, number> = {};
   let luar = 0;
+  const luarPts: FirePoint[] = [];
   for (const p of points) {
     const w = cariWilayah(idx, p[0], p[1]);
-    if (!w) { luar++; continue; }
+    if (!w) { luar++; luarPts.push(p.slice(0, 6) as FirePoint); continue; }
     out.push([p[0], p[1], p[2], p[3], p[4], p[5], w.slug, w.iso]);
     per[w.iso] = (per[w.iso] ?? 0) + 1;
   }
-  return { points: out, luar, per_provinsi: per };
+  return { points: out, luar, luar_points: luarPts, per_provinsi: per };
 }
 
 /** The 38 provinces (ISO 3166-2:ID) and their names as in OSM. */

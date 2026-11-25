@@ -19,10 +19,12 @@ const arrow = (from: number, speed: number) => L.divIcon({
 export interface Choropleth { url: string; nilai: Record<string, number | null>; nama: Record<string, string>; onPick: (slug: string) => void }
 
 /** National monitoring map (N-11, N-24): kab/kota colours, fire points of the last 24 hours sized by power, wind arrows. */
-export default function PantauMap({ fires, wind, hour = 0, center, zoom, dark, kab, jalur = [] }: {
+export default function PantauMap({ fires, wind, hour = 0, center, zoom, dark, kab, jalur = [], luar = false }: {
   fires: FirePoint[]; wind: WindFile | null; hour?: number; center: [number, number]; zoom: number; dark: boolean; kab?: Choropleth;
   /** N-26: 24-hour smoke paths (lon, lat per hour) */
   jalur?: Array<Array<[number, number]>>;
+  /** N-37: points without a kab/kota are fires outside Indonesia, drawn grey */
+  luar?: boolean;
 }) {
   const pts = gridPoints();
   const [fc, setFc] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -61,8 +63,8 @@ export default function PantauMap({ fires, wind, hour = 0, center, zoom, dark, k
       })}
       {fires.map((f, i) => (
         <CircleMarker key={i} center={[f[1], f[0]]} radius={Math.min(9, 2.5 + Math.sqrt(Math.max(0, f[2])) / 2)}
-          pathOptions={{ color: '#b91c1c', weight: 1, fillColor: f[3] === 'h' ? '#dc2626' : '#f97316', fillOpacity: 0.75 }}>
-          <Tooltip>Titik api {f[4].replace('T', ' ').replace('Z', ' UTC')} · daya {f[2].toLocaleString('id-ID')} MW · keyakinan {({ h: 'tinggi', n: 'sedang', l: 'rendah' } as Record<string, string>)[f[3]] ?? f[3]}</Tooltip>
+          pathOptions={luar && !f[6] ? { color: '#475569', weight: 1, fillColor: '#94a3b8', fillOpacity: 0.7 } : { color: '#b91c1c', weight: 1, fillColor: f[3] === 'h' ? '#dc2626' : '#f97316', fillOpacity: 0.75 }}>
+          <Tooltip>{luar && !f[6] ? 'Di luar Indonesia · ' : ''}Titik api {f[4].replace('T', ' ').replace('Z', ' UTC')} · daya {f[2].toLocaleString('id-ID')} MW · keyakinan {({ h: 'tinggi', n: 'sedang', l: 'rendah' } as Record<string, string>)[f[3]] ?? f[3]}</Tooltip>
         </CircleMarker>
       ))}
     </MapContainer>

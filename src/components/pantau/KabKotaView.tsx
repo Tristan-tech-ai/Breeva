@@ -44,7 +44,7 @@ export default function KabKotaView({ k, latar, fires, wind, hour, dark, asap = 
         <div className="rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-3 text-sm" data-asap-menuju>
           <p className="font-bold text-amber-900 dark:text-amber-200">Asap menuju: dalam {menuju[0].jam} jam</p>
           <p className="text-xs text-amber-900 dark:text-amber-200">
-            Asap dari {menuju.length} gugus titik api bisa terbawa angin ke sini{menuju[0].asal ? `, paling cepat dari ${nama[menuju[0].asal] ?? menuju[0].asal}` : ''}.
+            Asap dari {menuju.length} gugus titik api bisa terbawa angin ke sini{`, paling cepat dari ${menuju[0].asal ? (nama[menuju[0].asal] ?? menuju[0].asal) : 'luar Indonesia'}`}.
             Perkiraan kasar: hanya mengikuti angin, tanpa hujan dan naik-turunnya asap.
           </p>
         </div>

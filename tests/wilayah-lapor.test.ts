@@ -31,6 +31,7 @@ describe('N-23 kab/kota lookup', () => {
     expect(t.points.map((p) => p[6])).toEqual(['kota-a', 'kabupaten-b']);
     expect(t.points[0][7]).toBe('ID-BA');
     expect(t.luar).toBe(2);
+    expect(t.luar_points.map((p) => [p[0], p[1], p[6]])).toEqual([[125.6, -8.6, undefined], [103.3, 5.3, undefined]]); // N-37: kept for smoke paths
     expect(t.per_provinsi).toEqual({ 'ID-BA': 1, 'ID-JB': 1 });
   });
   it('counts per province with names, largest first', () => {

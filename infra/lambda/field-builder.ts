@@ -128,12 +128,13 @@ export async function nasional(bucket: string, now = new Date()): Promise<Record
     const f = fireFile(by, now);
     try {
       const t = tandaiWilayah(f.points, await wilayah(bucket));
-      f.points = t.points; f.n = t.points.length; f.luar_indonesia = t.luar; f.per_provinsi = t.per_provinsi;
+      f.points = t.points; f.n = t.points.length; f.luar_indonesia = t.luar; f.luar_points = t.luar_points; f.per_provinsi = t.per_provinsi;
     } catch (e) {
       res.wilayah_gagal = String((e as Error).message).slice(0, 120); // keep the box points rather than publish nothing
     }
     await putNational(bucket, 'v/nasional/titik_api.json', f);
-    firePts = f.points;
+    // N-37: smoke from fires just across the border can drift into Indonesia, so the paths use both lists
+    firePts = [...f.points, ...(f.luar_points ?? [])];
     res.titik_api = f.n;
     res.luar_indonesia = f.luar_indonesia ?? null;
   }

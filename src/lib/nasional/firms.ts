@@ -18,6 +18,8 @@ export interface FireFile {
   per_satelit: Record<string, number>;
   /** points in the FIRMS box but outside Indonesia's kab/kota boundaries (Malaysia, Timor-Leste, PNG, sea), dropped */
   luar_indonesia?: number;
+  /** N-37: those points themselves (no kab/kota): not counted for Indonesia, but their smoke can drift in */
+  luar_points?: FirePoint[];
   per_provinsi?: Record<string, number>;
   points: FirePoint[];
 }
