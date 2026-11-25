@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CircleMarker, GeoJSON, MapContainer, Marker, Tooltip } from 'react-leaflet';
+import { CircleMarker, GeoJSON, MapContainer, Marker, Polyline, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import BasemapLayer from '../map/VectorBasemap';
@@ -19,8 +19,10 @@ const arrow = (from: number, speed: number) => L.divIcon({
 export interface Choropleth { url: string; nilai: Record<string, number | null>; nama: Record<string, string>; onPick: (slug: string) => void }
 
 /** National monitoring map (N-11, N-24): kab/kota colours, fire points of the last 24 hours sized by power, wind arrows. */
-export default function PantauMap({ fires, wind, hour = 0, center, zoom, dark, kab }: {
+export default function PantauMap({ fires, wind, hour = 0, center, zoom, dark, kab, jalur = [] }: {
   fires: FirePoint[]; wind: WindFile | null; hour?: number; center: [number, number]; zoom: number; dark: boolean; kab?: Choropleth;
+  /** N-26: 24-hour smoke paths (lon, lat per hour) */
+  jalur?: Array<Array<[number, number]>>;
 }) {
   const pts = gridPoints();
   const [fc, setFc] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -49,6 +51,9 @@ export default function PantauMap({ fires, wind, hour = 0, center, zoom, dark, k
             layer.on('click', () => kab.onPick(s));
           }} />
       )}
+      {jalur.map((j, i) => (
+        <Polyline key={`j${i}`} positions={j.map(([lon, lat]) => [lat, lon] as [number, number])} pathOptions={{ color: '#7c2d12', weight: 2, opacity: 0.55, dashArray: '4 4' }} interactive={false} />
+      ))}
       {wind && pts.map(([lon, lat], k) => {
         const s = wind.speed[k]?.[hour], d = wind.dir[k]?.[hour];
         if (s == null || d == null || s < 0 || d < 0) return null;

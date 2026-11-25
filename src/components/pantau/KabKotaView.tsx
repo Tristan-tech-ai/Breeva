@@ -7,6 +7,7 @@ import { pm25Category } from '../../lib/ispu';
 import type { FireFile } from '../../lib/nasional/firms';
 import { windAt, type WindFile } from '../../lib/nasional/angin';
 import type { LatarFile } from '../../lib/nasional/latar';
+import type { AsapFile } from '../../lib/nasional/asap';
 import { apiSini, kabKotaCsv, latarSini, TINGKAT_LABEL, type KabKota } from '../../lib/nasional/kabkota';
 
 const PantauMap = lazy(() => import('./PantauMap'));
@@ -14,9 +15,12 @@ const ARAH = ['utara', 'timur laut', 'timur', 'tenggara', 'selatan', 'barat daya
 const n = (v: number | null | undefined, d = 0) => (v == null ? '…' : v.toLocaleString('id-ID', { maximumFractionDigits: d }));
 
 /** N-24: one kab/kota anywhere in Indonesia: background now and 48 hours, fires inside and near, wind; CSV. */
-export default function KabKotaView({ k, latar, fires, wind, hour, dark }: {
+export default function KabKotaView({ k, latar, fires, wind, hour, dark, asap = null, nama = {} }: {
   k: KabKota; latar: LatarFile | null; fires: FireFile | null; wind: WindFile | null; hour: number; dark: boolean;
+  asap?: AsapFile | null; nama?: Record<string, string>;
 }) {
+  const menuju = asap?.menuju[k.slug] ?? [];
+  const jalur = menuju.map((m) => asap!.gugus.find((g) => g.id === m.gugus)?.jalur).filter((j): j is Array<[number, number]> => !!j);
   const l = latarSini(latar, k.slug);
   const api = apiSini(fires?.points ?? [], k);
   const angin = wind ? windAt(wind, k.lon, k.lat, hour) : null;
@@ -36,6 +40,15 @@ export default function KabKotaView({ k, latar, fires, wind, hour, dark }: {
         <StatCard label="Titik api" value={n(api.dalam.length)} note={`di dalam, 24 jam; ${n(api.dekat.length)} lagi dalam 50 km`} tone={api.dalam.length ? 'warn' : 'good'} icon={<Flame className="h-3.5 w-3.5" aria-hidden="true" />} />
         <StatCard label="Angin" value={angin ? `${n(angin.speed, 1)} m/s` : '…'} note={angin ? `dari ${ARAH[Math.round(angin.from / 45) % 8]}` : ''} icon={<Wind className="h-3.5 w-3.5" aria-hidden="true" />} />
       </div>
+      {menuju.length > 0 && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-3 text-sm" data-asap-menuju>
+          <p className="font-bold text-amber-900 dark:text-amber-200">Asap menuju: dalam {menuju[0].jam} jam</p>
+          <p className="text-xs text-amber-900 dark:text-amber-200">
+            Asap dari {menuju.length} gugus titik api bisa terbawa angin ke sini{menuju[0].asal ? `, paling cepat dari ${nama[menuju[0].asal] ?? menuju[0].asal}` : ''}.
+            Perkiraan kasar: hanya mengikuti angin, tanpa hujan dan naik-turunnya asap.
+          </p>
+        </div>
+      )}
       {l && <p className="text-xs text-gray-600 dark:text-gray-300" data-tingkat>Tingkat keyakinan: <b>{TINGKAT_LABEL[l.t]}</b>. Udara latar saja; asap kendaraan per ruas baru ada di Badung–Denpasar dan Kota Bogor.</p>}
       {l && (
         <div className="rounded-2xl bg-white dark:bg-gray-900 p-4">
@@ -44,7 +57,7 @@ export default function KabKotaView({ k, latar, fires, wind, hour, dark }: {
         </div>
       )}
       <Suspense fallback={<div className="rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" style={{ height: '26rem' }} />}>
-        <PantauMap fires={[...api.dalam, ...api.dekat.map((d) => d.p)]} wind={wind} hour={hour} center={[k.lat, k.lon]} zoom={9} dark={dark} />
+        <PantauMap fires={[...api.dalam, ...api.dekat.map((d) => d.p)]} wind={wind} hour={hour} center={[k.lat, k.lon]} zoom={9} dark={dark} jalur={jalur} />
       </Suspense>
       <div className="flex flex-wrap gap-2">
         <button onClick={unduh} className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-emerald-700 px-4 text-sm font-semibold text-white">

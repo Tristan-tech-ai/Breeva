@@ -22,6 +22,8 @@ import { FIRMS_SOURCES, fireFile, firmsUrl, parseFirmsCsv, type FirePoint } from
 import { CHUNK, gridPoints, windFile, windUrl } from '../../src/lib/nasional/angin';
 import { indexWilayah, tandaiWilayah, type WilayahFC, type WilayahIndex } from '../../src/lib/nasional/wilayah';
 import { camsSeries, camsUrl, LATAR_CHUNK, latarFile, sensorsNow } from '../../src/lib/nasional/latar';
+import { asapFile } from '../../src/lib/nasional/asap';
+import type { WindFile } from '../../src/lib/nasional/angin';
 
 // every source fetch (Open-Meteo, OpenAQ, METAR) goes through a retry with a fresh pause budget per invocation (F2-18)
 const baseFetch = globalThis.fetch.bind(globalThis);
@@ -98,8 +100,19 @@ async function putNational(bucket: string, key: string, obj: unknown) {
     CacheControl: 'public, max-age=300, stale-while-revalidate=900', ContentType: 'application/json' }));
 }
 
+/** A gzip-stored JSON object of the bucket (the national files), or null. */
+async function readGzJson<T>(bucket: string, k: string): Promise<T | null> {
+  try {
+    const r = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: k }));
+    const b = Buffer.from(await r.Body!.transformToByteArray());
+    return JSON.parse((b[0] === 0x1f && b[1] === 0x8b ? gunzipSync(b) : b).toString('utf8')) as T;
+  } catch { return null; }
+}
+
 export async function nasional(bucket: string, now = new Date()): Promise<Record<string, unknown>> {
   const res: Record<string, unknown> = {};
+  let firePts: FirePoint[] | null = null;
+  let windNow: WindFile | null = null;
   const k = await firmsKey();
   if (k) {
     const by: Record<string, FirePoint[]> = {};
@@ -120,6 +133,7 @@ export async function nasional(bucket: string, now = new Date()): Promise<Record
       res.wilayah_gagal = String((e as Error).message).slice(0, 120); // keep the box points rather than publish nothing
     }
     await putNational(bucket, 'v/nasional/titik_api.json', f);
+    firePts = f.points;
     res.titik_api = f.n;
     res.luar_indonesia = f.luar_indonesia ?? null;
   }
@@ -134,7 +148,23 @@ export async function nasional(bucket: string, now = new Date()): Promise<Record
     }
     const w = windFile(answers, now);
     await putNational(bucket, 'v/nasional/angin.json', w);
+    windNow = w;
     res.angin = { titik: w.speed.length, jam: w.hours.length, panggilan: pts.length };
+  }
+  // N-26: 24-hour smoke paths of the fire clusters, every hour with the newest fires and the stored wind
+  if (firePts) {
+    try {
+      windNow ??= await readGzJson<WindFile>(bucket, 'v/nasional/angin.json');
+      if (windNow?.hours.length) {
+        let h0 = 0;
+        windNow.hours.forEach((hh, i) => { if (Math.abs(Date.parse(hh) - now.getTime()) < Math.abs(Date.parse(windNow!.hours[h0]) - now.getTime())) h0 = i; });
+        const a = asapFile(firePts, windNow, h0, await wilayah(bucket), now);
+        await putNational(bucket, 'v/nasional/asap.json', a);
+        res.asap = { gugus: a.gugus.length, kabkota_menuju: Object.keys(a.menuju).length };
+      }
+    } catch (e) {
+      res.asap_gagal = String((e as Error).message).slice(0, 120);
+    }
   }
   // N-22: background PM2.5 per kab/kota for 48 hours, corrected with OpenAQ citizen sensors; its own failure stays here
   if (now.getUTCHours() % 6 === 0 || !(await exists(bucket, 'v/nasional/latar.json'))) {

@@ -14,6 +14,7 @@ import { windAt, type WindFile } from '../lib/nasional/angin';
 import { fasilitasCsv, kmBetween, nearby, PANTAU_WILAYAH } from '../lib/nasional/pantau';
 import { perProvinsi } from '../lib/nasional/wilayah';
 import type { LatarFile } from '../lib/nasional/latar';
+import type { AsapFile } from '../lib/nasional/asap';
 import { bacaIndeks, cariKabKota, latarSini, type KabKotaIndeks } from '../lib/nasional/kabkota';
 import KabKotaView from '../components/pantau/KabKotaView';
 import LaporButton from '../components/lapor/LaporButton';
@@ -54,6 +55,7 @@ export default function PantauPage() {
   const b = fieldBase();
   const indeksFile = useJson<KabKotaIndeks>(`${b}/v/nasional/kabkota_indeks.json`);
   const latar = useJson<LatarFile>(`${b}/v/nasional/latar.json`);
+  const asap = useJson<AsapFile>(`${b}/v/nasional/asap.json`);
   const indeks = useMemo(() => bacaIndeks(indeksFile), [indeksFile]);
   const kab = !region && wilayah ? indeks.find((k) => k.slug === wilayah) ?? null : null;
   const [cari, setCari] = useState('');
@@ -97,7 +99,7 @@ export default function PantauPage() {
           <LaporButton className="ml-auto" getCenter={() => (pusat ? { lat: pusat.lat, lng: pusat.lon } : null)} />
         </header>
 
-        {kab && <KabKotaView k={kab} latar={latar} fires={fires} wind={wind} hour={h} dark={dark} />}
+        {kab && <KabKotaView k={kab} latar={latar} fires={fires} wind={wind} hour={h} dark={dark} asap={asap} nama={namaKab} />}
         {!region && wilayah && !kab && indeksFile && <p className="text-sm text-gray-600 dark:text-gray-300">Wilayah tidak ditemukan. <Link to="/pantau" className="underline">Cari di daftar kabupaten/kota</Link>.</p>}
 
         {!region && !wilayah && (
@@ -124,9 +126,10 @@ export default function PantauPage() {
             </div>
             <Suspense fallback={<div className="rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" style={{ height: "26rem" }} />}>
               <PantauMap fires={fires?.points ?? []} wind={wind} hour={h} center={[-2.5, 118]} zoom={5} dark={dark}
-                kab={{ url: `${b}/v/nasional/kabkota_peta.geojson`, nilai, nama: namaKab, onPick: (s) => navigate(`/pantau/${s}`) }} />
+                kab={{ url: `${b}/v/nasional/kabkota_peta.geojson`, nilai, nama: namaKab, onPick: (s) => navigate(`/pantau/${s}`) }}
+                jalur={(asap?.gugus ?? []).slice(0, 30).map((g) => g.jalur)} />
             </Suspense>
-            <p className="text-xs text-gray-600 dark:text-gray-300">Warna wilayah: PM2,5 latar jam ini (ketuk untuk membuka kabupaten/kotanya). Titik merah: api terdeteksi satelit dalam 24 jam terakhir. Panah biru: arah angin, ke mana asap terbawa.</p>
+            <p className="text-xs text-gray-600 dark:text-gray-300">Warna wilayah: PM2,5 latar jam ini (ketuk untuk membuka kabupaten/kotanya). Titik merah: api terdeteksi satelit dalam 24 jam terakhir. Garis putus-putus coklat: perkiraan jalur asap 24 jam dari 30 gugus api terbesar. Panah biru: arah angin.</p>
             {prov.length > 0 && (
               <div className="rounded-2xl bg-white dark:bg-gray-900 p-4">
                 <BarChart title="Titik api 24 jam per provinsi (10 teratas)" bars={prov.slice(0, 10).map((p, i) => ({ label: p.nama, value: p.n, highlight: i === 0, color: i === 0 ? '#dc2626' : '#fb923c' }))} />
