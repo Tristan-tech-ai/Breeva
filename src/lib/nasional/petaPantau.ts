@@ -5,6 +5,7 @@
  */
 import type { FirePoint } from './firms';
 import { gridPoints, type WindFile } from './angin';
+import { formatAngka } from '../angka';
 
 export interface Gaya { color: string; weight: number; fillColor: string; fillOpacity: number }
 
@@ -20,7 +21,7 @@ export function radiusApi(f: FirePoint): number {
 
 const KEYAKINAN: Record<string, string> = { h: 'tinggi', n: 'sedang', l: 'rendah' };
 export function teksApi(f: FirePoint, luar: boolean): string {
-  return `${luar && !f[6] ? 'Di luar Indonesia · ' : ''}Titik api ${f[4].replace('T', ' ').replace('Z', ' UTC')} · daya ${f[2].toLocaleString('id-ID')} MW · keyakinan ${KEYAKINAN[f[3]] ?? f[3]}`;
+  return `${luar && !f[6] ? 'Di luar Indonesia · ' : ''}Titik api ${f[4].replace('T', ' ').replace('Z', ' UTC')} · daya ${formatAngka(f[2], 0, 3)} MW · keyakinan ${KEYAKINAN[f[3]] ?? f[3]}`;
 }
 
 export interface Panah { lat: number; lon: number; from: number; speed: number }

@@ -1,4 +1,5 @@
 /** Priority list of schools and health facilities (data written by scripts/field/priority.mts). */
+import { formatAngka } from './angka';
 
 export interface Fasilitas {
   peringkat: number; peringkat_kelas: number; id: string; nama: string;
@@ -107,6 +108,8 @@ export function pickPrioritasRegion(search: string): PrioritasRegion {
 
 /** Rows shown at once; the page offers more on request (the Bogor list has about 1,600 facilities). */
 export const PAGE_SIZE = 150;
+/** Rows rendered for the first paint; the rest of PAGE_SIZE follows right after (N-42). */
+export const LANGSUNG_PERTAMA = 30;
 
 export function saringUrut(items: Fasilitas[], s: Saring): Fasilitas[] {
   const q = s.cari.trim().toLowerCase();
@@ -129,7 +132,7 @@ export function rentangJam(jam: number[]): string {
 }
 
 export function fmt(x: number, d = 1): string {
-  return x.toLocaleString('id-ID', { minimumFractionDigits: d, maximumFractionDigits: d });
+  return formatAngka(x, d, d); // N-42: cached formatter
 }
 
 /**

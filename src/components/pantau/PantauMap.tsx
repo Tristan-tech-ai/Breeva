@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { MapContainer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -6,6 +6,7 @@ import BasemapLayer from '../map/VectorBasemap';
 import { PETA_HEMAT } from '../../lib/mapPerf';
 import { basemap } from '../../lib/basemap';
 import { pm25Category } from '../../lib/ispu';
+import { formatAngka } from '../../lib/angka';
 import type { FirePoint } from '../../lib/nasional/firms';
 import type { WindFile } from '../../lib/nasional/angin';
 import { teksCctv, warnaCctv, CCTV_LABEL, type CctvKamera } from '../../lib/nasional/cctv';
@@ -39,42 +40,67 @@ function useLapisan(build: (map: L.Map) => L.Layer | null, deps: unknown[]) {
   }, [map, ...deps]);
 }
 
+/** After the page has painted (the map layers are not built inside React's render task, N-42). */
+const sesudahLukis = (fn: () => void) => { let t = 0; const r = requestAnimationFrame(() => { t = window.setTimeout(fn, 0); }); return () => { cancelAnimationFrame(r); clearTimeout(t); }; };
+type Berfitur = L.Layer & { feature?: GeoJSON.Feature };
+
 function Wilayah({ kab }: { kab: Choropleth }) {
+  const map = useMap();
   const [fc, setFc] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [lapisan, setLapisan] = useState<L.GeoJSON | null>(null);
+  const kabRef = useRef(kab);
+  useEffect(() => { kabRef.current = kab; }, [kab]);
   useEffect(() => {
     let alive = true;
     fetch(kab.url).then((r) => (r.ok ? r.json() : null)).then((j) => alive && setFc(j)).catch(() => {});
     return () => { alive = false; };
   }, [kab.url]);
-  useLapisan(() => {
-    if (!fc) return null;
+  // N-42: 513 polygons added 80 per task after the first paint; one tooltip and one click handler on the group (the
+  // text is made when a polygon is hovered), instead of 513 tooltips built while the page loads
+  useEffect(() => {
+    if (!fc) return;
+    const gaya = (f: GeoJSON.Feature | undefined) => {
+      const v = kabRef.current.nilai[(f?.properties as { s: string }).s];
+      return { color: '#475569', weight: 0.4, fillColor: v == null ? '#cbd5e1' : pm25Category(v).color, fillOpacity: v == null ? 0.15 : 0.45 };
+    };
     // smoothFactor is a polyline option; L.geoJSON hands its options to every polygon it makes
-    return L.geoJSON(fc, {
-      smoothFactor: 1.5,
-      style: (f: GeoJSON.Feature | undefined) => {
-        const v = kab.nilai[(f?.properties as { s: string }).s];
-        return { color: '#475569', weight: 0.4, fillColor: v == null ? '#cbd5e1' : pm25Category(v).color, fillOpacity: v == null ? 0.15 : 0.45 };
-      },
-      onEachFeature: (f, layer) => {
-        const s = (f.properties as { s: string }).s;
-        const v = kab.nilai[s];
-        layer.bindTooltip(`${kab.nama[s] ?? s}${v == null ? '' : ` · PM2,5 latar ${v.toLocaleString('id-ID', { maximumFractionDigits: 0 })} µg/m³`}`, { sticky: true });
-        layer.on('click', () => kab.onPick(s));
-      },
-    } as L.GeoJSONOptions);
-  }, [fc, kab.nilai, kab.nama, kab.onPick]);
+    const g = L.geoJSON(undefined, { smoothFactor: 1.5, style: gaya } as L.GeoJSONOptions);
+    g.bindTooltip((l) => {
+      const s = ((l as Berfitur).feature?.properties as { s: string } | undefined)?.s ?? '';
+      const v = kabRef.current.nilai[s];
+      return `${kabRef.current.nama[s] ?? s}${v == null ? '' : ` · PM2,5 latar ${formatAngka(v, 0, 0)} µg/m³`}`;
+    }, { sticky: true });
+    g.on('click', (e) => { const s = ((e.propagatedFrom as Berfitur | undefined)?.feature?.properties as { s: string } | undefined)?.s; if (s) kabRef.current.onPick(s); });
+    g.addTo(map);
+    setLapisan(g);
+    let i = 0, batal = () => {};
+    const langkah = () => {
+      const end = Math.min(fc.features.length, i + 80);
+      g.addData({ type: 'FeatureCollection', features: fc.features.slice(i, end) } as GeoJSON.FeatureCollection);
+      i = end;
+      if (i < fc.features.length) batal = sesudahLukis(langkah);
+    };
+    batal = sesudahLukis(langkah);
+    return () => { batal(); g.remove(); setLapisan(null); };
+  }, [fc, map]);
+  // new background values recolour the polygons in place
+  useEffect(() => { lapisan?.setStyle((f) => {
+    const v = kab.nilai[(f?.properties as { s: string }).s];
+    return { color: '#475569', weight: 0.4, fillColor: v == null ? '#cbd5e1' : pm25Category(v).color, fillOpacity: v == null ? 0.15 : 0.45 };
+  }); }, [lapisan, kab.nilai]);
   return null;
 }
 
 function Titik({ fires, luar, cctv, sensors, jalur }: { fires: FirePoint[]; luar: boolean; cctv: CctvKamera[]; sensors: NonNullable<Props['sensors']>; jalur: NonNullable<Props['jalur']> }) {
+  // tooltip texts are made when a point is hovered (functions), not for every point while the page loads (N-42)
   useLapisan(() => L.layerGroup(jalur.map((j) => L.polyline(j.map(([lon, lat]) => [lat, lon] as [number, number]),
     { color: '#7c2d12', weight: 2, opacity: 0.55, dashArray: '4 4', interactive: false }))), [jalur]);
   useLapisan(() => L.layerGroup(cctv.map((k) => L.circleMarker([k.lat, k.lon], {
     radius: k.status === 'ok' ? Math.min(8, 3.5 + Math.sqrt(k.total ?? 0)) : 3.5, color: '#134e4a', weight: 1, fillColor: warnaCctv(k), fillOpacity: 0.85,
-  }).bindTooltip(`${teksCctv(k)} · ${CCTV_LABEL}`))), [cctv]);
+  }).bindTooltip(() => `${teksCctv(k)} · ${CCTV_LABEL}`))), [cctv]);
   useLapisan(() => L.layerGroup(sensors.map((s) => L.circleMarker([s.lat, s.lon], { radius: 6, color: '#075985', weight: 2, fillColor: '#38bdf8', fillOpacity: 0.85 })
     .bindTooltip(s.label))), [sensors]);
-  useLapisan(() => L.layerGroup(fires.map((f) => L.circleMarker([f[1], f[0]], { radius: radiusApi(f), ...gayaApi(f, luar) }).bindTooltip(teksApi(f, luar)))), [fires, luar]);
+  useLapisan(() => L.layerGroup(fires.map((f) => L.circleMarker([f[1], f[0]], { radius: radiusApi(f), ...gayaApi(f, luar) }).bindTooltip(() => teksApi(f, luar)))), [fires, luar]);
   return null;
 }
 

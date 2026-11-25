@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, School, Stethoscope, Search, Info, MapPin } from 'lucide-react';
 import { Seo } from '../components/Seo';
-import { fmt, indicativeNote, JALAN, JENIS, PAGE_SIZE, PRIORITAS_REGIONS, pickPrioritasRegion, rentangJam, saringTeks, saringUrut, tanggalDaftar, type DaftarPrioritas, type Saring } from '../lib/prioritas';
+import { fmt, indicativeNote, JALAN, JENIS, LANGSUNG_PERTAMA, PAGE_SIZE, PRIORITAS_REGIONS, pickPrioritasRegion, rentangJam, saringTeks, saringUrut, tanggalDaftar, type DaftarPrioritas, type Saring } from '../lib/prioritas';
 import { CAMS_NOTICE, OPEN_METEO_LINK } from '../lib/attribution';
 import { destLink } from '../lib/route/share';
 import { simulasiLine, type SimulasiFile } from '../lib/simulasi';
@@ -45,7 +45,16 @@ export default function PrioritasPage() {
   const all = useMemo(() => (data ? saringUrut(data.fasilitas, saring) : []), [data, saring]);
   const top10 = useMemo(() => (data ? saringUrut(data.fasilitas, { ...saring, cari: '', urutan: 'lalin' }).slice(0, 10) : []), [data, saring]);
   const jarak = useMemo(() => (data ? sebaranJarak(data.fasilitas.filter((f) => saring.kelas === 'semua' || f.kelas === saring.kelas)) : []), [data, saring.kelas]);
-  const list = all.slice(0, shown);
+  // N-42: the first screen renders LANGSUNG_PERTAMA rows, the rest of the page size after it has painted (rendering 150
+  // rows at once was one 440 ms task on a slow phone)
+  const [lukisPenuh, setLukisPenuh] = useState(false);
+  useEffect(() => {
+    if (!data || lukisPenuh) return;
+    let t = 0;
+    const r = requestAnimationFrame(() => { t = window.setTimeout(() => setLukisPenuh(true), 0); });
+    return () => { cancelAnimationFrame(r); clearTimeout(t); };
+  }, [data, lukisPenuh]);
+  const list = all.slice(0, lukisPenuh ? shown : Math.min(shown, LANGSUNG_PERTAMA));
   const maxLalin = useMemo(() => Math.max(0.01, ...(data?.fasilitas.map((f) => f.no2_lalin) ?? [0])), [data]);
 
   return (
