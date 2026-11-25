@@ -7,6 +7,7 @@ import { runDate, runsStrip, runsSummary, runsText, type HourState, type RunsFil
 import { sensorSeries, type RecentFile } from '../lib/field/validationRecent';
 import LineChart from '../components/viz/LineChart';
 import Rincian from '../components/viz/Rincian';
+import DataNasional from '../components/status/DataNasional';
 
 const WARNA: Record<HourState, string> = { ok: 'bg-teal-600', gagal: 'bg-red-600', hilang: 'bg-amber-400', sebelum: 'bg-gray-200 dark:bg-gray-700' };
 const ARTI: Record<HourState, string> = { ok: 'terbit', gagal: 'gagal', hilang: 'tidak ada', sebelum: 'sebelum pencatatan' };
@@ -183,6 +184,7 @@ export default function StatusPage() {
             </div>
           ) : null;
         })()}
+        <DataNasional base={fieldBase()} />
         <Rincian summary="Sumber data">
         <p className="text-[11px] text-gray-500 dark:text-gray-400">
           Sumber: sensor warga OpenAQ (Badung–Denpasar), jarak pandang bandara, latar CAMS lewat Open-Meteo, dan asap kendaraan
