@@ -12,7 +12,7 @@ describe('landing at /, map at /peta (N-02, 25 Nov 2026)', () => {
   it('guests get the landing, signed-in users the app', () => {
     const r = readFileSync('src/components/auth/RootRoute.tsx', 'utf8');
     expect(r).toMatch(/if \(user\) return <Navigate to="\/home" replace \/>/);
-    expect(r).toMatch(/return <BerandaPage \/>/);
+    expect(r).toMatch(/return <LandingPage \/>/);
   });
 
   it('road colours are on by default in the app map, and the PWA starts at /', () => {

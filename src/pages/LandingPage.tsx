@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowRight, Wind, Shield, Cpu, MapPin, Radio, Flame,
-  Satellite, Radar, BrainCircuit, BarChart3, Leaf, Heart, Github, Twitter, Mail,
-  Sparkles, Route, CloudSun, MapPinned, TreePine, Store, Trophy, Map as MapIcon,
+  Satellite, Radar, BrainCircuit, Leaf, Heart, Github,
+  Route, CloudSun, MapPinned, School, Landmark, Footprints, Timer, Map as MapIcon,
   type LucideIcon,
 } from 'lucide-react';
 
 import { Seo } from '../components/Seo';
-import { CITIES } from '../lib/cities';
+import { FIELD_REGIONS, fieldBase } from '../lib/field/source';
+import { berandaAngka, type BerandaAngka } from '../lib/beranda';
 
 // Lazy three.js particle canvas — kept off the landing critical path (vendor-three chunk; skipped under reduced-motion).
 const ParticleHero = lazy(() => import('./landing/ParticleHero'));
@@ -31,6 +32,7 @@ const NAV = [
   { id: 'masalah', label: 'Masalah' },
   { id: 'solusi', label: 'Solusi' },
   { id: 'rute', label: 'Rute' },
+  { id: 'untuk', label: 'Untuk siapa' },
   { id: 'sains', label: 'Sains' },
 ];
 const NAV_IDS = NAV.map((n) => n.id);
@@ -91,6 +93,19 @@ export default function LandingPage() {
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   );
   const active = useActiveSection();
+  const [angka, setAngka] = useState<BerandaAngka>({ sensor: null, titikApi: null, jamTerbit: null });
+  useEffect(() => {
+    let alive = true;
+    const b = fieldBase();
+    const get = (path: string) => fetch(`${b}${path}`, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    Promise.all([
+      Promise.all(FIELD_REGIONS.map((r) => get(`/v/${r.name}/manifest.json`))),
+      Promise.all(FIELD_REGIONS.map((r) => get(`/v/${r.name}/runs_recent.json`))),
+      get('/v/nasional/titik_api.json'),
+    ]).then(([m, runs, fire]) => alive && setAngka(berandaAngka(m, runs, fire, new Date())));
+    return () => { alive = false; };
+  }, []);
+  const num = (v: number | null) => (v == null ? '…' : v.toLocaleString('id-ID'));
 
   useEffect(() => {
     const onScroll = () => {
@@ -147,23 +162,36 @@ export default function LandingPage() {
           <div className="max-w-5xl mx-auto flex flex-col lg:flex-row items-center gap-10">
             <motion.div {...fadeUp} className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 md:p-12 shadow-xl border border-white/60 ring-1 ring-black/5 max-w-xl flex-1">
               <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 bg-emerald-50 rounded-full px-3 py-1 mb-5">
-                <Leaf className="w-3.5 h-3.5" /> Navigasi udara bersih
+                <Leaf className="w-3.5 h-3.5" /> Asap kendaraan per ruas jalan
               </div>
               <h1 className="text-[2.5rem] sm:text-5xl md:text-6xl font-extrabold leading-[1.05] tracking-tight mb-4">
                 Rute Bersih,<br />
                 <span className="text-emerald-700">Napas Jernih.</span>
               </h1>
               <p className="text-[15px] sm:text-base text-slate-500 mb-8 leading-relaxed">
-                Breeva memetakan kualitas udara di setiap ruas jalan, menemukan rute jalan kaki paling bersih,
-                lalu menghadiahi tiap langkah rendah-emisi. Berjalan lebih sehat, beri dampak nyata.
+                Breeva menghitung asap kendaraan di setiap ruas jalan tiap jam, mencarikan rute dengan asap paling sedikit,
+                dan menunjukkan sekolah yang paling terpapar. Tanpa akun.
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
-                <Link to="/login" className="inline-flex items-center justify-center gap-2 bg-emerald-700 text-white font-bold py-3 px-7 rounded-xl hover:bg-emerald-800 shadow-lg shadow-emerald-600/20 transition-all">
-                  Mulai Jalan <ArrowRight className="w-4 h-4" />
+                <Link to="/peta" className="inline-flex items-center justify-center gap-2 bg-emerald-700 text-white font-bold py-3 px-7 rounded-xl hover:bg-emerald-800 shadow-lg shadow-emerald-600/20 transition-all">
+                  <MapIcon className="w-4 h-4" /> Buka Peta <ArrowRight className="w-4 h-4" />
                 </Link>
-                <Link to="/peta" className="inline-flex items-center justify-center gap-2 bg-slate-100 text-slate-700 font-semibold py-3 px-7 rounded-xl hover:bg-slate-200 transition-all">
-                  <MapIcon className="w-4 h-4" /> Lihat Peta Udara
+                <Link to="/pantau" className="inline-flex items-center justify-center gap-2 bg-slate-100 text-slate-700 font-semibold py-3 px-7 rounded-xl hover:bg-slate-200 transition-all">
+                  <Landmark className="w-4 h-4" /> Pemantauan
                 </Link>
+              </div>
+              <div className="mt-6 grid grid-cols-3 gap-2" aria-live="polite">
+                {([
+                  [Radio, num(angka.sensor), 'sensor warga aktif'],
+                  [Flame, num(angka.titikApi), 'titik api, 24 jam'],
+                  [Timer, angka.jamTerbit == null ? '…' : `${angka.jamTerbit}/24`, 'jam peta terbit'],
+                ] as [LucideIcon, string, string][]).map(([Icon, v, label]) => (
+                  <div key={label} className="rounded-2xl bg-slate-50 border border-slate-100 p-3 text-center">
+                    <Icon className="w-4 h-4 mx-auto text-emerald-700" />
+                    <div className="mt-1 text-xl font-extrabold tabular-nums text-slate-900">{v}</div>
+                    <div className="text-[10px] leading-tight text-slate-500">{label}</div>
+                  </div>
+                ))}
               </div>
             </motion.div>
             <motion.div
@@ -180,16 +208,16 @@ export default function LandingPage() {
         <section id="masalah" className="min-h-screen flex items-center justify-center px-6 scroll-mt-20">
           <Panel className="max-w-2xl">
             <Overline icon={Wind} color="text-slate-400">Masalah</Overline>
-            <h2 className={H2}>Rute Harianmu Bisa Jadi <span className="text-red-500">Beracun</span></h2>
+            <h2 className={H2}>Udara Buruk Hampir <span className="text-red-500">Setiap Hari</span></h2>
             <p className={LEAD}>
-              Polusi udara merenggut jutaan nyawa tiap tahun. Hampir semua aplikasi navigasi mengabaikan
-              kualitas udara — mengarahkanmu lewat kemacetan, proyek konstruksi, dan koridor industri.
+              Paling buruk saat jam berangkat sekolah. Tapi satu kota hanya punya satu atau dua stasiun, jadi tidak ada yang tahu
+              jalan dan sekolah mana yang paling berasap.
             </p>
             <div className="grid grid-cols-3 gap-3 sm:gap-4">
               {[
-                ['7 jt', 'kematian / tahun'],
-                ['99%', 'menghirup udara tak aman'],
-                ['3×', 'lebih pekat di jalan utama'],
+                ['90,7%', 'hari di atas pedoman WHO'],
+                ['59,2', 'µg/m³ PM2,5 di Bali pukul 08.00'],
+                ['3', 'stasiun untuk 60.961 ruas jalan'],
               ].map(([val, label]) => (
                 <div key={label} className="text-center p-4 rounded-2xl bg-slate-50 border border-slate-100">
                   <div className="text-2xl sm:text-3xl font-extrabold text-slate-800">{val}</div>
@@ -197,7 +225,7 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-slate-300 mt-4">Sumber: WHO (kualitas udara global).</p>
+            <p className="text-[11px] text-slate-400 mt-4">Sumber: 32 stasiun per jam (analisis proposal Breeva), pedoman harian WHO 15 µg/m³, OpenStreetMap.</p>
           </Panel>
         </section>
 
@@ -205,10 +233,10 @@ export default function LandingPage() {
         <section id="solusi" className="min-h-screen flex items-center justify-center px-6 scroll-mt-20">
           <Panel className="max-w-2xl">
             <Overline icon={Shield} color="text-emerald-700">Solusi</Overline>
-            <h2 className={H2}>Kenalkan <span className="text-emerald-700">VAYU</span> — Otak Udara Kotamu</h2>
+            <h2 className={H2}>Asap Kendaraan, <span className="text-emerald-700">Per Ruas Jalan</span></h2>
             <p className={LEAD}>
-              Breeva menghitung asap kendaraan tiap ruas jalan dari perkiraan lalu lintas, angin, dan rumus sebaran
-              panduan EPA, di atas udara latar dari CAMS (Open-Meteo) dan sensor warga, lengkap dengan rentang ketidakpastian.
+              Asap kendaraan tiap ruas jalan dihitung dari lalu lintas, angin, dan rumus sebaran panduan EPA, di atas udara latar
+              dari sensor warga dan CAMS.
             </p>
             <div className="grid sm:grid-cols-3 gap-3">
               {([
@@ -222,61 +250,60 @@ export default function LandingPage() {
           </Panel>
         </section>
 
-        {/* ── RUTE (Navigasi cerdas + Vayu AI) ── */}
+        {/* ── RUTE ── */}
         <section id="rute" className="min-h-screen flex items-center justify-center px-6 scroll-mt-20">
           <Panel className="max-w-2xl">
             <Overline icon={Cpu} color="text-indigo-500">Navigasi Cerdas</Overline>
             <h2 className={H2}>Rute yang <span className="text-indigo-500">Berpikir</span> untuk Napasmu</h2>
             <p className={LEAD}>
-              Breeva menilai ribuan segmen jalan untuk menemukan rute terbersih antara dua titik —
-              biasanya hanya menambah beberapa menit, tapi memangkas paparan polusi yang kamu hirup.
+              Setiap rute membawa dua angka: asap yang kamu hirup, dan asap yang kamu timbulkan untuk orang di sekitar jalan.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
-              <div className="flex-1 p-5 rounded-2xl bg-red-50 border border-red-100">
-                <div className="text-sm font-bold text-red-600 mb-2">Rute Standar</div>
-                <div className="text-xs text-slate-500">AQI 142 · Tidak sehat</div>
-                <div className="text-xs text-slate-500">Lewat jalan raya + zona industri</div>
-                <div className="text-xs text-slate-500 mt-1 font-semibold">18 mnt · ≈ 1.2 rokok</div>
+              <div className="flex-1 p-5 rounded-2xl bg-orange-50 border border-orange-100">
+                <div className="text-sm font-bold text-orange-700 mb-2">Rute tercepat</div>
+                <div className="text-3xl font-extrabold text-slate-800 tabular-nums">36 <span className="text-sm font-semibold text-slate-500">menit</span></div>
+                <div className="mt-2 h-2.5 rounded-full bg-orange-500" aria-hidden="true" />
+                <div className="text-xs text-slate-500 mt-1">asap kendaraan dihirup (patokan)</div>
               </div>
               <div className="flex-1 p-5 rounded-2xl bg-emerald-50 border border-emerald-200 ring-2 ring-emerald-300">
-                <div className="text-sm font-bold text-emerald-700 mb-2">Rute Breeva ✓</div>
-                <div className="text-xs text-slate-500">AQI 38 · Baik</div>
-                <div className="text-xs text-slate-500">Lewat taman + jalan perumahan</div>
-                <div className="text-xs text-slate-500 mt-1 font-semibold">21 mnt · ≈ 0.3 rokok</div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-bold text-emerald-700">Paling sedikit asap</span>
+                  <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-extrabold text-white">−66% asap</span>
+                </div>
+                <div className="text-3xl font-extrabold text-slate-800 tabular-nums">37 <span className="text-sm font-semibold text-slate-500">menit · +1</span></div>
+                <div className="mt-2 h-2.5 w-1/3 rounded-full bg-emerald-600" aria-hidden="true" />
+                <div className="text-xs text-slate-500 mt-1">asap kendaraan dihirup</div>
               </div>
             </div>
-            {/* Vayu AI highlight */}
+            <p className="text-[11px] text-slate-400 mt-2">Contoh nyata: jalan kaki di Denpasar, breeva.site 25 Nov 2026 pukul 14.00 WITA.</p>
             <div className="mt-3 rounded-2xl p-4 flex items-start gap-3 text-white shadow-md" style={{ background: 'linear-gradient(135deg,#10b981,#0d9488,#06b6d4)' }}>
               <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                <Sparkles className="w-5 h-5" />
+                <School className="w-5 h-5" />
               </div>
               <div>
-                <div className="text-sm font-bold">Tanya Vayu — asisten udara AI</div>
-                <div className="text-xs text-white/85 mt-1 leading-relaxed">
-                  Cukup chat: <i>"carikan rute bersih ke …"</i> atau <i>"aman jalan sekarang?"</i> — Vayu mencari rute,
-                  cek AQI live, dan menghitung paparanmu langsung di peta.
+                <div className="text-sm font-bold">Motor dan zona sekolah</div>
+                <div className="text-xs text-white/90 mt-1 leading-relaxed">
+                  Pada jam masuk sekolah, rute motor tidak lewat jalan kecil di depan sekolah, dan kartunya jujur menyebut harganya:
+                  di Kota Bogor pukul 06.45, tambah 5 menit.
                 </div>
               </div>
             </div>
           </Panel>
         </section>
 
-        {/* ── JELAJAH ── */}
-        <section id="jelajah" className="min-h-screen flex items-center justify-center px-6 scroll-mt-20">
+        {/* ── UNTUK SIAPA ── */}
+        <section id="untuk" className="min-h-screen flex items-center justify-center px-6 scroll-mt-20">
           <Panel className="max-w-2xl">
-            <Overline icon={MapPin} color="text-green-600">Jelajah</Overline>
-            <h2 className={H2}>Temukan Sisi <span className="text-green-600">Hijau</span> Kotamu</h2>
-            <p className={LEAD}>
-              Temukan taman, jalur, dan jalan rindang dengan udara terbersih. Dukung merchant ramah lingkungan
-              dan kumpulkan EcoPoints di setiap langkah.
-            </p>
+            <Overline icon={MapPin} color="text-green-600">Untuk siapa</Overline>
+            <h2 className={H2}>Satu Peta, <span className="text-green-600">Tiga Pengguna</span></h2>
+            <p className={LEAD}>Warga memilih jalan, sekolah melindungi muridnya, pemerintah daerah tahu harus mulai dari mana.</p>
             <div className="grid sm:grid-cols-3 gap-3">
               {([
-                [TreePine, 'Ruang Hijau', 'Taman, jalur alam, dan jalan minim lalu lintas dipetakan per kualitas udara.', 'bg-green-100 text-green-600'],
-                [Store, 'Merchant Eco', 'Dukung usaha berkelanjutan dan dapatkan hadiah bonus.', 'bg-amber-100 text-amber-600'],
-                [Trophy, 'Papan Peringkat', 'Bersaing dari tingkat desa hingga nasional untuk streak jalan terbersih.', 'bg-violet-100 text-violet-600'],
-              ] as [LucideIcon, string, string, string][]).map(([Icon, title, desc, tint], i) => (
-                <FeatureCard key={title} icon={Icon} title={title} desc={desc} tint={tint} i={i} />
+                [Footprints, 'Warga', 'Rute jalan kaki dan motor dengan asap paling sedikit, juga tanpa internet.', 'bg-emerald-100 text-emerald-700', '/peta'],
+                [School, 'Sekolah dan orang tua', 'Sekolah dan puskesmas yang paling terpapar asap kendaraan pada jam kegiatannya.', 'bg-violet-100 text-violet-600', '/prioritas'],
+                [Landmark, 'Pemerintah daerah', 'Titik api, arah angin, laporan warga, grafik, dan unduhan data per wilayah.', 'bg-sky-100 text-sky-600', '/pantau'],
+              ] as [LucideIcon, string, string, string, string][]).map(([Icon, title, desc, tint, to], i) => (
+                <Link key={title} to={to} className="block"><FeatureCard icon={Icon} title={title} desc={desc} tint={tint} i={i} /></Link>
               ))}
             </div>
           </Panel>
@@ -288,16 +315,15 @@ export default function LandingPage() {
             <Overline icon={Radio} color="text-cyan-600">Sains</Overline>
             <h2 className={H2}>Dibangun di Atas <span className="text-cyan-600">Sains Nyata</span></h2>
             <p className={LEAD}>
-              Data Breeva memadukan udara latar CAMS (Open-Meteo), sensor warga yang disebar dengan kriging, jarak
-              pandang bandara, dan rumus sebaran gas buang per ruas jalan — disertai rentang ketidakpastian dan model paparan PM2.5
-              yang dibandingkan ke ambang WHO (15 µg/m³) dan setara batang rokok (ilustratif, bukan klaim medis).
+              Udara latar dari sensor warga dan jarak pandang bandara, asap kendaraan dari rumus sebaran panduan EPA. Setiap
+              sumber baru hanya dipakai bila lolos uji di lokasi yang disembunyikan; kota tanpa titik ukur diberi label indikatif.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {([
-                [Satellite, 'Baseline Satelit'],
-                [Radar, 'Referensi Sensor'],
+                [Radar, 'Sensor warga'],
+                [Satellite, 'Titik api NASA'],
                 [BrainCircuit, 'Sebaran EPA'],
-                [BarChart3, 'Model Paparan'],
+                [Shield, 'Uji lokasi tersembunyi'],
               ] as [LucideIcon, string][]).map(([Icon, label]) => (
                 <div key={label} className="text-center p-4 rounded-2xl bg-cyan-50 border border-cyan-100">
                   <div className="w-9 h-9 rounded-xl bg-cyan-100 flex items-center justify-center mx-auto mb-2">
@@ -307,14 +333,13 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
-            {/* 8-city strip */}
             <div className="mt-6 pt-5 border-t border-slate-100">
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-2.5">Tersedia di 8 kota Indonesia</div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-2.5">Cakupan</div>
               <div className="flex flex-wrap gap-2">
-                {CITIES.map((c) => (
-                  <Link key={c.slug} to={`/udara/${c.slug}`}
+                {([['/pantau/badung-denpasar', 'Badung–Denpasar · per ruas'], ['/pantau/kota-bogor', 'Kota Bogor · per ruas'], ['/pantau', 'Indonesia · titik api dan angin'], ['/validasi', 'Seberapa akurat?']] as [string, string][]).map(([to, label]) => (
+                  <Link key={to} to={to}
                     className="text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-50 text-slate-600 border border-slate-100 hover:border-cyan-300 hover:text-cyan-700 hover:bg-cyan-50 transition-colors">
-                    {c.name}
+                    {label}
                   </Link>
                 ))}
               </div>
@@ -334,13 +359,13 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link to="/login" className="inline-flex items-center justify-center gap-2 bg-emerald-700 text-white font-bold py-3.5 px-9 rounded-xl hover:bg-emerald-800 shadow-lg shadow-emerald-600/20 transition-all">
-                Mulai Gratis <ArrowRight className="w-5 h-5" />
+                Masuk <ArrowRight className="w-5 h-5" />
               </Link>
               <Link to="/peta" className="inline-flex items-center justify-center gap-2 bg-slate-100 text-slate-700 font-semibold py-3.5 px-7 rounded-xl hover:bg-slate-200 transition-all">
                 <MapIcon className="w-4 h-4" /> Coba Peta Udara
               </Link>
             </div>
-            <p className="mt-4 text-xs text-slate-400">Gratis selamanya · Tanpa biaya akun</p>
+            <p className="mt-4 text-xs text-slate-400">Peta, rute, dan pemantauan bisa dipakai tanpa akun.</p>
           </Panel>
         </section>
 
@@ -363,12 +388,6 @@ export default function LandingPage() {
                   <a href="https://github.com/Tristan-tech-ai/Breeva" target="_blank" rel="noopener noreferrer" aria-label="GitHub" className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-colors">
                     <Github className="w-3.5 h-3.5" />
                   </a>
-                  <a href="https://twitter.com/breeva" target="_blank" rel="noopener noreferrer" aria-label="Twitter" className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-colors">
-                    <Twitter className="w-3.5 h-3.5" />
-                  </a>
-                  <a href="mailto:halo@breeva.site" aria-label="Email" className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-colors">
-                    <Mail className="w-3.5 h-3.5" />
-                  </a>
                 </div>
               </div>
 
@@ -376,22 +395,21 @@ export default function LandingPage() {
               <div>
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Produk</h4>
                 <ul className="space-y-2.5">
-                  <li><Link to="/peta" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Peta Udara</Link></li>
-                  <li><Link to="/paparan" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Kalkulator Paparan</Link></li>
-                  <li><Link to="/developers" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Developer API</Link></li>
-                  <li><a href="#solusi" onClick={goTo('solusi')} className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Mesin VAYU</a></li>
+                  <li><Link to="/peta" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Peta asap</Link></li>
+                  <li><Link to="/prioritas" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Prioritas sekolah</Link></li>
+                  <li><Link to="/uji-coba" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Uji coba siswa</Link></li>
+                  <li><Link to="/status" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Status data</Link></li>
                 </ul>
               </div>
 
-              {/* Kota */}
+              {/* Pemantauan */}
               <div>
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Kota</h4>
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Pemantauan</h4>
                 <ul className="space-y-2.5">
-                  {CITIES.map((c) => (
-                    <li key={c.slug}>
-                      <Link to={`/udara/${c.slug}`} className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">{c.name}</Link>
-                    </li>
-                  ))}
+                  <li><Link to="/pantau" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Indonesia</Link></li>
+                  <li><Link to="/pantau/badung-denpasar" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Badung–Denpasar</Link></li>
+                  <li><Link to="/pantau/kota-bogor" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Kota Bogor</Link></li>
+                  <li><Link to="/validasi" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Akurasi</Link></li>
                 </ul>
               </div>
 

@@ -3,7 +3,7 @@ import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { berandaAngka, publishedLast24 } from '../src/lib/beranda';
-import BerandaPage from '../src/pages/BerandaPage';
+import LandingPage from '../src/pages/LandingPage';
 
 const now = new Date('2026-11-25T10:30:00Z');
 const runs = (n: number, failAt: number[] = []) => ({ runs: Array.from({ length: n }, (_, i) => {
@@ -22,11 +22,10 @@ describe('landing at / (N-02)', () => {
     expect(berandaAngka([{ sensors_used: 23 }, { sensors_used: 0 }], [runs(24), runs(24, [3])], { n: 1385 }, now)).toEqual({ sensor: 23, titikApi: 1385, jamTerbit: 23 });
     expect(berandaAngka([null], [null], null, now)).toEqual({ sensor: null, titikApi: null, jamTerbit: null });
   });
-  it('shows one sentence, the three numbers and the three doors before any data arrives', () => {
-    const html = renderToStaticMarkup(h(MemoryRouter, null, h(BerandaPage)));
-    expect(html).toContain('Asap kendaraan per ruas jalan, diperbarui tiap jam.');
-    for (const t of ['Sensor warga', 'Titik api', 'Peta terbit']) expect(html).toContain(t);
+  it('the 3D landing carries the real numbers, the three doors and no invented route example', () => {
+    const html = renderToStaticMarkup(h(MemoryRouter, null, h(LandingPage)));
+    for (const t of ['sensor warga aktif', 'titik api, 24 jam', 'jam peta terbit', '90,7%', '−66% asap', 'Satu Peta']) expect(html).toContain(t);
     for (const href of ['href="/peta"', 'href="/prioritas"', 'href="/pantau"']) expect(html).toContain(href);
-    expect(html).toContain('beranda-peta.webp');
+    for (const gone of ['AQI 142', 'rokok', 'Tanya Vayu', '8 kota', 'twitter.com']) expect(html).not.toContain(gone);
   });
 });
