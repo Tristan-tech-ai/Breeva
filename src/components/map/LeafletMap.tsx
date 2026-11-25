@@ -431,7 +431,7 @@ function MapController({
       try {
         const container = map.getContainer();
         if (container && document.body.contains(container) && isFinite(viewTarget.lat) && isFinite(viewTarget.lng)) {
-          map.flyTo([viewTarget.lat, viewTarget.lng], Math.max(map.getZoom(), 16), { duration: 0.8 });
+          map.flyTo([viewTarget.lat, viewTarget.lng], viewTarget.zoom ?? Math.max(map.getZoom(), 16), { duration: 0.8 });
         }
       } catch { /* map already removed */ }
     }

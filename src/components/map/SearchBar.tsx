@@ -3,6 +3,9 @@ import { Search, X, MapPin, Clock, Loader2, Star, SlidersHorizontal } from 'luci
 import { useMapStore } from '../../stores/mapStore';
 import type { POI } from '../../lib/poi-api';
 import type { LucideIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { fieldBase } from '../../lib/field/source';
+import { kabKotaUntukCari, muatIndeksKabKota, type KabKota } from '../../lib/nasional/kabkota';
 
 export interface FilterChip {
   key: string;
@@ -37,6 +40,9 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
   const inputRef = useRef<HTMLInputElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // N-49: the 513 kab/kota, loaded when the box is first used; answers shown above the places
+  const [indeksKab, setIndeksKab] = useState<KabKota[]>([]);
+  const kabCocok = kabKotaUntukCari(indeksKab, searchQuery);
 
   const handleInputChange = useCallback(
     (value: string) => {
@@ -101,6 +107,13 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
   };
 
   const showDropdown = isFocused && !filterOpen && (searchQuery.length > 0 || recentSearches.length > 0);
+  const pilihKab = (k: KabKota) => {
+    // zoom 13: outside the pilot regions the phone colours the roads by vehicle exhaust there (indicative, N-21)
+    useMapStore.getState().setViewTarget({ lat: k.lat, lng: k.lon, zoom: 13 });
+    clearSearch();
+    setIsFocused(false);
+    inputRef.current?.blur();
+  };
 
   const hasFilter = filterChips && filterChips.length > 0;
   const activeChip = hasFilter ? filterChips.find(c => c.key === activeFilter) : undefined;
@@ -130,7 +143,7 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
           placeholder="Cari di sini"
           value={searchQuery}
           onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={() => { setIsFocused(true); setFilterOpen(false); siapkanCari(); }}
+          onFocus={() => { setIsFocused(true); setFilterOpen(false); siapkanCari(); void muatIndeksKabKota(fieldBase()).then(setIndeksKab).catch(() => {}); }}
           onBlur={() => setTimeout(() => setIsFocused(false), 200)}
           className="flex-1 self-stretch bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 outline-none"
         />
@@ -211,6 +224,25 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
             id="search-results-list"
             role="listbox"
           >
+            {kabCocok.length > 0 && (
+              <div className="border-b border-gray-100 dark:border-gray-800" data-cari-kabkota>
+                <p className="px-4 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Kabupaten/kota</p>
+                {kabCocok.map((k) => (
+                  <div key={k.slug} className="flex items-center gap-2 px-4 py-2">
+                    <button role="option" aria-selected={false} onClick={() => pilihKab(k)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                      <div className="w-10 h-10 rounded-full bg-sky-50 dark:bg-sky-900/40 flex items-center justify-center flex-shrink-0">
+                        <MapPin className="w-4 h-4 text-sky-700 dark:text-sky-300" />
+                      </div>
+                      <span className="min-w-0">
+                        <span className="block truncate text-[13px] font-semibold text-gray-900 dark:text-white">{k.nama}</span>
+                        <span className="block truncate text-[11px] text-gray-500 dark:text-gray-400">{k.provinsi} · asap kendaraan di peta: indikatif</span>
+                      </span>
+                    </button>
+                    <Link to={`/pantau/${k.slug}`} className="shrink-0 rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200">Pantau</Link>
+                  </div>
+                ))}
+              </div>
+            )}
             {/* Search results */}
             {searchResults.length > 0 && (
               <div>

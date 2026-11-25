@@ -21,6 +21,24 @@ export function cariKabKota(all: KabKota[], q: string, max = 12): KabKota[] {
   return hit.sort((a, b) => Number(!words(a).startsWith(t)) - Number(!words(b).startsWith(t)) || a.nama.localeCompare(b.nama)).slice(0, max);
 }
 
+/** N-49: kab/kota answers in the main map's search box: from 3 letters, at most 3, names only (not provinces, which
+ * would fill the list with every kab/kota of "Jawa Barat"). */
+export function kabKotaUntukCari(all: KabKota[], q: string, max = 3): KabKota[] {
+  const t = lipat(q.trim());
+  if (t.length < 3) return [];
+  return cariKabKota(all.filter((k) => lipat(k.nama).includes(t)), q, max);
+}
+
+let indeksJanji: Promise<KabKota[]> | null = null;
+/** The kab/kota index from the CDN, loaded once per page (when the search box is first used). */
+export function muatIndeksKabKota(base: string): Promise<KabKota[]> {
+  if (!indeksJanji) {
+    indeksJanji = fetch(`${base}/v/nasional/kabkota_indeks.json`).then((r) => (r.ok ? r.json() : null)).then((j) => bacaIndeks(j as KabKotaIndeks | null));
+    indeksJanji.catch(() => { indeksJanji = null; });
+  }
+  return indeksJanji;
+}
+
 export const TINGKAT_LABEL: Record<Tingkat, string> = {
   terukur: 'terukur: sensor warga dalam 25 km',
   terkalibrasi: 'terkalibrasi: dikoreksi sensor dalam 150 km',

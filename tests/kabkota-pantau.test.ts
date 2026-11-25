@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { apiSini, bacaIndeks, cariKabKota, kabKotaCsv, latarSini, type KabKotaIndeks } from '../src/lib/nasional/kabkota';
@@ -54,5 +55,22 @@ describe('N-24 /pantau for every kab/kota', () => {
     expect(html).toContain('indikatif: belum ada titik ukur di dekatnya');
     expect(html).toContain('Unduh CSV');
     expect(html).toContain('Sumatera Selatan');
+  });
+});
+
+describe('N-49 kab/kota in the main map search', () => {
+  it('answers from 3 letters, by name only, at most 3, the name that starts with the query first', async () => {
+    const { kabKotaUntukCari } = await import('../src/lib/nasional/kabkota');
+    const all = bacaIndeks(idx);
+    expect(kabKotaUntukCari(all, 'bo')).toEqual([]);
+    expect(kabKotaUntukCari(all, 'bogor').map((k) => k.slug)).toEqual(['kabupaten-bogor', 'kota-bogor']);
+    expect(kabKotaUntukCari(all, 'jawa barat')).toEqual([]); // a province alone does not list its kab/kota here
+    expect(kabKotaUntukCari(all, 'ogan').map((k) => k.slug)).toEqual(['kabupaten-ogan-komering-ilir']);
+  });
+  it('the search box flies to zoom 13 and links to /pantau', () => {
+    const src = readFileSync('src/components/map/SearchBar.tsx', 'utf8');
+    expect(src).toContain('setViewTarget({ lat: k.lat, lng: k.lon, zoom: 13 })');
+    expect(src).toContain('to={`/pantau/${k.slug}`}');
+    expect(readFileSync('src/components/map/LeafletMap.tsx', 'utf8')).toContain('viewTarget.zoom ?? Math.max(map.getZoom(), 16)');
   });
 });

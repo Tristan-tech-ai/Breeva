@@ -66,7 +66,8 @@ interface MapState {
   recentSearches: SearchResult[];
 
   // View target (fly-to on search select)
-  viewTarget: Coordinate | null;
+  /** where the map flies to; `zoom` set by a kab/kota answer of the search box (N-49), else at least 16 */
+  viewTarget: (Coordinate & { zoom?: number }) | null;
 
   // Destination
   destination: Coordinate | null;
@@ -95,7 +96,7 @@ interface MapState {
   // Actions
   setCenter: (center: Coordinate) => void;
   setZoom: (zoom: number) => void;
-  setViewTarget: (coord: Coordinate | null) => void;
+  setViewTarget: (coord: (Coordinate & { zoom?: number }) | null) => void;
   setUserLocation: (location: Coordinate | null) => void;
   startLocating: () => void;
   stopLocating: () => void;
