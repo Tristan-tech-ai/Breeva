@@ -5,8 +5,9 @@
 export const FIRMS_SOURCES = ['VIIRS_SNPP_NRT', 'VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT'] as const;
 export const INDONESIA_BBOX = [94.5, -11.5, 141.5, 6.5] as const; // W, S, E, N
 
-/** One fire point: lon, lat, fire radiative power (MW), confidence (l|n|h), UTC time ISO, satellite code. */
-export type FirePoint = [number, number, number, string, string, string];
+/** One fire point: lon, lat, fire radiative power (MW), confidence (l|n|h), UTC time ISO, satellite code, and (since N-23)
+ * the kab/kota slug and province code it lies in. */
+export type FirePoint = [number, number, number, string, string, string, string?, string?];
 
 export interface FireFile {
   format: 'titik_api';
@@ -15,6 +16,9 @@ export interface FireFile {
   window_hours: number;
   n: number;
   per_satelit: Record<string, number>;
+  /** points in the FIRMS box but outside Indonesia's kab/kota boundaries (Malaysia, Timor-Leste, PNG, sea), dropped */
+  luar_indonesia?: number;
+  per_provinsi?: Record<string, number>;
   points: FirePoint[];
 }
 

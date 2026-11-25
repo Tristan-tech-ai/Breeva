@@ -7,7 +7,7 @@
  * hidden-sensor statistics of the hour join v/<name>/validation_recent.json (task F5-09; statistics only, no readings).
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { gzipSync } from 'node:zlib';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import params from '../../scripts/field/params/measure.json' with { type: 'json' };
@@ -20,6 +20,7 @@ import { withRetry } from '../../src/lib/field/fetchRetry';
 import { mergeRuns, shortReason, type RunRecord, type RunsFile } from '../../src/lib/field/runsRecent';
 import { FIRMS_SOURCES, fireFile, firmsUrl, parseFirmsCsv, type FirePoint } from '../../src/lib/nasional/firms';
 import { CHUNK, gridPoints, windFile, windUrl } from '../../src/lib/nasional/angin';
+import { indexWilayah, tandaiWilayah, type WilayahFC, type WilayahIndex } from '../../src/lib/nasional/wilayah';
 
 // every source fetch (Open-Meteo, OpenAQ, METAR) goes through a retry with a fresh pause budget per invocation (F2-18)
 const baseFetch = globalThis.fetch.bind(globalThis);
@@ -80,6 +81,17 @@ async function firmsKey(): Promise<string | undefined> {
   return firmsKeyCache;
 }
 
+// N-23: kab/kota boundaries (v/nasional/kabkota.geojson, gzip) kept for the life of the container
+let wilayahCache: WilayahIndex | null = null;
+async function wilayah(bucket: string): Promise<WilayahIndex> {
+  if (wilayahCache) return wilayahCache;
+  const r = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: 'v/nasional/kabkota.geojson' }));
+  const b = Buffer.from(await r.Body!.transformToByteArray());
+  const txt = (b[0] === 0x1f && b[1] === 0x8b ? gunzipSync(b) : b).toString('utf8');
+  wilayahCache = indexWilayah(JSON.parse(txt) as WilayahFC);
+  return wilayahCache;
+}
+
 async function putNational(bucket: string, key: string, obj: unknown) {
   await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: gzipSync(JSON.stringify(obj), { level: 9 }), ContentEncoding: 'gzip',
     CacheControl: 'public, max-age=300, stale-while-revalidate=900', ContentType: 'application/json' }));
@@ -100,8 +112,15 @@ export async function nasional(bucket: string, now = new Date()): Promise<Record
       }
     }
     const f = fireFile(by, now);
+    try {
+      const t = tandaiWilayah(f.points, await wilayah(bucket));
+      f.points = t.points; f.n = t.points.length; f.luar_indonesia = t.luar; f.per_provinsi = t.per_provinsi;
+    } catch (e) {
+      res.wilayah_gagal = String((e as Error).message).slice(0, 120); // keep the box points rather than publish nothing
+    }
     await putNational(bucket, 'v/nasional/titik_api.json', f);
     res.titik_api = f.n;
+    res.luar_indonesia = f.luar_indonesia ?? null;
   }
   if (now.getUTCHours() % 3 === 0 || !(await exists(bucket, 'v/nasional/angin.json'))) {
     const pts = gridPoints();
