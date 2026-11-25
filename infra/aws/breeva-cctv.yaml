@@ -1,0 +1,120 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Breeva traffic-camera trial (task N-33) in AWS Jakarta (ap-southeast-3): the counting function (container image,
+  one frame per open camera counted in memory, only counts written to the private bucket) and its schedule every
+  20 minutes, which ends on 6 Dec 2026 00.00 WIB (EndDate); the function itself also refuses to run after that time.
+  Label: uji coba selama lomba, izin tertulis sedang diproses. Everything is named breeva-* and tagged project=breeva.
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: breeva-cctv image by digest (repository of stack breeva-cctv-dasar)
+  EndDate:
+    Type: String
+    Default: '2026-12-05T17:00:00Z'
+
+Resources:
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/breeva-cctv
+      RetentionInDays: 14
+      Tags:
+        - { Key: project, Value: breeva }
+
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: breeva-cctv-fungsi
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: breeva-cctv
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub '${LogGroup.Arn}:*'
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::breeva-cctv-${AWS::AccountId}/kamera.json'
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::breeva-cctv-${AWS::AccountId}/hitung/*'
+      Tags:
+        - { Key: project, Value: breeva }
+
+  Function:
+    Type: AWS::Lambda::Function
+    DependsOn: LogGroup
+    Properties:
+      FunctionName: breeva-cctv
+      PackageType: Image
+      Code: { ImageUri: !Ref ImageUri }
+      Role: !GetAtt FunctionRole.Arn
+      Architectures: [x86_64]
+      MemorySize: 2048
+      Timeout: 600
+      Environment:
+        Variables:
+          BUCKET: !Sub 'breeva-cctv-${AWS::AccountId}'
+          MATI_UTC: !Ref EndDate
+          PARALEL: '16'
+      Tags:
+        - { Key: project, Value: breeva }
+
+  NoRetry:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref Function
+      Qualifier: $LATEST
+      MaximumRetryAttempts: 0
+      MaximumEventAgeInSeconds: 600
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: breeva-cctv-jadwal
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: scheduler.amazonaws.com }
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: { 'aws:SourceAccount': !Ref 'AWS::AccountId' }
+      Policies:
+        - PolicyName: breeva-cctv-panggil
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt Function.Arn
+      Tags:
+        - { Key: project, Value: breeva }
+
+  Schedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: breeva-cctv-20-menit
+      Description: 'Breeva CCTV trial, every 20 minutes until 6 Dec 2026 00.00 WIB (uji coba selama lomba)'
+      ScheduleExpression: rate(20 minutes)
+      EndDate: !Ref EndDate
+      FlexibleTimeWindow: { Mode: 'OFF' }
+      State: ENABLED
+      Target:
+        Arn: !GetAtt Function.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        RetryPolicy: { MaximumRetryAttempts: 0, MaximumEventAgeInSeconds: 600 }
+
+Outputs:
+  FunctionArn:
+    Value: !GetAtt Function.Arn
+  ScheduleEndDate:
+    Value: !Ref EndDate

@@ -55,9 +55,10 @@ def grids(size: int = INPUT) -> tuple[np.ndarray, np.ndarray]:
     return np.concatenate(g).astype(np.float32), np.concatenate(s).astype(np.float32)
 
 
-def decode(raw: np.ndarray, ratio: float, conf: float = 0.3, iou: float = 0.45) -> list[tuple[int, float, np.ndarray]]:
-    """YOLOX head output (N, 85) at INPUT -> [(coco class, score, box x0 y0 x1 y1 in original pixels)] after NMS."""
-    g, s = grids()
+def decode(raw: np.ndarray, ratio: float, conf: float = 0.3, iou: float = 0.45, size: int = INPUT) -> list[tuple[int, float, np.ndarray]]:
+    """YOLOX head output (N, 85) at a size x size input -> [(coco class, score, box x0 y0 x1 y1 in original pixels)]
+    after NMS (YOLOX-s: 640, YOLOX-tiny: 416)."""
+    g, s = grids(size)
     xy = (raw[:, :2] + g) * s
     wh = np.exp(raw[:, 2:4]) * s
     scores = raw[:, 4:5] * raw[:, 5:]

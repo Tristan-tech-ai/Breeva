@@ -1,0 +1,4 @@
+# the versions of the local trial of 25 Nov 2026 (cp312 manylinux_2_28 x86_64 wheels on PyPI)
+numpy==2.5.5
+onnxruntime==1.32.0
+av==19.0.2

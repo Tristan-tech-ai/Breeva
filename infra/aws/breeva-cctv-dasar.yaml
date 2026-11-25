@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Breeva traffic-camera trial (task N-33), base stack in AWS Jakarta (ap-southeast-3): the private bucket for the camera
+  list and the counts, and the container repository of the counting function. Contest trial only; the counting stack
+  breeva-cctv stops on 6 Dec 2026. Everything is named breeva-* and tagged project=breeva.
+
+Resources:
+  Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'breeva-cctv-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerEnforced }]
+      LifecycleConfiguration:
+        Rules:
+          - Id: hitung-30-hari
+            Status: Enabled
+            Prefix: hitung/
+            ExpirationInDays: 30
+      Tags:
+        - { Key: project, Value: breeva }
+
+  Repo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: breeva-cctv
+      ImageScanningConfiguration: { ScanOnPush: false }
+      LifecyclePolicy:
+        LifecyclePolicyText: >-
+          {"rules":[{"rulePriority":1,"description":"keep the last 3 images","selection":{"tagStatus":"any",
+          "countType":"imageCountMoreThan","countNumber":3},"action":{"type":"expire"}}]}
+      Tags:
+        - { Key: project, Value: breeva }
+
+Outputs:
+  BucketName:
+    Value: !Ref Bucket
+  RepoUri:
+    Value: !GetAtt Repo.RepositoryUri
