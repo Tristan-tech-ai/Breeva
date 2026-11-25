@@ -11,7 +11,7 @@ Parameters:
     Description: breeva-cctv image by digest (repository of stack breeva-cctv-dasar)
   EndDate:
     Type: String
-    Default: '2026-12-05T17:00:00Z'
+    Default: '2026-12-05T17:00:00.000Z'
 
 Resources:
   LogGroup:

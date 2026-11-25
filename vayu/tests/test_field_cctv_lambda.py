@@ -73,17 +73,20 @@ def test_guard_drops_any_field_beyond_the_counts():
 def test_switch_off_at_6_dec_wib():
     assert not sudah_mati(datetime(2026, 12, 5, 16, 59, 59, tzinfo=timezone.utc))
     assert sudah_mati(datetime(2026, 12, 5, 17, 0, 0, tzinfo=timezone.utc))
+    # the EventBridge Scheduler format (yyyy-MM-ddTHH:mm:ss.SSSZ, found when the first stack create failed) also parses
+    assert sudah_mati(datetime(2026, 12, 5, 17, 0, 0, tzinfo=timezone.utc), "2026-12-05T17:00:00.000Z")
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z", __import__("app").MATI_UTC)
     assert kunci(datetime(2026, 11, 25, 13, 40, tzinfo=timezone.utc)) == "hitung/2026-11-25/1340.json"
 
 
 def test_schedule_and_function_end_on_the_same_date():
     tpl = open(os.path.join(ROOT, "infra", "aws", "breeva-cctv.yaml"), encoding="utf-8").read()
-    assert re.search(r"EndDate:\n\s+Type: String\n\s+Default: '2026-12-05T17:00:00Z'", tpl)
+    assert re.search(r"EndDate:\n\s+Type: String\n\s+Default: '2026-12-05T17:00:00.000Z'", tpl)
     assert "EndDate: !Ref EndDate" in tpl and "MATI_UTC: !Ref EndDate" in tpl
     assert "rate(20 minutes)" in tpl
     import app
 
-    assert app.MATI_UTC == "2026-12-05T17:00:00Z"
+    assert app.MATI_UTC == "2026-12-05T17:00:00.000Z"
 
 
 def test_no_code_path_writes_a_picture():

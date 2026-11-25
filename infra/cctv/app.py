@@ -17,7 +17,7 @@ import os
 from datetime import datetime, timezone
 from statistics import median
 
-MATI_UTC = os.environ.get("MATI_UTC", "2026-12-05T17:00:00Z")
+MATI_UTC = os.environ.get("MATI_UTC", "2026-12-05T17:00:00.000Z")  # the Scheduler EndDate format (milliseconds)
 MODEL = os.environ.get("MODEL", os.path.join(os.path.dirname(os.path.abspath(__file__)), "model", "yolox_s.onnx"))
 NAMA_MODEL = "YOLOX-s ONNX (Apache-2.0, Megvii 0.1.1rc0), skor >= 0.3, satu bingkai per kamera"
 LABEL = "uji coba selama lomba, izin tertulis sedang diproses"
