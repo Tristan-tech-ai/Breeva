@@ -10,7 +10,7 @@ import type { AsapReq, AsapTile } from '../../workers/asapNasional.worker';
  * labelled indicative. `onState` reports what is shown (for the label and tests).
  */
 export function useNationalExhaust(map: L.Map | null, enabled: boolean, onState?: (s: { aktif: boolean; ubin: number; ms: number[] }) => void) {
-  const workerRef = useRef<Worker | null>(null);
+  const workerRef = useRef<Worker[]>([]);
   useEffect(() => {
     if (!map || !enabled) return;
     const layer = L.layerGroup().addTo(map);
@@ -45,10 +45,11 @@ export function useNationalExhaust(map: L.Map | null, enabled: boolean, onState?
       const want = viewTiles({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() }, { lon: c.lng, lat: c.lat })
         .filter(([tz, x, y]) => !drawn.has(`${tz}/${x}/${y}@${hourKey}`));
       if (!want.length) return;
-      workerRef.current ??= new Worker(new URL('../../workers/asapNasional.worker.ts', import.meta.url), { type: 'module' });
-      const w = workerRef.current;
+      // two workers on phones with the cores for it: the tiles of a screen are computed side by side
+      const n = Math.max(1, Math.min(2, (navigator.hardwareConcurrency || 2) - 1));
+      while (workerRef.current.length < n) workerRef.current.push(new Worker(new URL('../../workers/asapNasional.worker.ts', import.meta.url), { type: 'module' }));
       const id = ++req;
-      w.onmessage = (ev: MessageEvent<{ id: number; tile?: AsapTile; done?: boolean }>) => {
+      const onTile = (ev: MessageEvent<{ id: number; tile?: AsapTile; done?: boolean }>) => {
         if (ev.data.id !== id || !ev.data.tile) return;
         const t = ev.data.tile;
         drawn.add(t.key);
@@ -62,8 +63,11 @@ export function useNationalExhaust(map: L.Map | null, enabled: boolean, onState?
         if (labelEl) { labelEl.dataset.ubin = String(drawn.size); labelEl.dataset.ms = ms.join(','); }
         onState?.({ aktif: true, ubin: drawn.size, ms });
       };
-      const msg: AsapReq = { id, base: fieldBase(), tiles: want, hourLocal, hourKey };
-      w.postMessage(msg);
+      workerRef.current.forEach((w, j) => {
+        w.onmessage = onTile;
+        const part = want.filter((_, i) => i % workerRef.current.length === j);
+        if (part.length) w.postMessage({ id, base: fieldBase(), tiles: part, hourLocal, hourKey } satisfies AsapReq);
+      });
     };
     map.on('moveend', update);
     update();
@@ -71,8 +75,8 @@ export function useNationalExhaust(map: L.Map | null, enabled: boolean, onState?
       map.off('moveend', update);
       layer.remove();
       if (labelOn) label.remove();
-      workerRef.current?.terminate();
-      workerRef.current = null;
+      workerRef.current.forEach((w) => w.terminate());
+      workerRef.current = [];
     };
   }, [map, enabled, onState]);
 }
