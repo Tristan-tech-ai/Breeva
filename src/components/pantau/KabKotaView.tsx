@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { Download, Flame, Radio, Wind } from 'lucide-react';
 import StatCard from '../viz/StatCard';
 import LineChart from '../viz/LineChart';
@@ -21,11 +21,14 @@ export default function KabKotaView({ k, latar, fires, wind, hour, dark, asap = 
   k: KabKota; latar: LatarFile | null; fires: FireFile | null; wind: WindFile | null; hour: number; dark: boolean;
   asap?: AsapFile | null; nama?: Record<string, string>; cctv?: CctvFile | null;
 }) {
-  const kamera = kameraKabKota(cctv, k.slug);
-  const menuju = asap?.menuju[k.slug] ?? [];
-  const jalur = menuju.map((m) => asap!.gugus.find((g) => g.id === m.gugus)?.jalur).filter((j): j is Array<[number, number]> => !!j);
+  const kamera = useMemo(() => kameraKabKota(cctv, k.slug), [cctv, k.slug]);
+  const menuju = useMemo(() => asap?.menuju[k.slug] ?? [], [asap, k.slug]);
+  // N-40: stable map inputs, so the canvas layers are built once per data file
+  const jalur = useMemo(() => menuju.map((m) => asap!.gugus.find((g) => g.id === m.gugus)?.jalur).filter((j): j is Array<[number, number]> => !!j), [menuju, asap]);
   const l = latarSini(latar, k.slug);
-  const api = apiSini(fires?.points ?? [], k);
+  const api = useMemo(() => apiSini(fires?.points ?? [], k), [fires, k]);
+  const apiPeta = useMemo(() => [...api.dalam, ...api.dekat.map((d) => d.p)], [api]);
+  const pusat = useMemo<[number, number]>(() => [k.lat, k.lon], [k]);
   const angin = wind ? windAt(wind, k.lon, k.lat, hour) : null;
   const unduh = () => {
     const url = URL.createObjectURL(new Blob([kabKotaCsv(k, l, api.dalam)], { type: 'text/csv;charset=utf-8' }));
@@ -60,7 +63,7 @@ export default function KabKotaView({ k, latar, fires, wind, hour, dark, asap = 
         </div>
       )}
       <Suspense fallback={<div className="rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" style={{ height: '26rem' }} />}>
-        <PantauMap fires={[...api.dalam, ...api.dekat.map((d) => d.p)]} wind={wind} hour={hour} center={[k.lat, k.lon]} zoom={kamera.length ? 12 : 9} dark={dark} jalur={jalur} cctv={kamera} />
+        <PantauMap fires={apiPeta} wind={wind} hour={hour} center={pusat} zoom={kamera.length ? 12 : 9} dark={dark} jalur={jalur} cctv={kamera} />
       </Suspense>
       <CctvRingkas file={cctv} kamera={kamera} />
       <div className="flex flex-wrap gap-2">

@@ -10,6 +10,7 @@ import type { Basemap } from '../../lib/basemap';
 import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_DATA_ZOOM, basemapRegion, basemapUrl, breevaFlavor, pendingTileColor, withoutPoiLabels } from '../../lib/basemapVector';
 import { fieldBase } from '../../lib/field/source';
 import { readAheadHeader, sharedRangeSource } from '../../lib/cachedRangeSource';
+import { UBIN_HEMAT } from '../../lib/mapPerf';
 
 export default function BasemapLayer({ raster, dark, vector }: { raster: Basemap; dark: boolean; vector: boolean }) {
   const map = useMap();
@@ -42,6 +43,7 @@ export default function BasemapLayer({ raster, dark, vector }: { raster: Basemap
         backgroundColor: flavor.background,
         maxDataZoom: BASEMAP_MAX_DATA_ZOOM,
         attribution: BASEMAP_ATTRIBUTION,
+        ...UBIN_HEMAT, // N-41: tiles drawn on the main thread render once the zoom ends
       });
       const gl = l as unknown as L.GridLayer;
       // tiles still loading show the land colour, not Leaflet's grey (X-W56)
@@ -61,5 +63,5 @@ export default function BasemapLayer({ raster, dark, vector }: { raster: Basemap
   }, [useVector, region, dark, map]);
 
   if (useVector) return null;
-  return <TileLayer key={raster.url + (raster.className ?? '')} url={raster.url} attribution={raster.attribution} className={raster.className} {...(raster.subdomains ? { subdomains: raster.subdomains } : {})} />;
+  return <TileLayer key={raster.url + (raster.className ?? '')} url={raster.url} attribution={raster.attribution} className={raster.className} {...(raster.subdomains ? { subdomains: raster.subdomains } : {})} {...UBIN_HEMAT} />;
 }

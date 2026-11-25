@@ -3,6 +3,7 @@ import L from 'leaflet';
 import type { PollutantType, RoadDisplayMode } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { ensureVectorGrid } from './RoadMvtLayer';
+import { UBIN_HEMAT } from '../../lib/mapPerf';
 import { weightFor, opacityFor } from '../../lib/roadColors';
 import { fieldColor } from '../../lib/field/color';
 import { FIELD_DRAWN_EVENT, FIELD_REGIONS, FieldSource, overzoomPoints, type Box } from '../../lib/field/source';
@@ -138,7 +139,7 @@ export function useFieldLayer(
           });
           const layer = new FieldGrid('', {
             rendererFactory: LG.canvas.tile, interactive: false, minZoom: 10, maxZoom: 18, maxNativeZoom: 18,
-            bounds: L.latLngBounds(region.bounds), pane: 'overlayPane',
+            bounds: L.latLngBounds(region.bounds), pane: 'overlayPane', ...UBIN_HEMAT, // N-41
             vectorTileLayerStyles: {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               roads: (props: any, zoom: number) => {

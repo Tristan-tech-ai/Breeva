@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Download, Flame, Radio, Wind, MapPinned } from 'lucide-react';
 import { Seo } from '../components/Seo';
@@ -39,6 +39,7 @@ function useJson<T>(path: string | null): T | null {
   return v;
 }
 
+const PUSAT_INDONESIA: [number, number] = [-2.5, 118];
 const jamWib = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) : '…');
 const runWib = (iso: string) => new Date(iso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' WIB';
 
@@ -85,6 +86,15 @@ export default function PantauPage() {
   useEffect(() => { let alive = true; void ambilUrgensi().then((r) => alive && setUrgensi(r)); return () => { alive = false; }; }, []);
   const urgensiSini = useMemo(() => (urgensi && pusat ? urgensi.filter((r) => kmBetween(pusat.lat, pusat.lon, r.lat, r.lng) <= 25) : urgensi), [urgensi, pusat]);
   const mendesak = useMemo(() => nilaiUrgensi(urgensiSini ?? [], { api: [...(fires?.points ?? []), ...(fires?.luar_points ?? [])], fasilitas: daftar?.fasilitas }).slice(0, 3), [urgensiSini, fires, daftar]);
+  // N-40: the map's inputs keep their identity across renders, so the canvas layers are built once per data file
+  const apiSemua = useMemo(() => [...(fires?.points ?? []), ...(fires?.luar_points ?? [])], [fires]);
+  const jalurAsap = useMemo(() => (asap?.gugus ?? []).slice(0, 30).map((g) => g.jalur), [asap]);
+  const kameraSemua = useMemo(() => cctv?.kamera ?? [], [cctv]);
+  const kameraSini = useMemo(() => (region ? kameraKabKota(cctv, region.slug) : []), [cctv, region]);
+  const apiDekat = useMemo(() => dekat.map((d) => d.p), [dekat]);
+  const pusatWilayah = useMemo<[number, number] | null>(() => (region ? [region.lat, region.lon] : null), [region]);
+  const buka = useCallback((s: string) => navigate(`/pantau/${s}`), [navigate]);
+  const choropleth = useMemo(() => ({ url: `${b}/v/nasional/kabkota_peta.geojson`, nilai, nama: namaKab, onPick: buka }), [b, nilai, namaKab, buka]);
   const laporJenis = useMemo(() => JENIS_LAPOR.map((j) => ({ label: j.label, value: (laporSini ?? []).filter((r) => r.jenis === j.id).reduce((a, r) => a + r.jumlah, 0) })).filter((b) => b.value > 0), [laporSini]);
 
   const unduh = () => {
@@ -135,12 +145,10 @@ export default function PantauPage() {
               <StatCard label="Angin" value={wind ? `${wind.speed.length}` : '…'} note="titik prakiraan tiap jam" icon={<Wind className="h-3.5 w-3.5" aria-hidden="true" />} />
             </div>
             <Suspense fallback={<div className="rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" style={{ height: "26rem" }} />}>
-              <PantauMap fires={[...(fires?.points ?? []), ...(fires?.luar_points ?? [])]} luar wind={wind} hour={h} center={[-2.5, 118]} zoom={5} dark={dark}
-                kab={{ url: `${b}/v/nasional/kabkota_peta.geojson`, nilai, nama: namaKab, onPick: (s) => navigate(`/pantau/${s}`) }}
-                jalur={(asap?.gugus ?? []).slice(0, 30).map((g) => g.jalur)} cctv={cctv?.kamera ?? []} />
+              <PantauMap fires={apiSemua} luar wind={wind} hour={h} center={PUSAT_INDONESIA} zoom={5} dark={dark} kab={choropleth} jalur={jalurAsap} cctv={kameraSemua} />
             </Suspense>
             <p className="text-xs text-gray-600 dark:text-gray-300">Warna wilayah: PM2,5 latar jam ini (ketuk untuk membuka kabupaten/kotanya). Titik merah: api terdeteksi satelit dalam 24 jam terakhir (abu-abu: di negara tetangga, asapnya tetap bisa masuk). Garis putus-putus coklat: perkiraan jalur asap 24 jam dari 30 gugus api terbesar. Panah biru: arah angin.{cctv?.kamera.length ? ' Titik kecil di Bogor, Bandung, dan Yogyakarta: kamera lalu lintas (uji coba).' : ''}</p>
-            <CctvRingkas file={cctv} kamera={cctv?.kamera ?? []} />
+            <CctvRingkas file={cctv} kamera={kameraSemua} />
             {prov.length > 0 && (
               <div className="rounded-2xl bg-white dark:bg-gray-900 p-4">
                 <BarChart title="Titik api 24 jam per provinsi (10 teratas)" bars={prov.slice(0, 10).map((p, i) => ({ label: p.nama, value: p.n, highlight: i === 0, color: i === 0 ? '#dc2626' : '#fb923c' }))} />
@@ -184,10 +192,9 @@ export default function PantauPage() {
               </div>
             )}
             <Suspense fallback={<div className="rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" style={{ height: "26rem" }} />}>
-              <PantauMap fires={dekat.map((d) => d.p)} wind={wind} hour={h} center={[region.lat, region.lon]} zoom={kameraKabKota(cctv, region.slug).length ? 12 : 8} dark={dark}
-                cctv={kameraKabKota(cctv, region.slug)} />
+              <PantauMap fires={apiDekat} wind={wind} hour={h} center={pusatWilayah!} zoom={kameraSini.length ? 12 : 8} dark={dark} cctv={kameraSini} />
             </Suspense>
-            <CctvRingkas file={cctv} kamera={kameraKabKota(cctv, region.slug)} />
+            <CctvRingkas file={cctv} kamera={kameraSini} />
             <Rincian summary="Titik api terdekat">
               {dekat.length === 0 ? <p>Tidak ada titik api dalam 150 km dalam 24 jam terakhir.</p> : (
                 <ul className="space-y-1">

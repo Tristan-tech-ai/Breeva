@@ -33,6 +33,7 @@ import type { RouteDest } from './WalkRouteLayer';
 import WheelGuard from './WheelGuard';
 import { FIELD_REGIONS } from '../../lib/field/source';
 import { onFirstDraw } from '../../lib/field/firstDraw';
+import { PETA_HEMAT } from '../../lib/mapPerf';
 
 const toTuple = (wp: Coordinate): L.LatLngTuple => [wp.lat, wp.lng];
 
@@ -668,6 +669,7 @@ export default function LeafletMap({
         style={{ width: '100%', height: '100%', position: 'relative', zIndex: 0 }}
         zoomControl={false}
         attributionControl
+        {...PETA_HEMAT}
         {...({ rotate: true, rotateControl: false, touchRotate: false, bearing: 0 } as Record<string, unknown>)}
       >
         {baseOn && <BasemapLayer raster={base} dark={isDarkMode} vector={FIELD_STATIC && mapStyle !== 'satellite'} />}

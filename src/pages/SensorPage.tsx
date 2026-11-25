@@ -10,6 +10,9 @@ import type { ScFile } from '../lib/nasional/sensorCommunity';
 import { ALASAN_SENSOR, ambilSensorPublik, contohCurl, contohEsphome, TIPE_SENSOR, type SensorPublik, type TipeSensor } from '../lib/sensorSendiri';
 
 const PantauMap = lazy(() => import('../components/pantau/PantauMap'));
+// N-40: stable map inputs (the map layers rebuild only when their data object changes)
+const TANPA_API: never[] = [];
+const PUSAT_INDONESIA: [number, number] = [-2.5, 118];
 const SB_URL = import.meta.env.VITE_SUPABASE_URL ?? '';
 const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
 
@@ -70,7 +73,7 @@ export default function SensorPage() {
           <div className="rounded-2xl bg-white dark:bg-gray-900 p-3"><Radio className="mx-auto h-4 w-4 text-emerald-700" aria-hidden="true" /><p className="text-xl font-extrabold tabular-nums">{milikPublik ? milikPublik.length : '…'}</p><p className="text-[11px] text-gray-600 dark:text-gray-300">sensor warga Breeva (publik)</p></div>
         </div>
         <Suspense fallback={<div className="rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" style={{ height: '26rem' }} />}>
-          <PantauMap fires={[]} wind={null} center={[-2.5, 118]} zoom={5} dark={dark} sensors={titik} />
+          <PantauMap fires={TANPA_API} wind={null} center={PUSAT_INDONESIA} zoom={5} dark={dark} sensors={titik} />
         </Suspense>
 
         <section className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 space-y-3" data-daftar-sensor>
