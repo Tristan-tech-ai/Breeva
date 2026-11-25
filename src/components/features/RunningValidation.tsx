@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { fieldBase } from '../../lib/field/source';
-import { pooledDaily, summarizeRecent, type RecentFile } from '../../lib/field/validationRecent';
+import { dailySeries, pooledDaily, summarizeRecent, type RecentFile } from '../../lib/field/validationRecent';
 import { num, pct, type SingleDay } from '../../lib/validasi';
+import LineChart from '../viz/LineChart';
+import Rincian from '../viz/Rincian';
+
+
 
 /**
  * Running hourly hidden-sensor test of the live map (task F5-09), read from the file the hourly builder writes. Hourly
@@ -34,11 +38,20 @@ export default function RunningValidation({ region = 'badung_denpasar', label = 
           <p className="text-[11px] text-amber-700 dark:text-amber-400">
             Angka per jam, belum dibandingkan dengan target EPA: target NRMSE ≤ 30% berlaku untuk rata-rata 24 jam.
           </p>
+          {f && f !== 'failed' && (() => {
+            const ser = dailySeries(f.daily);
+            return ser ? (
+              <LineChart title="Uji harian peta hidup: NRMSE per hari" unit="%" min={0} series={[{ name: 'NRMSE', values: ser.values, color: '#b45309' }]}
+                xLabels={[`${Number(ser.from.slice(8))} Nov`, `${Number(ser.to.slice(8))} Nov`]} reference={{ value: 30, label: 'target ≤ 30%' }} className="my-2" />
+            ) : null;
+          })()}
+          <Rincian summary="Kenapa ada hari tanpa uji harian?">
           <p className="text-[12px] text-gray-600 dark:text-gray-400" data-n08>
             Uji harian butuh sedikitnya 18 jam teruji per sensor. Sejak 21 Nov, OpenAQ makin sering terlambat 2 jam, sehingga sebagian jam
             terlewat dan hanya sedikit sensor yang mencapai 18 jam (beberapa hari tanpa uji harian). Sejak 25 Nov malam, setiap run juga menguji
             sampai 2 jam sensor sebelumnya yang ikut terunduh, jadi jam yang terlewat kembali masuk uji harian; rumus dan target EPA tidak berubah.
           </p>
+          </Rincian>
           {f && f !== 'failed' && (f.daily?.length ?? 0) > 0 && (() => {
             const d = f.daily![f.daily!.length - 1];
             const pool = pooledDaily(f.daily);
@@ -49,12 +62,14 @@ export default function RunningValidation({ region = 'badung_denpasar', label = 
                   titik potong {num(d.intercept, 1)} µg/m³, lolos <b>{d.passes} dari 4</b> target, dari {d.n} sensor dengan sedikitnya {d.hours_min} jam.
                 </p>
                 {singleDay && (
+                  <Rincian summary="Kenapa R² satu hari rendah?">
                   <p className="text-[12px] text-gray-600 dark:text-gray-400">
                     Satu hari saja menilai terutama beda antar-sensor hari itu, yang kecil (sebaran sekitar {num(singleDay.sd_within_day, 1)} µg/m³,
                     dibanding {num(singleDay.sd_pooled, 1)} µg/m³ antar-hari), jadi R² dan kemiringan satu hari rendah. Uji statis di atas, bila dinilai
                     per hari dengan cara yang sama, lolos 1 dari 4 pada {singleDay.passes_count[1]} dari {singleDay.days} hari (median R² {num(singleDay.r2)},
                     kemiringan {num(singleDay.slope)}); angka {singleDay.pooled_passed} dari 4 di tabel berasal dari gabungan {num(singleDay.pooled_n, 0)} hari-lokasi.
                   </p>
+                  </Rincian>
                 )}
                 {pool && (
                   <p>

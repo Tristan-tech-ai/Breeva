@@ -165,3 +165,17 @@ export function summarizeRecent(f: RecentFile | null): RecentSummary | null {
     last_run: all.reduce((m, e) => (e.run > m ? e.run : m), all[0].run),
   };
 }
+
+/** Daily NRMSE (%) per calendar day from the first daily test to the last, null on days without a test. */
+export function dailySeries(daily: Array<{ date: string; nrmse: number }> | undefined): { values: (number | null)[]; from: string; to: string } | null {
+  const ds = [...(daily ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+  if (ds.length < 2) return null;
+  const from = ds[0].date, to = ds[ds.length - 1].date;
+  const by = new Map(ds.map((d) => [d.date, d.nrmse]));
+  const values: (number | null)[] = [];
+  for (let t = Date.parse(`${from}T00:00:00Z`); t <= Date.parse(`${to}T00:00:00Z`); t += 86_400_000) {
+    const v = by.get(new Date(t).toISOString().slice(0, 10));
+    values.push(v == null ? null : Math.round(v * 1000) / 10);
+  }
+  return { values, from, to };
+}

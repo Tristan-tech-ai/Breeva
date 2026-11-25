@@ -5,6 +5,11 @@ import { Seo } from '../components/Seo';
 import { epaFlags, measuredLine, modelLine, num, pct, verdict, type Validasi } from '../lib/validasi';
 import ExhaustExplainer from '../components/features/ExhaustExplainer';
 import RunningValidation from '../components/features/RunningValidation';
+import EpaBars from '../components/viz/EpaBars';
+import ScatterChart from '../components/viz/ScatterChart';
+import Rincian from '../components/viz/Rincian';
+
+interface TitikFile { dari: string; sampai: string; n: number; per_hari: Record<string, number>; titik: Array<[number, number, string]>; sumber: string }
 
 const DATA_URL = '/data/validasi.json';
 
@@ -12,6 +17,10 @@ export default function ValidasiPage() {
   const navigate = useNavigate();
   const [v, setV] = useState<Validasi | null>(null);
   const [gagal, setGagal] = useState(false);
+  const [titik, setTitik] = useState<TitikFile | null>(null);
+  useEffect(() => {
+    fetch('/data/validasi_titik.json').then((r) => (r.ok ? r.json() : null)).then((d: TitikFile | null) => setTitik(d)).catch(() => setTitik(null));
+  }, []);
 
   useEffect(() => {
     fetch(DATA_URL)
@@ -50,7 +59,14 @@ export default function ValidasiPage() {
             </section>
 
             <section>
-              <h2 className="text-sm font-semibold mb-2">Rata-rata harian PM2,5</h2>
+              <h2 className="text-sm font-semibold mb-2">Rata-rata harian PM2,5: empat target EPA</h2>
+              <div className="grid gap-3 sm:grid-cols-2" data-epa-kartu>
+                {v.daily.map((r) => (
+                  <EpaBars key={r.id} title={r.label} values={r} note={r.n ? `n = ${r.n.toLocaleString('id-ID')} hari-lokasi · ${r.source}` : r.source} />
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Pita hijau = target, titik = hasil. Lolos keempatnya baru disebut akurat.</p>
+              <Rincian summary="Tabel angka" className="mt-2">
               <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800" tabIndex={0} role="region" aria-label="Tabel uji rata-rata harian (geser ke samping)">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-100 dark:bg-gray-900 text-left text-xs">
@@ -73,7 +89,17 @@ export default function ValidasiPage() {
                   </tbody>
                 </table>
               </div>
+              </Rincian>
             </section>
+
+            {titik && titik.n > 0 && (
+              <section className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 text-sm" data-sebar>
+                <ScatterChart title={`Tebakan lawan ukuran: ${titik.n} hari-sensor, peta hidup ${titik.dari.slice(8)}–${titik.sampai.slice(8)} Nov`}
+                  points={titik.titik.map(([o, p]) => ({ x: o, y: p }))} xLabel="terukur µg/m³" yLabel="tebakan µg/m³" />
+                <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">Tiap titik: rata-rata satu hari satu sensor warga yang disembunyikan, ditebak dari sensor lain. Di garis putus-putus = tebakan tepat.</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">{titik.sumber}</p>
+              </section>
+            )}
 
             <RunningValidation singleDay={v.single_day} />
 
@@ -113,8 +139,7 @@ export default function ValidasiPage() {
               </section>
             )}
 
-            <section>
-              <h2 className="text-sm font-semibold mb-2">Sumber data yang kami tolak</h2>
+            <Rincian summary={`Sumber data yang kami tolak (${v.rejected.length})`}>
               <ul className="space-y-2 text-sm">
                 {v.rejected.map((r) => (
                   <li key={r.name} className="rounded-xl border border-gray-200 dark:border-gray-800 p-3">
@@ -124,7 +149,7 @@ export default function ValidasiPage() {
                   </li>
                 ))}
               </ul>
-            </section>
+            </Rincian>
             <p className="text-[11px] text-gray-500 dark:text-gray-400">Dibangun {new Date(v.built_at).toLocaleString('id-ID')} dari berkas validasi; kode dan skrip uji ada di repositori Breeva.</p>
           </>
         )}
