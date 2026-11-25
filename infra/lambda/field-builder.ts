@@ -23,6 +23,7 @@ import { CHUNK, gridPoints, windFile, windUrl } from '../../src/lib/nasional/ang
 import { indexWilayah, tandaiWilayah, type WilayahFC, type WilayahIndex } from '../../src/lib/nasional/wilayah';
 import { camsFromBox, camsSeries, camsUrl, INDONESIA_BOX, LATAR_CHUNK, LATAR_HOURS, latarFile, sensorsNow } from '../../src/lib/nasional/latar';
 import { readBox } from './openmeteoS3';
+import { SC_URL, scFile } from '../../src/lib/nasional/sensorCommunity';
 import { asapFile } from '../../src/lib/nasional/asap';
 import { FINE_GRID, GRID as WIND_GRID, windFromBoxes, type WindFile } from '../../src/lib/nasional/angin';
 
@@ -189,6 +190,16 @@ export async function nasional(bucket: string, now = new Date()): Promise<Record
     } catch (e) {
       res.asap_gagal = String((e as Error).message).slice(0, 120);
     }
+  }
+  // N-27: open Sensor.Community sensors in Indonesia, every hour (shown, never used by the model)
+  try {
+    const r = await fetch(SC_URL);
+    if (!r.ok) throw new Error(`sensor.community ${r.status}`);
+    const f = scFile((await r.json()) as Parameters<typeof scFile>[0], now);
+    await putNational(bucket, 'v/nasional/sensor_community.json', f);
+    res.sensor_community = f.sensors.length;
+  } catch (e) {
+    res.sensor_community_gagal = String((e as Error).message).slice(0, 120);
   }
   // N-22/N-36: background PM2.5 per kab/kota for 48 hours, every hour: CAMS from Open-Meteo's open data on AWS (the API
   // only as a fallback every 6 hours), corrected with the OpenAQ sensors of this hour; its own failure stays here

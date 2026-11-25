@@ -110,7 +110,7 @@ export default function PantauPage() {
 
         {!region && !wilayah && (
           <>
-            <p className="text-xs text-gray-600 dark:text-gray-300">Dari dinas atau puskesmas? <Link to="/pemerintah" className="font-semibold underline">Minta ringkasan mingguan</Link>.</p>
+            <p className="text-xs text-gray-600 dark:text-gray-300">Dari dinas atau puskesmas? <Link to="/pemerintah" className="font-semibold underline">Minta ringkasan mingguan</Link>. Punya sensor? <Link to="/sensor" className="font-semibold underline">Tampilkan di peta</Link>.</p>
             <label className="flex items-center gap-2 rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 px-3">
               <span className="sr-only">Cari kabupaten atau kota</span>
               <input value={cari} onChange={(e) => setCari(e.target.value)} placeholder={`Cari ${indeks.length ? indeks.length.toLocaleString('id-ID') : ''} kabupaten/kota`}
