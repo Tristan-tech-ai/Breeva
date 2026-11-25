@@ -9,6 +9,12 @@ import EpaBars from '../components/viz/EpaBars';
 import ScatterChart from '../components/viz/ScatterChart';
 import Rincian from '../components/viz/Rincian';
 
+/** "18–22 Nov" from the days that actually have pairs. */
+const rentangHari = (per: Record<string, number>) => {
+  const d = Object.keys(per).sort();
+  return d.length ? `${Number(d[0].slice(8))}–${Number(d[d.length - 1].slice(8))} Nov` : '';
+};
+
 interface TitikFile { dari: string; sampai: string; n: number; per_hari: Record<string, number>; titik: Array<[number, number, string]>; sumber: string }
 
 const DATA_URL = '/data/validasi.json';
@@ -94,7 +100,7 @@ export default function ValidasiPage() {
 
             {titik && titik.n > 0 && (
               <section className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 text-sm" data-sebar>
-                <ScatterChart title={`Tebakan lawan ukuran: ${titik.n} hari-sensor, peta hidup ${titik.dari.slice(8)}–${titik.sampai.slice(8)} Nov`}
+                <ScatterChart title={`Tebakan lawan ukuran: ${titik.n} hari-sensor, peta hidup ${rentangHari(titik.per_hari)}`}
                   points={titik.titik.map(([o, p]) => ({ x: o, y: p }))} xLabel="terukur µg/m³" yLabel="tebakan µg/m³" />
                 <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">Tiap titik: rata-rata satu hari satu sensor warga yang disembunyikan, ditebak dari sensor lain. Di garis putus-putus = tebakan tepat.</p>
                 <p className="text-[11px] text-gray-500 dark:text-gray-400">{titik.sumber}</p>
@@ -118,11 +124,13 @@ export default function ValidasiPage() {
               </div>
             </section>
 
-            <ExhaustExplainer />
+            <Rincian summary="Asap kendaraan: cara hitung dan yang belum diuji">
+              <ExhaustExplainer />
+            </Rincian>
 
             {v.roadside && (
-              <section className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 text-sm space-y-2">
-                <h2 className="font-semibold">Asap kendaraan dibanding pengukuran pinggir jalan</h2>
+              <Rincian summary="Asap kendaraan dibanding pengukuran pinggir jalan">
+              <section className="text-sm space-y-2">
                 <p className="text-xs text-gray-600 dark:text-gray-400">Model (NOx lalu lintas di titik tengah ruas, tanpa udara latar):</p>
                 <ul className="space-y-1">
                   {v.roadside.model_latest.map((m) => <li key={m.name}>{modelLine(m)}</li>)}
@@ -137,6 +145,7 @@ export default function ValidasiPage() {
                 <p className="text-amber-800 dark:text-amber-300">{v.roadside.limits}</p>
                 <p className="text-[11px] text-gray-500 dark:text-gray-400">{v.roadside.measured_source} · {v.roadside.correction.source}</p>
               </section>
+              </Rincian>
             )}
 
             <Rincian summary={`Sumber data yang kami tolak (${v.rejected.length})`}>
