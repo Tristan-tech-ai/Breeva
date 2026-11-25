@@ -12,6 +12,7 @@ import { lookAheadPoint, routeProgress, splitPathAtFraction } from '../../lib/ge
 import { useRoadPollutionLayer } from './RoadPollutionLayer';
 import { useRoadMvtLayer } from './RoadMvtLayer';
 import { useFieldLayer } from './FieldLayer';
+import { useNationalExhaust } from './NationalExhaustLayer';
 import { useWalkRouting, type WalkRoutingState } from './WalkRouteLayer';
 
 // Static field (PMTiles + value cells) instead of /api road tiles; see src/lib/field/source.ts.
@@ -534,6 +535,8 @@ function MapController({
     roadDisplayMode || 'total',
   );
   const roadMeta = useMvt ? (FIELD_STATIC ? fieldMeta : mvtMeta) : vectorMeta;
+  // N-21: outside the pilot regions, exhaust per road computed on the phone (zoom 13+, indicative)
+  useNationalExhaust(map, !!showAQIOverlay && useMvt && FIELD_STATIC);
   useWalkRouting(map, !!walkRouting, onWalkRouting, routeMode ?? 'walk', routeLink, routeDest, routeDepart, routeStart);
 
   // Forward road layer meta to parent
