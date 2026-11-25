@@ -16,6 +16,14 @@ describe('viz components (N-01)', () => {
     expect(html).toContain('Sensor aktif');
     expect(html).toContain('>23<');
     expect(html).toContain('jam ini');
+    expect(html).not.toContain('data-panjang');
+  });
+
+  it('a long word value gets the smaller size so it fits a half-width card at 320 px (N-16)', () => {
+    const html = renderToStaticMarkup(h(StatCard, { label: 'Tingkat', value: 'terkalibrasi' }));
+    expect(html).toContain('data-panjang="true"');
+    expect(html).toContain('text-lg');
+    expect(html).not.toContain('text-2xl');
   });
 
   it('bars scale to the largest value and carry an accessible name', () => {
