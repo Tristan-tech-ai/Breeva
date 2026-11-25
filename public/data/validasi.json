@@ -239,7 +239,35 @@
    "source": "humidity_correction_bali.json B_network_vs_archive_daily"
   },
   {
-   "name": "Cuaca ERA5, cuaca terukur bandara, arah angin, CO/AOD model, jarak ke pantai, ketinggian",
+   "name": "Cuaca terukur bandara (kota tanpa stasiun)",
+   "before": 33.39,
+   "after": 34.17,
+   "unit": "RMSE per jam µg/m³ (kota disembunyikan)",
+   "source": "stats_i.json kota_cuaca_terukur (dasar, dengan_cuaca_bandara)"
+  },
+  {
+   "name": "AOD satelit harian (JAXA SGLI, MODIS)",
+   "before": 31.58,
+   "after": 31.57,
+   "unit": "RMSE per jam µg/m³ (kota disembunyikan; terbaik dari 3 varian, turun < 3% dan 3+ wilayah memburuk)",
+   "source": "uji_aod.json kota_disembunyikan (N-31, 25 Nov)"
+  },
+  {
+   "name": "NO2 troposfer Sentinel-5P",
+   "before": 31.58,
+   "after": 31.79,
+   "unit": "RMSE per jam µg/m³ (kota disembunyikan; terbaik dari 3 varian, semua lebih buruk)",
+   "source": "uji_no2.json kota_disembunyikan (N-30, 25 Nov)"
+  },
+  {
+   "name": "Hitungan kendaraan CCTV (uji coba selama lomba)",
+   "before": null,
+   "after": null,
+   "unit": "belum bisa diuji: 0 kamera punya sensor aktif dalam 1 km; tampil di /pantau saja, tidak masuk angka peta",
+   "source": "uji_n34.json (N-34, 25 Nov)"
+  },
+  {
+   "name": "Cuaca ERA5, arah angin, CO model, jarak ke pantai, ketinggian",
    "before": null,
    "after": null,
    "unit": "tidak menurunkan galat di uji lokasi disembunyikan",

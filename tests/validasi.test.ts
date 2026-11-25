@@ -57,3 +57,19 @@ describe('near-road exhaust comparison (F5-17)', async () => {
       .toBe('Kota Bogor (run 2026111712, jam 19.00): median 4,5, 99% ruas di bawah 196 µg/m³ NOx lalu lintas');
   });
 });
+
+describe('N-43 traces we tested and turned down', () => {
+  const v = JSON.parse(readFileSync('public/data/validasi.json', 'utf8')) as { rejected: Array<{ name: string; before: number | null; after: number | null; unit: string; source: string }> };
+  const by = (s: string) => v.rejected.find((r) => r.name.includes(s))!;
+  it('lists the satellite and camera traces with the numbers of their test files', () => {
+    const aod = JSON.parse(readFileSync('D:/breeva-ml-data/field/validation/uji_aod.json', 'utf8'));
+    const no2 = JSON.parse(readFileSync('D:/breeva-ml-data/field/validation/uji_no2.json', 'utf8'));
+    expect(by('AOD').before).toBe(aod.kota_disembunyikan.dasar.semua);
+    expect(by('NO2').before).toBe(no2.kota_disembunyikan.dasar.semua);
+    expect(by('NO2').after).toBe(Math.min(no2.kota_disembunyikan.no2.semua, no2.kota_disembunyikan.no2_kota.semua, no2.kota_disembunyikan.no2_keduanya.semua));
+    expect(by('CCTV').unit).toMatch(/tidak masuk angka peta/);
+  });
+  it('a rejected trace never shows as an improvement of 3% or more', () => {
+    for (const r of v.rejected) if (r.before != null && r.after != null && r.unit.includes('RMSE')) expect((r.before - r.after) / r.before).toBeLessThan(0.03);
+  });
+});

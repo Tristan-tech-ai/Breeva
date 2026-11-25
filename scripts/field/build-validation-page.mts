@@ -20,6 +20,11 @@ const loso = read(join(F, 'validation', 'sensors_bali_loso.json'));
 const time = read(join(F, 'validation', 'time_split.json'));
 const hum = read(join(F, 'validation', 'humidity_correction_bali.json'));
 const bogor = read(join(F, 'reports', 'bogor_stasiun_2026-11-17.json'));
+// N-43: satellite and camera traces tested 25 Nov (copied from D:/breeva-ml-data/nasional and cctv into validation/)
+const aod = read(join(F, 'validation', 'uji_aod.json'));
+const no2 = read(join(F, 'validation', 'uji_no2.json'));
+const cctv = read(join(F, 'validation', 'uji_n34.json'));
+const best = (o: Record<string, { semua: number }>, keys: string[]) => keys.map((k) => o[k].semua).reduce((a, b) => Math.min(a, b));
 
 const EPA = { nrmse_pct: 30, r2: 0.7, slope: [0.65, 1.35], intercept: 5 };
 const pass = (r: { nrmse_pct: number; r2: number; slope?: number | null; intercept?: number | null }) => {
@@ -105,7 +110,11 @@ const out = {
   rejected: [
     { name: 'Kepadatan jalan sebagai fitur', before: statsG.E_bali.idw.rmse, after: statsG.E_bali.idw_x_waktu_jalan.rmse, unit: 'RMSE per jam µg/m³ (Bali, sensor disembunyikan)', source: 'stats_g.json E_bali (idw, idw_x_waktu_jalan)' },
     { name: 'Koreksi kelembapan AS (Barkjohn 2021)', before: hum.B_network_vs_archive_daily.raw.slope, after: hum.B_network_vs_archive_daily.barkjohn_sensor_rh_else_era5.slope, unit: 'kemiringan terhadap stasiun arsip (1 = sempurna)', source: 'humidity_correction_bali.json B_network_vs_archive_daily' },
-    { name: 'Cuaca ERA5, cuaca terukur bandara, arah angin, CO/AOD model, jarak ke pantai, ketinggian', before: null, after: null, unit: 'tidak menurunkan galat di uji lokasi disembunyikan', source: 'proposal (analisis E, H, I)' },
+    { name: 'Cuaca terukur bandara (kota tanpa stasiun)', before: statsI.kota_cuaca_terukur.dasar.rmse, after: statsI.kota_cuaca_terukur.dengan_cuaca_bandara.rmse, unit: 'RMSE per jam µg/m³ (kota disembunyikan)', source: 'stats_i.json kota_cuaca_terukur (dasar, dengan_cuaca_bandara)' },
+    { name: 'AOD satelit harian (JAXA SGLI, MODIS)', before: aod.kota_disembunyikan.dasar.semua, after: best(aod.kota_disembunyikan, ['sgli', 'modis', 'gabungan']), unit: `RMSE per jam µg/m³ (kota disembunyikan; terbaik dari 3 varian, turun < 3% dan ${aod.kota_disembunyikan.sgli.wilayah_memburuk.length}+ wilayah memburuk)`, source: 'uji_aod.json kota_disembunyikan (N-31, 25 Nov)' },
+    { name: 'NO2 troposfer Sentinel-5P', before: no2.kota_disembunyikan.dasar.semua, after: best(no2.kota_disembunyikan, ['no2', 'no2_kota', 'no2_keduanya']), unit: 'RMSE per jam µg/m³ (kota disembunyikan; terbaik dari 3 varian, semua lebih buruk)', source: 'uji_no2.json kota_disembunyikan (N-30, 25 Nov)' },
+    { name: 'Hitungan kendaraan CCTV (uji coba selama lomba)', before: null, after: null, unit: `belum bisa diuji: ${cctv.kamera_dengan_sensor_aktif_1km} kamera punya sensor aktif dalam 1 km; tampil di /pantau saja, tidak masuk angka peta`, source: 'uji_n34.json (N-34, 25 Nov)' },
+    { name: 'Cuaca ERA5, arah angin, CO model, jarak ke pantai, ketinggian', before: null, after: null, unit: 'tidak menurunkan galat di uji lokasi disembunyikan', source: 'proposal (analisis E, H, I)' },
   ],
 };
 writeFileSync('public/data/validasi.json', JSON.stringify(out, null, 1) + '\n');
