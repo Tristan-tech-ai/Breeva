@@ -10,6 +10,7 @@
  * OpenAQ v3 /parameters/2/latest is global (countries_id ignored), so the Indonesia box is applied here.
  */
 import { kmBetween } from './pantau';
+import { nearest, type OmBox } from './omgrid';
 
 export const LATAR_CHUNK = 100;
 export const LATAR_HOURS = 48;
@@ -28,6 +29,8 @@ export interface LatarFile {
   /** per kab/kota slug: level, sensors within 25 km, scale applied, 48 hourly values (1 decimal; null where CAMS has none) */
   wilayah: Record<string, { t: Tingkat; s: number; f: number; v: (number | null)[] }>;
   jumlah: Record<Tingkat, number>;
+  /** N-36: CAMS run the 48 hours come from (UTC ISO), when read from s3://openmeteo */
+  cams_run?: string;
 }
 
 export function camsUrl(points: Array<{ lon: number; lat: number }>): string {
@@ -94,5 +97,14 @@ export function latarFile(centres: Centre[], cams: { hours: string[]; series: (n
   return {
     format: 'latar_nasional', updated_at: now.toISOString(), hours: cams.hours, wilayah, jumlah,
     sumber: 'CAMS lewat Open-Meteo (48 jam), dikoreksi sensor warga OpenAQ (CC BY 4.0); tingkat terukur <= 25 km, terkalibrasi 2+ sensor <= 150 km, selain itu indikatif',
+  };
+}
+
+/** N-36: one CAMS series per kab/kota centre from a box read from s3://openmeteo (same shape as camsSeries); the
+ * nearest 0.4 degree cell, as the Open-Meteo API and the regional builder use. */
+export function camsFromBox(box: OmBox, centres: Array<{ lon: number; lat: number }>): { hours: string[]; series: (number | null)[][] } {
+  return {
+    hours: box.times.map((t) => new Date(t * 1000).toISOString().slice(0, 16) + 'Z'),
+    series: centres.map((c) => box.times.map((_, t) => { const v = nearest(box, c.lon, c.lat, t); return Number.isFinite(v) ? Math.round(v * 10) / 10 : null; })),
   };
 }

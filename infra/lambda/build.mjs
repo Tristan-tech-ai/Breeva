@@ -6,7 +6,8 @@
  * Zip and upload are done by infra/lambda/deploy.mjs.
  */
 import { build } from 'esbuild';
-import { statSync } from 'node:fs';
+import { copyFileSync, realpathSync, statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 const outfile = 'infra/lambda/dist/index.mjs';
 await build({
@@ -22,4 +23,9 @@ await build({
   legalComments: 'none',
   logLevel: 'warning',
 });
-console.log(JSON.stringify({ outfile, bytes: statSync(outfile).size }));
+// N-36: the Open-Meteo file reader loads om_file_format.node.wasm next to the bundle (new URL(..., import.meta.url))
+// pnpm keeps the wasm package beside the reader's real folder (node_modules/.pnpm/.../node_modules/@openmeteo/)
+const readerDir = realpathSync('node_modules/@openmeteo/file-reader');
+const wasmSrc = join(dirname(readerDir), 'file-format-wasm/dist/om_file_format.node.wasm');
+copyFileSync(wasmSrc, 'infra/lambda/dist/om_file_format.node.wasm');
+console.log(JSON.stringify({ outfile, bytes: statSync(outfile).size, wasm: statSync('infra/lambda/dist/om_file_format.node.wasm').size }));

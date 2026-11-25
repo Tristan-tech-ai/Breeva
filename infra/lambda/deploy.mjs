@@ -21,7 +21,10 @@ const aws = (args, quiet = false) =>
   execFileSync('aws', [...args, '--region', REGION], { env, stdio: quiet ? 'pipe' : ['ignore', 'inherit', 'inherit'] });
 
 execFileSync(process.execPath, ['infra/lambda/build.mjs'], { stdio: 'inherit' });
-const zip = zipFiles([{ name: 'index.mjs', data: readFileSync('infra/lambda/dist/index.mjs') }]);
+const zip = zipFiles([
+  { name: 'index.mjs', data: readFileSync('infra/lambda/dist/index.mjs') },
+  { name: 'om_file_format.node.wasm', data: readFileSync('infra/lambda/dist/om_file_format.node.wasm') },
+]);
 const sha = createHash('sha256').update(zip).digest('hex').slice(0, 16);
 const key = `lambda/field-builder-${sha}.zip`;
 writeFileSync('infra/lambda/dist/bundle.zip', zip);

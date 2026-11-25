@@ -9,7 +9,7 @@ import { kmBetween } from './pantau';
 import { cariWilayah, type WilayahIndex } from './wilayah';
 
 export const CLUSTER_KM = 5;
-export const MAX_CLUSTERS = 80;
+export const MAX_CLUSTERS = 150;
 export const PATH_HOURS = 24;
 
 export interface Gugus { id: number; lon: number; lat: number; frp: number; n: number; asal: string | null }

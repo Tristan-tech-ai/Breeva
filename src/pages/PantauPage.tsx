@@ -37,6 +37,9 @@ function useJson<T>(path: string | null): T | null {
   return v;
 }
 
+const jamWib = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) : '…');
+const runWib = (iso: string) => new Date(iso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' WIB';
+
 /** Hour index of the wind file closest to now. */
 function windHour(w: WindFile | null): number {
   if (!w?.hours.length) return 0;
@@ -191,6 +194,11 @@ export default function PantauPage() {
             : <p className="text-xs text-gray-500 dark:text-gray-400">{lapor ? 'Belum ada laporan. Lihat asap atau pembakaran? Tekan Laporkan asap.' : 'Memuat…'}</p>}
           <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">Hanya jumlah per wilayah; identitas pelapor tidak pernah tampil. Laporan warga tidak masuk ke angka peta.</p>
         </div>
+        {(latar || wind) && (
+          <p className="text-[11px] text-gray-600 dark:text-gray-300" data-jam-data>
+            Data jam {jamWib(latar?.updated_at ?? wind?.updated_at)} WIB: udara latar CAMS{latar?.cams_run ? ` (run ${runWib(latar.cams_run)})` : ''} dikoreksi sensor warga jam ini; angin{wind?.run ? ` ECMWF (run ${runWib(wind.run)})` : ''}; titik api {jamWib(fires?.updated_at)} WIB. Diperbarui tiap jam.
+          </p>
+        )}
         <SourceLine>NASA FIRMS (VIIRS NOAA-20, NOAA-21, S-NPP), Open-Meteo, OpenStreetMap, OpenAQ, CAMS; diperbarui tiap jam.</SourceLine>
       </div>
     </main>

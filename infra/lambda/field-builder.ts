@@ -21,9 +21,10 @@ import { mergeRuns, shortReason, type RunRecord, type RunsFile } from '../../src
 import { FIRMS_SOURCES, fireFile, firmsUrl, parseFirmsCsv, type FirePoint } from '../../src/lib/nasional/firms';
 import { CHUNK, gridPoints, windFile, windUrl } from '../../src/lib/nasional/angin';
 import { indexWilayah, tandaiWilayah, type WilayahFC, type WilayahIndex } from '../../src/lib/nasional/wilayah';
-import { camsSeries, camsUrl, LATAR_CHUNK, latarFile, sensorsNow } from '../../src/lib/nasional/latar';
+import { camsFromBox, camsSeries, camsUrl, INDONESIA_BOX, LATAR_CHUNK, LATAR_HOURS, latarFile, sensorsNow } from '../../src/lib/nasional/latar';
+import { readBox } from './openmeteoS3';
 import { asapFile } from '../../src/lib/nasional/asap';
-import type { WindFile } from '../../src/lib/nasional/angin';
+import { FINE_GRID, GRID as WIND_GRID, windFromBoxes, type WindFile } from '../../src/lib/nasional/angin';
 
 // every source fetch (Open-Meteo, OpenAQ, METAR) goes through a retry with a fresh pause budget per invocation (F2-18)
 const baseFetch = globalThis.fetch.bind(globalThis);
@@ -138,8 +139,29 @@ export async function nasional(bucket: string, now = new Date()): Promise<Record
     res.titik_api = f.n;
     res.luar_indonesia = f.luar_indonesia ?? null;
   }
-  // every 6 hours (N-22 budget: wind 384 + background 513 points, 4 times a day = 3.588 Open-Meteo calls)
-  if (now.getUTCHours() % 6 === 0 || !(await exists(bucket, 'v/nasional/angin.json'))) {
+  const hourStart = Math.floor(now.getTime() / 3_600_000) * 3600;
+  const runIso = (t: number) => new Date(t * 1000).toISOString().slice(0, 16) + 'Z';
+  // N-36: wind every hour from ECMWF IFS (0.25 degree) in Open-Meteo's open data on AWS (no call quota); the 1.5 degree file is
+  // what the map draws, the 0.25 degree one only feeds the smoke paths (GFS 0.13 took 137 s to read, ECMWF 12 s). The API stays as a fallback every 6 hours.
+  let windFine: WindFile | null = null;
+  try {
+    const t = Date.now();
+    // ECMWF IFS 0.25 degree, 3-hourly: 9 steps from the 3-hour step at or before now cover the next 24 hours
+    const step3 = Math.floor(hourStart / 10800) * 10800;
+    const [u, v] = await Promise.all([
+      readBox('ecmwf_ifs025', 'wind_u_component_10m', INDONESIA_BOX, step3, 9),
+      readBox('ecmwf_ifs025', 'wind_v_component_10m', INDONESIA_BOX, step3, 9),
+    ]);
+    const run = runIso(u.meta.last_run_initialisation_time);
+    const w = windFromBoxes(u, v, WIND_GRID, now, run);
+    windFine = windFromBoxes(u, v, FINE_GRID, now, run);
+    await putNational(bucket, 'v/nasional/angin.json', w);
+    windNow = w;
+    res.angin = { sumber: 's3 ecmwf_ifs025', run, jam: w.hours.length, detik: Math.round((Date.now() - t) / 100) / 10, panggilan_api: 0 };
+  } catch (e) {
+    res.angin_s3_gagal = String((e as Error).message).slice(0, 120);
+  }
+  if (!windNow && (now.getUTCHours() % 6 === 0 || !(await exists(bucket, 'v/nasional/angin.json')))) {
     const pts = gridPoints();
     const answers = [];
     for (let i = 0; i < pts.length; i += CHUNK) {
@@ -150,34 +172,52 @@ export async function nasional(bucket: string, now = new Date()): Promise<Record
     const w = windFile(answers, now);
     await putNational(bucket, 'v/nasional/angin.json', w);
     windNow = w;
-    res.angin = { titik: w.speed.length, jam: w.hours.length, panggilan: pts.length };
+    res.angin = { sumber: 'api cadangan', titik: w.speed.length, jam: w.hours.length, panggilan_api: pts.length };
   }
   // N-26: 24-hour smoke paths of the fire clusters, every hour with the newest fires and the stored wind
   if (firePts) {
     try {
       windNow ??= await readGzJson<WindFile>(bucket, 'v/nasional/angin.json');
-      if (windNow?.hours.length) {
+      const wPath = windFine ?? windNow;
+      if (wPath?.hours.length) {
         let h0 = 0;
-        windNow.hours.forEach((hh, i) => { if (Math.abs(Date.parse(hh) - now.getTime()) < Math.abs(Date.parse(windNow!.hours[h0]) - now.getTime())) h0 = i; });
-        const a = asapFile(firePts, windNow, h0, await wilayah(bucket), now);
+        wPath.hours.forEach((hh, i) => { if (Math.abs(Date.parse(hh) - now.getTime()) < Math.abs(Date.parse(wPath.hours[h0]) - now.getTime())) h0 = i; });
+        const a = asapFile(firePts, wPath, h0, await wilayah(bucket), now);
         await putNational(bucket, 'v/nasional/asap.json', a);
-        res.asap = { gugus: a.gugus.length, kabkota_menuju: Object.keys(a.menuju).length };
+        res.asap = { gugus: a.gugus.length, kabkota_menuju: Object.keys(a.menuju).length, angin: windFine ? '0,25 derajat' : '1,5 derajat' };
       }
     } catch (e) {
       res.asap_gagal = String((e as Error).message).slice(0, 120);
     }
   }
-  // N-22: background PM2.5 per kab/kota for 48 hours, corrected with OpenAQ citizen sensors; its own failure stays here
-  if (now.getUTCHours() % 6 === 0 || !(await exists(bucket, 'v/nasional/latar.json'))) {
+  // N-22/N-36: background PM2.5 per kab/kota for 48 hours, every hour: CAMS from Open-Meteo's open data on AWS (the API
+  // only as a fallback every 6 hours), corrected with the OpenAQ sensors of this hour; its own failure stays here
+  {
     try {
       const idx = await wilayah(bucket);
       const centres = idx.items.map((it) => ({ slug: it.p.slug, lon: it.p.pusat[0], lat: it.p.pusat[1] }));
-      const answers = [];
-      for (let i = 0; i < centres.length; i += LATAR_CHUNK) {
-        const r = await fetch(camsUrl(centres.slice(i, i + LATAR_CHUNK)));
-        if (!r.ok) throw new Error(`latar cams ${r.status}`);
-        answers.push(await r.json());
+      let cams: { hours: string[]; series: (number | null)[][] } | null = null;
+      let camsRun: string | undefined;
+      const t = Date.now();
+      try {
+        const box = await readBox('cams_global', 'pm2_5', INDONESIA_BOX, hourStart, LATAR_HOURS);
+        cams = camsFromBox(box, centres);
+        camsRun = runIso(box.meta.last_run_initialisation_time);
+        res.cams = { sumber: 's3 cams_global', run: camsRun, detik: Math.round((Date.now() - t) / 100) / 10, panggilan_api: 0 };
+      } catch (e) {
+        res.cams_s3_gagal = String((e as Error).message).slice(0, 120);
       }
+      if (!cams && (now.getUTCHours() % 6 === 0 || !(await exists(bucket, 'v/nasional/latar.json')))) {
+        const answers = [];
+        for (let i = 0; i < centres.length; i += LATAR_CHUNK) {
+          const r = await fetch(camsUrl(centres.slice(i, i + LATAR_CHUNK)));
+          if (!r.ok) throw new Error(`latar cams ${r.status}`);
+          answers.push(await r.json());
+        }
+        cams = camsSeries(answers);
+        res.cams = { sumber: 'api cadangan', panggilan_api: centres.length };
+      }
+      if (!cams) throw new Error('no CAMS this hour');
       const pages = [];
       const k2 = await key();
       for (let pg = 1; k2 && pg <= 30; pg++) {
@@ -188,9 +228,10 @@ export async function nasional(bucket: string, now = new Date()): Promise<Record
         if ((j.results?.length ?? 0) < 1000) break;
       }
       const sensors = sensorsNow(pages, now);
-      const f = latarFile(centres, camsSeries(answers), sensors, now);
+      const f = latarFile(centres, cams, sensors, now);
+      if (camsRun) f.cams_run = camsRun;
       await putNational(bucket, 'v/nasional/latar.json', f);
-      res.latar = { wilayah: centres.length, ...f.jumlah, sensor_indonesia: sensors.length, halaman_openaq: pages.length, panggilan_cams: centres.length };
+      res.latar = { wilayah: centres.length, ...f.jumlah, sensor_indonesia: sensors.length, halaman_openaq: pages.length };
     } catch (e) {
       res.latar_gagal = String((e as Error).message).slice(0, 120);
     }
