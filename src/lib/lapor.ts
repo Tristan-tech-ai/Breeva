@@ -85,3 +85,40 @@ export async function ambilRingkas(opts: { url?: string; key?: string; fetchFn?:
 export function totalRingkas(rows: RingkasLapor[]): { laporan: number; pelapor: number } {
   return rows.reduce((a, r) => ({ laporan: a.laporan + r.jumlah, pelapor: a.pelapor + r.pelapor }), { laporan: 0, pelapor: 0 });
 }
+
+/** N-25: urgency per 0.01 degree cell from the view laporan_urgensi (one count per device per cell per day, guest 0.5,
+ * halved every 3 days); the page adds what only it knows: a fire within 5 km (x1.5), a school or health facility within
+ * 300 m (x1.3). */
+export interface UrgensiBaris { lat: number; lng: number; jenis: JenisLapor[]; pelapor: number; skor: number; terakhir: string }
+
+export async function ambilUrgensi(opts: { url?: string; key?: string; fetchFn?: typeof fetch } = {}): Promise<UrgensiBaris[] | null> {
+  const url = opts.url ?? import.meta.env.VITE_SUPABASE_URL;
+  const key = opts.key ?? import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  try {
+    const r = await (opts.fetchFn ?? fetch)(`${url}/rest/v1/laporan_urgensi?select=*`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+    if (!r.ok) return null;
+    return ((await r.json()) as UrgensiBaris[]).map((x) => ({ ...x, lat: Number(x.lat), lng: Number(x.lng), pelapor: Number(x.pelapor), skor: Number(x.skor) }));
+  } catch {
+    return null;
+  }
+}
+
+const jarakKm = (a: { lat: number; lng: number }, lat: number, lon: number) => {
+  const r = Math.PI / 180;
+  const s = Math.sin(((lat - a.lat) * r) / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(lat * r) * Math.sin(((lon - a.lng) * r) / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.min(1, Math.sqrt(s)));
+};
+
+export function nilaiUrgensi(rows: UrgensiBaris[], ctx: { api?: Array<[number, number, ...unknown[]]>; fasilitas?: Array<{ lat: number; lon: number }> }) {
+  return rows.map((r) => {
+    const alasan: string[] = [];
+    let f = 1;
+    if ((ctx.api ?? []).some((p) => jarakKm(r, p[1], p[0]) <= 5)) { f *= 1.5; alasan.push('titik api dalam 5 km'); }
+    if ((ctx.fasilitas ?? []).some((x) => jarakKm(r, x.lat, x.lon) <= 0.3)) { f *= 1.3; alasan.push('sekolah atau faskes dalam 300 m'); }
+    return { ...r, nilai: Math.round(r.skor * f * 100) / 100, alasan };
+  }).sort((a, b) => b.nilai - a.nilai);
+}
+
+/** "N warga melapor minggu ini": the weighted reporters of the cells (a guest counts half). */
+export const wargaMelapor = (rows: UrgensiBaris[]) => Math.round(rows.reduce((a, r) => a + r.pelapor, 0) * 10) / 10;

@@ -18,7 +18,7 @@ import type { AsapFile } from '../lib/nasional/asap';
 import { bacaIndeks, cariKabKota, latarSini, type KabKotaIndeks } from '../lib/nasional/kabkota';
 import KabKotaView from '../components/pantau/KabKotaView';
 import LaporButton from '../components/lapor/LaporButton';
-import { ambilRingkas, JENIS_LAPOR, totalRingkas, type RingkasLapor } from '../lib/lapor';
+import { ambilRingkas, ambilUrgensi, JENIS_LAPOR, nilaiUrgensi, wargaMelapor, type RingkasLapor, type UrgensiBaris } from '../lib/lapor';
 
 const PantauMap = lazy(() => import('../components/pantau/PantauMap'));
 
@@ -78,7 +78,10 @@ export default function PantauPage() {
   const [lapor, setLapor] = useState<RingkasLapor[] | null>(null);
   useEffect(() => { let alive = true; void ambilRingkas().then((r) => alive && setLapor(r)); return () => { alive = false; }; }, []);
   const laporSini = useMemo(() => (lapor && pusat ? lapor.filter((r) => kmBetween(pusat.lat, pusat.lon, r.lat, r.lng) <= 25) : lapor), [lapor, pusat]);
-  const laporTotal = laporSini ? totalRingkas(laporSini) : null;
+  const [urgensi, setUrgensi] = useState<UrgensiBaris[] | null>(null);
+  useEffect(() => { let alive = true; void ambilUrgensi().then((r) => alive && setUrgensi(r)); return () => { alive = false; }; }, []);
+  const urgensiSini = useMemo(() => (urgensi && pusat ? urgensi.filter((r) => kmBetween(pusat.lat, pusat.lon, r.lat, r.lng) <= 25) : urgensi), [urgensi, pusat]);
+  const mendesak = useMemo(() => nilaiUrgensi(urgensiSini ?? [], { api: [...(fires?.points ?? []), ...(fires?.luar_points ?? [])], fasilitas: daftar?.fasilitas }).slice(0, 3), [urgensiSini, fires, daftar]);
   const laporJenis = useMemo(() => JENIS_LAPOR.map((j) => ({ label: j.label, value: (laporSini ?? []).filter((r) => r.jenis === j.id).reduce((a, r) => a + r.jumlah, 0) })).filter((b) => b.value > 0), [laporSini]);
 
   const unduh = () => {
@@ -190,7 +193,17 @@ export default function PantauPage() {
         )}
         <div className="rounded-2xl bg-white dark:bg-gray-900 p-4" data-laporan-ringkas>
           <p className="text-sm font-bold text-gray-900 dark:text-white">Laporan warga, 7 hari{region ? ' (radius 25 km)' : ''}</p>
-          <p className="mt-1 text-2xl font-extrabold tabular-nums text-gray-900 dark:text-white">{laporTotal ? n(laporTotal.laporan) : '…'}</p>
+          <p className="mt-1 text-2xl font-extrabold tabular-nums text-gray-900 dark:text-white" data-warga-melapor>{urgensiSini ? `${n(wargaMelapor(urgensiSini), 1)} warga melapor minggu ini` : '…'}</p>
+          {mendesak.length > 0 && (
+            <ol className="mt-2 space-y-1 text-xs text-gray-700 dark:text-gray-200">
+              {mendesak.map((m) => (
+                <li key={`${m.lat},${m.lng}`}>
+                  <a className="font-semibold underline" href={`https://www.openstreetmap.org/?mlat=${m.lat}&mlon=${m.lng}#map=15/${m.lat}/${m.lng}`} target="_blank" rel="noreferrer">sekitar {m.lat.toFixed(2)}, {m.lng.toFixed(2)}</a>
+                  {' '}· {m.jenis.map((j) => JENIS_LAPOR.find((x) => x.id === j)?.label ?? j).join(', ')} · urgensi {n(m.nilai, 2)}{m.alasan.length ? ` (${m.alasan.join(', ')})` : ''}
+                </li>
+              ))}
+            </ol>
+          )}
           {laporJenis.length > 0 ? <div className="mt-2"><BarChart title="Per jenis" bars={laporJenis.map((b) => ({ ...b, color: '#b45309' }))} /></div>
             : <p className="text-xs text-gray-500 dark:text-gray-400">{lapor ? 'Belum ada laporan. Lihat asap atau pembakaran? Tekan Laporkan asap.' : 'Memuat…'}</p>}
           <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">Hanya jumlah per wilayah; identitas pelapor tidak pernah tampil. Laporan warga tidak masuk ke angka peta.</p>
