@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { bentukPanah, gayaApi, opasitasPanah, panahAngin, radiusApi, teksApi } from '../src/lib/nasional/petaPantau';
 import { GRID, type WindFile } from '../src/lib/nasional/angin';
+import { dprPetaDasar, PETA_HEMAT, UBIN_HEMAT } from '../src/lib/mapPerf';
 import type { FirePoint } from '../src/lib/nasional/firms';
 
 const api = (o: Partial<{ frp: number; conf: string; slug?: string }> = {}): FirePoint =>
@@ -52,5 +53,19 @@ describe('N-40 /pantau map on canvas', () => {
       expect(calls.length).toBeGreaterThan(0);
       for (const c of calls) expect(c, `${page}: ${c}`).not.toMatch(/=\{\[|=\{\{|\.map\(|\?\? \[\]/);
     }
+  });
+
+  it('caps the vector basemap pixel ratio at 2 and keeps tiles still while zooming (N-41)', () => {
+    expect(dprPetaDasar(3)).toBe(2);
+    expect(dprPetaDasar(2.75)).toBe(2);
+    expect(dprPetaDasar(1)).toBe(1);
+    expect(dprPetaDasar(0)).toBe(1);
+    expect(UBIN_HEMAT).toEqual({ updateWhenZooming: false, keepBuffer: 1 });
+    expect(PETA_HEMAT).toEqual({ fadeAnimation: false });
+    const vb = readFileSync('src/components/map/VectorBasemap.tsx', 'utf8');
+    expect(vb).toContain('devicePixelRatio: dprPetaDasar()');
+    expect(vb).toContain('...UBIN_HEMAT');
+    expect(readFileSync('src/components/map/FieldLayer.ts', 'utf8')).toContain('...UBIN_HEMAT');
+    expect(readFileSync('src/components/map/LeafletMap.tsx', 'utf8')).toContain('{...PETA_HEMAT}');
   });
 });

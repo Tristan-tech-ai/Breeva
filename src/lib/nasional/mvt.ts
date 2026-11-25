@@ -50,6 +50,77 @@ function packed(r: Reader): number[] {
 }
 
 /** Line features of one layer, geometry converted to lon/lat for tile z/x/y. */
+/** N-41: line features of one layer in tile units (0..extent), for drawing straight onto a tile canvas, each with its
+ * bounding box (so an overzoomed child tile skips the features outside it). */
+export interface MvtTileLine { props: Record<string, string | number>; rings: Array<Array<{ x: number; y: number }>>; bbox: [number, number, number, number] }
+export function decodeTileLines(bytes: Uint8Array, layerName: string): { extent: number; features: MvtTileLine[] } {
+  let extent = 4096;
+  const features: MvtTileLine[] = [];
+  eachLayer(bytes, (name, ext, keys, vals, feats) => {
+    if (name !== layerName) return;
+    extent = ext;
+    for (const f of feats) {
+      if (f.type !== 2) continue;
+      const props: Record<string, string | number> = {};
+      for (let i = 0; i + 1 < f.tags.length; i += 2) props[keys[f.tags[i]]] = vals[f.tags[i + 1]];
+      const rings: Array<Array<{ x: number; y: number }>> = [];
+      let cx = 0, cy = 0, i = 0, cur: Array<{ x: number; y: number }> = [];
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      while (i < f.geom.length) {
+        const c = f.geom[i++], cmd = c & 7, cnt = c >> 3;
+        if (cmd === 7) continue;
+        for (let k = 0; k < cnt; k++) {
+          const dx = f.geom[i++], dy = f.geom[i++];
+          cx += dx % 2 ? -(dx + 1) / 2 : dx / 2;
+          cy += dy % 2 ? -(dy + 1) / 2 : dy / 2;
+          if (cx < x0) x0 = cx; if (cx > x1) x1 = cx; if (cy < y0) y0 = cy; if (cy > y1) y1 = cy;
+          if (cmd === 1) { if (cur.length > 1) rings.push(cur); cur = [{ x: cx, y: cy }]; }
+          else cur.push({ x: cx, y: cy });
+        }
+      }
+      if (cur.length > 1) rings.push(cur);
+      if (rings.length) features.push({ props, rings, bbox: [x0, y0, x1, y1] });
+    }
+  });
+  return { extent, features };
+}
+
+type RawFeat = { tags: number[]; type: number; geom: number[] };
+/** Walk the layers of a tile: name, extent, keys, values and raw features of each. */
+function eachLayer(bytes: Uint8Array, fn: (name: string, extent: number, keys: string[], vals: Array<string | number>, feats: RawFeat[]) => void) {
+  const r = new Reader(bytes);
+  while (r.pos < r.end) {
+    const t = r.varint();
+    if (t >> 3 !== 3 || (t & 7) !== 2) { r.skip(t & 7); continue; }
+    const len = r.varint(), lend = r.pos + len;
+    let name = '', extent = 4096;
+    const keys: string[] = [], vals: Array<string | number> = [];
+    const feats: RawFeat[] = [];
+    while (r.pos < lend) {
+      const tt = r.varint(), f = tt >> 3, w = tt & 7;
+      if (f === 1 && w === 2) { const n = r.varint(); name = utf8.decode(bytes.subarray(r.pos, r.pos + n)); r.pos += n; }
+      else if (f === 3 && w === 2) { const n = r.varint(); keys.push(utf8.decode(bytes.subarray(r.pos, r.pos + n))); r.pos += n; }
+      else if (f === 4 && w === 2) { const n = r.varint(); const e = r.pos + n; vals.push(value(r, e)); r.pos = e; }
+      else if (f === 5 && w === 0) extent = r.varint();
+      else if (f === 2 && w === 2) {
+        const n = r.varint(), fend = r.pos + n;
+        const feat: RawFeat = { tags: [], type: 0, geom: [] };
+        while (r.pos < fend) {
+          const ft = r.varint(), ff = ft >> 3, fw = ft & 7;
+          if (ff === 2 && fw === 2) feat.tags = packed(r);
+          else if (ff === 3 && fw === 0) feat.type = r.varint();
+          else if (ff === 4 && fw === 2) feat.geom = packed(r);
+          else r.skip(fw);
+        }
+        r.pos = fend;
+        feats.push(feat);
+      } else r.skip(w);
+    }
+    r.pos = lend;
+    fn(name, extent, keys, vals, feats);
+  }
+}
+
 export function decodeLines(bytes: Uint8Array, layerName: string, z: number, x: number, y: number): MvtLine[] {
   const r = new Reader(bytes);
   const out: MvtLine[] = [];

@@ -10,7 +10,7 @@ import type { Basemap } from '../../lib/basemap';
 import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_DATA_ZOOM, basemapRegion, basemapUrl, breevaFlavor, pendingTileColor, withoutPoiLabels } from '../../lib/basemapVector';
 import { fieldBase } from '../../lib/field/source';
 import { readAheadHeader, sharedRangeSource } from '../../lib/cachedRangeSource';
-import { UBIN_HEMAT } from '../../lib/mapPerf';
+import { dprPetaDasar, UBIN_HEMAT } from '../../lib/mapPerf';
 
 export default function BasemapLayer({ raster, dark, vector }: { raster: Basemap; dark: boolean; vector: boolean }) {
   const map = useMap();
@@ -44,6 +44,7 @@ export default function BasemapLayer({ raster, dark, vector }: { raster: Basemap
         maxDataZoom: BASEMAP_MAX_DATA_ZOOM,
         attribution: BASEMAP_ATTRIBUTION,
         ...UBIN_HEMAT, // N-41: tiles drawn on the main thread render once the zoom ends
+        devicePixelRatio: dprPetaDasar(),
       });
       const gl = l as unknown as L.GridLayer;
       // tiles still loading show the land colour, not Leaflet's grey (X-W56)

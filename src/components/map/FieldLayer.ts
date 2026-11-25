@@ -2,11 +2,12 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import type { PollutantType, RoadDisplayMode } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
-import { ensureVectorGrid } from './RoadMvtLayer';
 import { UBIN_HEMAT } from '../../lib/mapPerf';
 import { weightFor, opacityFor } from '../../lib/roadColors';
 import { fieldColor } from '../../lib/field/color';
-import { FIELD_DRAWN_EVENT, FIELD_REGIONS, FieldSource, overzoomPoints, type Box } from '../../lib/field/source';
+import { FIELD_DRAWN_EVENT, FIELD_REGIONS, FieldSource, type Box } from '../../lib/field/source';
+import { decodeTileLines, type MvtTileLine } from '../../lib/nasional/mvt';
+import { gambarUbin, type GayaRuas } from '../../lib/field/gambarRuas';
 import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS, regionGate, routeSettled, markFieldDrawn } from '../../lib/field/firstDraw';
 import { HARGA_COLORS } from '../../lib/field/harga';
 import { popupHtml } from '../../lib/field/popup';
@@ -14,6 +15,7 @@ import { nearestFeature, tileFraction, unitsPerPixel, type TileFeature } from '.
 
 // Road colors from the static field (VITE_FIELD_STATIC): geometry from a PMTiles archive, values from BVF1 cells.
 // No call to /api/vayu/road-aqi or the database. Tiles exist for z10-14; z15-18 reuse the z14 tile, rescaled.
+// N-41: drawn by our own canvas grid layer (lib/field/gambarRuas.ts) instead of Leaflet.VectorGrid.
 
 const MAX_NATIVE = 14;
 /** How far from a road a tap still selects it, in screen pixels. */
@@ -89,11 +91,8 @@ export function useFieldLayer(
     const failFirst = () => { if (drawn) return; drawn = true; markDrawn(); markFieldDrawn(window); window.dispatchEvent(new Event(FIELD_FAILED_EVENT)); };
     // what the region in view does not need yet (other regions, harga files) waits for this
     const othersGo = waitRoute ? Promise.all([firstDrawn, routeSettled()]).then(() => undefined) : firstDrawn;
-    ensureVectorGrid()
+    Promise.resolve()
       .then(async () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const LG = L as any;
-        const Proto = LG.VectorGrid.Protobuf;
         for (const [k, region] of ordered.entries()) {
           await regionGate(k, waitRoute, othersGo); // F1-63: on a route link even the region in view waits for the route
           if (cancelled) return;
@@ -105,61 +104,60 @@ export function useFieldLayer(
           if (modeRef.current.displayMode === 'harga') void src.ensureHarga();
           const tiles = new Map<string, TileFeature[]>();
           tapSources.push({ src, bounds: L.latLngBounds(region.bounds), tiles });
-          const FieldGrid = Proto.extend({
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            _getVectorTilePromise: async function (this: any, coords: { x: number; y: number; z: number }) {
-              const dz = Math.max(0, coords.z - MAX_NATIVE);
+          // N-41: native tiles decoded once (also feeding the tap lookup); child tiles of a zoom drawn from this cache
+          const decoded = new Map<string, Promise<{ extent: number; features: MvtTileLine[] } | null>>();
+          const native = (z: number, x: number, y: number) => {
+            const key = `${z}/${x}/${y}`;
+            let p = decoded.get(key);
+            if (!p) {
+              p = src.tile(z, x, y).then((r) => {
+                if (!r) return null;
+                const t = decodeTileLines(new Uint8Array(r.data), 'roads');
+                if (!tiles.has(key)) {
+                  tiles.set(key, t.features.map((f) => ({ geometry: f.rings, properties: f.props, extent: t.extent })));
+                  if (tiles.size > TILE_CACHE) tiles.delete(tiles.keys().next().value as string);
+                }
+                return t;
+              }).catch((e) => { console.warn('[field] tile', key, e); decoded.delete(key); return null; });
+              decoded.set(key, p);
+              if (decoded.size > TILE_CACHE) decoded.delete(decoded.keys().next().value as string);
+            }
+            return p;
+          };
+          const gaya = (zoom: number) => (props: MvtTileLine['props']): GayaRuas | null => {
+            const v = src.value(Number(props.c), Number(props.i));
+            const highway = src.highway(Number(props.h));
+            if (!v) return { color: '#cbd5e1', weight: weightFor(highway, zoom), opacity: 0.35 };
+            const { pollutant: p, displayMode: m } = modeRef.current;
+            let color: string;
+            if (m === 'harga') {
+              const h = src.harga?.value(Number(props.c), Number(props.i));
+              color = h == null || !src.harga ? '#cbd5e1' : HARGA_COLORS[src.harga.klass(h)];
+            } else {
+              color = fieldColor(v, p, m);
+            }
+            return { color, weight: weightFor(highway, zoom), opacity: opacityFor(highway, zoom, v.ood ? 0.5 : src.isStale() ? 0.55 : 0.9) };
+          };
+          const LapisanRuas = L.GridLayer.extend({
+            createTile(this: L.GridLayer, coords: L.Coords, done: L.DoneCallback) {
+              const size = this.getTileSize();
+              const dpr = Math.min(2, window.devicePixelRatio || 1);
+              const canvas = document.createElement('canvas');
+              canvas.width = size.x * dpr; canvas.height = size.y * dpr;
               const n = 2 ** coords.z;
               // Leaflet can ask for tiles outside the world range (wrapping); pmtiles throws on those.
-              if (coords.x < 0 || coords.y < 0 || coords.x >= n || coords.y >= n) return { layers: {} };
-              let r;
-              try { r = await src.tile(coords.z - dz, coords.x >> dz, coords.y >> dz); }
-              catch (e) { console.warn('[field] tile', coords, e); return { layers: {} }; }
-              if (!r) return { layers: {} };
-              // Reuse the stock parser: point the URL template at a blob of this tile's bytes (template is read synchronously).
-              const url = URL.createObjectURL(new Blob([r.data]));
-              const saved = this._url;
-              this._url = url;
-              let json;
-              try { json = await Proto.prototype._getVectorTilePromise.call(this, coords); }
-              finally { this._url = saved; URL.revokeObjectURL(url); }
-              const key = `${coords.z - dz}/${coords.x >> dz}/${coords.y >> dz}`;
-              if (!tiles.has(key)) {
-                // keep the native geometry (before any overzoom rescale) for tapping
-                tiles.set(key, (json.layers.roads?.features ?? []).map((f: TileFeature) => ({ geometry: f.geometry, properties: f.properties, extent: f.extent })));
-                if (tiles.size > TILE_CACHE) tiles.delete(tiles.keys().next().value as string);
-              }
-              if (dz > 0) {
-                for (const name in json.layers) {
-                  for (const f of json.layers[name].features) f.geometry = overzoomPoints(f.geometry, f.extent, coords, MAX_NATIVE);
-                }
-              }
-              return json;
+              if (coords.x < 0 || coords.y < 0 || coords.x >= n || coords.y >= n) { setTimeout(() => done(undefined, canvas), 0); return canvas; }
+              const dz = Math.max(0, coords.z - MAX_NATIVE);
+              void native(coords.z - dz, coords.x >> dz, coords.y >> dz).then((t) => {
+                const ctx = canvas.getContext('2d');
+                if (t && ctx) gambarUbin(ctx, t, coords, gaya(coords.z), { maxNative: MAX_NATIVE, tileSize: size.x, dpr });
+                done(undefined, canvas);
+              });
+              return canvas;
             },
-          });
-          const layer = new FieldGrid('', {
-            rendererFactory: LG.canvas.tile, interactive: false, minZoom: 10, maxZoom: 18, maxNativeZoom: 18,
-            bounds: L.latLngBounds(region.bounds), pane: 'overlayPane', ...UBIN_HEMAT, // N-41
-            vectorTileLayerStyles: {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              roads: (props: any, zoom: number) => {
-                const v = src.value(Number(props.c), Number(props.i));
-                const highway = src.highway(Number(props.h));
-                if (!v) return { color: '#cbd5e1', weight: weightFor(highway, zoom), opacity: 0.35 };
-                const { pollutant: p, displayMode: m } = modeRef.current;
-                let color: string;
-                if (m === 'harga') {
-                  const h = src.harga?.value(Number(props.c), Number(props.i));
-                  color = h == null || !src.harga ? '#cbd5e1' : HARGA_COLORS[src.harga.klass(h)];
-                } else {
-                  color = fieldColor(v, p, m);
-                }
-                return {
-                  color, weight: weightFor(highway, zoom),
-                  opacity: opacityFor(highway, zoom, v.ood ? 0.5 : src.isStale() ? 0.55 : 0.9), lineCap: 'round', lineJoin: 'round',
-                };
-              },
-            },
+          }) as unknown as new (o: L.GridLayerOptions) => L.GridLayer;
+          const layer: L.GridLayer = new LapisanRuas({
+            minZoom: 10, maxZoom: 18, maxNativeZoom: 18, bounds: L.latLngBounds(region.bounds), pane: 'overlayPane', ...UBIN_HEMAT,
           });
           let redrawTimer: ReturnType<typeof setTimeout> | undefined;
           src.onCell = () => { clearTimeout(redrawTimer); redrawTimer = setTimeout(() => layer.redraw(), 120); };
