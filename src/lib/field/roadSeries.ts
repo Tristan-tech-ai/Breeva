@@ -42,7 +42,14 @@ export function sparkSvg(pts: SeriesPoint[], w = 180, h = 44): string {
   const lo = pts.reduce((a, b) => (b.value < a.value ? b : a));
   const hh = (n: number) => `${String(n).padStart(2, '0')}.00`;
   const dots = pts.map((p) => `<circle cx="${x(p.ahead).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="${p.ahead === 0 ? 3 : 2.2}" fill="${p.ahead === 0 ? '#0f172a' : '#b45309'}"/>`).join('');
-  const labels = pts.map((p) => `<text x="${x(p.ahead).toFixed(1)}" y="${h - 1}" font-size="8" text-anchor="middle" fill="#6b7280">${p.ahead === 0 ? 'kini' : esc(String(p.local_hour).padStart(2, '0'))}</text>`).join('');
+  // a label only where it does not run into the one before (the next 3 hours sit 7 px apart on a 24-hour axis)
+  let lastX = -Infinity;
+  const labels = pts.map((p) => {
+    const px = x(p.ahead);
+    if (px - lastX < 22) return '';
+    lastX = px;
+    return `<text x="${px.toFixed(1)}" y="${h - 1}" font-size="8" text-anchor="${p.ahead === 0 ? 'start' : 'middle'}" fill="#6b7280">${p.ahead === 0 ? 'kini' : esc(String(p.local_hour).padStart(2, '0'))}</text>`;
+  }).join('');
   return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Asap kendaraan jam ini dan jam berikutnya: tertinggi ${hh(hi.local_hour)}, terendah ${hh(lo.local_hour)}">` +
     `<path d="${d}" fill="none" stroke="#b45309" stroke-width="1.6" stroke-linejoin="round"/>${dots}${labels}</svg>`;
 }

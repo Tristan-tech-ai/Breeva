@@ -35,6 +35,8 @@ describe('N-04 tapped road: exhaust now and at the forecast hours', () => {
     expect(b).toContain('<svg');
     expect(b).toContain('paling sedikit asap pukul 19.00 (−25% dari sekarang)');
     expect(b).toContain('aria-label="Asap kendaraan jam ini dan jam berikutnya: tertinggi 07.00, terendah 19.00"');
+    const crowded = sparkSvg([{ ahead: 0, local_hour: 18, value: 5 }, { ahead: 1, local_hour: 19, value: 4 }, { ahead: 2, local_hour: 20, value: 3 }, { ahead: 13, local_hour: 7, value: 9 }]);
+    expect(crowded.match(/<text/g)).toHaveLength(2); // kini and 07; 19 and 20 would overlap
     expect(sparkBlock([{ ahead: 0, local_hour: 3, value: 2 }, { ahead: 1, local_hour: 4, value: 1.95 }])).toContain('jam ini termasuk yang paling sedikit');
   });
 });
