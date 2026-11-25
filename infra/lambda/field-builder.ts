@@ -21,6 +21,7 @@ import { mergeRuns, shortReason, type RunRecord, type RunsFile } from '../../src
 import { FIRMS_SOURCES, fireFile, firmsUrl, parseFirmsCsv, type FirePoint } from '../../src/lib/nasional/firms';
 import { CHUNK, gridPoints, windFile, windUrl } from '../../src/lib/nasional/angin';
 import { indexWilayah, tandaiWilayah, type WilayahFC, type WilayahIndex } from '../../src/lib/nasional/wilayah';
+import { camsSeries, camsUrl, LATAR_CHUNK, latarFile, sensorsNow } from '../../src/lib/nasional/latar';
 
 // every source fetch (Open-Meteo, OpenAQ, METAR) goes through a retry with a fresh pause budget per invocation (F2-18)
 const baseFetch = globalThis.fetch.bind(globalThis);
@@ -122,7 +123,8 @@ export async function nasional(bucket: string, now = new Date()): Promise<Record
     res.titik_api = f.n;
     res.luar_indonesia = f.luar_indonesia ?? null;
   }
-  if (now.getUTCHours() % 3 === 0 || !(await exists(bucket, 'v/nasional/angin.json'))) {
+  // every 6 hours (N-22 budget: wind 384 + background 513 points, 4 times a day = 3.588 Open-Meteo calls)
+  if (now.getUTCHours() % 6 === 0 || !(await exists(bucket, 'v/nasional/angin.json'))) {
     const pts = gridPoints();
     const answers = [];
     for (let i = 0; i < pts.length; i += CHUNK) {
@@ -133,6 +135,34 @@ export async function nasional(bucket: string, now = new Date()): Promise<Record
     const w = windFile(answers, now);
     await putNational(bucket, 'v/nasional/angin.json', w);
     res.angin = { titik: w.speed.length, jam: w.hours.length, panggilan: pts.length };
+  }
+  // N-22: background PM2.5 per kab/kota for 48 hours, corrected with OpenAQ citizen sensors; its own failure stays here
+  if (now.getUTCHours() % 6 === 0 || !(await exists(bucket, 'v/nasional/latar.json'))) {
+    try {
+      const idx = await wilayah(bucket);
+      const centres = idx.items.map((it) => ({ slug: it.p.slug, lon: it.p.pusat[0], lat: it.p.pusat[1] }));
+      const answers = [];
+      for (let i = 0; i < centres.length; i += LATAR_CHUNK) {
+        const r = await fetch(camsUrl(centres.slice(i, i + LATAR_CHUNK)));
+        if (!r.ok) throw new Error(`latar cams ${r.status}`);
+        answers.push(await r.json());
+      }
+      const pages = [];
+      const k2 = await key();
+      for (let pg = 1; k2 && pg <= 30; pg++) {
+        const r = await fetch(`https://api.openaq.org/v3/parameters/2/latest?limit=1000&page=${pg}`, { headers: { 'X-API-Key': k2 } });
+        if (!r.ok) break;
+        const j = (await r.json()) as { results?: unknown[] };
+        pages.push(j as Parameters<typeof sensorsNow>[0][number]);
+        if ((j.results?.length ?? 0) < 1000) break;
+      }
+      const sensors = sensorsNow(pages, now);
+      const f = latarFile(centres, camsSeries(answers), sensors, now);
+      await putNational(bucket, 'v/nasional/latar.json', f);
+      res.latar = { wilayah: centres.length, ...f.jumlah, sensor_indonesia: sensors.length, halaman_openaq: pages.length, panggilan_cams: centres.length };
+    } catch (e) {
+      res.latar_gagal = String((e as Error).message).slice(0, 120);
+    }
   }
   return res;
 }
