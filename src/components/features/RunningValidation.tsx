@@ -34,6 +34,11 @@ export default function RunningValidation({ region = 'badung_denpasar', label = 
           <p className="text-[11px] text-amber-700 dark:text-amber-400">
             Angka per jam, belum dibandingkan dengan target EPA: target NRMSE ≤ 30% berlaku untuk rata-rata 24 jam.
           </p>
+          <p className="text-[12px] text-gray-600 dark:text-gray-400" data-n08>
+            Uji harian butuh sedikitnya 18 jam teruji per sensor. Sejak 21 Nov, OpenAQ makin sering terlambat 2 jam, sehingga sebagian jam
+            terlewat dan hanya sedikit sensor yang mencapai 18 jam (beberapa hari tanpa uji harian). Sejak 25 Nov malam, setiap run juga menguji
+            sampai 2 jam sensor sebelumnya yang ikut terunduh, jadi jam yang terlewat kembali masuk uji harian; rumus dan target EPA tidak berubah.
+          </p>
           {f && f !== 'failed' && (f.daily?.length ?? 0) > 0 && (() => {
             const d = f.daily![f.daily!.length - 1];
             const pool = pooledDaily(f.daily);

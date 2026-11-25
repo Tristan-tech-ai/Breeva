@@ -30,6 +30,9 @@ export interface MeasuredInputs {
   sensors: SensorReading[];
   /** Hour (UTC start) the kriged sensor readings belong to; up to the lookback before hour_utc. */
   sensor_hour_utc?: string;
+  /** N-08: older hours of the same OpenAQ request (at most 2 before sensor_hour_utc) with enough sensors, S1 applied.
+   * Not used for the map; only hidden-sensor rows, so an hour skipped when OpenAQ lags still reaches the daily test. */
+  earlier?: Array<{ sensor_hour_utc: string; sensors: SensorReading[] }>;
   sensors_vetted: number;
   variogram_log?: Variogram;
   pi_scale?: number;
@@ -97,6 +100,21 @@ export async function fetchMetarHour(station: string, hourUtc: Date, opts: { fet
   return summariseHour(parseIemCsv(await res.text()), station, a.toISOString());
 }
 
+/** N-08: the hours before `hour` (at most `back`, newest first) that `need` sensors reported, with rule S1 applied. */
+export function earlierHours(byHour: Map<string, SensorReading[]>, hour: string, need: number, back = 2): Array<{ sensor_hour_utc: string; sensors: SensorReading[] }> {
+  const t = Date.parse(hour);
+  const out: Array<{ sensor_hour_utc: string; sensors: SensorReading[] }> = [];
+  for (const h of [...byHour.keys()].sort().reverse()) {
+    const lag = (t - Date.parse(h)) / 3600_000;
+    if (lag <= 0 || lag > back) continue;
+    const all = byHour.get(h)!;
+    const keep = s1Keep(all);
+    const sensors = all.filter((_, i) => keep[i]);
+    if (sensors.length >= need) out.push({ sensor_hour_utc: h, sensors });
+  }
+  return out;
+}
+
 /** Decide the measurement layer for one region and hour. Never throws for a network failure: it falls back and says so. */
 export async function measureHour(
   params: RegionMeasureParams | undefined, hourUtc: Date, env: { openaqKey?: string },
@@ -122,7 +140,8 @@ export async function measureHour(
           const dropped = all.length - readings.length;
           const lag = Math.round((hourUtc.getTime() - Date.parse(hour)) / 3600_000);
           notes.push(`${all.length} of ${params.sensors.length} vetted sensors reported hour ${hour} (${lag} h before the field hour)${dropped ? `, ${dropped} dropped by rule S1` : ''}${fail}`);
-          return { ...base, method: 'kriging', sensors: readings, sensor_hour_utc: hour, variogram_log: params.variogram_log, pi_scale: params.pi_scale ?? 1, note: notes.join('; ') };
+          const earlier = earlierHours(byHour, hour, need);
+          return { ...base, method: 'kriging', sensors: readings, sensor_hour_utc: hour, earlier, variogram_log: params.variogram_log, pi_scale: params.pi_scale ?? 1, note: notes.join('; ') };
         }
         notes.push(`fewer than ${need} vetted sensors reported in the last ${(opts.lookbackHours ?? 3) + 1} hours${fail}`);
       } catch (e) {

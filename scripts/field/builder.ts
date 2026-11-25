@@ -10,7 +10,7 @@ import { encodeCell, saturated } from './cells.js';
 import { computeField, exhaustForHour, type FieldInputs } from './engine.js';
 import { encodeExhaust, forecastOffsets, type ForecastEntry } from '../../src/lib/field/forecast.js';
 import { measureHour, type RegionMeasureParams } from './measure.js';
-import { hourlyRows, hourlyValidation } from './hourly-validation.js';
+import { earlierRows, hourlyRows, hourlyValidation } from './hourly-validation.js';
 
 export interface BuildOptions {
   name: string;
@@ -151,6 +151,8 @@ export async function buildFieldRun(pack: RoadPack, o: BuildOptions): Promise<Bu
     validation: hourlyValidation(measured),
     // per-sensor hidden guesses of that hour, for the daily EPA test (F5-10); the report stays in the private audit/
     validation_rows: hourlyRows(measured),
+    // N-08: older sensor hours of the same request, so an hour skipped when OpenAQ lags still reaches the daily test
+    validation_rows_earlier: earlierRows(measured),
     forecast: forecasts.map((f) => ({ ...f.entry, bytes: f.bytes.byteLength })),
     seconds: { inputs: (t1 - t0) / 1000, compute: (t2 - t1) / 1000, forecast: (t3 - t2) / 1000, total: (Date.now() - t0) / 1000 },
   };

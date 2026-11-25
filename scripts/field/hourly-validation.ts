@@ -47,6 +47,17 @@ export function hourlyRows(m: MeasuredInputs | undefined): { sensor_hour_utc: st
   return { sensor_hour_utc: m.sensor_hour_utc, rows: rows.map((r, k) => ({ loc_id: m.sensors[k].loc_id, obs: r.obs, pred: Number(r.pred.toFixed(2)) })) };
 }
 
+/** N-08: hidden-sensor rows of the older hours carried by the run (same variogram and interval scale), oldest first. */
+export function earlierRows(m: MeasuredInputs | undefined): Array<{ sensor_hour_utc: string; rows: Array<{ loc_id: number; obs: number; pred: number }> }> {
+  if (!m || m.method !== 'kriging' || !m.variogram_log || !m.earlier?.length) return [];
+  const out = [];
+  for (const e of [...m.earlier].sort((a, b) => a.sensor_hour_utc.localeCompare(b.sensor_hour_utc))) {
+    const rows = looHour(e.sensors, m.variogram_log, m.pi_scale ?? 1);
+    if (rows.length) out.push({ sensor_hour_utc: e.sensor_hour_utc, rows: rows.map((r, k) => ({ loc_id: e.sensors[k].loc_id, obs: r.obs, pred: Number(r.pred.toFixed(2)) })) });
+  }
+  return out;
+}
+
 export function hourlyValidation(m: MeasuredInputs | undefined): HourlyValidation | null {
   if (!m || m.method !== 'kriging' || !m.variogram_log) return null;
   const rows = looHour(m.sensors, m.variogram_log, m.pi_scale ?? 1);

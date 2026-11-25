@@ -15,7 +15,7 @@ import { RoadPack } from '../../scripts/field/pack';
 import { buildFieldRun, reportKey, runFor, runObjects, uploadBody } from '../../scripts/field/builder';
 import { BUILD_REGIONS, packKey } from '../../scripts/field/regions';
 import type { RegionMeasureParams } from '../../scripts/field/measure';
-import { dailyEpa, localDate, mergeDaily, mergeRecent, type HourRows, type RecentEntry, type RecentFile } from '../../src/lib/field/validationRecent';
+import { dailyEpa, dayHours, localDate, mergeDaily, mergeRecent, type HourRows, type RecentEntry, type RecentFile } from '../../src/lib/field/validationRecent';
 import { withRetry } from '../../src/lib/field/fetchRetry';
 import { mergeRuns, shortReason, type RunRecord, type RunsFile } from '../../src/lib/field/runsRecent';
 import { FIRMS_SOURCES, fireFile, firmsUrl, parseFirmsCsv, type FirePoint } from '../../src/lib/nasional/firms';
@@ -167,8 +167,8 @@ export const handler = async () => {
         if (sensor_hour_utc && !(next.daily ?? []).some((d) => d.date === day && d.sums)) {
           const dayStartUtc = Date.parse(`${day}T00:00:00Z`) - r.tz * 3_600_000;
           const ids = Array.from({ length: 28 }, (_, h) => new Date(dayStartUtc + h * 3_600_000).toISOString().slice(0, 13).replace(/[-T]/g, ''));
-          const reps = await Promise.all(ids.map((id) => readJson<{ validation_rows?: HourRows | null }>(bucket, reportKey(r.name, id))));
-          const hours = reps.map((x) => x?.validation_rows).filter((x): x is HourRows => !!x);
+          const reps = await Promise.all(ids.map((id) => readJson<{ validation_rows?: HourRows | null; validation_rows_earlier?: HourRows[] }>(bucket, reportKey(r.name, id))));
+          const hours = dayHours(reps);
           const d = dailyEpa(hours, day, r.tz);
           if (d) next = mergeDaily(next, d);
         }

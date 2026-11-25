@@ -35,6 +35,17 @@ export interface DailySums { n: number; so: number; sp: number; soo: number; spp
 /** Hidden-sensor guesses of one sensor hour (kept in the private audit report of a run). */
 export interface HourRows { sensor_hour_utc: string; rows: Array<{ loc_id: number; obs: number; pred: number }> }
 
+/**
+ * N-08: the hidden-sensor hours of a day's reports. Each run's own hour comes first, so it wins when an hour appears
+ * twice (dailyEpa keeps the first); the older hours a run carried (validation_rows_earlier) only fill the gaps left when
+ * OpenAQ lagged and no run kriged that hour.
+ */
+export function dayHours(reps: Array<{ validation_rows?: HourRows | null; validation_rows_earlier?: HourRows[] } | null | undefined>): HourRows[] {
+  const main = reps.map((x) => x?.validation_rows).filter((x): x is HourRows => !!x);
+  const earlier = reps.flatMap((x) => x?.validation_rows_earlier ?? []);
+  return [...main, ...earlier];
+}
+
 export const MAX_DAYS = 30;
 export const MIN_HOURS = 18;
 
