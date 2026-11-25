@@ -15,6 +15,9 @@ Parameters:
   OpenaqParam:
     Type: String
     Default: /breeva/openaq_api_key
+  FirmsParam:
+    Type: String
+    Default: /breeva/firms_map_key
 
 Resources:
   BuilderLogs:
@@ -56,7 +59,9 @@ Resources:
                 Condition: { StringLike: { 's3:prefix': ['v/*', 'audit/*'] } }
               - Effect: Allow
                 Action: ssm:GetParameter
-                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${OpenaqParam}'
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${OpenaqParam}'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${FirmsParam}'
               - Effect: Allow
                 Action: kms:Decrypt
                 Resource: '*'
@@ -81,6 +86,7 @@ Resources:
         Variables:
           FIELD_BUCKET: !Ref FieldBucket
           OPENAQ_PARAM: !Ref OpenaqParam
+          FIRMS_PARAM: !Ref FirmsParam
       LoggingConfig: { LogGroup: !Ref BuilderLogs }
       Tags:
         - { Key: project, Value: breeva }

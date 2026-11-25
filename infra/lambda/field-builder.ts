@@ -18,6 +18,8 @@ import type { RegionMeasureParams } from '../../scripts/field/measure';
 import { dailyEpa, localDate, mergeDaily, mergeRecent, type HourRows, type RecentEntry, type RecentFile } from '../../src/lib/field/validationRecent';
 import { withRetry } from '../../src/lib/field/fetchRetry';
 import { mergeRuns, shortReason, type RunRecord, type RunsFile } from '../../src/lib/field/runsRecent';
+import { FIRMS_SOURCES, fireFile, firmsUrl, parseFirmsCsv, type FirePoint } from '../../src/lib/nasional/firms';
+import { CHUNK, gridPoints, windFile, windUrl } from '../../src/lib/nasional/angin';
 
 // every source fetch (Open-Meteo, OpenAQ, METAR) goes through a retry with a fresh pause budget per invocation (F2-18)
 const baseFetch = globalThis.fetch.bind(globalThis);
@@ -64,6 +66,56 @@ async function pack(bucket: string, k: string): Promise<RoadPack> {
     writeFileSync(local, await r.Body!.transformToByteArray());
   }
   return new RoadPack(new Uint8Array(readFileSync(local)));
+}
+
+
+// N-09/N-10: national layers written after the regions; a failure here never blocks the regional fields
+let firmsKeyCache: string | undefined;
+async function firmsKey(): Promise<string | undefined> {
+  if (firmsKeyCache !== undefined) return firmsKeyCache;
+  const name = process.env.FIRMS_PARAM;
+  if (!name) return undefined;
+  const r = await ssm.send(new GetParameterCommand({ Name: name, WithDecryption: true }));
+  firmsKeyCache = r.Parameter?.Value ?? '';
+  return firmsKeyCache;
+}
+
+async function putNational(bucket: string, key: string, obj: unknown) {
+  await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: gzipSync(JSON.stringify(obj), { level: 9 }), ContentEncoding: 'gzip',
+    CacheControl: 'public, max-age=300, stale-while-revalidate=900', ContentType: 'application/json' }));
+}
+
+export async function nasional(bucket: string, now = new Date()): Promise<Record<string, unknown>> {
+  const res: Record<string, unknown> = {};
+  const k = await firmsKey();
+  if (k) {
+    const by: Record<string, FirePoint[]> = {};
+    for (const src of FIRMS_SOURCES) {
+      try {
+        const r = await fetch(firmsUrl(k, src));
+        by[src] = r.ok ? parseFirmsCsv(await r.text(), now) : [];
+      } catch (e) {
+        by[src] = [];
+        res[`galat_${src}`] = String((e as Error).message).split(k).join('***').slice(0, 120);
+      }
+    }
+    const f = fireFile(by, now);
+    await putNational(bucket, 'v/nasional/titik_api.json', f);
+    res.titik_api = f.n;
+  }
+  if (now.getUTCHours() % 3 === 0 || !(await exists(bucket, 'v/nasional/angin.json'))) {
+    const pts = gridPoints();
+    const answers = [];
+    for (let i = 0; i < pts.length; i += CHUNK) {
+      const r = await fetch(windUrl(pts.slice(i, i + CHUNK)));
+      if (!r.ok) throw new Error(`angin ${r.status}`);
+      answers.push(await r.json());
+    }
+    const w = windFile(answers, now);
+    await putNational(bucket, 'v/nasional/angin.json', w);
+    res.angin = { titik: w.speed.length, jam: w.hours.length, panggilan: pts.length };
+  }
+  return res;
 }
 
 export const handler = async () => {
@@ -115,6 +167,7 @@ export const handler = async () => {
       await noteRun(bucket, r.name, { run, ok: false, reason: shortReason((e as Error).message) });
     }
   }
+  try { out.push({ nasional: await nasional(bucket) }); } catch (e) { console.log(JSON.stringify({ nasional_failed: (e as Error).message.slice(0, 200) })); }
   console.log(JSON.stringify(out));
   if (failed === BUILD_REGIONS.length) throw new Error(`all regions failed: ${JSON.stringify(out)}`);
   return out;
