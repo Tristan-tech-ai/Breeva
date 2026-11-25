@@ -83,7 +83,7 @@ export default function PantauPage() {
               <StatCard label="Wilayah per ruas" value="2" note="Badung–Denpasar, Kota Bogor" icon={<Radio className="h-3.5 w-3.5" aria-hidden="true" />} />
               <StatCard label="Angin" value={wind ? `${wind.speed.length}` : '…'} note="titik prakiraan tiap jam" icon={<Wind className="h-3.5 w-3.5" aria-hidden="true" />} />
             </div>
-            <Suspense fallback={<div className="h-[26rem] rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" />}>
+            <Suspense fallback={<div className="rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" style={{ height: "26rem" }} />}>
               <PantauMap fires={fires?.points ?? []} wind={wind} hour={h} center={[-2.5, 118]} zoom={5} dark={dark} />
             </Suspense>
             <p className="text-xs text-gray-600 dark:text-gray-300">Titik merah: api terdeteksi satelit dalam 24 jam terakhir (makin besar makin panas). Panah biru: arah angin jam ini, ke mana asap terbawa.</p>
@@ -129,7 +129,7 @@ export default function PantauPage() {
                 </div>
               </div>
             )}
-            <Suspense fallback={<div className="h-[26rem] rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" />}>
+            <Suspense fallback={<div className="rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" style={{ height: "26rem" }} />}>
               <PantauMap fires={dekat.map((d) => d.p)} wind={wind} hour={h} center={[region.lat, region.lon]} zoom={8} dark={dark} />
             </Suspense>
             <Rincian summary="Titik api terdekat">

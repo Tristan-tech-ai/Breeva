@@ -19,7 +19,7 @@ export default function PantauMap({ fires, wind, hour = 0, center, zoom, dark }:
 }) {
   const pts = gridPoints();
   return (
-    <MapContainer center={center} zoom={zoom} minZoom={4} className="h-[26rem] w-full rounded-2xl" attributionControl scrollWheelZoom={false}
+    <MapContainer center={center} zoom={zoom} minZoom={4} className="w-full rounded-2xl" style={{ height: "26rem" }} attributionControl scrollWheelZoom={false}
       ref={(m) => { m?.attributionControl.addAttribution('Titik api: <a href="https://firms.modaps.eosdis.nasa.gov">NASA FIRMS</a>; angin: <a href="https://open-meteo.com">Open-Meteo</a>'); }}>
       <BasemapLayer raster={basemap('voyager', dark)} dark={dark} vector />
       {wind && pts.map(([lon, lat], k) => {
