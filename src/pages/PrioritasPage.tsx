@@ -6,6 +6,9 @@ import { fmt, indicativeNote, JALAN, JENIS, PAGE_SIZE, PRIORITAS_REGIONS, pickPr
 import { CAMS_NOTICE, OPEN_METEO_LINK } from '../lib/attribution';
 import { destLink } from '../lib/route/share';
 import { simulasiLine, type SimulasiFile } from '../lib/simulasi';
+import BarChart from '../components/viz/BarChart';
+import Rincian from '../components/viz/Rincian';
+import { sebaranJarak } from '../lib/prioritasViz';
 
 export default function PrioritasPage() {
   const navigate = useNavigate();
@@ -40,6 +43,8 @@ export default function PrioritasPage() {
   const simById = useMemo(() => new Map((sim?.region === region.name ? sim.file.sekolah : []).map((s) => [s.id, s])), [sim, region.name]);
 
   const all = useMemo(() => (data ? saringUrut(data.fasilitas, saring) : []), [data, saring]);
+  const top10 = useMemo(() => (data ? saringUrut(data.fasilitas, { ...saring, cari: '', urutan: 'lalin' }).slice(0, 10) : []), [data, saring]);
+  const jarak = useMemo(() => (data ? sebaranJarak(data.fasilitas.filter((f) => saring.kelas === 'semua' || f.kelas === saring.kelas)) : []), [data, saring.kelas]);
   const list = all.slice(0, shown);
   const maxLalin = useMemo(() => Math.max(0.01, ...(data?.fasilitas.map((f) => f.no2_lalin) ?? [0])), [data]);
 
@@ -72,11 +77,15 @@ export default function PrioritasPage() {
           </p>
         )}
         <section className="space-y-2">
-          <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-            Sekolah, TK, penitipan anak, klinik, dan rumah sakit diurutkan menurut <b>asap kendaraan dari jalan di sekitarnya</b> (NOx lalu lintas) yang
-            diperkirakan terhirup pada jam kegiatan. Bagian ini berbeda tajam dari satu fasilitas ke fasilitas lain dan bisa diubah
-            dengan kebijakan jalan dan sekolah. Polusi latar wilayah ditampilkan terpisah.
+          <p className="text-sm text-gray-700 dark:text-gray-200 leading-snug">
+            Sekolah dan faskes diurutkan menurut <b>asap kendaraan dari jalan di sekitarnya</b> pada jam kegiatan.
           </p>
+          <Rincian summary="Kenapa asap kendaraan?">
+            <p>
+              Asap kendaraan (NOx lalu lintas) berbeda tajam dari satu fasilitas ke fasilitas lain dan bisa diubah dengan kebijakan jalan
+              dan sekolah. Polusi latar wilayah hampir sama di semua fasilitas, jadi ditampilkan terpisah.
+            </p>
+          </Rincian>
           {data && (
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {tanggalDaftar(data)} Dihitung {new Date(data.dibuat).toLocaleString('id-ID')} dari {data.ruas.toLocaleString('id-ID')} ruas jalan.
@@ -116,12 +125,26 @@ export default function PrioritasPage() {
         {gagal && <p className="text-sm text-red-600">Data prioritas tidak bisa dimuat.</p>}
         {!data && !gagal && <p className="text-sm text-gray-500">Memuat…</p>}
 
+        {data && top10.length > 0 && (
+          <section className="grid gap-3 sm:grid-cols-2" data-prioritas-grafik>
+            <div className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-3.5">
+              <BarChart title="10 teratas: asap kendaraan (µg/m³)" unit="µg/m³"
+                bars={top10.map((f, i) => ({ label: f.nama, value: f.no2_lalin, highlight: i < 3, color: i < 3 ? '#c2410c' : '#fb923c' }))} />
+            </div>
+            <div className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-3.5">
+              <BarChart title="Jarak ke jalan ramai (jumlah fasilitas)"
+                bars={jarak.map((b, i) => ({ label: b.label, value: b.n, highlight: i === 0, color: i === 0 ? '#0369a1' : '#7dd3fc' }))} />
+              <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Makin dekat ke jalan ramai, biasanya makin banyak asap pada jam masuk.</p>
+            </div>
+          </section>
+        )}
+
         {data && (
-          <ol className="space-y-2" aria-label="Daftar fasilitas">
+          <ol className="space-y-1.5" aria-label="Daftar fasilitas">
             {list.map((f) => {
               const Icon = f.kelas === 'pendidikan' ? School : Stethoscope;
               return (
-                <li key={f.id} className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-3.5">
+                <li key={f.id} className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 px-3 py-2.5">
                   <div className="flex items-start gap-3">
                     <span className="w-9 shrink-0 text-right text-sm font-semibold tabular-nums text-gray-500 dark:text-gray-400">#{f.peringkat}</span>
                     <Icon className="w-4 h-4 mt-0.5 shrink-0 text-emerald-600" aria-hidden />
@@ -130,12 +153,12 @@ export default function PrioritasPage() {
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         {JENIS[f.jenis] ?? f.jenis} · {f.d_ramai_m} m dari {JALAN[f.jalan_terdekat] ?? f.jalan_terdekat} · jam {rentangJam(f.jam)}
                       </p>
-                      <p className="mt-2 text-xs tabular-nums"><b className="text-sm">{fmt(f.no2_lalin)}</b> µg/m³ asap kendaraan (NOx lalu lintas)</p>
+                      <p className="mt-1 text-xs tabular-nums"><b className="text-sm">{fmt(f.no2_lalin)}</b> µg/m³ asap kendaraan (NOx lalu lintas)</p>
                       <div className="mt-1 h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden" aria-hidden>
                         <div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.max(1, Math.min(100, (f.no2_lalin / maxLalin) * 100))}%` }} />
                       </div>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-                        PM2,5 dari lalu lintas {fmt(f.pm25_lalin, 2)} µg/m³ · PM2,5 total {fmt(f.pm25)} µg/m³ (rentang 95%: ±{fmt(f.pi95, 0)}) · puncak jam {String(f.jam_puncak).padStart(2, '0')}.00
+                      <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+                        PM2,5 total {fmt(f.pm25)} µg/m³ (±{fmt(f.pi95, 0)}), dari lalu lintas {fmt(f.pm25_lalin, 2)} · puncak {String(f.jam_puncak).padStart(2, '0')}.00
                       </p>
                       {f.kelas === 'pendidikan' && simById.get(f.id) && (
                         <p className="mt-1.5 rounded-lg bg-sky-50 dark:bg-sky-900/20 px-2 py-1 text-[11.5px] leading-snug text-sky-900 dark:text-sky-200">
@@ -164,8 +187,9 @@ export default function PrioritasPage() {
           </ol>
         )}
 
-        <section className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 space-y-2 text-sm leading-relaxed">
-          <h2 className="font-semibold flex items-center gap-2"><Info className="w-4 h-4" /> Cara menghitung dan batasannya</h2>
+        <Rincian summary="Cara menghitung dan batasannya">
+        <section className="space-y-2 text-sm leading-relaxed">
+          <h2 className="sr-only flex items-center gap-2"><Info className="w-4 h-4" /> Cara menghitung dan batasannya</h2>
           <ul className="list-disc pl-5 space-y-1.5 text-gray-600 dark:text-gray-300">
             <li><b>Di titik fasilitas.</b> Nilai dihitung di lokasi fasilitas (OpenStreetMap), bukan di ruas jalan terdekat, dengan
               rumus asap kendaraan yang sama dengan peta: semua jalan besar dalam 500 m dan 40 jalan kecil terdekat, angin dari segala
@@ -193,6 +217,7 @@ export default function PrioritasPage() {
             </p>
           )}
         </section>
+        </Rincian>
       </main>
     </div>
   );
