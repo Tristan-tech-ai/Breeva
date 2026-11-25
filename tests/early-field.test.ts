@@ -96,10 +96,10 @@ describe('the inline script of index.html (X-W7)', () => {
       expect(got, JSON.stringify(c)).toBe(want);
     }
   });
-  it('on / opens as /peta, and other pages ask for nothing', () => {
-    expect(runScript('', { mode: 'app', path: '/', stored: 'kota_bogor', tz: 'Asia/Jakarta' }).early?.name).toBe('badung_denpasar');
-    expect(runScript('?wilayah=kota_bogor', { mode: 'app', path: '/' }).early?.name).toBe('kota_bogor');
-    for (const path of ['/prioritas', '/status', '/uji-coba', '/profile']) expect(runScript('', { mode: 'app', path }).calls).toEqual([]);
+  it('the app shell opens /peta early; the landing at / and other pages ask for nothing (N-02)', () => {
+    expect(runScript('', { mode: 'app', path: '/peta', stored: 'kota_bogor', tz: 'Asia/Jakarta' }).early?.name).toBe('badung_denpasar');
+    expect(runScript('?wilayah=kota_bogor', { mode: 'app', path: '/peta' }).early?.name).toBe('kota_bogor');
+    for (const path of ['/', '/prioritas', '/status', '/uji-coba', '/profile']) expect(runScript('', { mode: 'app', path }).calls).toEqual([]);
     expect(runScript('?rute=-8.6,115.2~-8.7,115.3', { mode: 'app', path: '/home' }).calls).toEqual([]);
   });
 });

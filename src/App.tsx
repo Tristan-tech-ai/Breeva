@@ -30,7 +30,6 @@ const TransactionsPage = lazy(() => import('./pages/TransactionsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const MerchantsPage = lazy(() => import('./pages/MerchantsPage'));
 const RewardsPage = lazy(() => import('./pages/RewardsPage'));
-const LandingPage = lazy(() => import('./pages/LandingPage'));
 const SavedPlacesPage = lazy(() => import('./pages/SavedPlacesPage'));
 const EcoImpactPage = lazy(() => import('./pages/EcoImpactPage'));
 const ContributePage = lazy(() => import('./pages/ContributePage'));
@@ -369,7 +368,7 @@ function App() {
             {/* Root: map first. Guests see the live coloured map with its legend; signed-in users go to the app. */}
             <Route path="/" element={<RootRoute />} />
             {/* Product story (former root) */}
-            <Route path="/landing" element={<LandingPage />} />
+            <Route path="/landing" element={<Navigate to="/" replace />} />
           </Routes>
           </main>
         </Suspense>

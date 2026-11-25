@@ -35,7 +35,7 @@ export function earlyFieldScript(base, regions, mode = 'peta') {
   const R = JSON.stringify(regions);
   const B = JSON.stringify(base.replace(/\/$/, ''));
   const pick = mode === 'app'
-    ? `var p=location.pathname,s=null,z='';if(p==='/'){r=f(w)||R[0]}else if(p==='/home'){try{s=localStorage.getItem('breeva_field_region')}catch(_){}`
+    ? `var p=location.pathname,s=null,z='';if(p==='/peta'){r=f(w)||R[0]}else if(p==='/home'){try{s=localStorage.getItem('breeva_field_region')}catch(_){}`
       + `try{z=Intl.DateTimeFormat().resolvedOptions().timeZone||''}catch(_){}r=f(w)||f(s)||((z==='Asia/Jakarta'||z==='Asia/Pontianak')?f('kota_bogor'):null)||R[0]}else return;`
     : `r=f(w)||R[0];`;
   const route = mode === 'peta'

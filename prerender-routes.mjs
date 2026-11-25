@@ -263,7 +263,7 @@ for (const r of ROUTES) {
   const map = ['src/components/map/LeafletMap.tsx'];
   const vg = ['/vendor/leaflet-vectorgrid.js'];
   const byPath = {
-    '/': { ...preloadFiles(buildManifest, ['src/pages/ExploreMapPage.tsx', ...map], have), scripts: vg },
+    '/': { ...preloadFiles(buildManifest, ['src/pages/BerandaPage.tsx'], have), scripts: [] },
     '/home': { ...preloadFiles(buildManifest, ['src/pages/HomePage.tsx', ...map], have), scripts: vg },
   };
   const pre = appPreloadScript(byPath);
