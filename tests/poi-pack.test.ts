@@ -111,3 +111,16 @@ describe('N-47 place search on a large pack', () => {
     expect(second).toBeLessThan(first); // the second search reuses the normalised names
   });
 });
+
+describe('N-47 sliced pack preparation', () => {
+  it('decodes in slices with the same places, ids and search answers as the one-shot decoder', async () => {
+    const { siapkanPack } = await import('../src/lib/poiPack');
+    const f: PoiPackFile = { format: 'breeva_poi', v: 1, region: 'r', release: 'x', cats: ['catering.cafe', 'education.school'],
+      pois: Array.from({ length: 9001 }, (_, i) => [i === 9000 ? 'Kopi Tuku' : `Sekolah ${i}`, i === 9000 ? 0 : 1, -660000 + i, 10680000, ''] as [string, number, number, number, string]) };
+    const a = await siapkanPack(f);
+    const b = decodePoiPack(f);
+    expect(a).toEqual(b);
+    expect(searchPoiPack(a, 'kopi').map((p) => p.name)).toEqual(['Kopi Tuku']);
+    expect(searchPoiPack(a, 'sekolah 899').length).toBe(8);
+  });
+});

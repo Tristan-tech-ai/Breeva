@@ -29,6 +29,7 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
     clearSearch,
     setDestination,
     userLocation,
+    siapkanCari,
   } = useMapStore();
 
   const [isFocused, setIsFocused] = useState(false);
@@ -129,7 +130,7 @@ export default function SearchBar({ onPlaceSelect, filterChips, activeFilter, on
           placeholder="Cari di sini"
           value={searchQuery}
           onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={() => { setIsFocused(true); setFilterOpen(false); }}
+          onFocus={() => { setIsFocused(true); setFilterOpen(false); siapkanCari(); }}
           onBlur={() => setTimeout(() => setIsFocused(false), 200)}
           className="flex-1 self-stretch bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 outline-none"
         />

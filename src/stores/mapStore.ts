@@ -101,6 +101,8 @@ interface MapState {
   stopLocating: () => void;
   setSearchQuery: (query: string) => void;
   search: (query: string) => Promise<void>;
+  /** N-47: start preparing the region's place pack (sliced) when the search box gets focus, before the first letter */
+  siapkanCari: () => void;
   clearSearch: () => void;
   setDestination: (coord: Coordinate, name?: string) => Promise<void>;
   clearDestination: () => void;
@@ -246,6 +248,12 @@ export const useMapStore = create<MapState>()((set, get) => ({
   },
 
   setSearchQuery: (query) => set({ searchQuery: query }),
+
+  siapkanCari: () => {
+    const anchor = get().userLocation || get().center;
+    const region = FIELD_STATIC_STORE ? basemapRegion(anchor.lat, anchor.lng) : null;
+    if (region) void loadPoiPack(fieldBase(), region).catch(() => {});
+  },
 
   search: async (query) => {
     if (!query.trim()) {

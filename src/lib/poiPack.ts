@@ -123,13 +123,32 @@ export function searchPoiPack(pois: POI[], query: string, near?: { lat: number; 
 }
 
 const loaded = new Map<string, Promise<POI[]>>();
+const jeda = () => new Promise<void>((r) => setTimeout(r, 0));
+const POTONG = 4000;
+
+/** N-47: decode a pack and normalise its names in slices of POTONG places, yielding between slices, so the page keeps
+ * answering while a 37,548-place pack is prepared (one 390 ms task on a slow phone before). */
+export async function siapkanPack(f: PoiPackFile): Promise<POI[]> {
+  const out: POI[] = [];
+  for (let i = 0; i < f.pois.length; i += POTONG) {
+    out.push(...decodePoiPack({ ...f, pois: f.pois.slice(i, i + POTONG) }).map((p, k) => ({ ...p, id: `poi-${f.region}-${i + k}` })));
+    await jeda();
+  }
+  const n: string[] = [];
+  for (let i = 0; i < out.length; i += POTONG) {
+    for (const p of out.slice(i, i + POTONG)) n.push(normName(p.name));
+    await jeda();
+  }
+  namaNormal.set(out, { n, nc: n.map((x) => x.replace(/ /g, '')) });
+  return out;
+}
 
 /** The decoded pack of a region, once per page (cache first, so a saved region works offline). */
 export function loadPoiPack(base: string, region: string, fetchBytes: typeof cachedBytes = cachedBytes): Promise<POI[]> {
   const url = poiPackUrl(base, region);
   let p = loaded.get(url);
   if (!p) {
-    p = fetchBytes(url, { cacheFirst: true }).then((b) => decodePoiPack(JSON.parse(new TextDecoder().decode(b)) as PoiPackFile));
+    p = fetchBytes(url, { cacheFirst: true }).then((b) => siapkanPack(JSON.parse(new TextDecoder().decode(b)) as PoiPackFile));
     p.catch(() => loaded.delete(url)); // a failed load may be tried again later
     loaded.set(url, p);
   }
