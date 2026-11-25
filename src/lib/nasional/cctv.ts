@@ -1,0 +1,67 @@
+/**
+ * N-35: the traffic-camera layer of /pantau, from v/nasional/cctv.json (written every 20 minutes by breeva-cctv in AWS
+ * Jakarta, infra/cctv/app.py). Per camera: point, name, vehicles seen in one frame, the mean of the last hour and that
+ * mean against the camera's own 24-hour median. No picture and no stream address are ever published. Contest trial only,
+ * switched off 6 Dec 2026; not part of the map numbers (not yet through the hidden-location test, N-34).
+ */
+import { kmBetween } from './pantau';
+
+export const CCTV_PATH = 'v/nasional/cctv.json';
+export const CCTV_LABEL = 'uji coba selama lomba, izin tertulis sedang diproses';
+
+export type CctvTingkat = 'sepi' | 'biasa' | 'padat';
+export interface CctvKamera {
+  id: string; kota: string; nama: string; lat: number; lon: number;
+  status: 'ok' | 'buram' | 'offline'; total: number | null; rata_jam: number | null; indeks: number | null; tingkat: CctvTingkat | null;
+}
+export interface CctvFile { format: 'cctv_publik'; updated_at: string; label: string; model: string; catatan: string; kamera: CctvKamera[] }
+
+export const KOTA_CCTV: Record<string, string> = { kota_bogor: 'Kota Bogor', kota_bandung: 'Kota Bandung', kota_yogyakarta: 'Kota Yogyakarta' };
+
+const WARNA: Record<CctvTingkat | 'belum' | 'mati', string> = { sepi: '#16a34a', biasa: '#ca8a04', padat: '#dc2626', belum: '#0f766e', mati: '#94a3b8' };
+
+/** Marker colour: by the density level once a camera has 3 hours of runs, teal before that, grey when it shows nothing. */
+export function warnaCctv(k: CctvKamera): string {
+  if (k.status !== 'ok') return WARNA.mati;
+  return k.tingkat ? WARNA[k.tingkat] : WARNA.belum;
+}
+
+/** Tooltip text of one camera. */
+export function teksCctv(k: CctvKamera): string {
+  const nama = k.nama || 'Kamera lalu lintas';
+  if (k.status === 'offline') return `${nama} · kamera tidak menayangkan gambar saat diperiksa`;
+  if (k.status === 'buram') return `${nama} · gambar buram atau gelap, tidak dihitung`;
+  const rata = k.rata_jam != null ? `, rata-rata jam terakhir ${k.rata_jam.toLocaleString('id-ID', { maximumFractionDigits: 1 })}` : '';
+  const ting = k.tingkat ? ` · ${k.tingkat} dibanding biasanya (${k.indeks!.toLocaleString('id-ID', { maximumFractionDigits: 2 })}x)` : ' · tingkat biasanya belum diketahui (perlu 3 jam data)';
+  return `${nama} · ${k.total ?? 0} kendaraan terlihat${rata}${ting}`;
+}
+
+/** Cameras within km of a place, nearest first. */
+export function cctvDekat(file: CctvFile | null, lat: number, lon: number, km: number): CctvKamera[] {
+  if (!file) return [];
+  return file.kamera.map((k) => ({ k, d: kmBetween(lat, lon, k.lat, k.lon) })).filter((x) => x.d <= km).sort((a, b) => a.d - b.d).map((x) => x.k);
+}
+
+/** The cameras of one kab/kota page: the trial cities are keyed kota_bogor etc., the pages kota-bogor (a camera of Kota
+ * Bogor is not shown on Kabupaten Bogor, whose box contains the city). */
+export function kameraKabKota(file: CctvFile | null, slug: string): CctvKamera[] {
+  return (file?.kamera ?? []).filter((k) => k.kota.replace(/_/g, '-') === slug);
+}
+
+/** Per city: cameras, how many showed a countable picture, vehicles seen in the latest frames, and how many are busy. */
+export function ringkasCctv(kamera: CctvKamera[]): Array<{ kota: string; nama: string; kamera: number; ok: number; kendaraan: number; padat: number }> {
+  const by = new Map<string, { kota: string; nama: string; kamera: number; ok: number; kendaraan: number; padat: number }>();
+  for (const k of kamera) {
+    const r = by.get(k.kota) ?? { kota: k.kota, nama: KOTA_CCTV[k.kota] ?? k.kota, kamera: 0, ok: 0, kendaraan: 0, padat: 0 };
+    r.kamera += 1;
+    if (k.status === 'ok') { r.ok += 1; r.kendaraan += k.total ?? 0; }
+    if (k.tingkat === 'padat') r.padat += 1;
+    by.set(k.kota, r);
+  }
+  return [...by.values()].sort((a, b) => b.kamera - a.kamera);
+}
+
+/** The file is stale when the last run is more than an hour old (the schedule runs every 20 minutes). */
+export function cctvBasi(file: CctvFile | null, now = Date.now()): boolean {
+  return !file || now - Date.parse(file.updated_at) > 60 * 60 * 1000;
+}

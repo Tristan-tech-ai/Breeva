@@ -10,7 +10,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..", "..")
 sys.path[:0] = [os.path.join(ROOT, "vayu", "field"), os.path.join(ROOT, "infra", "cctv")]
-from app import kunci, sudah_mati, tanpa_rahasia  # noqa: E402
+from app import LABEL as LABEL_APP, kunci, perbarui_riwayat, ringkas_publik, sudah_mati, tanpa_rahasia  # noqa: E402
 from cctv_count import SHARP_MIN  # noqa: E402
 from hitung import LABEL, hitung_bingkai, jalankan  # noqa: E402
 
@@ -94,4 +94,26 @@ def test_no_code_path_writes_a_picture():
         for bad in (".tofile(", "np.save", "imwrite", "Image.save", ".save(", "av.open(url, 'w'", "mode=\"w\""):
             assert bad not in src, (f, bad)
     app_src = open(os.path.join(ROOT, "infra", "cctv", "app.py"), encoding="utf-8").read()
-    assert app_src.count("put_object(") == 1 and "Body=body" in app_src and "body = json.dumps(run" in app_src
+    # one writer, and it writes JSON only
+    assert app_src.count("put_object(") == 1 and "body = json.dumps(obj" in app_src and "Body=body" in app_src
+
+
+def test_history_keeps_the_last_72_runs_and_none_for_offline():
+    run = {"hasil": [{"id": "a", "kota": "k", "status": "ok", "total": 4}, {"id": "b", "kota": "k", "status": "buram"}]}
+    r = perbarui_riwayat({"k:a": list(range(72))}, run)
+    assert len(r["k:a"]) == 72 and r["k:a"][-1] == 4 and r["k:a"][0] == 1
+    assert r["k:b"] == [None]
+
+
+def test_public_summary_index_needs_three_hours_and_carries_no_url():
+    kam = [{"id": "a", "kota": "k", "nama": "Jl. Uji", "url": "https://kamera.example/a.m3u8", "lat": -6.6, "lon": 106.8},
+           {"id": "b", "kota": "k", "nama": "Jl. Baru", "url": "https://kamera.example/b.m3u8", "lat": -6.7, "lon": 106.9}]
+    run = {"waktu_utc": "2026-11-25T14:00:00Z", "model": "uji", "hasil": [
+        {"id": "a", "kota": "k", "status": "ok", "total": 9}, {"id": "b", "kota": "k", "status": "ok", "total": 2}]}
+    riw = {"k:a": [3] * 9 + [6, 9, 9], "k:b": [2, 2]}
+    pub = ringkas_publik(kam, run, riw)
+    a, b = pub["kamera"]
+    assert a["rata_jam"] == 8.0 and a["indeks"] == round(8.0 / 3, 2) and a["tingkat"] == "padat" and a["total"] == 9
+    assert b["rata_jam"] == 2.0 and b["indeks"] is None and b["tingkat"] is None  # 2 runs: no typical level yet
+    assert pub["label"] == LABEL == LABEL_APP and "belum lolos uji" in pub["catatan"].lower()
+    assert "m3u8" not in json.dumps(pub) and "url" not in a

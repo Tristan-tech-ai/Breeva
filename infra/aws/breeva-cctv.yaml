@@ -42,10 +42,19 @@ Resources:
                 Resource: !Sub '${LogGroup.Arn}:*'
               - Effect: Allow
                 Action: s3:GetObject
-                Resource: !Sub 'arn:aws:s3:::breeva-cctv-${AWS::AccountId}/kamera.json'
+                Resource:
+                  - !Sub 'arn:aws:s3:::breeva-cctv-${AWS::AccountId}/kamera.json'
+                  - !Sub 'arn:aws:s3:::breeva-cctv-${AWS::AccountId}/hitung/*'
+              # a missing hitung/riwayat.json answers NoSuchKey instead of AccessDenied only with ListBucket
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub 'arn:aws:s3:::breeva-cctv-${AWS::AccountId}'
               - Effect: Allow
                 Action: s3:PutObject
-                Resource: !Sub 'arn:aws:s3:::breeva-cctv-${AWS::AccountId}/hitung/*'
+                Resource:
+                  - !Sub 'arn:aws:s3:::breeva-cctv-${AWS::AccountId}/hitung/*'
+                  # N-35: the public summary (points and density index, no URL or picture) on the Breeva CDN bucket
+                  - !Sub 'arn:aws:s3:::breeva-field-${AWS::AccountId}/v/nasional/cctv.json'
       Tags:
         - { Key: project, Value: breeva }
 
@@ -65,6 +74,8 @@ Resources:
           BUCKET: !Sub 'breeva-cctv-${AWS::AccountId}'
           MATI_UTC: !Ref EndDate
           PARALEL: '16'
+          PUBLIK_BUCKET: !Sub 'breeva-field-${AWS::AccountId}'
+          PUBLIK_REGION: ap-southeast-1
       Tags:
         - { Key: project, Value: breeva }
 

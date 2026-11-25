@@ -9,16 +9,19 @@ import { windAt, type WindFile } from '../../lib/nasional/angin';
 import type { LatarFile } from '../../lib/nasional/latar';
 import type { AsapFile } from '../../lib/nasional/asap';
 import { apiSini, kabKotaCsv, latarSini, TINGKAT_LABEL, type KabKota } from '../../lib/nasional/kabkota';
+import { kameraKabKota, type CctvFile } from '../../lib/nasional/cctv';
+import CctvRingkas from './CctvRingkas';
 
 const PantauMap = lazy(() => import('./PantauMap'));
 const ARAH = ['utara', 'timur laut', 'timur', 'tenggara', 'selatan', 'barat daya', 'barat', 'barat laut'];
 const n = (v: number | null | undefined, d = 0) => (v == null ? '…' : v.toLocaleString('id-ID', { maximumFractionDigits: d }));
 
 /** N-24: one kab/kota anywhere in Indonesia: background now and 48 hours, fires inside and near, wind; CSV. */
-export default function KabKotaView({ k, latar, fires, wind, hour, dark, asap = null, nama = {} }: {
+export default function KabKotaView({ k, latar, fires, wind, hour, dark, asap = null, nama = {}, cctv = null }: {
   k: KabKota; latar: LatarFile | null; fires: FireFile | null; wind: WindFile | null; hour: number; dark: boolean;
-  asap?: AsapFile | null; nama?: Record<string, string>;
+  asap?: AsapFile | null; nama?: Record<string, string>; cctv?: CctvFile | null;
 }) {
+  const kamera = kameraKabKota(cctv, k.slug);
   const menuju = asap?.menuju[k.slug] ?? [];
   const jalur = menuju.map((m) => asap!.gugus.find((g) => g.id === m.gugus)?.jalur).filter((j): j is Array<[number, number]> => !!j);
   const l = latarSini(latar, k.slug);
@@ -57,8 +60,9 @@ export default function KabKotaView({ k, latar, fires, wind, hour, dark, asap = 
         </div>
       )}
       <Suspense fallback={<div className="rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" style={{ height: '26rem' }} />}>
-        <PantauMap fires={[...api.dalam, ...api.dekat.map((d) => d.p)]} wind={wind} hour={hour} center={[k.lat, k.lon]} zoom={9} dark={dark} jalur={jalur} />
+        <PantauMap fires={[...api.dalam, ...api.dekat.map((d) => d.p)]} wind={wind} hour={hour} center={[k.lat, k.lon]} zoom={kamera.length ? 12 : 9} dark={dark} jalur={jalur} cctv={kamera} />
       </Suspense>
+      <CctvRingkas file={cctv} kamera={kamera} />
       <div className="flex flex-wrap gap-2">
         <button onClick={unduh} className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-emerald-700 px-4 text-sm font-semibold text-white">
           <Download className="h-4 w-4" aria-hidden="true" />Unduh CSV (latar 48 jam, titik api)

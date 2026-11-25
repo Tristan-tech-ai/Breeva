@@ -7,6 +7,7 @@ import { basemap } from '../../lib/basemap';
 import { pm25Category } from '../../lib/ispu';
 import type { FirePoint } from '../../lib/nasional/firms';
 import { gridPoints, type WindFile } from '../../lib/nasional/angin';
+import { teksCctv, warnaCctv, CCTV_LABEL, type CctvKamera } from '../../lib/nasional/cctv';
 
 const arrow = (from: number, speed: number) => L.divIcon({
   className: '',
@@ -19,7 +20,7 @@ const arrow = (from: number, speed: number) => L.divIcon({
 export interface Choropleth { url: string; nilai: Record<string, number | null>; nama: Record<string, string>; onPick: (slug: string) => void }
 
 /** National monitoring map (N-11, N-24): kab/kota colours, fire points of the last 24 hours sized by power, wind arrows. */
-export default function PantauMap({ fires, wind, hour = 0, center, zoom, dark, kab, jalur = [], luar = false, sensors = [] }: {
+export default function PantauMap({ fires, wind, hour = 0, center, zoom, dark, kab, jalur = [], luar = false, sensors = [], cctv = [] }: {
   fires: FirePoint[]; wind: WindFile | null; hour?: number; center: [number, number]; zoom: number; dark: boolean; kab?: Choropleth;
   /** N-26: 24-hour smoke paths (lon, lat per hour) */
   jalur?: Array<Array<[number, number]>>;
@@ -27,6 +28,8 @@ export default function PantauMap({ fires, wind, hour = 0, center, zoom, dark, k
   luar?: boolean;
   /** N-27: open and own sensors, drawn blue, never used by the model */
   sensors?: Array<{ lat: number; lon: number; label: string }>;
+  /** N-35: traffic cameras (counts only, no picture), contest trial */
+  cctv?: CctvKamera[];
 }) {
   const pts = gridPoints();
   const [fc, setFc] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -63,6 +66,12 @@ export default function PantauMap({ fires, wind, hour = 0, center, zoom, dark, k
         if (s == null || d == null || s < 0 || d < 0) return null;
         return <Marker key={`w${k}`} position={[lat, lon]} icon={arrow(d, s)} interactive={false} keyboard={false} />;
       })}
+      {cctv.map((k) => (
+        <CircleMarker key={`c${k.kota}${k.id}`} center={[k.lat, k.lon]} radius={k.status === 'ok' ? Math.min(8, 3.5 + Math.sqrt(k.total ?? 0)) : 3.5}
+          pathOptions={{ color: '#134e4a', weight: 1, fillColor: warnaCctv(k), fillOpacity: 0.85 }}>
+          <Tooltip>{teksCctv(k)} · {CCTV_LABEL}</Tooltip>
+        </CircleMarker>
+      ))}
       {sensors.map((s, i) => (
         <CircleMarker key={`s${i}`} center={[s.lat, s.lon]} radius={6} pathOptions={{ color: '#075985', weight: 2, fillColor: '#38bdf8', fillOpacity: 0.85 }}>
           <Tooltip>{s.label}</Tooltip>
