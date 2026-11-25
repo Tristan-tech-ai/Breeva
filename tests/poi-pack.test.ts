@@ -96,3 +96,18 @@ describe('POI packs', () => {
     expect(poiCategoryLabel(undefined)).toBe('Tempat');
   });
 });
+
+describe('N-47 place search on a large pack', () => {
+  it('normalises the names once per pack and keeps the same answers on repeated searches', () => {
+    const big = Array.from({ length: 40000 }, (_, i) => ({ id: String(i), name: i === 39999 ? 'Kopi Tuku Bogor' : `Toko Nomor ${i}`, coordinate: { lat: -6.6 + i * 1e-6, lng: 106.8 }, types: ['shop'] })) as unknown as Parameters<typeof searchPoiPack>[0];
+    const t0 = performance.now();
+    const a = searchPoiPack(big, 'kopi tuku');
+    const first = performance.now() - t0;
+    const t1 = performance.now();
+    const b = searchPoiPack(big, 'kopi tuk');
+    const second = performance.now() - t1;
+    expect(a.map((x) => x.name)).toEqual(['Kopi Tuku Bogor']);
+    expect(b.map((x) => x.name)).toEqual(['Kopi Tuku Bogor']);
+    expect(second).toBeLessThan(first); // the second search reuses the normalised names
+  });
+});

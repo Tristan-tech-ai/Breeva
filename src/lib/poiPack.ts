@@ -74,6 +74,19 @@ export function normName(s: string): string {
   return s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+/** N-47: normalised names of a pack, made once per pack (normalising 37,548 names on every keystroke was one 410 ms task
+ * on a slow phone) and kept as long as the pack array lives. */
+const namaNormal = new WeakMap<POI[], { n: string[]; nc: string[] }>();
+function normalPack(pois: POI[]) {
+  let c = namaNormal.get(pois);
+  if (!c) {
+    const n = pois.map((p) => normName(p.name));
+    c = { n, nc: n.map((x) => x.replace(/ /g, '')) };
+    namaNormal.set(pois, c);
+  }
+  return c;
+}
+
 /**
  * Places of a pack whose name matches the query (F1-71): the whole name starting with it first, then a word starting
  * with it, then the text anywhere, then the text without spaces; within a rank the nearest to `near` first. Works without internet once the pack is
@@ -83,10 +96,12 @@ export function searchPoiPack(pois: POI[], query: string, near?: { lat: number; 
   const q = normName(query);
   if (q.length < 2) return [];
   const qc = q.replace(/ /g, '');
-  const scored: Array<{ p: POI; rank: number; d: number }> = [];
-  for (const p of pois) {
-    const n = normName(p.name);
-    const nc = n.replace(/ /g, '');
+  const norm = normalPack(pois);
+  const scored: Array<{ p: POI; n: string; rank: number; d: number }> = [];
+  for (let i = 0; i < pois.length; i++) {
+    const p = pois[i];
+    const n = norm.n[i];
+    const nc = norm.nc[i];
     // spaces differ between sources ("Swiss-Belhotel" and "Swissbel Hotel"): compare without spaces as well
     // rank 4 (X-W47): the query is the full name with words the source left out, e.g. "Inna Bali Heritage" for the hotel
     // the source lists as "Inna Bali" (Jalan Veteran 3); only names of two words or more, so "Bali" alone never matches.
@@ -94,18 +109,17 @@ export function searchPoiPack(pois: POI[], query: string, near?: { lat: number; 
       : n.includes(' ') && n.length >= 6 && q.startsWith(n + ' ') ? 4 : -1;
     if (rank < 0) continue;
     const d = near ? (p.coordinate.lat - near.lat) ** 2 + ((p.coordinate.lng - near.lng) * Math.cos((near.lat * Math.PI) / 180)) ** 2 : 0;
-    scored.push({ p, rank, d });
+    scored.push({ p, n, rank, d });
   }
   scored.sort((a, b) => a.rank - b.rank || a.d - b.d || a.p.name.length - b.p.name.length);
   // one result per place: the same name within about 300 m is the same place mapped twice (two sources or two features)
-  const out: POI[] = [];
-  for (const { p } of scored) {
+  const out: Array<{ p: POI; n: string }> = [];
+  for (const s of scored) {
     if (out.length >= max) break;
-    const n = normName(p.name);
-    if (out.some((o) => normName(o.name) === n && Math.abs(o.coordinate.lat - p.coordinate.lat) < 0.003 && Math.abs(o.coordinate.lng - p.coordinate.lng) < 0.003)) continue;
-    out.push(p);
+    if (out.some((o) => o.n === s.n && Math.abs(o.p.coordinate.lat - s.p.coordinate.lat) < 0.003 && Math.abs(o.p.coordinate.lng - s.p.coordinate.lng) < 0.003)) continue;
+    out.push(s);
   }
-  return out;
+  return out.map((o) => o.p);
 }
 
 const loaded = new Map<string, Promise<POI[]>>();
