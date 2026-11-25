@@ -1,0 +1,14 @@
+# CodeBuild (project breeva-cctv-build, AWS Jakarta): the breeva-cctv image. The model comes from the YOLOX release and
+# must match the file tested on 25 Nov 2026 (sha256 below); IMAGE_TAG is the commit, passed by infra/cctv/deploy.sh.
+version: 0.2
+phases:
+  pre_build:
+    commands:
+      - mkdir -p model
+      - curl -sSfL -o model/yolox_s.onnx https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_s.onnx
+      - echo "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063  model/yolox_s.onnx" | sha256sum -c -
+      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "${REPO_URI%%/*}"
+  build:
+    commands:
+      - docker build -t "$REPO_URI:$IMAGE_TAG" .
+      - docker push "$REPO_URI:$IMAGE_TAG"
