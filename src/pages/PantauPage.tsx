@@ -11,7 +11,10 @@ import { fieldBase } from '../lib/field/source';
 import { saringUrut, type DaftarPrioritas } from '../lib/prioritas';
 import type { FireFile } from '../lib/nasional/firms';
 import { windAt, type WindFile } from '../lib/nasional/angin';
-import { fasilitasCsv, nearby, PANTAU_WILAYAH, perPulau } from '../lib/nasional/pantau';
+import { fasilitasCsv, kmBetween, nearby, PANTAU_WILAYAH } from '../lib/nasional/pantau';
+import { perProvinsi } from '../lib/nasional/wilayah';
+import LaporButton from '../components/lapor/LaporButton';
+import { ambilRingkas, JENIS_LAPOR, totalRingkas, type RingkasLapor } from '../lib/lapor';
 
 const PantauMap = lazy(() => import('../components/pantau/PantauMap'));
 
@@ -50,10 +53,15 @@ export default function PantauPage() {
   const manifest = useJson<{ sensors_used?: number; computed_at?: string; indicative?: boolean }>(region ? `${b}/v/${region.field}/manifest.json` : null);
   const daftar = useJson<DaftarPrioritas>(region ? `/data/prioritas/${region.field}.json` : null);
   const h = windHour(wind);
-  const pulau = useMemo(() => perPulau(fires?.points ?? []), [fires]);
+  const prov = useMemo(() => perProvinsi(fires?.points ?? []), [fires]);
   const dekat = useMemo(() => (region && fires ? nearby(fires.points, region.lat, region.lon, 150) : []), [fires, region]);
   const top = useMemo(() => (daftar ? saringUrut(daftar.fasilitas, { kelas: 'semua', cari: '', urutan: 'lalin' }).slice(0, 10) : []), [daftar]);
   const anginSini = region && wind ? windAt(wind, region.lon, region.lat, h) : null;
+  const [lapor, setLapor] = useState<RingkasLapor[] | null>(null);
+  useEffect(() => { let alive = true; void ambilRingkas().then((r) => alive && setLapor(r)); return () => { alive = false; }; }, []);
+  const laporSini = useMemo(() => (lapor && region ? lapor.filter((r) => kmBetween(region.lat, region.lon, r.lat, r.lng) <= 25) : lapor), [lapor, region]);
+  const laporTotal = laporSini ? totalRingkas(laporSini) : null;
+  const laporJenis = useMemo(() => JENIS_LAPOR.map((j) => ({ label: j.label, value: (laporSini ?? []).filter((r) => r.jenis === j.id).reduce((a, r) => a + r.jumlah, 0) })).filter((b) => b.value > 0), [laporSini]);
 
   const unduh = () => {
     if (!daftar || !region) return;
@@ -73,13 +81,14 @@ export default function PantauPage() {
             <ChevronLeft className="h-5 w-5" aria-hidden="true" />
           </Link>
           <h1 className="text-lg font-extrabold text-gray-900 dark:text-white">{region ? `Pemantauan ${region.label}` : 'Pemantauan udara Indonesia'}</h1>
+          <LaporButton className="ml-auto" getCenter={() => (region ? { lat: region.lat, lng: region.lon } : null)} />
         </header>
 
         {!region && (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <StatCard label="Titik api" value={n(fires?.n)} note="24 jam, NASA FIRMS" tone={fires?.n ? 'warn' : 'neutral'} icon={<Flame className="h-3.5 w-3.5" aria-hidden="true" />} />
-              <StatCard label="Pulau terbanyak" value={pulau[0]?.nama ?? '…'} note={pulau[0] ? `${n(pulau[0].n)} titik` : ''} icon={<MapPinned className="h-3.5 w-3.5" aria-hidden="true" />} />
+              <StatCard label="Provinsi terbanyak" value={prov[0]?.nama ?? '…'} note={prov[0] ? `${n(prov[0].n)} titik` : ''} icon={<MapPinned className="h-3.5 w-3.5" aria-hidden="true" />} />
               <StatCard label="Wilayah per ruas" value="2" note="Badung–Denpasar, Kota Bogor" icon={<Radio className="h-3.5 w-3.5" aria-hidden="true" />} />
               <StatCard label="Angin" value={wind ? `${wind.speed.length}` : '…'} note="titik prakiraan tiap jam" icon={<Wind className="h-3.5 w-3.5" aria-hidden="true" />} />
             </div>
@@ -87,10 +96,10 @@ export default function PantauPage() {
               <PantauMap fires={fires?.points ?? []} wind={wind} hour={h} center={[-2.5, 118]} zoom={5} dark={dark} />
             </Suspense>
             <p className="text-xs text-gray-600 dark:text-gray-300">Titik merah: api terdeteksi satelit dalam 24 jam terakhir (makin besar makin panas). Panah biru: arah angin jam ini, ke mana asap terbawa.</p>
-            {pulau.length > 0 && (
+            {prov.length > 0 && (
               <div className="rounded-2xl bg-white dark:bg-gray-900 p-4">
-                <BarChart title="Titik api 24 jam per pulau" bars={pulau.map((p, i) => ({ label: p.nama, value: p.n, highlight: i === 0, color: i === 0 ? '#dc2626' : '#fb923c' }))} />
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Artinya: di pulau teratas paling banyak pembakaran atau kebakaran lahan hari ini; asapnya bisa terbawa angin ratusan kilometer.</p>
+                <BarChart title="Titik api 24 jam per provinsi (10 teratas)" bars={prov.slice(0, 10).map((p, i) => ({ label: p.nama, value: p.n, highlight: i === 0, color: i === 0 ? '#dc2626' : '#fb923c' }))} />
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Artinya: di provinsi teratas paling banyak pembakaran atau kebakaran lahan hari ini; asapnya bisa terbawa angin ratusan kilometer.{fires?.luar_indonesia ? ` ${n(fires.luar_indonesia)} titik di negara tetangga atau laut tidak dihitung.` : ''}</p>
               </div>
             )}
             <nav className="grid gap-2 sm:grid-cols-2" aria-label="Wilayah dengan peta per ruas">
@@ -141,6 +150,13 @@ export default function PantauPage() {
             </Rincian>
           </>
         )}
+        <div className="rounded-2xl bg-white dark:bg-gray-900 p-4" data-laporan-ringkas>
+          <p className="text-sm font-bold text-gray-900 dark:text-white">Laporan warga, 7 hari{region ? ' (radius 25 km)' : ''}</p>
+          <p className="mt-1 text-2xl font-extrabold tabular-nums text-gray-900 dark:text-white">{laporTotal ? n(laporTotal.laporan) : '…'}</p>
+          {laporJenis.length > 0 ? <div className="mt-2"><BarChart title="Per jenis" bars={laporJenis.map((b) => ({ ...b, color: '#b45309' }))} /></div>
+            : <p className="text-xs text-gray-500 dark:text-gray-400">{lapor ? 'Belum ada laporan. Lihat asap atau pembakaran? Tekan Laporkan asap.' : 'Memuat…'}</p>}
+          <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">Hanya jumlah per wilayah; identitas pelapor tidak pernah tampil. Laporan warga tidak masuk ke angka peta.</p>
+        </div>
         <SourceLine>NASA FIRMS (VIIRS NOAA-20, NOAA-21, S-NPP), Open-Meteo, OpenStreetMap, OpenAQ, CAMS; diperbarui tiap jam.</SourceLine>
       </div>
     </main>

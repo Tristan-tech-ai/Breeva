@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Wind, Route, Gauge, MapPin, Crosshair, ArrowRight, Sparkles } from 'lucide-react';
 import { Seo } from '../components/Seo';
 import OpenAppLink from '../components/auth/OpenAppLink';
+import LaporButton from '../components/lapor/LaporButton';
 import { useMapStore } from '../stores/mapStore';
 import { useIsDark } from '../stores/settingsStore';
 import AQICard from '../components/features/AQICard';
@@ -148,7 +149,8 @@ export default function ExploreMapPage() {
         )}
         <h1 className="text-base font-semibold text-gray-900 dark:text-white">{isRoot ? 'Breeva · Peta Udara Langsung' : 'Peta Udara Langsung'}</h1>
         {isRoot && <Link to="/landing" className="ml-2 text-xs text-gray-500 dark:text-gray-400 underline-offset-2 hover:underline">Tentang</Link>}
-        <OpenAppLink className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-full gradient-primary text-white shadow-sm">Buka aplikasi</OpenAppLink>
+        <LaporButton className="ml-auto" getCenter={() => useMapStore.getState().center ?? null} />
+        <OpenAppLink className="text-xs font-semibold px-3 py-1.5 rounded-full gradient-primary text-white shadow-sm">Buka aplikasi</OpenAppLink>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 pt-4 space-y-5">
