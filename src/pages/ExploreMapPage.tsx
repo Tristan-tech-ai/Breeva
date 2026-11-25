@@ -1,9 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { Coordinate } from '../types';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Wind, Route, Gauge, MapPin, Crosshair, ArrowRight, Sparkles } from 'lucide-react';
+import { ChevronLeft, Wind, Route, Gauge, MapPin, Crosshair, ArrowRight } from 'lucide-react';
 import { Seo } from '../components/Seo';
 import OpenAppLink from '../components/auth/OpenAppLink';
+import Rincian from '../components/viz/Rincian';
 import LaporButton from '../components/lapor/LaporButton';
 import { useMapStore } from '../stores/mapStore';
 import { useIsDark } from '../stores/settingsStore';
@@ -156,17 +157,19 @@ export default function ExploreMapPage() {
       <div className="max-w-3xl mx-auto px-4 pt-4 space-y-5">
         {/* Hero copy (real, crawlable content) */}
         <header>
-          <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] font-bold text-primary-600 dark:text-primary-400">
-            <Sparkles className="w-3.5 h-3.5" /> Mesin VAYU · Data publik
+          <h2 className="text-xl font-extrabold text-gray-900 dark:text-white leading-snug">Asap kendaraan per ruas jalan</h2>
+          <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] font-semibold" aria-label="Ringkasan">
+            <span className="rounded-full bg-emerald-50 dark:bg-emerald-900/30 px-2.5 py-1 text-emerald-800 dark:text-emerald-300">diperbarui tiap jam</span>
+            <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-2.5 py-1 text-gray-700 dark:text-gray-200">ketuk jalan untuk angkanya</span>
+            <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-2.5 py-1 text-gray-700 dark:text-gray-200">tanpa akun</span>
           </div>
-          <h2 className="mt-1.5 text-2xl font-extrabold text-gray-900 dark:text-white leading-snug">
-            Kualitas udara per jalan, langsung di peta
-          </h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-            Breeva memperkirakan polusi udara untuk <b>tiap ruas jalan</b>, dalam ISPU (Indeks Standar Pencemar Udara),
-            diperbarui per jam: latar atmosfer CAMS ditambah sebaran polusi dari lalu lintas di jalan sekitar. Nilainya
-            perkiraan model, lengkap dengan rentang ketidakpastian. Ketuk jalan untuk melihat angkanya. Bebas dipakai tanpa akun.
-          </p>
+          <Rincian summary="Apa yang dihitung?" className="mt-2">
+            <p>
+              Untuk tiap ruas jalan, Breeva menghitung asap kendaraan dari perkiraan lalu lintas jam itu, angin, dan rumus sebaran
+              panduan EPA, di atas udara latar dari sensor warga (OpenAQ) dan CAMS. Nilainya perkiraan model, lengkap dengan rentang
+              95%. Wilayah tanpa titik ukur diberi label indikatif.
+            </p>
+          </Rincian>
         </header>
 
         {/* Layer controls — pollutant type + road resolution (mirrors main map) */}
@@ -207,9 +210,11 @@ export default function ExploreMapPage() {
                   </button>
                 ))}
               </div>
-              <p className="text-[10.5px] text-gray-400 dark:text-gray-500 mt-2 leading-relaxed">
-                <b>Asap kendaraan</b>: gas buang dan jelaga dari kendaraan di ruas itu dan sekitarnya; inilah yang berbeda antara jalan ramai dan gang, dan yang bisa dihindari lewat pilihan jalan. <b>Udara total</b>: PM2,5 dan ISPU, hampir sama di seluruh kota karena didominasi udara latar. <b>Harga hirup</b>: seberapa banyak orang menghirup gas buang ruas itu.
-              </p>
+              <Rincian summary="Arti tiap mode" className="mt-2">
+                <p><b>Asap kendaraan</b>: gas buang dan jelaga dari kendaraan di ruas itu dan sekitarnya; inilah yang berbeda antara jalan ramai dan gang, dan yang bisa dihindari lewat pilihan jalan.</p>
+                <p className="mt-1"><b>Udara total</b>: PM2,5 dan ISPU, hampir sama di seluruh kota karena didominasi udara latar.</p>
+                <p className="mt-1"><b>Harga hirup</b>: seberapa banyak orang menghirup gas buang ruas itu.</p>
+              </Rincian>
             </div>
           )}
         </div>
@@ -309,9 +314,8 @@ export default function ExploreMapPage() {
           <Link to="/prioritas" className="font-semibold text-sky-700 dark:text-sky-300 underline">Prioritas sekolah dan faskes</Link>
         </p>
 
-        {/* How it works */}
-        <section>
-          <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Cara kerja</h3>
+        {/* How it works (folded: N-04) */}
+        <Rincian summary="Cara kerja">
           <div className="grid sm:grid-cols-3 gap-3">
             {HOW.map((h) => (
               <div key={h.title} className="glass-card p-4">
@@ -321,7 +325,7 @@ export default function ExploreMapPage() {
               </div>
             ))}
           </div>
-        </section>
+        </Rincian>
 
         {/* City grid — internal links so crawlers reach every /udara/* page in one hop */}
         <section>

@@ -56,8 +56,19 @@ export function useFieldLayer(
         if (!hit) continue;
         const pr = hit.feature.properties;
         const c = Number(pr.c), i = Number(pr.i);
-        L.popup({ closeButton: true, className: 'glass-popup', offset: [0, -2], autoPan: true })
-          .setLatLng(latlng).setContent(popupHtml(t.src.value(c, i), pr.n as string | undefined, t.src, c, i)).openOn(map);
+        const v = t.src.value(c, i);
+        const html = popupHtml(v, pr.n as string | undefined, t.src, c, i);
+        const m = t.src.manifest;
+        const more = !!(v && m?.forecast_runs?.length);
+        const pop = L.popup({ closeButton: true, className: 'glass-popup', offset: [0, -2], autoPan: true })
+          .setLatLng(latlng).setContent(html + (more ? '<div data-spark style="font-size:10px;color:#6b7280;margin-top:4px">Memuat jam berikutnya…</div>' : '')).openOn(map);
+        // N-04: the road's exhaust now and at the run's forecast hours, loaded only on tap
+        if (more && v && m) {
+          void import('../../lib/field/roadSeries')
+            .then(({ roadSeries, sparkBlock }) => roadSeries(t.src.base, t.src.region.name, m, c, i, v.no2_delta).then((pts) => sparkBlock(pts)))
+            .catch(() => '')
+            .then((block) => { if (pop.isOpen()) pop.setContent(html + block); });
+        }
         return true;
       }
       return false;

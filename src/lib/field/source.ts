@@ -17,6 +17,8 @@ export interface FieldManifest {
   indicative?: boolean;
   /** Measurement layer of the run: kriging (citizen sensors), koschmieder (airport smoke), none or off. */
   measurement?: { method: string; hour_utc?: string | null; sensor_hour_utc?: string | null; metar?: string | null };
+  /** Exhaust forecast hours of the run (F3-10): the next 3 hours and the next 07.00 and 13.00 local. */
+  forecast_runs?: Array<{ ahead: number; valid: string; local_hour: number; key: string }>;
 }
 
 export interface FieldRegion { name: string; label: string; geometry: string; bounds: [[number, number], [number, number]]; home: { lat: number; lng: number } }
