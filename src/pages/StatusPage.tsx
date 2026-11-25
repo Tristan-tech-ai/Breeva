@@ -3,7 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { Seo } from '../components/Seo';
 import { FIELD_REGIONS, fieldBase } from '../lib/field/source';
-import { runsSummary, runsText, type RunsFile } from '../lib/field/runsRecent';
+import { runDate, runsStrip, runsSummary, runsText, type HourState, type RunsFile } from '../lib/field/runsRecent';
+import { sensorSeries, type RecentFile } from '../lib/field/validationRecent';
+import LineChart from '../components/viz/LineChart';
+import Rincian from '../components/viz/Rincian';
+
+const WARNA: Record<HourState, string> = { ok: 'bg-teal-600', gagal: 'bg-red-600', hilang: 'bg-amber-400', sebelum: 'bg-gray-200 dark:bg-gray-700' };
+const ARTI: Record<HourState, string> = { ok: 'terbit', gagal: 'gagal', hilang: 'tidak ada', sebelum: 'sebelum pencatatan' };
+
+/** N-07: one block per hour of the last 24, coloured by what happened to that run. */
+function HourStrip({ f }: { f: RunsFile | null }) {
+  const strip = runsStrip(f);
+  if (!strip) return null;
+  const jam = (run: string) => runDate(run).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  return (
+    <div className="mt-2" data-strip>
+      <div className="flex gap-[2px]" role="img" aria-label={`24 jam terakhir: ${strip.filter((x) => x.state === 'ok').length} terbit, ${strip.filter((x) => x.state === 'gagal').length} gagal, ${strip.filter((x) => x.state === 'hilang').length} tidak ada`}>
+        {strip.map((x) => <span key={x.run} title={`${jam(x.run)}: ${ARTI[x.state]}`} className={`h-4 flex-1 rounded-[3px] ${WARNA[x.state]}`} />)}
+      </div>
+      <div className="mt-0.5 flex justify-between text-[10px] text-gray-500 dark:text-gray-400"><span>{jam(strip[0].run)}</span><span>jam peta terbit, 24 jam terakhir</span><span>{jam(strip[strip.length - 1].run)}</span></div>
+    </div>
+  );
+}
 import { FRESH_MINUTES, manifestStatus, statusText, type FieldStatus } from '../lib/field/status';
 import { estimateDownload, estimateText, readSaved, saveRegionOffline, savedText } from '../lib/pwa/offlineRegion';
 
@@ -50,6 +71,14 @@ export default function StatusPage() {
     return () => { alive = false; };
   }, []);
 
+  const [recent, setRecent] = useState<RecentFile | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch(`${fieldBase()}/v/badung_denpasar/validation_recent.json`, { cache: 'no-cache' })
+      .then((res) => (res.ok ? res.json() : null)).then((f: RecentFile | null) => alive && setRecent(f)).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
   useEffect(() => {
     let alive = true;
     const load = () => {
@@ -85,10 +114,12 @@ export default function StatusPage() {
           Peta dihitung ulang setiap jam di cloud (menit ke-20) tanpa komputer rumah. Data disebut segar bila dihitung kurang
           dari {FRESH_MINUTES} menit lalu.
         </p>
-        <p className="text-[13px] text-gray-600 dark:text-gray-400">
-          Untuk peragaan tanpa internet: tekan "Simpan … untuk tanpa internet" sekali sambil online (perkiraan unduhannya tertulis di bawah tiap tombol).
-          Angkanya tetap jam yang tersimpan.
-        </p>
+        <Rincian summary="Untuk peragaan tanpa internet">
+          <p>
+            Tekan "Simpan … untuk tanpa internet" sekali sambil online (perkiraan unduhannya tertulis di bawah tiap tombol).
+            Angkanya tetap jam yang tersimpan.
+          </p>
+        </Rincian>
         <ul className="space-y-2">
           {FIELD_REGIONS.map((r) => {
             const s = rows[r.name];
@@ -109,7 +140,12 @@ export default function StatusPage() {
                   const rs = runsSummary(runs[r.name] ?? null);
                   if (!rs) return null;
                   const fmt = (d: Date) => d.toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-                  return <p className={`mt-1 text-[12px] ${rs.ok === rs.hours ? 'text-gray-600 dark:text-gray-400' : 'text-amber-800 dark:text-amber-300'}`}>{runsText(rs, fmt)}</p>;
+                  return (
+                    <>
+                      <HourStrip f={runs[r.name] ?? null} />
+                      <p className={`mt-1 text-[12px] ${rs.ok === rs.hours ? 'text-gray-600 dark:text-gray-400' : 'text-amber-800 dark:text-amber-300'}`}>{runsText(rs, fmt)}</p>
+                    </>
+                  );
                 })()}
                 {(() => {
                   const sv = saving[r.name];
@@ -136,11 +172,24 @@ export default function StatusPage() {
             );
           })}
         </ul>
+        {(() => {
+          const last = runsSummary(runs.badung_denpasar ?? null)?.last;
+          const vals = last && recent ? sensorSeries(recent, last) : null;
+          return vals && vals.some((v) => v != null) ? (
+            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3" data-sensor-jam>
+              <LineChart title="Sensor warga yang dipakai tiap jam (Badung–Denpasar)" series={[{ name: 'sensor', values: vals, color: '#0f766e' }]} min={0}
+                xLabels={['24 jam lalu', 'jam ini']} />
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">Kota Bogor belum punya sensor warga; nilainya indikatif.</p>
+            </div>
+          ) : null;
+        })()}
+        <Rincian summary="Sumber data">
         <p className="text-[11px] text-gray-500 dark:text-gray-400">
           Sumber: sensor warga OpenAQ (Badung–Denpasar), jarak pandang bandara, latar CAMS lewat Open-Meteo, dan asap kendaraan
           dari semua jalan dalam 500 m dengan rumus sebaran dari panduan EPA (CALINE-3, ISC3, AERMOD). Kota Bogor belum punya
           titik ukur, jadi nilainya indikatif.
         </p>
+        </Rincian>
       </main>
     </div>
   );

@@ -179,3 +179,10 @@ export function dailySeries(daily: Array<{ date: string; nrmse: number }> | unde
   }
   return { values, from, to };
 }
+
+/** N-07: citizen sensors kriged per run hour for the last `hours` runs up to `lastRun` (null where no run tested). */
+export function sensorSeries(f: Pick<RecentFile, 'entries'> | null, lastRun: string, hours = 24): (number | null)[] {
+  const by = new Map((f?.entries ?? []).map((e) => [e.run, e.n]));
+  const t0 = Date.UTC(+lastRun.slice(0, 4), +lastRun.slice(4, 6) - 1, +lastRun.slice(6, 8), +lastRun.slice(8, 10));
+  return Array.from({ length: hours }, (_, k) => by.get(new Date(t0 + (k - hours + 1) * 3_600_000).toISOString().slice(0, 13).replace(/[-T]/g, '')) ?? null);
+}

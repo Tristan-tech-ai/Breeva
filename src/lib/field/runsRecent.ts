@@ -54,3 +54,19 @@ export function runsText(s: NonNullable<ReturnType<typeof runsSummary>>, fmt: (d
   ];
   return bad.length ? `${head} ${bad.join('; ')}.` : head;
 }
+
+export type HourState = 'ok' | 'gagal' | 'hilang' | 'sebelum';
+
+/** N-07: the last `hours` run hours as states, oldest first: published, failed, missing, or before the file began. */
+export function runsStrip(f: RunsFile | null, hours = 24): Array<{ run: string; state: HourState }> | null {
+  const runs = f?.runs ?? [];
+  if (!runs.length) return null;
+  const last = runs.reduce((m, r) => (r.run > m ? r.run : m), runs[0].run);
+  const first = runs.reduce((m, r) => (r.run < m ? r.run : m), runs[0].run);
+  const byRun = new Map(runs.map((r) => [r.run, r]));
+  return Array.from({ length: hours }, (_, k) => {
+    const run = shiftRun(last, k - hours + 1);
+    const r = byRun.get(run);
+    return { run, state: run < first ? 'sebelum' : !r ? 'hilang' : r.ok ? 'ok' : 'gagal' };
+  });
+}
