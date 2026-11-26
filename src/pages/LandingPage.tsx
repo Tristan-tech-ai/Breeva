@@ -420,7 +420,7 @@ export default function LandingPage() {
                 <ul className="space-y-2.5">
                   <li><Link to="/about" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Tentang</Link></li>
                   <li><Link to="/help" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Bantuan</Link></li>
-                  <li><Link to="/eco-tips" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Tips Eco</Link></li>
+                  <li><Link to="/eco-tips" className="inline-flex min-h-6 min-w-6 items-center text-xs text-slate-600 hover:text-emerald-700 transition-colors">Tips hijau</Link></li>
                 </ul>
               </div>
 
