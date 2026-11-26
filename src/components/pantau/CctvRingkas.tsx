@@ -16,12 +16,13 @@ export default function CctvRingkas({ file, kamera }: { file: CctvFile | null; k
       </p>
       <ul className="mt-1 space-y-0.5">
         {kota.map((r) => (
-          <li key={r.kota}>{r.nama}: {r.ok.toLocaleString('id-ID')} dari {r.kamera.toLocaleString('id-ID')} kamera terbaca, {r.kendaraan.toLocaleString('id-ID')} kendaraan terlihat{r.padat ? `, ${r.padat} lebih padat dari biasanya` : ''}</li>
+          <li key={r.kota}>{r.nama}: {r.ok.toLocaleString('id-ID')} dari {r.kamera.toLocaleString('id-ID')} kamera terbaca, {r.kendaraan.toLocaleString('id-ID')} kendaraan terlihat{r.padat ? `, ${r.padat} lebih padat dari jam yang sama kemarin` : ''}</li>
         ))}
       </ul>
       <p className="mt-1">
         Satu gambar per kamera tiap 20 menit dihitung di server lalu dibuang; tidak ada gambar yang disimpan atau ditampilkan. Warna titik: hijau sepi, kuning biasa, merah padat
-        dibanding biasanya di kamera itu (hijau kebiruan: belum 3 jam data; abu-abu: kamera mati atau buram). Belum masuk angka peta.
+        dibanding jam yang sama pada hari sebelumnya di kamera itu (hijau kebiruan: belum ada data jam yang sama kemarin; abu-abu: kamera mati atau buram).
+        Belum masuk angka peta.
       </p>
       <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Diperbarui {jamWib(file.updated_at)}{basi ? ' (tertunda)' : ''}. Dimatikan 6 Des 2026.</p>
     </div>

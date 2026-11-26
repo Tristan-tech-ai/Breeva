@@ -101,24 +101,41 @@ def test_no_code_path_writes_a_picture():
     assert app_src.count("put_object(") == 1 and "body = json.dumps(obj" in app_src and "Body=body" in app_src
 
 
-def test_history_keeps_the_last_72_runs_and_none_for_offline():
+def test_history_keeps_run_times_for_eight_days_and_none_for_offline():
+    now = datetime(2026, 11, 26, 1, 0, tzinfo=timezone.utc)
+    old = {"format": "riwayat_v2", "runs": [{"t": "2026-11-17T00:00Z", "v": {"k:a": 1}}, {"t": "2026-11-25T01:00Z", "v": {"k:a": 2}}]}
     run = {"hasil": [{"id": "a", "kota": "k", "status": "ok", "total": 4}, {"id": "b", "kota": "k", "status": "buram"}]}
-    r = perbarui_riwayat({"k:a": list(range(72))}, run)
-    assert len(r["k:a"]) == 72 and r["k:a"][-1] == 4 and r["k:a"][0] == 1
-    assert r["k:b"] == [None]
+    r = perbarui_riwayat(old, run, now)
+    assert [x["t"] for x in r["runs"]] == ["2026-11-25T01:00Z", "2026-11-26T01:00Z"]  # 9-day-old run dropped
+    assert r["runs"][-1]["v"] == {"k:a": 4, "k:b": None}
+    # a history in the old format (per camera lists, no times) is not mixed in
+    assert perbarui_riwayat({"k:a": [1, 2, 3]}, run, now)["runs"] == [{"t": "2026-11-26T01:00Z", "v": {"k:a": 4, "k:b": None}}]
 
 
-def test_public_summary_index_needs_three_hours_and_carries_no_url():
+def test_index_compares_with_the_same_hour_on_earlier_days_not_with_the_night():
+    from app import dasar_jam, run_jam_sama
+
+    now = datetime(2026, 11, 27, 0, 0, tzinfo=timezone.utc)  # 07.00 WIB
+    runs = []
+    for day in (25, 26):
+        for hh in range(24):
+            t = datetime(2026, 11, day, hh, 0, tzinfo=timezone.utc)
+            busy = 6 <= (hh + 7) % 24 <= 8  # morning peak in WIB
+            runs.append({"t": t.strftime("%Y-%m-%dT%H:%MZ"), "v": {"k:a": 10 if busy else 1, "k:b": None}})
+    riw = {"format": "riwayat_v2", "runs": runs + [{"t": "2026-11-26T23:20Z", "v": {"k:a": 10}}, {"t": "2026-11-26T23:40Z", "v": {"k:a": 11}}]}
+    sama = run_jam_sama(riw, now)
+    assert {(datetime.fromisoformat(r["t"].replace("Z", "+00:00")) + __import__("datetime").timedelta(hours=7)).hour for r in sama} <= {6, 7, 8}
+    assert dasar_jam(sama, "k:a") == 10 and dasar_jam(sama, "k:b") is None
     kam = [{"id": "a", "kota": "k", "nama": "Jl. Uji", "url": "https://kamera.example/a.m3u8", "lat": -6.6, "lon": 106.8},
            {"id": "b", "kota": "k", "nama": "Jl. Baru", "url": "https://kamera.example/b.m3u8", "lat": -6.7, "lon": 106.9}]
-    run = {"waktu_utc": "2026-11-25T14:00:00Z", "model": "uji", "hasil": [
-        {"id": "a", "kota": "k", "status": "ok", "total": 9}, {"id": "b", "kota": "k", "status": "ok", "total": 2}]}
-    riw = {"k:a": [3] * 9 + [6, 9, 9], "k:b": [2, 2]}
-    pub = ringkas_publik(kam, run, riw)
+    run = {"waktu_utc": "2026-11-27T00:00:00Z", "model": "uji", "hasil": [{"id": "a", "kota": "k", "status": "ok", "total": 12}, {"id": "b", "kota": "k", "status": "ok", "total": 2}]}
+    riw["runs"].append({"t": "2026-11-27T00:00Z", "v": {"k:a": 12, "k:b": 2}})
+    pub = ringkas_publik(kam, run, riw, now)
     a, b = pub["kamera"]
-    assert a["rata_jam"] == 8.0 and a["indeks"] == round(8.0 / 3, 2) and a["tingkat"] == "padat" and a["total"] == 9
-    assert b["rata_jam"] == 2.0 and b["indeks"] is None and b["tingkat"] is None  # 2 runs: no typical level yet
-    assert pub["label"] == LABEL == LABEL_APP and "belum lolos uji" in pub["catatan"].lower()
+    # a busy morning is 'biasa' against yesterday's morning (11 vs 10), not 'padat' against the night
+    assert a["rata_jam"] == 11.0 and a["biasa_jam_ini"] == 10 and a["indeks"] == round(12 / 11, 2) and a["tingkat"] == "biasa"
+    assert b["indeks"] is None and b["tingkat"] is None  # no same-hour baseline yet
+    assert pub["label"] == LABEL == LABEL_APP and "jam yang sama" in pub["catatan"]
     assert "m3u8" not in json.dumps(pub) and "url" not in a
 
 

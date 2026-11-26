@@ -5,6 +5,7 @@
  * switched off 6 Dec 2026; not part of the map numbers (not yet through the hidden-location test, N-34).
  */
 import { kmBetween } from './pantau';
+import { formatAngka } from '../angka';
 
 export const CCTV_PATH = 'v/nasional/cctv.json';
 export const CCTV_LABEL = 'uji coba selama lomba, izin tertulis sedang diproses';
@@ -13,6 +14,8 @@ export type CctvTingkat = 'sepi' | 'biasa' | 'padat';
 export interface CctvKamera {
   id: string; kota: string; nama: string; lat: number; lon: number;
   status: 'ok' | 'buram' | 'offline'; total: number | null; rata_jam: number | null; indeks: number | null; tingkat: CctvTingkat | null;
+  /** N-44: the camera's typical count at this hour on earlier days (null until there is one) */
+  biasa_jam_ini?: number | null;
 }
 export interface CctvFile { format: 'cctv_publik'; updated_at: string; label: string; model: string; catatan: string; kamera: CctvKamera[] }
 
@@ -31,8 +34,9 @@ export function teksCctv(k: CctvKamera): string {
   const nama = k.nama || 'Kamera lalu lintas';
   if (k.status === 'offline') return `${nama} · kamera tidak menayangkan gambar saat diperiksa`;
   if (k.status === 'buram') return `${nama} · gambar buram atau gelap, tidak dihitung`;
-  const rata = k.rata_jam != null ? `, rata-rata jam terakhir ${k.rata_jam.toLocaleString('id-ID', { maximumFractionDigits: 1 })}` : '';
-  const ting = k.tingkat ? ` · ${k.tingkat} dibanding biasanya (${k.indeks!.toLocaleString('id-ID', { maximumFractionDigits: 2 })}x)` : ' · tingkat biasanya belum diketahui (perlu 3 jam data)';
+  const rata = k.rata_jam != null ? `, rata-rata jam terakhir ${formatAngka(k.rata_jam, 0, 1)}` : '';
+  const biasa = k.biasa_jam_ini != null ? `, biasanya ${formatAngka(k.biasa_jam_ini, 0, 1)} pada jam ini` : '';
+  const ting = k.tingkat ? ` · ${k.tingkat} dibanding jam yang sama kemarin${biasa}` : ' · belum ada data jam yang sama kemarin';
   return `${nama} · ${k.total ?? 0} kendaraan terlihat${rata}${ting}`;
 }
 

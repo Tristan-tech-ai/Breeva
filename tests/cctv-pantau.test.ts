@@ -25,8 +25,9 @@ describe('N-35 traffic-camera layer', () => {
     expect(warnaCctv(file.kamera[3])).toBe('#94a3b8');
   });
   it('tooltips say what was seen, and never claim a level without history', () => {
-    expect(teksCctv(file.kamera[0])).toBe('Jl. Pajajaran · 5 kendaraan terlihat, rata-rata jam terakhir 4,3 · padat dibanding biasanya (1,6x)');
-    expect(teksCctv(file.kamera[1])).toContain('belum diketahui');
+    expect(teksCctv(file.kamera[0])).toBe('Jl. Pajajaran · 5 kendaraan terlihat, rata-rata jam terakhir 4,3 · padat dibanding jam yang sama kemarin');
+    expect(teksCctv({ ...file.kamera[0], biasa_jam_ini: 2.5 })).toContain('padat dibanding jam yang sama kemarin, biasanya 2,5 pada jam ini');
+    expect(teksCctv(file.kamera[1])).toContain('belum ada data jam yang sama kemarin');
     expect(teksCctv(file.kamera[2])).toContain('buram');
     expect(teksCctv(file.kamera[3])).toContain('tidak menayangkan');
   });
