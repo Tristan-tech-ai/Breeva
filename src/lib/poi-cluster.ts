@@ -42,25 +42,31 @@ const index = new Supercluster<PointProps, Record<string, never>>({
 // F1-70: marker budget and spacing live in poiThin.ts (pure, tested in node)
 
 let loadedSerial = -1;
-let loadedZoom = -1;
 let loadedShowMerchants = true;
 let loadedGreenOnly = false;
+let loads = 0;
 let poiLookup = new Map<string, POI>();
 
+/** True when the POI set changed since the last build (the zoom is not part of the key: N-67). */
+export function needsReindex(serial: number, showMerchants = true, greenOnly = false): boolean {
+  return !(serial === loadedSerial && showMerchants === loadedShowMerchants && greenOnly === loadedGreenOnly);
+}
+
+/** How many times the index was built (tests). */
+export function indexLoads(): number {
+  return loads;
+}
+
 /**
- * Re-index the Supercluster with POIs filtered by priority at the given zoom.
- * Only priority-eligible POIs enter the index — the rest are simply hidden
- * (no cluster bubbles for off-screen-tier POIs).
+ * Build the spatial index once per POI set. Every POI enters with its priority tier; the tier is applied at query
+ * time (getVisibleFeatures). N-67: the index used to be rebuilt each time a pinch crossed an integer zoom, which put
+ * a load of up to 37,548 points inside the gesture (/home longest task 185-213 ms at CPU 6x).
  */
-export function reindex(pois: POI[], serial: number, zoom: number, showAll: boolean, showMerchants = true, greenOnly = false): void {
-  const effectiveZoom = Math.floor(zoom);
-  // showMerchants + greenOnly are part of the cache key: POILayer pre-filters `pois`
-  // (drops merchants / keeps only green spaces), but serial/zoom don't change when a
-  // toggle flips — without this the memoized index would keep the stale set.
-  if (serial === loadedSerial && effectiveZoom === loadedZoom
-      && showMerchants === loadedShowMerchants && greenOnly === loadedGreenOnly) return;
+export function reindex(pois: POI[], serial: number, showMerchants = true, greenOnly = false): void {
+  // showMerchants + greenOnly are part of the cache key: POILayer pre-filters `pois` (drops merchants / keeps only
+  // green spaces), but the serial does not change when a toggle flips
+  if (!needsReindex(serial, showMerchants, greenOnly)) return;
   loadedSerial = serial;
-  loadedZoom = effectiveZoom;
   loadedShowMerchants = showMerchants;
   loadedGreenOnly = greenOnly;
 
@@ -73,9 +79,6 @@ export function reindex(pois: POI[], serial: number, zoom: number, showAll: bool
     const priority = mp._isMerchant
       ? merchantPriority(mp._priorityBoost || 0)
       : resolvePriority(poi.types || []);
-    // Skip POIs whose priority tier is above current zoom (unless showAll)
-    if (!showAll && priority > effectiveZoom) continue;
-
     poiLookup.set(poi.id, poi);
     features.push({
       type: 'Feature',
@@ -93,6 +96,7 @@ export function reindex(pois: POI[], serial: number, zoom: number, showAll: bool
   }
 
   index.load(features);
+  loads++;
 }
 
 /**
@@ -104,7 +108,9 @@ export function getVisibleFeatures(
   east: number,
   north: number,
   zoom: number,
+  showAll = false,
 ): ClusterFeature[] {
+  const tier = Math.floor(zoom);
   // above the index's maxZoom Supercluster returns every point unclustered; thinPoints spaces them instead
   const raw = index.getClusters([west, south, east, north], 21);
   const clusters: ClusterFeature[] = [];
@@ -128,6 +134,8 @@ export function getVisibleFeatures(
         expansionZoom: index.getClusterExpansionZoom(props.cluster_id!),
       });
     } else {
+      // POIs whose priority tier is above the current zoom stay hidden (unless showAll)
+      if (!showAll && (props.priority ?? 99) > tier) continue;
       const poi = poiLookup.get(props.poiId);
       if (poi) {
         points.push({ type: 'point', poi, lng, lat, id: poi.id, _priority: props.priority ?? 99 });

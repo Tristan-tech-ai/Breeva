@@ -4,7 +4,7 @@ import L from 'leaflet';
 import { useNavigate } from 'react-router-dom';
 import type { POI } from '../../lib/poi-api';
 import { usePoiStore } from '../../stores/poiStore';
-import { reindex, getVisibleFeatures } from '../../lib/poi-cluster';
+import { needsReindex, reindex, getVisibleFeatures } from '../../lib/poi-cluster';
 import { resolvePriority, merchantPriority, isGreenSpace, getMerchantDivIcon } from '../../lib/poi-icons';
 import { resolveLabels, type LabelCandidate } from '../../lib/label-collision';
 import { diagStart, diagEnd } from '../../lib/poi-diagnostics';
@@ -95,15 +95,17 @@ export default function POILayer({
     const ctx = ctxRef.current;
     if (!ctx.visible || zoom < 14) return null;
 
-    let pois = st.getPOIArray().filter((p) => !(p as POI & { _isMerchant?: boolean })._isMerchant);
-    if (ctx.greenOnly) pois = pois.filter((p) => isGreenSpace(p.types || []));
-
     const currentZoom = Math.floor(zoom);
     const showAll = !!ctx.activeFilter || currentZoom >= 17;
 
-    diagStart('reindex');
-    reindex(pois, st.serial, zoom, showAll, true, ctx.greenOnly);
-    diagEnd('reindex', { pois: pois.length });
+    // Build the index only when the POI set changed, not on every zoom level (N-67)
+    if (needsReindex(st.serial, true, ctx.greenOnly)) {
+      let pois = st.getPOIArray().filter((p) => !(p as POI & { _isMerchant?: boolean })._isMerchant);
+      if (ctx.greenOnly) pois = pois.filter((p) => isGreenSpace(p.types || []));
+      diagStart('reindex');
+      reindex(pois, st.serial, true, ctx.greenOnly);
+      diagEnd('reindex', { pois: pois.length });
+    }
 
     const latPad = (bounds.getNorth() - bounds.getSouth()) * 0.15;
     const lngPad = (bounds.getEast() - bounds.getWest()) * 0.15;
@@ -113,6 +115,7 @@ export default function POILayer({
       bounds.getEast() + lngPad,
       bounds.getNorth() + latPad,
       zoom,
+      showAll,
     );
 
     // Collision-aware label placement (screen space)
