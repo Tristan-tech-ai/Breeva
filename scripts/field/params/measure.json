@@ -217,7 +217,9 @@
    "alpha_m2g": 6.18,
    "licence": "OpenAQ location records: CC BY 4.0 (checked 2026-11-16); attribution to OpenAQ and AirGradient",
    "alpha_source": "sumber_proposal/data/stats_f.json alpha, fold bali (Koschmieder, estimated from the other cities)",
-   "pi_scale": 1.735
+   "pi_scale": 1.259,
+   "noise_floor_ugm3": 6,
+   "interval_note": "F5-30 (26 Nov 2026): sensor noise floor 6 ug/m3 chosen on November training days (both time splits), pi_scale refitted nested on June-October with it (was 1.735 without floor). June-October coverage 0.944 (night 0.943, morning 0.934, day 0.952), November held-out 0.952 and 0.957; scripts/field/validate-sensors.mts --noise-floor 6"
   },
   "kota_bogor": {
    "metar": "WIHH",

@@ -19,6 +19,8 @@ export interface RegionMeasureParams {
   variogram_log?: Variogram;
   /** Widening of the kriging sd so the 95 % interval holds 95 % of hidden readings (validate-sensors.mts, F5-05). */
   pi_scale?: number;
+  /** F5-30: sensor noise floor (ug/m3) added to the interval; pi_scale was refitted with it (validate-sensors.mts --noise-floor). */
+  noise_floor_ugm3?: number;
   sensors?: VettedSensor[];
   metar?: string;
   alpha_m2g?: number;
@@ -36,6 +38,7 @@ export interface MeasuredInputs {
   sensors_vetted: number;
   variogram_log?: Variogram;
   pi_scale?: number;
+  noise_floor_ugm3?: number;
   metar?: MetarHour;
   koschmieder?: { pm25: number; reason: 'smoke' | 'low_visibility'; alpha_m2g: number };
   note: string;
@@ -141,7 +144,7 @@ export async function measureHour(
           const lag = Math.round((hourUtc.getTime() - Date.parse(hour)) / 3600_000);
           notes.push(`${all.length} of ${params.sensors.length} vetted sensors reported hour ${hour} (${lag} h before the field hour)${dropped ? `, ${dropped} dropped by rule S1` : ''}${fail}`);
           const earlier = earlierHours(byHour, hour, need);
-          return { ...base, method: 'kriging', sensors: readings, sensor_hour_utc: hour, earlier, variogram_log: params.variogram_log, pi_scale: params.pi_scale ?? 1, note: notes.join('; ') };
+          return { ...base, method: 'kriging', sensors: readings, sensor_hour_utc: hour, earlier, variogram_log: params.variogram_log, pi_scale: params.pi_scale ?? 1, noise_floor_ugm3: params.noise_floor_ugm3 ?? 0, note: notes.join('; ') };
         }
         notes.push(`fewer than ${need} vetted sensors reported in the last ${(opts.lookbackHours ?? 3) + 1} hours${fail}`);
       } catch (e) {

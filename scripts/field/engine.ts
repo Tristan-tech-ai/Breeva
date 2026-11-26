@@ -8,7 +8,7 @@ import { caline4CanyonFactor, pasquillClass } from '../../api/vayu/_caline4.js';
 import { exhaustAt, isMajor, mixingHalfWidth, splitCarriagewayShare, urbanStability, type ExhaustSource, type Stability } from '../../src/lib/field/exhaust.js';
 import type { RoadPack } from './pack.js';
 import type { CellValue } from './cells.js';
-import { OrdinaryKriging } from './kriging.js';
+import { intervalSd, OrdinaryKriging } from './kriging.js';
 import type { MeasuredInputs } from './measure.js';
 
 /** Everything the computation depends on, saved with each run so it can be recomputed exactly. */
@@ -78,9 +78,10 @@ export function makeMeasuredAdjust(m: MeasuredInputs | undefined) {
     const ok = new OrdinaryKriging(m.sensors, m.variogram_log);
     const vals = m.sensors.map((s) => Math.log1p(s.pm25));
     const k = m.pi_scale ?? 1; // interval calibration from the hidden-sensor test (1 in runs built before it)
+    const floor = m.noise_floor_ugm3 ?? 0; // F5-30 sensor noise floor (0 in runs built before it)
     return (lat: number, lon: number, v: { pm25: number; pm25_delta: number; pi95_hi: number; ood_refused: boolean; confidence: CellValue['confidence'] }) => {
       const r = ok.predict(vals, lat, lon);
-      const sd = Math.sqrt(r.variance) * k;
+      const sd = intervalSd(r.variance, r.mean, k, floor);
       const pm25 = r2(Math.max(0, Math.expm1(r.mean) + v.pm25_delta));
       return {
         pm25, pi95_lo: r2(Math.max(0, Math.expm1(r.mean - 1.96 * sd) + v.pm25_delta)),

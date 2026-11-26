@@ -8,12 +8,13 @@
  *   pnpm exec tsx scripts/field/validate-sensors.mts [--data <sumber_proposal/data>] [--out <dir>] [--params <json>]
  *
  * --params writes the variogram fitted on all sensors plus the vetted sensor list for the field builder.
+ * --noise-floor <ug/m3> (F5-30) adds a fixed sensor noise floor to the interval and refits the nested factor with it.
  * Exit 1 when the daily NRMSE is above 23 %.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
-import { distanceMatrix, fitVariogram, looPredict, nestedIntervalScale, pairStats } from './kriging.js';
+import { distanceMatrix, fitVariogram, intervalSd, looPredict, nestedIntervalScale, pairStats } from './kriging.js';
 
 function arg(name: string, def?: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -38,6 +39,9 @@ function csv(text: string): Record<string, string>[] {
 }
 
 const DATA = arg('data', 'C:/Users/Tristan/Downloads/teknopak/sumber_proposal/data')!;
+const FLOOR = Number(arg('noise-floor', '0'));
+// |z| left for the kriging sd once the noise floor is in place: inside iff |y - mean| <= 1.96 * intervalSd(...)
+const zFloor = (y: number, mean: number, sd: number) => Math.sqrt(Math.max(0, (y - mean) ** 2 - (1.96 * FLOOR / Math.exp(mean)) ** 2)) / sd;
 const OUT = arg('out', 'D:/breeva-ml-data/field/validation')!;
 const sensors = csv(readFileSync(join(DATA, 'sensor_warga_bali.csv'), 'utf8'));
 const ids = sensors.map((s) => Number(s.loc_id));
@@ -79,7 +83,7 @@ for (let i = 0; i < N; i++) {
     LO[i][t] = Math.expm1(mean[t] - 1.96 * s);
     HI[i][t] = Math.expm1(mean[t] + 1.96 * s);
     MU[i][t] = mean[t]; SD[i][t] = s;
-    if (s > 0) Z[i].push((Y[i][t] - mean[t]) / s);
+    if (s > 0) Z[i].push(zFloor(Y[i][t], mean[t], s));
   }
 }
 // Interval calibration (task F5-05): nested per-sensor widening factor, then coverage and width with it.
@@ -88,8 +92,8 @@ let insideCal = 0, nCal = 0;
 const widths: number[] = [];
 for (let i = 0; i < N; i++) for (let t = 0; t < T; t++) {
   if (!Number.isFinite(P[i][t]) || !Number.isFinite(SD[i][t])) continue;
-  const k = scale.perSensor[i];
-  const lo = Math.expm1(MU[i][t] - 1.96 * k * SD[i][t]), hi = Math.expm1(MU[i][t] + 1.96 * k * SD[i][t]);
+  const sdi = intervalSd(SD[i][t] ** 2, MU[i][t], scale.perSensor[i], FLOOR);
+  const lo = Math.expm1(MU[i][t] - 1.96 * sdi), hi = Math.expm1(MU[i][t] + 1.96 * sdi);
   nCal++;
   if (V[i][t] >= lo && V[i][t] <= hi) insideCal++;
   widths.push(hi - lo);
@@ -105,15 +109,15 @@ const partOf = (t: number) => { const h = (new Date(hours[t]).getUTCHours() + 8)
 const zPart: number[][][] = PARTS.map(() => ids.map(() => [] as number[]));
 for (let i = 0; i < N; i++) for (let t = 0; t < T; t++) {
   if (!Number.isFinite(P[i][t]) || !(SD[i][t] > 0)) continue;
-  zPart[partOf(t)][i].push((Y[i][t] - MU[i][t]) / SD[i][t]);
+  zPart[partOf(t)][i].push(zFloor(Y[i][t], MU[i][t], SD[i][t]));
 }
 const partScale = zPart.map((zs) => nestedIntervalScale(zs).perSensor);
 const tally = (factor: (i: number, t: number) => number) => {
   const inside = [0, 0, 0], n = [0, 0, 0], w: number[] = [];
   for (let i = 0; i < N; i++) for (let t = 0; t < T; t++) {
     if (!Number.isFinite(P[i][t]) || !Number.isFinite(SD[i][t])) continue;
-    const k = factor(i, t), pt = partOf(t);
-    const lo = Math.expm1(MU[i][t] - 1.96 * k * SD[i][t]), hi = Math.expm1(MU[i][t] + 1.96 * k * SD[i][t]);
+    const pt = partOf(t), sdi = intervalSd(SD[i][t] ** 2, MU[i][t], factor(i, t), FLOOR);
+    const lo = Math.expm1(MU[i][t] - 1.96 * sdi), hi = Math.expm1(MU[i][t] + 1.96 * sdi);
     n[pt]++; if (V[i][t] >= lo && V[i][t] <= hi) inside[pt]++;
     w.push(hi - lo);
   }
@@ -233,6 +237,7 @@ const report = {
   pi95_hourly_coverage: Number((inside / hp.length).toFixed(3)),
   pi95_calibrated: {
     method: 'nested: factor for each hidden sensor = 95th percentile of |z| over the other sensors / 1.96',
+    noise_floor_ugm3: FLOOR,
     coverage_hourly: Number((insideCal / nCal).toFixed(3)), n: nCal,
     median_width_ug_m3: Number(widths[Math.floor(widths.length / 2)].toFixed(1)),
     factor_all_sensors: Number(scale.all.toFixed(3)),
@@ -248,7 +253,7 @@ if (paramsPath) {
   const prev = (() => { try { return JSON.parse(readFileSync(paramsPath, 'utf8')); } catch { return { regions: {} }; } })();
   prev.regions ??= {};
   const net = {
-    network: 'openaq', min_sensors: 3, variogram_log: all, pi_scale: Number(scale.all.toFixed(3)),
+    network: 'openaq', min_sensors: 3, variogram_log: all, pi_scale: Number(scale.all.toFixed(3)), noise_floor_ugm3: FLOOR,
     fitted: { from: hours[0], to: hours[T - 1], hours: T, sensors: N, script: 'scripts/field/validate-sensors.mts' },
     sensors: sensors.map((s) => ({ loc_id: Number(s.loc_id), sensor_id: Number(s.sensor_id), name: s.name, lat: Number(s.lat), lon: Number(s.lon) })),
   };

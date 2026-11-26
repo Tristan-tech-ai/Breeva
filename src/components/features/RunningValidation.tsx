@@ -38,6 +38,15 @@ export default function RunningValidation({ region = 'badung_denpasar', label = 
           <p className="text-[11px] text-amber-700 dark:text-amber-400">
             Angka per jam, belum dibandingkan dengan target EPA: target NRMSE ≤ 30% berlaku untuk rata-rata 24 jam.
           </p>
+          <Rincian summary="Kenapa rentang 95% sempat memuat kurang dari 95%?">
+          <p className="text-[12px] text-gray-600 dark:text-gray-400" data-f530>
+            Pada 19–26 Nov rentang 95% hanya memuat 81% bacaan yang disembunyikan, terendah pada hari-hari udara bersih 21–24 Nov (rata-rata
+            sekitar 10 µg/m³). Rentang dulu disetel pada data Juni–Oktober yang jauh lebih kotor, sedangkan derau sensor murah tetap beberapa
+            µg/m³ berapa pun kadarnya. Sejak 26 Nov siang rentang memuat lantai derau sensor 6 µg/m³; diuji dengan sensor disembunyikan:
+            Juni–Oktober 94,4%, dan pada hari November yang tidak dipakai untuk menyetel 95,2% dan 95,7%. Angka peta tidak berubah, hanya lebar
+            rentangnya. Membagi rentang per pagi, siang, dan malam juga diuji dan tidak lolos.
+          </p>
+          </Rincian>
           {f && f !== 'failed' && (() => {
             const ser = dailySeries(f.daily);
             return ser ? (

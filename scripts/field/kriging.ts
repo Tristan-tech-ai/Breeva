@@ -198,6 +198,17 @@ export function looPredict(cols: ArrayLike<number>[], D: number[][], target: num
 }
 
 /**
+ * Standard deviation in log1p space of the 95 % interval around a kriged estimate (F5-30): the kriging sd widened by
+ * piScale, plus a sensor noise floor that is fixed in ug/m3 (noiseFloor), which in log1p space is noiseFloor / exp(mean).
+ * Without the floor the interval of a clean hour is too narrow: in November 2026 the live map's interval held 0.78 of
+ * hidden readings below 10 ug/m3 against 0.89 at 20-40 (cakupan_varian_2026-11-26.json).
+ */
+export function intervalSd(variance: number, mean: number, piScale = 1, noiseFloor = 0): number {
+  const a = noiseFloor > 0 ? noiseFloor / Math.exp(mean) : 0;
+  return Math.sqrt(Math.max(0, variance) * piScale * piScale + a * a);
+}
+
+/**
  * Widening of the kriging interval so that it holds the stated share of hidden readings. z = (log1p(obs) - mean) / sd
  * per hidden sensor; the factor for sensor i is the q-quantile of |z| over the OTHER sensors, divided by the normal
  * 1.96 (nested: a sensor never calibrates its own interval). Returns those per-sensor factors and the factor from all

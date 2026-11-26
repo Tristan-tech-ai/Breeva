@@ -1,10 +1,10 @@
 /**
  * Running validation of the measurement layer (task F5-07): for the hour a run kriged, hide each sensor in turn,
  * krige its value from the other sensors of that same hour exactly as the engine does (log1p space, the run's
- * variogram, expm1 back, interval widened by pi_scale), and compare with what it read. One hour, hidden-location test;
+ * variogram, expm1 back, interval widened by pi_scale plus the noise floor, F5-30), and compare with what it read. One hour, hidden-location test;
  * it is NOT the daily EPA target (24-hour means), which docs and the validation page report separately.
  */
-import { OrdinaryKriging, type Variogram } from './kriging.js';
+import { intervalSd, OrdinaryKriging, type Variogram } from './kriging.js';
 import type { MeasuredInputs, SensorReading } from './measure.js';
 
 export interface HourlyValidation {
@@ -26,14 +26,14 @@ export interface HourlyValidation {
 const round = (x: number, d = 3) => (Number.isFinite(x) ? Number(x.toFixed(d)) : Number.NaN);
 
 /** Leave-one-sensor-out predictions for one hour (ug/m3) with their 95 % intervals. */
-export function looHour(sensors: SensorReading[], v: Variogram, piScale = 1): Array<{ obs: number; pred: number; lo: number; hi: number }> {
+export function looHour(sensors: SensorReading[], v: Variogram, piScale = 1, noiseFloor = 0): Array<{ obs: number; pred: number; lo: number; hi: number }> {
   const out: Array<{ obs: number; pred: number; lo: number; hi: number }> = [];
   if (sensors.length < 3) return out;
   for (let i = 0; i < sensors.length; i++) {
     const rest = sensors.filter((_, j) => j !== i);
     const ok = new OrdinaryKriging(rest, v);
     const r = ok.predict(rest.map((s) => Math.log1p(s.pm25)), sensors[i].lat, sensors[i].lon);
-    const sd = Math.sqrt(r.variance) * piScale;
+    const sd = intervalSd(r.variance, r.mean, piScale, noiseFloor);
     out.push({ obs: sensors[i].pm25, pred: Math.expm1(r.mean), lo: Math.expm1(r.mean - 1.96 * sd), hi: Math.expm1(r.mean + 1.96 * sd) });
   }
   return out;
@@ -42,7 +42,7 @@ export function looHour(sensors: SensorReading[], v: Variogram, piScale = 1): Ar
 /** The hidden-sensor guesses of the hour, for the daily test (task F5-10); private (audit report only). */
 export function hourlyRows(m: MeasuredInputs | undefined): { sensor_hour_utc: string; rows: Array<{ loc_id: number; obs: number; pred: number }> } | null {
   if (!m || m.method !== 'kriging' || !m.variogram_log || !m.sensor_hour_utc) return null;
-  const rows = looHour(m.sensors, m.variogram_log, m.pi_scale ?? 1);
+  const rows = looHour(m.sensors, m.variogram_log, m.pi_scale ?? 1, m.noise_floor_ugm3 ?? 0);
   if (!rows.length) return null;
   return { sensor_hour_utc: m.sensor_hour_utc, rows: rows.map((r, k) => ({ loc_id: m.sensors[k].loc_id, obs: r.obs, pred: Number(r.pred.toFixed(2)) })) };
 }
@@ -52,7 +52,7 @@ export function earlierRows(m: MeasuredInputs | undefined): Array<{ sensor_hour_
   if (!m || m.method !== 'kriging' || !m.variogram_log || !m.earlier?.length) return [];
   const out = [];
   for (const e of [...m.earlier].sort((a, b) => a.sensor_hour_utc.localeCompare(b.sensor_hour_utc))) {
-    const rows = looHour(e.sensors, m.variogram_log, m.pi_scale ?? 1);
+    const rows = looHour(e.sensors, m.variogram_log, m.pi_scale ?? 1, m.noise_floor_ugm3 ?? 0);
     if (rows.length) out.push({ sensor_hour_utc: e.sensor_hour_utc, rows: rows.map((r, k) => ({ loc_id: e.sensors[k].loc_id, obs: r.obs, pred: Number(r.pred.toFixed(2)) })) });
   }
   return out;
@@ -60,7 +60,7 @@ export function earlierRows(m: MeasuredInputs | undefined): Array<{ sensor_hour_
 
 export function hourlyValidation(m: MeasuredInputs | undefined): HourlyValidation | null {
   if (!m || m.method !== 'kriging' || !m.variogram_log) return null;
-  const rows = looHour(m.sensors, m.variogram_log, m.pi_scale ?? 1);
+  const rows = looHour(m.sensors, m.variogram_log, m.pi_scale ?? 1, m.noise_floor_ugm3 ?? 0);
   if (!rows.length) return null;
   const n = rows.length;
   const mo = rows.reduce((s, r) => s + r.obs, 0) / n, mp = rows.reduce((s, r) => s + r.pred, 0) / n;
