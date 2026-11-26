@@ -6,7 +6,8 @@ describe('N-63 sticky headers do not let the page text show through', () => {
     const css = readFileSync('src/index.css', 'utf8');
     const light = css.match(/\.glass-nav \{[^}]*background: rgba\(255, 255, 255, ([\d.]+)\)/);
     const dark = css.match(/\.dark \.glass-nav \{[^}]*background: rgba\(15, 23, 42, ([\d.]+)\)/);
-    expect(Number(light?.[1])).toBeGreaterThanOrEqual(0.95);
-    expect(Number(dark?.[1])).toBeGreaterThanOrEqual(0.95);
+    // N-154: fully opaque; 0.95 still let scrolled text show faintly behind the title in the video rehearsal
+    expect(Number(light?.[1])).toBe(1);
+    expect(Number(dark?.[1])).toBe(1);
   });
 });

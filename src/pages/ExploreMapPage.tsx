@@ -336,7 +336,7 @@ export default function ExploreMapPage() {
             {CITIES.map((c) => (
               <Link key={c.slug} to={`/udara/${c.slug}`} className="glass-card px-3 py-2.5 text-center hover:ring-1 hover:ring-primary-400/40 transition">
                 <span className="block text-sm font-semibold text-gray-900 dark:text-white">{c.name}</span>
-                <span className="block text-[10px] text-gray-400 dark:text-gray-500">Lihat AQI</span>
+                <span className="block text-[10px] text-gray-500 dark:text-gray-400">Lihat udara</span>
               </Link>
             ))}
           </div>

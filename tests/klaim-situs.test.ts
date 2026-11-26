@@ -35,4 +35,10 @@ describe('no unsupported claims in the visible text (N-94)', () => {
     expect(read('src/components/map/MapLayersSheet.tsx')).toMatch(/type="range"\s+aria-label="Jam prakiraan"/);
     expect(read('src/pages/OnboardingPage.tsx')).not.toMatch(/dark:bg-primary-600 text-white/);
   });
+
+  it('the city tiles under /peta speak of air, not the US index (N-152)', () => {
+    const s = read('src/pages/ExploreMapPage.tsx');
+    expect(s).not.toMatch(/Lihat AQI/);
+    expect(s).toMatch(/Lihat udara/);
+  });
 });
