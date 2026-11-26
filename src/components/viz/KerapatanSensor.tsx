@@ -32,7 +32,7 @@ export default function KerapatanSensor() {
       </p>
       <p className="mt-1 text-[12px] text-gray-700 dark:text-gray-300">
         Galat per kelas lokasi (median NRMSE harian): {Object.entries(d.kelas).map(([k, v]) => `${k} ${formatAngka(v.nrmse_median, 1, 1)}% (${v.n} sensor)`).join('; ')}.
-        Galat terbesar datang dari sensor yang jauh berbeda dari tetangganya, misalnya di dataran tinggi.
+        Galat terbesar (kelas dataran tinggi) datang dari satu sensor yang ternyata rusak: membaca hampir 0 sejak Oktober (pemeriksaan mutu sensor 27 Nov); sensor itu akan dikeluarkan dan uji ini diulang.
       </p>
     </section>
   );
