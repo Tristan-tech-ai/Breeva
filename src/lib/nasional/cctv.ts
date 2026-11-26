@@ -53,16 +53,26 @@ export function kameraKabKota(file: CctvFile | null, slug: string): CctvKamera[]
 }
 
 /** Per city: cameras, how many showed a countable picture, vehicles seen in the latest frames, and how many are busy. */
-export function ringkasCctv(kamera: CctvKamera[]): Array<{ kota: string; nama: string; kamera: number; ok: number; kendaraan: number; padat: number }> {
-  const by = new Map<string, { kota: string; nama: string; kamera: number; ok: number; kendaraan: number; padat: number }>();
+export interface RingkasKota { kota: string; nama: string; kamera: number; ok: number; kendaraan: number; padat: number; mati: number }
+
+export function ringkasCctv(kamera: CctvKamera[]): RingkasKota[] {
+  const by = new Map<string, RingkasKota>();
   for (const k of kamera) {
-    const r = by.get(k.kota) ?? { kota: k.kota, nama: KOTA_CCTV[k.kota] ?? k.kota, kamera: 0, ok: 0, kendaraan: 0, padat: 0 };
+    const r = by.get(k.kota) ?? { kota: k.kota, nama: KOTA_CCTV[k.kota] ?? k.kota, kamera: 0, ok: 0, kendaraan: 0, padat: 0, mati: 0 };
     r.kamera += 1;
+    if (k.status === 'offline') r.mati += 1;
     if (k.status === 'ok') { r.ok += 1; r.kendaraan += k.total ?? 0; }
     if (k.tingkat === 'padat') r.padat += 1;
     by.set(k.kota, r);
   }
   return [...by.values()].sort((a, b) => b.kamera - a.kamera);
+}
+
+/** N-119: the line for one city; when every camera of the city was offline in the last run, its server did not answer. */
+export function barisKota(r: RingkasKota): string {
+  const n = (x: number) => x.toLocaleString('id-ID');
+  if (r.kamera > 0 && r.mati === r.kamera) return `${r.nama}: server kamera kota ini tidak menjawab pada run terakhir (${n(r.kamera)} kamera); dicoba lagi tiap 20 menit`;
+  return `${r.nama}: ${n(r.ok)} dari ${n(r.kamera)} kamera terbaca, ${n(r.kendaraan)} kendaraan terlihat${r.padat ? `, ${r.padat} lebih padat dari jam yang sama kemarin` : ''}`;
 }
 
 /** The file is stale when the last run is more than an hour old (the schedule runs every 20 minutes). */

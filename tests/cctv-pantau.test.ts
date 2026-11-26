@@ -38,7 +38,7 @@ describe('N-35 traffic-camera layer', () => {
     expect(kameraKabKota(file, 'kabupaten-bogor')).toEqual([]);
     expect(kameraKabKota(file, 'kota-bandung').map((k) => k.id)).toEqual(['d']);
     const r = ringkasCctv(file.kamera);
-    expect(r[0]).toEqual({ kota: 'kota_bogor', nama: 'Kota Bogor', kamera: 3, ok: 2, kendaraan: 7, padat: 1 });
+    expect(r[0]).toEqual({ kota: 'kota_bogor', nama: 'Kota Bogor', kamera: 3, ok: 2, kendaraan: 7, padat: 1, mati: 0 });
     expect(r[1]).toMatchObject({ kota: 'kota_bandung', ok: 0, kendaraan: 0 });
   });
   it('is stale after an hour without a run', () => {
@@ -53,5 +53,19 @@ describe('N-35 traffic-camera layer', () => {
     expect(html).toContain('Kota Bogor');
     expect(html).toMatch(/21[.:]00/); // 14.00 UTC = 21.00 WIB
     expect(html).not.toMatch(/<img|<video|m3u8/);
+  });
+});
+
+describe('a city whose camera server did not answer (N-119)', () => {
+  it('says so instead of 0 cameras read and 0 vehicles', async () => {
+    const { barisKota, ringkasCctv } = await import('../src/lib/nasional/cctv');
+    const k = (id: string, kota: string, status: string, total?: number) => ({ id, kota, status, total }) as never;
+    const rows = ringkasCctv([k('1', 'kota_bogor', 'offline'), k('2', 'kota_bogor', 'offline'), k('3', 'kota_bandung', 'ok', 4), k('4', 'kota_bandung', 'offline')]);
+    const bogor = rows.find((r) => r.kota === 'kota_bogor')!, bandung = rows.find((r) => r.kota === 'kota_bandung')!;
+    expect(barisKota(bogor)).toMatch(/server kamera kota ini tidak menjawab pada run terakhir \(2 kamera\)/);
+    expect(barisKota(bandung)).toMatch(/1 dari 2 kamera terbaca, 4 kendaraan terlihat/);
+    // all blurred at night is not a silent server
+    const malam = ringkasCctv([k('5', 'kota_bogor', 'buram'), k('6', 'kota_bogor', 'buram')]);
+    expect(barisKota(malam[0])).toMatch(/0 dari 2 kamera terbaca/);
   });
 });

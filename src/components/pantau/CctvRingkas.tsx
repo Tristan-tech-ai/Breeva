@@ -1,5 +1,5 @@
 import { Car } from 'lucide-react';
-import { CCTV_LABEL, cctvBasi, ringkasCctv, type CctvFile, type CctvKamera } from '../../lib/nasional/cctv';
+import { barisKota, CCTV_LABEL, cctvBasi, ringkasCctv, type CctvFile, type CctvKamera } from '../../lib/nasional/cctv';
 
 const jamWib = (iso: string) => new Date(iso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' WIB';
 
@@ -16,7 +16,7 @@ export default function CctvRingkas({ file, kamera }: { file: CctvFile | null; k
       </p>
       <ul className="mt-1 space-y-0.5">
         {kota.map((r) => (
-          <li key={r.kota}>{r.nama}: {r.ok.toLocaleString('id-ID')} dari {r.kamera.toLocaleString('id-ID')} kamera terbaca, {r.kendaraan.toLocaleString('id-ID')} kendaraan terlihat{r.padat ? `, ${r.padat} lebih padat dari jam yang sama kemarin` : ''}</li>
+          <li key={r.kota}>{barisKota(r)}</li>
         ))}
       </ul>
       <p className="mt-1">
