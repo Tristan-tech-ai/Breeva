@@ -12,6 +12,7 @@ import { formatLocalDateYYYYMMDD } from '../lib/utils';
 import { computeDose, type ExposureMode, type ExposureDoseResult, type UserExposureProfile } from '../lib/exposure';
 import { saveExposureLedger } from '../lib/exposure-ledger';
 import { bearing, smoothHeading, routeProgress, isOffRoute, withinGeofence } from '../lib/geo';
+import { daftarPenjaga } from '../lib/penjaga-muat';
 
 // Map the walk's transport mode to the exposure dose model's mode.
 function transportToExposureMode(t: string): ExposureMode {
@@ -610,3 +611,6 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
     set({ pointsEarned: points });
   },
 }));
+
+// A new build must not reload the page in the middle of a walk (pwa.ts, M-U00).
+daftarPenjaga(() => { const s = useWalkStore.getState().session; return !!s && (s.status === 'active' || s.status === 'paused'); });

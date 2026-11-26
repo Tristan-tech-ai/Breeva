@@ -2,16 +2,27 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'node:child_process'
+
+// Build stamp (src/lib/versi.ts): Vercel gives the commit; a local build reads git.
+function buildCommit(): string {
+  const v = process.env.BUILD_COMMIT || process.env.VERCEL_GIT_COMMIT_SHA
+  if (v) return v.slice(0, 7)
+  try { return execSync('git rev-parse --short=7 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() } catch { return 'lokal' }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    __BUILD_COMMIT__: JSON.stringify(buildCommit()),
+  },
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
-      // 'prompt' (not 'autoUpdate'): a new SW does NOT auto-reload the open app.
-      // It waits; onNeedRefresh fires a gentle toast; it applies silently on the
-      // next full close+reopen (or immediately if the user taps "Refresh sekarang").
+      // 'prompt' keeps the plugin from reloading on its own; sw.ts skips waiting and pwa.ts decides when a
+      // reload is safe (no walk, no route being computed), M-U00.
       registerType: 'prompt',
       strategies: 'injectManifest',
       srcDir: 'src',

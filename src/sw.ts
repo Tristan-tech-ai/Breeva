@@ -71,14 +71,13 @@ interface BreevaOfflineDB extends DBSchema {
 const SYNC_TAG = 'breeva-sync-pending-actions';
 const CACHE_PREFIX = 'breeva-pwa';
 
-// Update model = PROMPT, not force-reload. We deliberately DON'T call skipWaiting()
-// on install: a new SW stays "waiting" and the old one keeps serving the running app
-// (no surprise mid-session reload, no lazy-chunk version mismatch). The waiting SW
-// activates on the next full close+reopen → silent update on exit. The "Refresh
-// sekarang" toast (pwa.ts onNeedRefresh) posts SKIP_WAITING to apply it immediately.
-clientsClaim(); // first install (no prior SW) → control the page without a reload
+// Update model (M-U00, 26 Nov): a new build takes over at once. It skips waiting on install and claims open pages;
+// pwa.ts then reloads the page when no walk is active and no route is being computed (otherwise it waits and offers a
+// button). The old prompt model left phones on a stale build for days, because a PWA is rarely closed completely.
+self.addEventListener('install', () => { void self.skipWaiting(); });
+clientsClaim();
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+  if (event.data && event.data.type === 'SKIP_WAITING') void self.skipWaiting();
 });
 
 precacheAndRoute(self.__WB_MANIFEST);

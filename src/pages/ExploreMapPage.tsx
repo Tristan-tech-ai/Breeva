@@ -25,6 +25,7 @@ import { locationStart } from '../lib/route/appRoute';
 import { parseDepart } from '../lib/route/depart';
 import { totalModeNote } from '../lib/roadColors';
 import { noteRouteLookup } from '../lib/trial/storage';
+import { capVersi } from '../lib/versi';
 
 const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
 
@@ -362,6 +363,7 @@ export default function ExploreMapPage() {
           <Link to="/paparan" className="inline-flex min-h-6 items-center hover:text-primary-500">Kalkulator Paparan</Link>
           <Link to="/about" className="inline-flex min-h-6 items-center hover:text-primary-500">Tentang</Link>
           <Link to="/eco-tips" className="inline-flex min-h-6 items-center hover:text-primary-500">Tips Udara Bersih</Link>
+          <span className="inline-flex min-h-6 items-center tabular-nums" data-versi>Versi {capVersi()}</span>
         </nav>
       </div>
     </div>

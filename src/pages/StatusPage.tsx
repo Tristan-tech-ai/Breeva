@@ -28,6 +28,7 @@ function HourStrip({ f }: { f: RunsFile | null }) {
 }
 import { FRESH_MINUTES, manifestStatus, statusText, type FieldStatus } from '../lib/field/status';
 import { estimateDownload, estimateText, readSaved, saveRegionOffline, savedText } from '../lib/pwa/offlineRegion';
+import { capVersi } from '../lib/versi';
 
 type Saving = { state: 'saving'; done: number; total: number } | { state: 'done'; bytes: number; files: number; run: string; at: string } | { state: 'error'; error: string };
 
@@ -185,6 +186,7 @@ export default function StatusPage() {
           ) : null;
         })()}
         <DataNasional base={fieldBase()} />
+        <p className="text-[11px] text-gray-500 dark:text-gray-400" data-versi>Versi aplikasi: {capVersi()}</p>
         <Rincian summary="Sumber data">
         <p className="text-[11px] text-gray-500 dark:text-gray-400">
           Sumber: sensor warga OpenAQ (Badung–Denpasar), jarak pandang bandara, latar CAMS lewat Open-Meteo, dan asap kendaraan

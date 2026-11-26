@@ -25,6 +25,7 @@ import { parseViewLink } from '../lib/route/share';
 import { basemapRegion } from '../lib/basemapVector';
 import { fieldBase } from '../lib/field/source';
 import { loadPoiPack, poiCategoryLabel, searchPoiPack } from '../lib/poiPack';
+import { daftarPenjaga } from '../lib/penjaga-muat';
 
 const FIELD_STATIC_STORE = import.meta.env.VITE_FIELD_STATIC === 'true';
 // ?pusat=lat,lng,zoom: the app map opens at that view (QA screenshots of one street, demo links)
@@ -742,3 +743,6 @@ export const useMapStore = create<MapState>()((set, get) => ({
     }
   },
 }));
+
+// A new build must not reload the page while routes are being computed (pwa.ts, M-U00).
+daftarPenjaga(() => useMapStore.getState().isCalculatingRoutes);
