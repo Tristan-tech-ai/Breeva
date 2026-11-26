@@ -80,3 +80,21 @@ Cara membaca hasilnya: yang dibandingkan adalah lonjakan per menit dan selisih j
 bukan rata-rata jam (PM2,5 latar hampir sama di kedua titik). Model dianggap cocok bila arah selisihnya benar di ketiga pasangan dan
 urutan besarnya sama dengan urutan rasio model; bila tidak, model asap kendaraan diberi catatan dan dikalibrasi ulang sebelum dipakai
 untuk klaim. Pemasangan di pinggir jalan perlu izin pemilik tempat (pagar sekolah, warung); sensor tidak dipasang di trotoar umum.
+
+## Uji kalibrasi lokasi 14 hari (aturan ditulis 27 Nov 2026, sebelum ada alat)
+
+Tujuan: memeriksa apakah kalibrasi lokasi yang lolos 4 dari 4 target EPA pada uji statis (sensor warga Bali, 7 dan 14 hari)
+juga berlaku di lokasi baru dengan sensor pinjaman.
+
+1. Sesudah jadwal pasangan pinggir jalan, tiap sensor pinjaman tinggal 14 hari di satu lokasi dari daftar titik sensor
+   (titik 1 dan 2 tiap wilayah, breeva.site/sensor/titik). Sensor dipasang 1,5-3 m dari tanah, jauh dari dapur, pembakaran,
+   dan knalpot yang berhenti, dengan izin pemilik tempat.
+2. Data masuk lewat jalur yang sama dengan sensor warga (nilai per jam). Selama uji, sensor pinjaman tidak dipakai model peta.
+3. Hari 1-7: hitung selisih menetap lokasi (rata-rata log(1 + sensor) dikurangi log(1 + peta tanpa sensor itu)).
+4. Hari 8-14: uji sekali. Bandingkan peta + selisih dengan peta tanpa selisih, rata-rata harian (hari dengan sedikitnya 18 jam).
+5. Berhasil bila gabungan semua lokasi lolos empat target EPA harian (NRMSE paling tinggi 30%, R² paling rendah 0,70,
+   kemiringan 1 ± 0,35, titik potong ± 5 µg/m³) dan galat per jam turun sedikitnya 10%. Bila tidak, hasilnya tetap dicatat dan
+   kalibrasi lokasi tidak dipasang di peta.
+6. Dua sensor dibandingkan berdampingan pada hari pertama dan terakhir jadwal; selisih lebih dari 10% disamakan dulu dengan
+   faktor dari hari pertama, dan hari terakhir dipakai untuk melihat pergeseran.
+
