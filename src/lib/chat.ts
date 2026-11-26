@@ -9,6 +9,9 @@ const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 const CHAT_URL = `${(SUPA_URL || '').replace('.supabase.co', '.functions.supabase.co')}/chat`;
 
+/** The assistant is shown only when its Edge Function exists (N-57: 'chat' answers 404 on the new project). */
+export const CHAT_AKTIF = import.meta.env.VITE_CHAT_AKTIF === 'true';
+
 export interface ChatMessage { role: 'user' | 'model'; content: string; }
 export interface ToolCall { name: string; args: Record<string, unknown>; }
 export interface ToolResult { name: string; args: Record<string, unknown>; response: unknown; }

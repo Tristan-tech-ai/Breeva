@@ -17,6 +17,8 @@ interface ImportMetaEnv {
   readonly VITE_FIELD_BASE?: string;
   /** Free CARTO basemap key (browser key, public by design); without it OpenStreetMap tiles are used. */
   readonly VITE_CARTO_BASEMAP_KEY?: string;
+  /** 'true' = show the Vayu assistant; it needs the 'chat' Edge Function, which the new Supabase project does not have yet. */
+  readonly VITE_CHAT_AKTIF?: string;
 }
 
 interface ImportMeta {

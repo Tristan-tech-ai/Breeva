@@ -48,6 +48,7 @@ import HomeStatCards from '../components/features/HomeStatCards';
 import Sidebar from '../components/layout/Sidebar';
 import TransportModeSelector from '../components/map/TransportModeSelector';
 import { ispuRingkas } from '../lib/ispu';
+import { CHAT_AKTIF } from '../lib/chat';
 import AQICard from '../components/features/AQICard';
 import WalkComplete from '../components/features/WalkComplete';
 import LiveExposureTracker from '../components/features/LiveExposureTracker';
@@ -411,8 +412,8 @@ export default function HomePage() {
               </button>
             )}
 
-            {/* Vayu AI assistant button (3rd, always visible — bottom of the stack) */}
-            <button
+            {/* Vayu AI assistant button (3rd, bottom of the stack); hidden while its Edge Function is missing */}
+            {CHAT_AKTIF && <button
               onClick={() => setShowChat(true)}
               className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-md ring-1 ring-white/50 hover:shadow-lg hover:scale-105 active:scale-95 transition-all"
               style={{ background: 'linear-gradient(135deg,#10b981,#14b8a6,#06b6d4)', boxShadow: '0 4px 14px -2px rgba(20,184,166,0.5)' }}
@@ -420,7 +421,7 @@ export default function HomePage() {
               aria-label="Tanya Vayu — asisten udara"
             >
               <Sparkles className="w-4.5 h-4.5" strokeWidth={2.2} />
-            </button>
+            </button>}
           </div>
         </>
       )}
@@ -904,7 +905,7 @@ export default function HomePage() {
       />
 
       {/* Map Layers Sheet */}
-      {showChat && (
+      {CHAT_AKTIF && showChat && (
         <Suspense fallback={null}>
           <ChatAssistant onClose={() => setShowChat(false)} />
         </Suspense>

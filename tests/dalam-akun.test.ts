@@ -146,4 +146,11 @@ describe('N-57 inner pages, guest and signed in', () => {
     expect(lb).toMatch(/data-pekan-tampil/);
     expect(lb).not.toMatch(/\{idx \+ 1\}/);
   });
+
+  it('the Vayu assistant is hidden while its Edge Function is missing (404 on the new project)', () => {
+    const home = readFileSync('src/pages/HomePage.tsx', 'utf8');
+    expect(readFileSync('src/lib/chat.ts', 'utf8')).toMatch(/CHAT_AKTIF = import\.meta\.env\.VITE_CHAT_AKTIF === 'true'/);
+    expect(home).toMatch(/\{CHAT_AKTIF && <button\s+onClick=\{\(\) => setShowChat\(true\)\}/);
+    expect(home).toMatch(/\{CHAT_AKTIF && showChat && \(/);
+  });
 });
