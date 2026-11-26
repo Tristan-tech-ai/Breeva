@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import BasemapLayer from '../map/VectorBasemap';
 import { PETA_HEMAT } from '../../lib/mapPerf';
+import { lipatAtribusi } from '../../lib/map/lipatAtribusi';
 import { basemap } from '../../lib/basemap';
 import { pm25Category } from '../../lib/ispu';
 import { formatAngka } from '../../lib/angka';
@@ -180,6 +181,12 @@ class LapisanPanah extends L.Layer {
   }
 }
 
+function Atribusi() {
+  const map = useMap();
+  useEffect(() => lipatAtribusi(map), [map]);
+  return null;
+}
+
 function Angin({ wind, hour }: { wind: WindFile | null; hour: number }) {
   const map = useMap();
   useEffect(() => {
@@ -205,6 +212,7 @@ function PantauMap({ fires, wind, hour = 0, center, zoom, dark, kab, jalur = EMP
       {kab && <Wilayah kab={kab} />}
       <Titik fires={fires} luar={luar} cctv={cctv} sensors={sensors} jalur={jalur} />
       <Angin wind={wind} hour={hour} />
+      <Atribusi />
     </MapContainer>
     </div>
   );

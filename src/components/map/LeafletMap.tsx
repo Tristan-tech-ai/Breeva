@@ -35,6 +35,7 @@ import { FIELD_REGIONS } from '../../lib/field/source';
 import { onFirstDraw } from '../../lib/field/firstDraw';
 import { PETA_HEMAT } from '../../lib/mapPerf';
 import KartuRuas from './KartuRuas';
+import { lipatAtribusi } from '../../lib/map/lipatAtribusi';
 import { kartuTerbuka, tutupKartu } from '../../lib/field/kartu';
 
 const toTuple = (wp: Coordinate): L.LatLngTuple => [wp.lat, wp.lng];
@@ -541,6 +542,8 @@ function MapController({
   );
   const roadMeta = useMvt ? (FIELD_STATIC ? fieldMeta : mvtMeta) : vectorMeta;
   // N-21: outside the pilot regions, exhaust per road computed on the phone (zoom 13+, indicative)
+  // M-U05: attribution visible at load, folded to (i) after 5 s or the first touch
+  useEffect(() => lipatAtribusi(map), [map]);
   // M-U03: outside the pilot only the exhaust exists (indicative); other modes draw no road colour there
   useNationalExhaust(map, !!showAQIOverlay && useMvt && FIELD_STATIC && roadDisplayMode === 'traffic');
   useWalkRouting(map, !!walkRouting, onWalkRouting, routeMode ?? 'walk', routeLink, routeDest, routeDepart, routeStart);

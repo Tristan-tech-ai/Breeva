@@ -163,86 +163,17 @@ export default function ExploreMapPage() {
             <ChevronLeft className="w-6 h-6" />
           </button>
         )}
-        <h1 className="text-base font-semibold text-gray-900 dark:text-white">{isRoot ? 'Breeva · Peta Udara Langsung' : 'Peta Udara Langsung'}</h1>
+        <h1 className="min-w-0 truncate text-base font-semibold text-gray-900 dark:text-white">{isRoot ? 'Breeva · Peta Udara' : 'Peta Udara'}</h1>
         {isRoot && <Link to="/landing" className="ml-2 text-xs text-gray-500 dark:text-gray-400 underline-offset-2 hover:underline">Tentang</Link>}
         <LaporButton className="ml-auto" getCenter={() => useMapStore.getState().center ?? null} />
-        <OpenAppLink className="text-xs font-semibold px-3 py-1.5 rounded-full gradient-primary text-white shadow-sm">Buka aplikasi</OpenAppLink>
+        {/* M-U05: on a 360 px phone the title needs the room; "Buka aplikasi penuh" is also at the foot of the page */}
+        <OpenAppLink className="hidden min-[400px]:inline-flex text-xs font-semibold px-3 py-1.5 rounded-full gradient-primary text-white shadow-sm">Buka aplikasi</OpenAppLink>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 pt-4 space-y-5">
-        {/* Hero copy (real, crawlable content) */}
-        <header>
-          <h2 className="text-xl font-extrabold text-gray-900 dark:text-white leading-snug">Asap kendaraan per ruas jalan</h2>
-          <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] font-semibold" aria-label="Ringkasan">
-            <span className="rounded-full bg-emerald-50 dark:bg-emerald-900/30 px-2.5 py-1 text-emerald-800 dark:text-emerald-300">diperbarui tiap jam</span>
-            <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-2.5 py-1 text-gray-700 dark:text-gray-200">ketuk jalan untuk angkanya</span>
-            <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-2.5 py-1 text-gray-700 dark:text-gray-200">tanpa akun</span>
-          </div>
-          <Rincian summary="Apa yang dihitung?" className="mt-2">
-            <p>
-              Untuk tiap ruas jalan, Breeva menghitung asap kendaraan dari perkiraan lalu lintas jam itu, angin, dan rumus sebaran
-              panduan EPA, di atas udara latar dari sensor warga (OpenAQ) dan CAMS. Nilainya perkiraan model, lengkap dengan rentang
-              95%. Wilayah tanpa titik ukur diberi label indikatif.
-            </p>
-          </Rincian>
-        </header>
-
-        {/* Layer controls — pollutant type + road resolution (mirrors main map) */}
-        <div className="glass-card p-4 space-y-3">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Jenis polusi</p>
-            <div className="flex flex-wrap gap-2">
-              {POLLUTANTS.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setPollutant(p.id)}
-                  disabled={!tersedia.polutan.has(p.id)}
-                  aria-pressed={pollutant === p.id}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 disabled:line-through ${
-                    pollutant === p.id
-                      ? 'gradient-primary text-white shadow-sm'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-            {tersedia.alasan && <p className="mt-2 text-[12px] leading-snug text-amber-900 dark:text-amber-200" data-alasan-mode>{tersedia.alasan}</p>}
-          </div>
-          {showRoadModes && (
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Resolusi jalan</p>
-              <div className="flex flex-wrap gap-2">
-                {ROAD_MODES.map(([m, label]) => (
-                  <button
-                    key={m}
-                    onClick={() => setRoadDisplayMode(m)}
-                    disabled={!tersedia.mode.has(m)}
-                    aria-pressed={roadDisplayMode === m}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 disabled:line-through ${
-                      roadDisplayMode === m
-                        ? 'bg-sky-700 text-white shadow-sm'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <Rincian summary="Arti tiap mode" className="mt-2">
-                <p><b>Asap kendaraan</b>: gas buang dan jelaga dari kendaraan di ruas itu dan sekitarnya; inilah yang berbeda antara jalan ramai dan gang, dan yang bisa dihindari lewat pilihan jalan.</p>
-                <p className="mt-1">Angka asap kendaraan adalah perkiraan model dari kelas jalan, pola jam, dan angin. Belum memakai data kamera lalu lintas (CCTV) dan belum diuji di pinggir jalan.</p>
-                <p className="mt-1"><b>Udara total</b>: PM2,5 dan ISPU, hampir sama di seluruh kota karena didominasi udara latar.</p>
-                <p className="mt-1"><b>Harga hirup</b>: seberapa banyak orang menghirup gas buang ruas itu.</p>
-              </Rincian>
-            </div>
-          )}
-        </div>
-
+      <div className="max-w-3xl mx-auto px-4 pt-2 space-y-3">
         {/* Field regions: jump to one */}
         {FIELD_STATIC && (
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Wilayah">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Wilayah">
             {luar && <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-900 dark:bg-amber-900/40 dark:text-amber-100" data-wilayah-lain>Wilayah lain (indikatif)</span>}
             {FIELD_REGIONS.map((r) => (
               <button key={r.name} aria-pressed={!luar && region === r.name}
@@ -256,7 +187,7 @@ export default function ExploreMapPage() {
 
         {/* Interactive map (progressive enhancement) */}
         {/* peta-tombol-kiri: the attribution keeps clear of the bottom-left route button (index.css, X-W52) */}
-        <div className={`relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg${FIELD_STATIC ? ' peta-tombol-kiri' : ''}`} style={{ height: 'min(58vh, 480px)' }}>
+        <div className={`relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg${FIELD_STATIC ? ' peta-tombol-kiri' : ''}`} style={{ height: 'min(66svh, 600px)' }} data-peta-utama>
           <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
             <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} walkRouting={walkMode} onWalkRouting={setWalkState} routeMode={routeMode} routeLink={link} routeDest={schoolDest} routeDepart={depart} routeStart={walkMode ? fromHere.start : null} wheelNeedsModifier initialCenter={view && !link && !destParam ? view : FIELD_STATIC ? startRegion.home : undefined} initialZoom={view && !link && !destParam ? view.zoom : undefined} />
           </Suspense>
@@ -285,6 +216,71 @@ export default function ExploreMapPage() {
           )}
         </div>
 
+        {/* Layer controls — pollutant type + road resolution (mirrors main map) */}
+        <div className="glass-card p-3 space-y-2" data-kontrol-peta>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-1.5">Jenis polusi</p>
+            <div className="flex flex-wrap gap-2">
+              {POLLUTANTS.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setPollutant(p.id)}
+                  disabled={!tersedia.polutan.has(p.id)}
+                  aria-pressed={pollutant === p.id}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 disabled:line-through ${
+                    pollutant === p.id
+                      ? 'gradient-primary text-white shadow-sm'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {tersedia.alasan && <p className="mt-2 text-[12px] leading-snug text-amber-900 dark:text-amber-200" data-alasan-mode>{tersedia.alasan}</p>}
+          </div>
+          {showRoadModes && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-1.5">Tampilan jalan</p>
+              <div className="flex flex-wrap gap-2">
+                {ROAD_MODES.map(([m, label]) => (
+                  <button
+                    key={m}
+                    onClick={() => setRoadDisplayMode(m)}
+                    disabled={!tersedia.mode.has(m)}
+                    aria-pressed={roadDisplayMode === m}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 disabled:line-through ${
+                      roadDisplayMode === m
+                        ? 'bg-sky-700 text-white shadow-sm'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <Rincian summary="Arti tiap mode" className="mt-2">
+                <p><b>Asap kendaraan</b>: gas buang dan jelaga dari kendaraan di ruas itu dan sekitarnya; inilah yang berbeda antara jalan ramai dan gang, dan yang bisa dihindari lewat pilihan jalan.</p>
+                <p className="mt-1">Angka asap kendaraan adalah perkiraan model dari kelas jalan, pola jam, dan angin. Belum memakai data kamera lalu lintas (CCTV) dan belum diuji di pinggir jalan.</p>
+                <p className="mt-1"><b>Udara total</b>: PM2,5 dan ISPU, hampir sama di seluruh kota karena didominasi udara latar.</p>
+                <p className="mt-1"><b>Harga hirup</b>: seberapa banyak orang menghirup gas buang ruas itu.</p>
+              </Rincian>
+            </div>
+          )}
+        </div>
+
+        {/* Hero copy (real, crawlable content) */}
+        <header>
+          <h2 className="text-base font-extrabold text-gray-900 dark:text-white leading-snug">Asap kendaraan per ruas jalan</h2>
+          <Rincian summary="Apa yang dihitung?" className="mt-2">
+            <p>
+              Untuk tiap ruas jalan, Breeva menghitung asap kendaraan dari perkiraan lalu lintas jam itu, angin, dan rumus sebaran
+              panduan EPA, di atas udara latar dari sensor warga (OpenAQ) dan CAMS. Nilainya perkiraan model, lengkap dengan rentang
+              95%. Wilayah tanpa titik ukur diberi label indikatif. Diperbarui tiap jam, tanpa akun; ketuk jalan untuk angkanya.
+            </p>
+          </Rincian>
+        </header>
+
         {walkMode && (
           <div className="space-y-2">
             <SchoolPicker region={pickRegion(region)} value={schoolDest} onChange={setSchoolDest} />
@@ -298,7 +294,7 @@ export default function ExploreMapPage() {
 
         {/* Legend — reflects the selected pollutant / road mode */}
         <div className="glass-card p-4" data-legenda>
-          {FIELD_STATIC && !luar && <FieldAgeNote region={region} className="mb-2" />}
+          {FIELD_STATIC && !luar && !walkMode && <FieldAgeNote region={region} className="mb-2" />}
           <p className="text-xs font-semibold text-gray-900 dark:text-white mb-2.5">
             {luar ? 'Arti warna jalan — asap kendaraan (NO₂ dari knalpot), indikatif' : <>Arti warna jalan — {activeP.label}
             {roadDisplayMode === 'traffic' ? ' · asap kendaraan' : roadDisplayMode === 'harga' ? ' · harga hirup' : ''}</>}

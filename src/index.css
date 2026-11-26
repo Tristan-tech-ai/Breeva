@@ -894,3 +894,9 @@ html.dark .leaflet-bar a.leaflet-disabled {
 .peta-tombol-kiri .leaflet-bottom.leaflet-right .leaflet-control-attribution {
   max-width: calc(100% - 172px);
 }
+
+/* M-U05: the map attribution folds to an (i) button after 5 s or the first touch (lib/map/lipatAtribusi.ts, OSMF 1.5.2) */
+.atribusi-lipat .leaflet-control-attribution { display: none; }
+.atribusi-tombol { width: 28px; height: 28px; border-radius: 9999px; background: rgba(255,255,255,.95); color: #0f172a; font: 700 14px/28px system-ui;
+  text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.25); border: 1px solid rgba(0,0,0,.1); cursor: pointer; }
+.dark .atribusi-tombol { background: rgba(17,24,39,.92); color: #f1f5f9; border-color: rgba(255,255,255,.15); }
