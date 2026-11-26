@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Search, BadgeCheck, Star, MapPin, Plus, Settings, Leaf } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { supabase } from '../lib/supabase';
+import { CATATAN_CONTOH_MERCHANT, kategoriMerchant, merchantPercobaan } from '../lib/teksId';
 import { SkeletonList } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
 import LazyImage from '../components/ui/LazyImage';
@@ -60,7 +61,7 @@ export default function MerchantsPage() {
           .order('rating', { ascending: false });
 
         if (error) throw error;
-        setMerchants(data || []);
+        setMerchants((data || []).filter((m) => !merchantPercobaan(m)));
       } catch (err) {
         console.error('Failed to fetch merchants:', err);
       } finally {
@@ -100,14 +101,14 @@ export default function MerchantsPage() {
         {/* Header */}
         <div className="safe-area-top px-4 pt-4 pb-3 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Eco-Merchants</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Discover sustainable businesses near you</p>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Merchant ramah lingkungan</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Usaha yang menukar EcoPoin dengan hadiah</p>
           </div>
           <div className="flex items-center gap-2">
             {ownedMerchant && (
               <Link
                 to={`/merchants/${ownedMerchant.id}/manage`}
-                title={ownedMerchant.status === 'approved' ? 'Manage your merchant' : 'Your merchant (pending review)'}
+                title={ownedMerchant.status === 'approved' ? 'Kelola merchantmu' : 'Merchantmu (menunggu tinjauan)'}
                 className="relative w-9 h-9 rounded-xl bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700/30 flex items-center justify-center shadow-sm"
               >
                 <Settings className="w-4 h-4 text-gray-600 dark:text-gray-300" />
@@ -123,13 +124,15 @@ export default function MerchantsPage() {
           </div>
         </div>
 
+        <p className="mx-4 mb-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200/70 dark:border-amber-800/40 px-3 py-2 text-[12px] leading-relaxed text-amber-900 dark:text-amber-200" data-catatan-contoh>{CATATAN_CONTOH_MERCHANT}</p>
+
         {/* Search */}
         <div className="px-4 mb-4">
           <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm">
             <Search size={18} className="text-gray-400 dark:text-gray-500" />
             <input
               type="text"
-              placeholder="Search merchants..."
+              placeholder="Cari merchant..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none"
@@ -152,7 +155,7 @@ export default function MerchantsPage() {
                   : 'bg-white dark:bg-gray-900/60 backdrop-blur-sm border border-gray-200 dark:border-gray-700/30 text-gray-600 dark:text-gray-300 hover:bg-white dark:bg-gray-900/80 dark:hover:bg-gray-800/60'
               }`}
             >
-              {cat}
+              {kategoriMerchant(cat)}
             </motion.button>
           ))}
         </div>
@@ -164,10 +167,10 @@ export default function MerchantsPage() {
           ) : filtered.length === 0 ? (
             <EmptyState
               icon={MapPin}
-              title={merchants.length === 0 ? 'No Merchants Yet' : 'No Matches'}
+              title={merchants.length === 0 ? 'Belum ada merchant' : 'Tidak ada yang cocok'}
               description={merchants.length === 0
-                ? 'Eco-merchants will appear here once partners are onboarded. You can suggest a merchant from the Contribute page!'
-                : 'Try a different search or category.'}
+                ? 'Merchant mitra muncul di sini begitu bergabung. Kamu bisa mengusulkan merchant dari halaman Kontribusi.'
+                : 'Coba kata atau kategori lain.'}
             />
           ) : (
             filtered.map((merchant, i) => (
@@ -197,7 +200,7 @@ export default function MerchantsPage() {
                       <BadgeCheck size={14} className="text-primary-500 flex-shrink-0" />
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{merchant.category || 'General'} · {merchant.address || 'No address'}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{kategoriMerchant(merchant.category)} · {merchant.address || 'Alamat belum ada'}</p>
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                     <div className="flex items-center gap-0.5">
                       <Star size={11} className="text-amber-400" fill="currentColor" />

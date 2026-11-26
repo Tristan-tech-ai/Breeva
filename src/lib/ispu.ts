@@ -85,3 +85,11 @@ export function sensitiveAdvice(pm25: number): string | null {
   }
   return `Untukmu (profil sensitif): PM2,5 ${v} µg/m³, jauh di atas pedoman harian WHO ${WHO_24H_PM25}. Hindari aktivitas di luar ruangan; bila harus keluar, pakai masker yang rapat (N95/KN95).`;
 }
+
+/** One reading as the app states it everywhere (card, screen reader, navigation): ISPU from PM2.5 and its category. */
+export function ispuRingkas(pm25: number | null | undefined): { nilai: number; kategori: string; warna: string; teks: string } | null {
+  if (pm25 == null || !Number.isFinite(pm25) || pm25 < 0) return null;
+  const nilai = ispuRounded('pm25', pm25) ?? 0;
+  const cat = ispuCategory(nilai);
+  return { nilai, kategori: cat.name, warna: cat.color, teks: `ISPU ${nilai}, ${cat.name}` };
+}

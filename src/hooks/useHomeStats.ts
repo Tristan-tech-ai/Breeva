@@ -1,17 +1,13 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
+import { rankThisWeek, wibToday, wibWeekStart } from '../lib/wibWeek';
 
 export interface HomeStats {
   questsCompleted: number;
   questsTotal: number;
   rank: number | null;
   loading: boolean;
-}
-
-// WIB (Asia/Jakarta, UTC+7) calendar date — must match the server's quest day.
-function wibToday(): string {
-  return new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
 /**
@@ -46,18 +42,18 @@ export function useHomeStats(): HomeStats {
           .not('template_id', 'is', null),
         supabase
           .from('leaderboard_weekly')
-          .select('rank')
+          .select('rank, week_start')
           .eq('user_id', userId)
-          .order('week_start', { ascending: false })
-          .limit(1)
+          .eq('week_start', wibWeekStart())
           .maybeSingle(),
       ]);
       if (cancelled) return;
-      const rank = (rankRes.data as { rank?: number } | null)?.rank ?? null;
+      // Only this WIB week's row counts: an old week's rank must not read as 'minggu ini' (N-57: June's #7 did).
+      const rank = rankThisWeek(rankRes.data as { rank?: number; week_start?: string } | null);
       setStats({
         questsTotal: 3,
         questsCompleted: doneRes.count ?? 0,
-        rank: rank && rank > 0 ? rank : null,
+        rank,
         loading: false,
       });
     })().catch(() => {

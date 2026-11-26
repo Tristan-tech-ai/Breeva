@@ -1,5 +1,6 @@
 import toast from 'react-hot-toast';
 import IconBadge from './IconBadge';
+import { namaPencapaian } from '../../lib/teksId';
 
 export interface UnlockedAchievement {
   achievement_id?: string;
@@ -24,7 +25,7 @@ export function showAchievementToast(a: UnlockedAchievement) {
           <div className="text-[10px] font-bold uppercase tracking-wider text-primary-600 dark:text-primary-400">
             Achievement terbuka!
           </div>
-          <div className="text-sm font-bold text-gray-900 dark:text-white truncate">{a.name}</div>
+          <div className="text-sm font-bold text-gray-900 dark:text-white truncate">{namaPencapaian(a.name)}</div>
         </div>
         {a.points_reward ? (
           <div className="text-xs font-extrabold text-accent-500 shrink-0">+{a.points_reward}</div>

@@ -1,7 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronLeft, CloudOff, Footprints, Map as MapIcon } from 'lucide-react';
+import { ChevronLeft, CloudOff, Footprints, LogIn, Map as MapIcon } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { GUEST_NEEDS_ACCOUNT, useGuestStore } from '../stores/guestStore';
+import { useAuthStore } from '../stores/authStore';
 
 const dateFmt = new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -9,6 +10,9 @@ const dateFmt = new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: 'numer
 export default function GuestOnlyPage({ title, walks = false }: { title: string; walks?: boolean }) {
   const navigate = useNavigate();
   const list = useGuestStore((s) => s.walks);
+  const leaveGuest = useAuthStore((s) => s.leaveGuest);
+  // Signing in leaves guest mode; the walks kept on this device stay in the guest store.
+  const signIn = () => { leaveGuest(); navigate('/login'); };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-28">
@@ -31,7 +35,10 @@ export default function GuestOnlyPage({ title, walks = false }: { title: string;
             </div>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Link to="/home" className="inline-flex items-center gap-1.5 rounded-full gradient-primary px-4 py-2 text-xs font-semibold text-white shadow-sm">
+            <button type="button" onClick={signIn} data-guest-masuk className="inline-flex items-center gap-1.5 rounded-full gradient-primary px-4 py-2 text-xs font-semibold text-white shadow-sm">
+              <LogIn className="h-3.5 w-3.5" /> Masuk atau daftar
+            </button>
+            <Link to="/home" className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 dark:bg-gray-800 px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200">
               <MapIcon className="h-3.5 w-3.5" /> Kembali ke peta
             </Link>
             <Link to="/profile" className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200">

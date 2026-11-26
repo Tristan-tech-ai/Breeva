@@ -10,6 +10,7 @@ import type { LucideIcon } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
+import { CATATAN_CONTOH_MERCHANT } from '../lib/teksId';
 import { cacheCollection, getCachedCollection } from '../lib/offline-db';
 import RewardRedemptionModal from '../components/features/RewardRedemptionModal';
 import { SkeletonGrid } from '../components/ui/Skeleton';
@@ -48,41 +49,43 @@ interface CategoryDef {
 }
 
 const CATEGORIES: CategoryDef[] = [
-  { key: 'all', label: 'All', icon: Tag },
-  { key: 'food', label: 'Food & Drink', icon: Coffee },
-  { key: 'shopping', label: 'Shopping', icon: ShoppingBag },
-  { key: 'wellness', label: 'Wellness', icon: Dumbbell },
-  { key: 'entertainment', label: 'Entertainment', icon: Film },
+  { key: 'all', label: 'Semua', icon: Tag },
+  { key: 'food', label: 'Makan & Minum', icon: Coffee },
+  { key: 'shopping', label: 'Belanja', icon: ShoppingBag },
+  { key: 'wellness', label: 'Kesehatan', icon: Dumbbell },
+  { key: 'entertainment', label: 'Hiburan', icon: Film },
 ];
 
 type SortOption = 'points-asc' | 'points-desc' | 'newest';
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: 'points-asc', label: 'Points: Low to High' },
-  { value: 'points-desc', label: 'Points: High to Low' },
-  { value: 'newest', label: 'Newest First' },
+  { value: 'points-asc', label: 'Poin: terendah dulu' },
+  { value: 'points-desc', label: 'Poin: tertinggi dulu' },
+  { value: 'newest', label: 'Terbaru dulu' },
 ];
 
 function getStatusConfig(status: string): { icon: LucideIcon; color: string; bg: string; label: string } {
   switch (status) {
     case 'active':
-      return { icon: CheckCircle2, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', label: 'Active' };
+      return { icon: CheckCircle2, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', label: 'Aktif' };
     case 'used':
-      return { icon: CheckCircle2, color: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800/60', label: 'Used' };
+      return { icon: CheckCircle2, color: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800/60', label: 'Terpakai' };
     default:
-      return { icon: XCircle, color: 'text-red-500 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', label: 'Expired' };
+      return { icon: XCircle, color: 'text-red-500 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', label: 'Kedaluwarsa' };
   }
 }
+
+const STATUS_ID: Record<VoucherStatus, string> = { active: 'aktif', used: 'terpakai', expired: 'kedaluwarsa' };
 
 function formatExpiry(dateStr: string): string {
   const d = new Date(dateStr);
   const now = new Date();
   const diff = d.getTime() - now.getTime();
-  if (diff < 0) return 'Expired';
+  if (diff < 0) return 'Kedaluwarsa';
   const days = Math.ceil(diff / 86_400_000);
-  if (days <= 1) return 'Expires today';
-  if (days <= 7) return `${days}d left`;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (days <= 1) return 'Berakhir hari ini';
+  if (days <= 7) return `${days} hari lagi`;
+  return `Sampai ${d.toLocaleDateString('id-ID', { month: 'short', day: 'numeric' })}`;
 }
 
 export default function RewardsPage() {
@@ -202,9 +205,9 @@ export default function RewardsPage() {
         <div className="safe-area-top px-5 pt-5 pb-2">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Rewards</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Hadiah</h1>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                Redeem EcoPoints for exclusive offers
+                Tukar EcoPoin dengan penawaran dari merchant mitra
               </p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center">
@@ -212,6 +215,8 @@ export default function RewardsPage() {
             </div>
           </div>
         </div>
+
+        <p className="mx-5 mt-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200/70 dark:border-amber-800/40 px-3 py-2 text-[12px] leading-relaxed text-amber-900 dark:text-amber-200" data-catatan-contoh>{CATATAN_CONTOH_MERCHANT}</p>
 
         {/* ─── Balance Card ─── */}
         <div className="px-5 mt-4 mb-5">
@@ -223,17 +228,17 @@ export default function RewardsPage() {
             </div>
             <div className="relative flex items-center justify-between">
               <div>
-                <p className="text-white/70 text-xs font-medium uppercase tracking-wider">Your Balance</p>
+                <p className="text-white/70 text-xs font-medium uppercase tracking-wider">Saldo kamu</p>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-4xl font-extrabold text-white tabular-nums tracking-tight">
-                    {balance.toLocaleString()}
+                    {balance.toLocaleString('id-ID')}
                   </span>
-                  <span className="text-sm font-medium text-white/60">pts</span>
+                  <span className="text-sm font-medium text-white/60">poin</span>
                 </div>
                 {redeemableCount > 0 && (
                   <p className="text-xs text-white/60 mt-1.5 flex items-center gap-1">
                     <TrendingUp size={12} />
-                    {redeemableCount} reward{redeemableCount !== 1 ? 's' : ''} available to redeem
+                    {redeemableCount} hadiah bisa ditukar
                   </p>
                 )}
               </div>
@@ -270,12 +275,12 @@ export default function RewardsPage() {
                     {tab === 'available' ? (
                       <>
                         <Gift size={14} />
-                        Available
+                        Tersedia
                       </>
                     ) : (
                       <>
                         <Ticket size={14} />
-                        My Vouchers
+                        Voucherku
                         {myVouchers.length > 0 && (
                           <span className="ml-0.5 w-5 h-5 rounded-full bg-primary-500 text-white text-[10px] font-bold flex items-center justify-center">
                             {myVouchers.length}
@@ -305,7 +310,7 @@ export default function RewardsPage() {
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Search rewards..."
+                    placeholder="Cari hadiah..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-9 pr-3 py-2.5 text-sm rounded-xl bg-white dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700/40 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition"
@@ -373,8 +378,8 @@ export default function RewardsPage() {
               {!isLoading && rewards.length > 0 && (
                 <div className="mb-5">
                   <div className="px-5 flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Featured Rewards</h3>
-                    <span className="text-xs text-primary-500 font-medium">{rewards.length} total</span>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Hadiah unggulan</h3>
+                    <span className="text-xs text-primary-500 font-medium">{rewards.length} hadiah</span>
                   </div>
                   <div className="flex gap-3 overflow-x-auto px-5 pb-2 snap-x snap-mandatory scrollbar-hide">
                     {rewards.slice(0, 5).map((reward, i) => {
@@ -413,7 +418,7 @@ export default function RewardsPage() {
                                 <span className="text-sm font-bold text-gray-900 dark:text-white tabular-nums">
                                   {reward.points_required.toLocaleString()}
                                 </span>
-                                <span className="text-[10px] text-gray-400">pts</span>
+                                <span className="text-[10px] text-gray-400">poin</span>
                               </div>
                               {canAfford && <ArrowRight size={14} className="text-primary-500" />}
                             </div>
@@ -426,7 +431,7 @@ export default function RewardsPage() {
                                   />
                                 </div>
                                 <p className="text-[10px] text-gray-400 mt-1">
-                                  {(reward.points_required - balance).toLocaleString()} pts more needed
+                                  kurang {(reward.points_required - balance).toLocaleString('id-ID')} poin
                                 </p>
                               </div>
                             )}
@@ -443,10 +448,10 @@ export default function RewardsPage() {
                 {!isLoading && filteredRewards.length > 0 && (
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                      All Rewards
+                      Semua hadiah
                       {searchQuery && (
                         <span className="ml-2 text-xs text-gray-400 font-normal">
-                          {filteredRewards.length} result{filteredRewards.length !== 1 ? 's' : ''}
+                          {filteredRewards.length} hasil
                         </span>
                       )}
                     </h3>
@@ -458,11 +463,11 @@ export default function RewardsPage() {
                 ) : filteredRewards.length === 0 ? (
                   <EmptyState
                     icon={Gift}
-                    title={searchQuery ? 'No Results Found' : 'No Rewards Available Yet'}
+                    title={searchQuery ? 'Tidak ada hasil' : 'Belum ada hadiah yang sedang berlaku'}
                     description={
                       searchQuery
-                        ? `No rewards matching "${searchQuery}". Try a different search.`
-                        : 'Rewards from eco-merchants will appear here soon. Keep walking to earn EcoPoints!'
+                        ? `Tidak ada hadiah yang cocok dengan "${searchQuery}". Coba kata lain.`
+                        : 'Hadiah dari merchant mitra muncul di sini begitu ada yang berlaku. EcoPoin yang kamu kumpulkan tetap tersimpan.'
                     }
                   />
                 ) : (
@@ -486,7 +491,7 @@ export default function RewardsPage() {
                             </span>
                             {stockLow && (
                               <span className="absolute top-2 right-2 text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-md">
-                                {reward.remaining_stock} left
+                                sisa {reward.remaining_stock}
                               </span>
                             )}
                             {canAfford && (
@@ -512,7 +517,7 @@ export default function RewardsPage() {
                                 <span className="text-sm font-bold text-gray-900 dark:text-white tabular-nums">
                                   {reward.points_required.toLocaleString()}
                                 </span>
-                                <span className="text-[10px] text-gray-400">pts</span>
+                                <span className="text-[10px] text-gray-400">poin</span>
                               </div>
                               {!canAfford && (
                                 <div className="mt-1.5">
@@ -538,11 +543,11 @@ export default function RewardsPage() {
                             >
                               {canAfford ? (
                                 <>
-                                  Redeem
+                                  Tukar
                                   <ArrowRight size={12} />
                                 </>
                               ) : (
-                                `${(reward.points_required - balance).toLocaleString()} pts more`
+                                `kurang ${(reward.points_required - balance).toLocaleString('id-ID')} poin`
                               )}
                             </button>
                           </div>
@@ -568,9 +573,9 @@ export default function RewardsPage() {
                 <div className="px-5 mb-4">
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { label: 'Active', count: myVouchers.filter((v) => v.status === 'active').length, color: 'text-emerald-600 dark:text-emerald-400' },
-                      { label: 'Used', count: myVouchers.filter((v) => v.status === 'used').length, color: 'text-gray-500 dark:text-gray-400' },
-                      { label: 'Expired', count: myVouchers.filter((v) => v.status === 'expired').length, color: 'text-red-500 dark:text-red-400' },
+                      { label: 'Aktif', count: myVouchers.filter((v) => v.status === 'active').length, color: 'text-emerald-600 dark:text-emerald-400' },
+                      { label: 'Terpakai', count: myVouchers.filter((v) => v.status === 'used').length, color: 'text-gray-500 dark:text-gray-400' },
+                      { label: 'Kedaluwarsa', count: myVouchers.filter((v) => v.status === 'expired').length, color: 'text-red-500 dark:text-red-400' },
                     ].map((stat) => (
                       <div key={stat.label} className="glass-card p-3 text-center">
                         <p className={`text-lg font-bold tabular-nums ${stat.color}`}>{stat.count}</p>
@@ -605,16 +610,16 @@ export default function RewardsPage() {
                 {myVouchers.length === 0 ? (
                   <EmptyState
                     icon={Ticket}
-                    title="No Vouchers Yet"
-                    description="Redeem your EcoPoints to get vouchers from eco-merchants."
-                    actionLabel="Browse Rewards"
+                    title="Belum ada voucher"
+                    description="Tukar EcoPoin untuk mendapat voucher dari merchant mitra."
+                    actionLabel="Lihat hadiah"
                     onAction={() => setActiveTab('available')}
                   />
                 ) : filteredVouchers.length === 0 ? (
                   <EmptyState
                     icon={Ticket}
-                    title="No Matching Vouchers"
-                    description={`You don't have any ${voucherFilter} vouchers.`}
+                    title="Tidak ada voucher"
+                    description={voucherFilter === 'all' ? 'Belum ada voucher.' : `Belum ada voucher yang ${STATUS_ID[voucherFilter]}.`}
                   />
                 ) : (
                   <div className="space-y-3">
@@ -636,15 +641,15 @@ export default function RewardsPage() {
                             <QrCode size={20} className={statusCfg.color} />
                           </div>
                           <div className="flex-1 min-w-0 pl-2">
-                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{v.reward?.title || 'Reward'}</h4>
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{v.reward?.title || 'Hadiah'}</h4>
                             <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                              {v.merchant?.name}<span className="mx-1 text-gray-300 dark:text-gray-600">·</span>{v.points_spent.toLocaleString()} pts
+                              {v.merchant?.name}<span className="mx-1 text-gray-300 dark:text-gray-600">·</span>{v.points_spent.toLocaleString('id-ID')} poin
                             </p>
                             <div className="flex items-center gap-1 mt-1.5"><Clock size={10} className="text-gray-400" /><span className="text-[10px] text-gray-400">{formatExpiry(v.expires_at)}</span></div>
                           </div>
                           <div className="flex flex-col items-end gap-1.5">
                             <span className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg ${statusCfg.bg} ${statusCfg.color}`}><StatusIcon size={10} />{statusCfg.label}</span>
-                            {isActive && <span className="text-[9px] text-primary-500 font-medium">Tap for QR</span>}
+                            {isActive && <span className="text-[9px] text-primary-500 font-medium">Ketuk untuk QR</span>}
                           </div>
                         </motion.div>
                       );
@@ -665,14 +670,14 @@ export default function RewardsPage() {
                   <h3 className="text-base font-bold text-gray-900 dark:text-white truncate">{selectedVoucher.reward?.title || 'Voucher'}</h3>
                   <button aria-label="Tutup" onClick={() => setSelectedVoucher(null)} className="p-1 text-gray-400 hover:text-gray-600 shrink-0"><X size={20} /></button>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{selectedVoucher.merchant?.name} · show this to the cashier</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{selectedVoucher.merchant?.name} · tunjukkan ke kasir</p>
                 <div className="bg-white p-3 rounded-2xl shadow-sm inline-block">
                   <Suspense fallback={<div className="w-[180px] h-[180px] bg-gray-100 animate-pulse rounded-lg" />}>
                     <QrImage value={selectedVoucher.qr_code} size={180} />
                   </Suspense>
                 </div>
                 <p className="text-lg font-mono font-bold text-gray-900 dark:text-white tracking-[0.15em] mt-4">{selectedVoucher.qr_code}</p>
-                <p className="text-[11px] text-gray-400 mt-1 font-mono">Backup: {selectedVoucher.backup_code}</p>
+                <p className="text-[11px] text-gray-400 mt-1 font-mono">Kode cadangan: {selectedVoucher.backup_code}</p>
                 <div className="flex items-center justify-center gap-1.5 mt-3 text-xs text-gray-400"><Clock size={12} />{formatExpiry(selectedVoucher.expires_at)}</div>
               </motion.div>
             </motion.div>

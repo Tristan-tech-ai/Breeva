@@ -6,6 +6,7 @@ import {
   Landmark, Globe, Users, LocateFixed, Coins, Route, Sparkles, Share2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { labelPekan } from '../lib/wibWeek';
 import { useAuthStore } from '../stores/authStore';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -234,7 +235,7 @@ function Podium({
                 <Emblem code={(r as RegionRow).region_code} name={name} className={`${av} rounded-full ring-2 ring-white dark:ring-gray-900 ${isFirst ? 'text-2xl' : 'text-xl'}`} />
               )}
               <span className={`absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-gradient-to-br ${tier.grad} text-white text-[11px] font-extrabold flex items-center justify-center ring-2 ring-white dark:ring-gray-900`}>
-                {idx + 1}
+                {mode === 'people' ? (r as UserRow).rank : (r as RegionRow).rank}
               </span>
             </div>
             <div className={`mt-2 text-xs font-bold text-center leading-tight truncate max-w-full ${mine ? 'text-primary-600 dark:text-primary-400' : 'text-gray-900 dark:text-white'}`}>
@@ -357,6 +358,15 @@ export default function LeaderboardPage() {
   const [regions, setRegions] = useState<RegionRow[]>([]);
   const [myRegion, setMyRegion] = useState<MyRegion | null>(null);
   const [loading, setLoading] = useState(true);
+  // The board shows the latest week with at least 8 people (breeva_active_leaderboard_week), which may not be this week.
+  const [pekanTampil, setPekanTampil] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.rpc('breeva_active_leaderboard_week').then(({ data }) => {
+      if (typeof data === 'string') setPekanTampil(data);
+    }, () => {});
+  }, []);
+  const pekan = labelPekan(pekanTampil);
+  const pekanIni = pekan === 'pekan ini';
   const [locating, setLocating] = useState(false);
   const scopeTouched = useRef(false);
 
@@ -506,14 +516,19 @@ export default function LeaderboardPage() {
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-base font-bold text-gray-900 dark:text-white">Papan Peringkat</h1>
-        <div className="flex items-center gap-1 text-[10px] font-semibold text-primary-600 dark:text-primary-400">
+        <div className={`flex items-center gap-1 text-[10px] font-semibold text-primary-600 dark:text-primary-400 ${pekanIni ? '' : 'invisible'}`}>
           <span className="relative flex w-2 h-2">
             <span className="absolute inline-flex w-full h-full rounded-full bg-primary-400 opacity-60 animate-ping" />
             <span className="relative inline-flex w-2 h-2 rounded-full bg-primary-500" />
           </span>
-          Live
+          Langsung
         </div>
       </div>
+      {!pekanIni && (
+        <p className="relative max-w-2xl mx-auto px-4 pt-3 text-[12px] leading-relaxed text-gray-600 dark:text-gray-300" data-pekan-tampil>
+          Pekan ini pesertanya belum cukup (paling sedikit 8), jadi yang tampil {pekan}.
+        </p>
+      )}
 
       <div className="relative max-w-2xl mx-auto px-4 pt-4">
         {/* Hero — my standing */}
@@ -567,7 +582,7 @@ export default function LeaderboardPage() {
                   )}
                 </div>
                 <div className="text-[11px] text-white/70 mt-1">
-                  {heroRank > 0 ? 'Peringkatmu pekan ini' : 'Belum masuk peringkat'}
+                  {heroRank > 0 ? `Peringkatmu ${pekan}` : `Belum masuk peringkat ${pekan}`}
                 </div>
               </div>
               <div className="text-right">

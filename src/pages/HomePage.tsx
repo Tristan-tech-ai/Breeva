@@ -47,7 +47,7 @@ import BottomNavigation from '../components/layout/BottomNavigation';
 import HomeStatCards from '../components/features/HomeStatCards';
 import Sidebar from '../components/layout/Sidebar';
 import TransportModeSelector from '../components/map/TransportModeSelector';
-import AQIBadge from '../components/features/AQIBadge';
+import { ispuRingkas } from '../lib/ispu';
 import AQICard from '../components/features/AQICard';
 import WalkComplete from '../components/features/WalkComplete';
 import LiveExposureTracker from '../components/features/LiveExposureTracker';
@@ -363,7 +363,7 @@ export default function HomePage() {
 
               {/* Screen-reader live region: announces air-quality changes to assistive tech */}
               <div className="sr-only" role="status" aria-live="polite">
-                {currentAQI ? `Kualitas udara saat ini: AQI ${Math.round(currentAQI.aqi)}, ${currentAQI.level.replace(/-/g, ' ')}` : ''}
+                {(() => { const r = currentAQI ? ispuRingkas(currentAQI.pm25) : null; return r ? `Kualitas udara saat ini: ${r.teks}` : ''; })()}
               </div>
 
               {/* Active filter pill */}
@@ -577,7 +577,16 @@ export default function HomePage() {
                 {/* AQI during walk */}
                 {currentAQI && (
                   <div className="mt-3 flex items-center justify-center">
-                    <AQIBadge aqi={currentAQI.aqi} size="sm" confidence={currentAQI.confidence} />
+                    {(() => {
+                      const r = ispuRingkas(currentAQI.pm25);
+                      return r ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 dark:bg-gray-900/80 px-3 py-1 text-xs shadow-sm" data-ispu-jalan>
+                          <span className="h-2 w-2 rounded-full" style={{ background: r.warna }} aria-hidden="true" />
+                          <span className="font-bold text-gray-900 dark:text-white tabular-nums">ISPU {r.nilai}</span>
+                          <span className="font-medium" style={{ color: r.warna }}>{r.kategori}</span>
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                 )}
 

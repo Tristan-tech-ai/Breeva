@@ -4,6 +4,7 @@ import { Wind, Megaphone, Gift, User } from 'lucide-react';
 import logoBreeva from '../../assets/logo-breeva.svg';
 import { haptic } from '../../lib/haptic';
 import { useMapStore } from '../../stores/mapStore';
+import { ispuRingkas } from '../../lib/ispu';
 
 // AQI band → color (mirrors --color-aqi-* tokens / LeafletMap getAQIColor) so the
 // center beacon's halo doubles as a live air-quality indicator.
@@ -41,7 +42,9 @@ export default function BottomNavigation({ badges }: BottomNavigationProps) {
   const reduce = useReducedMotion();
   const currentAQI = useMapStore((s) => s.currentAQI);
   const aqi = currentAQI?.aqi ?? null;
-  const aqiColor = aqiToColor(aqi);
+  // The halo and the label follow the ISPU category the home card shows, not the US AQI band (N-57).
+  const ispu = ispuRingkas(currentAQI?.pm25);
+  const aqiColor = ispu ? ispu.warna : aqiToColor(aqi);
   const homeActive = location.pathname === '/home';
 
   const isActive = (path: string) =>
@@ -112,7 +115,7 @@ export default function BottomNavigation({ badges }: BottomNavigationProps) {
           to="/home"
           role="tab"
           aria-current={homeActive ? 'page' : undefined}
-          aria-label={`Beranda${aqi != null ? ` — kualitas udara AQI ${Math.round(aqi)}` : ''}`}
+          aria-label={`Beranda${ispu ? ` — kualitas udara ${ispu.teks}` : ''}`}
           onClick={() => haptic('medium')}
           className="relative flex flex-1 flex-col items-center justify-end gap-1 self-stretch pb-1.5"
         >

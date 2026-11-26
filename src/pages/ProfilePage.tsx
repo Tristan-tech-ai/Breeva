@@ -92,7 +92,7 @@ export default function ProfilePage() {
   const heatmapCategories: HeatmapCategory[] = [
     {
       key: 'walks',
-      label: 'Walks',
+      label: 'Jalan',
       icon: Footprints,
       data: guest ? guestWalkDays : walkDays,
       colors: [
@@ -142,20 +142,20 @@ export default function ProfilePage() {
   const treesEquivalent = treesFromCo2Kg(co2Kg).toFixed(2);
 
   const profileTourSteps: TourStep[] = [
-    { target: '[data-tour="stats-bar"]', title: 'Your Stats at a Glance', description: 'Track your EcoPoints, distance, walks, and streak all in one place.' },
-    { target: '[data-tour="activity-rings"]', title: 'Daily Progress Rings', description: 'Watch your activity rings fill up as you walk. Close all three to earn bonus points!' },
-    { target: '[data-tour="heatmap"]', title: 'Activity Heatmap', description: 'See your walking consistency over time — just like a GitHub contribution graph.' },
-    { target: '[data-tour="impact"]', title: 'Environmental Impact', description: 'Every walk reduces your carbon footprint. See how much CO₂ you\'ve saved!' },
+    { target: '[data-tour="stats-bar"]', title: 'Ringkasan statistikmu', description: 'EcoPoin, jarak, jumlah jalan, dan hari beruntun dalam satu tempat.' },
+    { target: '[data-tour="activity-rings"]', title: 'Cincin kemajuan', description: 'Cincin terisi saat kamu berjalan: jarak, jumlah jalan, dan poin.' },
+    { target: '[data-tour="heatmap"]', title: 'Peta aktivitas', description: 'Hari-hari kamu berjalan; makin gelap, makin banyak.' },
+    { target: '[data-tour="impact"]', title: 'Dampak lingkungan', description: 'Perkiraan CO₂ yang tidak keluar karena kamu berjalan kaki, bukan naik kendaraan.' },
   ];
 
   const menuItems = [
-    { icon: <BarChart3 size={18} />, label: 'Walk History', path: '/profile/history', color: 'text-blue-500' },
-    { icon: <Trophy size={18} />, label: 'Achievements', path: '/profile/achievements', color: 'text-amber-500' },
-    { icon: <Coins size={18} />, label: 'Point Transactions', path: '/profile/transactions', color: 'text-emerald-500' },
-    { icon: <Calendar size={18} />, label: 'Year in Review', path: '/year-in-review', color: 'text-rose-500' },
-    { icon: <Settings size={18} />, label: 'Settings', path: '/profile/settings', color: 'text-gray-500 dark:text-gray-400' },
-    { icon: <HelpCircle size={18} />, label: 'Help & Support', path: '/help', color: 'text-violet-500' },
-    { icon: <Info size={18} />, label: 'About Breeva', path: '/about', color: 'text-cyan-500' },
+    { icon: <BarChart3 size={18} />, label: 'Riwayat jalan', path: '/profile/history', color: 'text-blue-500' },
+    { icon: <Trophy size={18} />, label: 'Pencapaian', path: '/profile/achievements', color: 'text-amber-500' },
+    { icon: <Coins size={18} />, label: 'Transaksi poin', path: '/profile/transactions', color: 'text-emerald-500' },
+    { icon: <Calendar size={18} />, label: 'Kilas balik setahun', path: '/year-in-review', color: 'text-rose-500' },
+    { icon: <Settings size={18} />, label: 'Pengaturan', path: '/profile/settings', color: 'text-gray-500 dark:text-gray-400' },
+    { icon: <HelpCircle size={18} />, label: 'Bantuan', path: '/help', color: 'text-violet-500' },
+    { icon: <Info size={18} />, label: 'Tentang Breeva', path: '/about', color: 'text-cyan-500' },
   ];
 
   // Skeleton loading state
@@ -295,7 +295,7 @@ export default function ProfilePage() {
           >
             <div className="w-24 h-24 rounded-full border-4 border-white/30 overflow-hidden bg-white dark:bg-gray-900/20 backdrop-blur-sm shadow-xl">
               {profile?.avatar_url ? (
-                <LazyImage src={profile.avatar_url} alt={profile.full_name || 'Profile'} className="w-full h-full" />
+                <LazyImage src={profile.avatar_url} alt={profile.full_name || 'Profil'} className="w-full h-full" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-3xl text-white font-bold">
                   {profile?.full_name?.[0]?.toUpperCase() || '?'}
@@ -335,7 +335,7 @@ export default function ProfilePage() {
                 className="mt-2 flex items-center gap-1 text-xs text-white/60 hover:text-white/90 transition"
               >
                 <Pencil size={11} />
-                Edit Profile
+                Ubah profil
               </Link>
             )}
           </motion.div>
@@ -354,7 +354,7 @@ export default function ProfilePage() {
             <div className="grid grid-cols-4 gap-3 text-center">
               <div>
                 <AnimatedNumber value={profile?.ecopoints_balance || 0} className="text-lg font-bold tabular-nums text-accent-500" />
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">Points</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">Poin</div>
               </div>
               <div>
                 <AnimatedNumber value={profile?.total_distance_km || 0} decimals={1} className="text-lg font-bold tabular-nums text-gray-900 dark:text-white" />
@@ -362,11 +362,11 @@ export default function ProfilePage() {
               </div>
               <div>
                 <AnimatedNumber value={profile?.total_walks || 0} className="text-lg font-bold tabular-nums text-gray-900 dark:text-white" />
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">Walks</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">Jalan</div>
               </div>
               <div>
                 <AnimatedNumber value={profile?.current_streak || 0} className="text-lg font-bold tabular-nums text-primary-500" />
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">Streak</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">Beruntun</div>
               </div>
             </div>
           </div>
@@ -391,31 +391,31 @@ export default function ProfilePage() {
         >
           <div className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
-              Daily Progress
+              Kemajuan
             </h3>
             <div data-tour="activity-rings" className="flex items-center gap-5">
               <ActivityRings
                 size={100}
                 rings={[
-                  { label: 'Distance', value: profile?.total_distance_km || 0, max: Math.max(profile?.total_distance_km || 0, 5), color: '#10b981' },
-                  { label: 'Walks', value: profile?.total_walks || 0, max: Math.max(profile?.total_walks || 0, 3), color: '#3b82f6' },
-                  { label: 'Points', value: profile?.ecopoints_balance || 0, max: Math.max(profile?.ecopoints_balance || 0, 500), color: '#f59e0b' },
+                  { label: 'Jarak', value: profile?.total_distance_km || 0, max: Math.max(profile?.total_distance_km || 0, 5), color: '#10b981' },
+                  { label: 'Jalan', value: profile?.total_walks || 0, max: Math.max(profile?.total_walks || 0, 3), color: '#3b82f6' },
+                  { label: 'Poin', value: profile?.ecopoints_balance || 0, max: Math.max(profile?.ecopoints_balance || 0, 500), color: '#f59e0b' },
                 ]}
               />
               <div className="flex-1 space-y-2">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  <span className="text-xs text-gray-600 dark:text-gray-400">Distance</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Jarak</span>
                   <span className="text-xs font-bold text-gray-900 dark:text-white ml-auto">{(profile?.total_distance_km || 0).toFixed(1)} km</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                  <span className="text-xs text-gray-600 dark:text-gray-400">Walks</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Jalan</span>
                   <span className="text-xs font-bold text-gray-900 dark:text-white ml-auto">{profile?.total_walks || 0}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                  <span className="text-xs text-gray-600 dark:text-gray-400">Points</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Poin</span>
                   <span className="text-xs font-bold text-gray-900 dark:text-white ml-auto">{formatNumber(profile?.ecopoints_balance || 0)}</span>
                 </div>
               </div>
@@ -432,7 +432,7 @@ export default function ProfilePage() {
         >
           <div data-tour="heatmap" className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-              Activity
+              Aktivitas
             </h3>
             <StreakHeatmap categories={heatmapCategories} loading={guest ? false : heatmapLoading} />
           </div>
@@ -447,7 +447,7 @@ export default function ProfilePage() {
         >
           <div data-tour="impact" className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm p-5">
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
-              Your Environmental Impact
+              Dampak lingkunganmu
             </h3>
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
@@ -455,21 +455,21 @@ export default function ProfilePage() {
                   <Leaf size={18} className="text-emerald-500" />
                 </div>
                 <div className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">{co2Saved} kg</div>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">CO₂ Saved</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">CO₂ dihemat</div>
               </div>
               <div>
                 <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 mb-1.5">
                   <Flame size={18} className="text-orange-500" />
                 </div>
                 <div className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">{formatNumber(calories)}</div>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">Calories</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">Kalori</div>
               </div>
               <div>
                 <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-green-50 dark:bg-green-500/10 mb-1.5">
                   <TreePine size={18} className="text-green-600" />
                 </div>
                 <div className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">{treesEquivalent}</div>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">Trees equiv.</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">Setara pohon</div>
               </div>
             </div>
           </div>

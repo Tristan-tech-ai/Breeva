@@ -13,6 +13,7 @@ import PageHeader from '../components/ui/PageHeader';
 import HeroCard from '../components/ui/HeroCard';
 import Segmented from '../components/ui/Segmented';
 import AnimatedNumber from '../components/ui/AnimatedNumber';
+import { teksTransaksi } from '../lib/teksId';
 
 interface Transaction {
   id: string;
@@ -130,8 +131,8 @@ export default function TransactionsPage() {
                           <Icon className="w-4 h-4" />
                         </div>
                         <div className="min-w-0">
-                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate capitalize">
-                            {tx.description || tx.transaction_type.replace(/_/g, ' ')}
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {teksTransaksi(tx.description, tx.transaction_type)}
                           </div>
                           <div className="text-[10px] text-gray-400 mt-0.5">{formatTime(tx.created_at)}</div>
                         </div>

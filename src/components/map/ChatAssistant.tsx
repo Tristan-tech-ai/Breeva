@@ -17,7 +17,7 @@ import { buildChatContext } from '../../lib/chat-context';
 import { CHAT_TOOL_EXECUTORS, type ToolUiAction } from '../../lib/chat-tools';
 
 // The assistant runs on the account server, which guest mode does not call.
-const GUEST_CHAT = 'Asisten Vayu berjalan di server akun Breeva yang sedang dipulihkan, jadi belum tersedia di mode tamu. Peta dan rute tetap berjalan di perangkat ini.';
+const GUEST_CHAT = 'Asisten Vayu butuh akun Breeva, jadi belum tersedia di mode tamu. Masuk lewat Profil; peta dan rute tetap berjalan di perangkat ini.';
 
 interface UiMsg { role: 'user' | 'assistant'; text: string; streaming?: boolean; action?: ToolUiAction; }
 

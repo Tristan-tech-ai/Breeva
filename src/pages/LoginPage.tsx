@@ -201,17 +201,17 @@ export default function LoginPage() {
               </h1>
             </button>
 
-            {/* Account sign-in is down (database quota): say so and offer guest mode above the form */}
-            <div className="mb-4 rounded-2xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-900/20 p-4" role="status">
-              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Masuk dengan akun sementara tidak tersedia</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-amber-800 dark:text-amber-300">
-                Server akun Breeva sedang dipulihkan. Kamu tetap bisa memakai aplikasi penuh sebagai tamu: peta, rute di perangkat,
-                dan catatan jalan tersimpan di perangkat ini.
+            {/* Guest mode stays one tap away for people who do not want an account yet */}
+            <div className="mb-4 rounded-2xl border border-gray-200 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/40 p-4">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">Belum mau membuat akun?</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-300">
+                Pakai Breeva sebagai tamu: peta, rute di perangkat, dan catatan jalan tersimpan di perangkat ini. Poin, misi,
+                dan riwayat di akun butuh masuk dengan Google atau email.
               </p>
               <button
                 type="button"
                 onClick={handleGuest}
-                className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl gradient-primary py-3 text-sm font-semibold text-white shadow-lg shadow-primary-500/25"
+                className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-primary-500/40 py-3 text-sm font-semibold text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition"
               >
                 <UserRound className="w-4 h-4" />
                 Masuk sebagai tamu

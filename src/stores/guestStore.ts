@@ -12,7 +12,7 @@ import { nextStreak, validateWalk, walkCo2Grams, walkEcoPoints, walkKm, type Wal
 
 export const GUEST_NAME = 'Tamu';
 export const GUEST_NEEDS_ACCOUNT =
-  'Fitur ini butuh akun. Server akun Breeva sedang dipulihkan; peta, rute, dan catatan jalanmu tetap berjalan di perangkat ini.';
+  'Fitur ini butuh akun Breeva. Masuk dengan Google atau email agar poin, misi, dan riwayatmu tersimpan di akun; peta, rute, dan catatan jalanmu tetap berjalan di perangkat ini.';
 
 export interface GuestProfile {
   ecopoints_balance: number;

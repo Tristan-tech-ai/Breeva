@@ -15,6 +15,7 @@ import ProgressBar from '../components/ui/ProgressBar';
 import CelebrationBurst from '../components/ui/CelebrationBurst';
 import IconBadge from '../components/features/IconBadge';
 import { useAchievementUnlocks } from '../components/features/useAchievementUnlocks';
+import { deskripsiPencapaian, namaPencapaian } from '../lib/teksId';
 
 interface ProgressRow {
   achievement_id: string;
@@ -127,10 +128,10 @@ export default function AchievementsPage() {
                     <IconBadge icon={r.icon} category={r.category} unlocked={r.is_unlocked} size={44} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-bold text-gray-900 dark:text-white truncate">{r.name}</span>
+                        <span className="text-sm font-bold text-gray-900 dark:text-white truncate">{namaPencapaian(r.name)}</span>
                         <span className={`text-[11px] font-extrabold shrink-0 ${r.is_unlocked ? 'text-primary-500' : 'text-gray-400'}`}>+{r.points_reward}</span>
                       </div>
-                      <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{r.description}</div>
+                      <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{deskripsiPencapaian(r.name, r.description)}</div>
                       {r.is_unlocked ? (
                         <div className="text-[10px] text-primary-600 dark:text-primary-400 font-semibold mt-0.5 flex items-center gap-1">
                           <Trophy className="w-3 h-3" /> Terbuka{r.unlocked_at ? ` · ${new Date(r.unlocked_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}` : ''}
