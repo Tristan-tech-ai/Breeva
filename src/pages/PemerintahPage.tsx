@@ -4,6 +4,7 @@ import { ChevronLeft, Download, Flame, Landmark, Printer, School } from 'lucide-
 import { Seo } from '../components/Seo';
 import Rincian from '../components/viz/Rincian';
 import { fieldBase } from '../lib/field/source';
+import ButuhSensorNasional from '../components/sensor/ButuhSensorNasional';
 import { bacaIndeks, cariKabKota, type KabKota, type KabKotaIndeks } from '../lib/nasional/kabkota';
 import { emailSah, mintaRingkasan, PERTANYAAN_MASUKAN, type DinasHasil } from '../lib/dinas';
 
@@ -120,6 +121,7 @@ export default function PemerintahPage() {
             <li>Sumber: OpenStreetMap (ODbL), NASA FIRMS, CAMS dan ECMWF lewat Open-Meteo (CC BY 4.0), sensor warga OpenAQ (CC BY 4.0).</li>
           </ul>
         </Rincian>
+        <ButuhSensorNasional />
         <p className="text-sm"><Link to="/sensor/titik" className="font-semibold text-sky-800 underline dark:text-sky-300">Di mana sensor berikutnya paling berguna?</Link> Peta kebutaan dan titik sensor berperingkat untuk Badung–Denpasar dan Kota Bogor (CSV).</p>
       </div>
     </main>

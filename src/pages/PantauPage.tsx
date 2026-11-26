@@ -21,6 +21,7 @@ import CctvRingkas from '../components/pantau/CctvRingkas';
 import { CCTV_PATH, kameraKabKota, type CctvFile } from '../lib/nasional/cctv';
 import LaporButton from '../components/lapor/LaporButton';
 import { ambilRingkas, ambilUrgensi, JENIS_LAPOR, nilaiUrgensi, wargaMelapor, type RingkasLapor, type UrgensiBaris } from '../lib/lapor';
+import ButuhSensorNasional from '../components/sensor/ButuhSensorNasional';
 
 const PantauMap = lazy(() => import('../components/pantau/PantauMap'));
 const UkurPantau = lazy(() => import('../components/pantau/UkurPantau'));
@@ -153,6 +154,7 @@ export default function PantauPage() {
             <Suspense fallback={<div className="rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" style={{ height: "26rem" }} />}>
               <PantauMap fires={apiSemua} luar wind={wind} hour={h} center={PUSAT_INDONESIA} zoom={5} dark={dark} kab={choropleth} jalur={jalurAsap} cctv={kameraSemua} />
             </Suspense>
+            <ButuhSensorNasional n={3} />
             <Rincian summary="Arti warna, titik, dan garis di peta">
               <p className="text-xs text-gray-600 dark:text-gray-300">Warna wilayah: PM2,5 latar jam ini (ketuk untuk membuka kabupaten/kotanya). Titik merah: api terdeteksi satelit dalam 24 jam terakhir (abu-abu: di negara tetangga, asapnya tetap bisa masuk). Garis putus-putus coklat: perkiraan jalur asap 24 jam dari 30 gugus api terbesar. Panah biru: arah angin.{cctv?.kamera.length ? ' Titik kecil di Bogor, Bandung, dan Yogyakarta: kamera lalu lintas (uji coba).' : ''}</p>
             </Rincian>

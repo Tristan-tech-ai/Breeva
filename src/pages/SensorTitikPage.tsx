@@ -6,6 +6,7 @@ import Rincian from '../components/viz/Rincian';
 import BarChart from '../components/viz/BarChart';
 import { useIsDark } from '../stores/settingsStore';
 import { formatAngka } from '../lib/angka';
+import { fieldBase } from '../lib/field/source';
 import { csvTitik, jenisKata, kalimatPeran, kalimatTitik, WILAYAH_TITIK, type DataTitik, type KabTitik, type KotaTitik } from '../lib/sensorTitik';
 
 const PetaTitik = lazy(() => import('../components/sensor/PetaTitik'));
@@ -33,7 +34,7 @@ export default function SensorTitikPage() {
   const [nasional, setNasional] = useState<KabTitik[] | null>(null);
   const [kota, setKota] = useState<KotaTitik[] | null>(null);
   useEffect(() => {
-    fetch('/data/titik_sensor/nasional.json').then((r) => (r.ok ? r.json() : null)).then((d) => setNasional(d?.kabkota ?? null)).catch(() => setNasional(null));
+    fetch(`${fieldBase()}/v/nasional/butuh_sensor.json`).then((r) => (r.ok ? r.json() : null)).then((d) => setNasional(d?.kabkota ?? null)).catch(() => setNasional(null));
     fetch('/data/titik_sensor/sepuluh_kota.json').then((r) => (r.ok ? r.json() : null)).then((d) => setKota(d?.kota ?? null)).catch(() => setKota(null));
   }, []);
   const label = WILAYAH_TITIK.find((w) => w.name === wil)?.label ?? wil;
