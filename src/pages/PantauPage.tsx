@@ -23,6 +23,7 @@ import LaporButton from '../components/lapor/LaporButton';
 import { ambilRingkas, ambilUrgensi, JENIS_LAPOR, nilaiUrgensi, wargaMelapor, type RingkasLapor, type UrgensiBaris } from '../lib/lapor';
 
 const PantauMap = lazy(() => import('../components/pantau/PantauMap'));
+const UkurPantau = lazy(() => import('../components/pantau/UkurPantau'));
 
 const ARAH = ['utara', 'timur laut', 'timur', 'tenggara', 'selatan', 'barat daya', 'barat', 'barat laut'];
 const arahDari = (deg: number) => ARAH[Math.round(deg / 45) % 8];
@@ -57,6 +58,8 @@ export default function PantauPage() {
   const { wilayah } = useParams();
   const dark = useIsDark();
   const region = PANTAU_WILAYAH.find((w) => w.slug === wilayah) ?? null;
+  // M-U04: /pantau?ukur=1 shows the in-page lag meter (for a reading from a real phone)
+  const [ukur] = useState(() => new URLSearchParams(window.location.search).get('ukur') === '1');
   const navigate = useNavigate();
   const b = fieldBase();
   const indeksFile = useJson<KabKotaIndeks>(`${b}/v/nasional/kabkota_indeks.json`);
@@ -94,7 +97,9 @@ export default function PantauPage() {
   const apiDekat = useMemo(() => dekat.map((d) => d.p), [dekat]);
   const pusatWilayah = useMemo<[number, number] | null>(() => (region ? [region.lat, region.lon] : null), [region]);
   const buka = useCallback((s: string) => navigate(`/pantau/${s}`), [navigate]);
-  const choropleth = useMemo(() => ({ url: `${b}/v/nasional/kabkota_peta.geojson`, nilai, nama: namaKab, onPick: buka }), [b, nilai, namaKab, buka]);
+  // M-U04: a coarse copy for the national view (18,920 vertices instead of 48,310; islands under ~5 km2 dropped, 1-2 px at
+  // zoom 7): every zoom re-projected every vertex, 150-200 ms per pinch on a slow phone
+  const choropleth = useMemo(() => ({ url: '/data/kabkota_peta_kasar.geojson', nilai, nama: namaKab, onPick: buka }), [nilai, namaKab, buka]);
   const laporJenis = useMemo(() => JENIS_LAPOR.map((j) => ({ label: j.label, value: (laporSini ?? []).filter((r) => r.jenis === j.id).reduce((a, r) => a + r.jumlah, 0) })).filter((b) => b.value > 0), [laporSini]);
 
   const unduh = () => {
@@ -144,6 +149,7 @@ export default function PantauPage() {
               <StatCard label="Wilayah per ruas" value="2" note="Badung–Denpasar, Kota Bogor" icon={<Radio className="h-3.5 w-3.5" aria-hidden="true" />} />
               <StatCard label="Angin" value={wind ? `${wind.speed.length}` : '…'} note="titik prakiraan tiap jam" icon={<Wind className="h-3.5 w-3.5" aria-hidden="true" />} />
             </div>
+            {ukur && <Suspense fallback={null}><UkurPantau /></Suspense>}
             <Suspense fallback={<div className="rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" style={{ height: "26rem" }} />}>
               <PantauMap fires={apiSemua} luar wind={wind} hour={h} center={PUSAT_INDONESIA} zoom={5} dark={dark} kab={choropleth} jalur={jalurAsap} cctv={kameraSemua} />
             </Suspense>
@@ -191,6 +197,7 @@ export default function PantauPage() {
                 </div>
               </div>
             )}
+            {ukur && <Suspense fallback={null}><UkurPantau /></Suspense>}
             <Suspense fallback={<div className="rounded-2xl bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" style={{ height: "26rem" }} />}>
               <PantauMap fires={apiDekat} wind={wind} hour={h} center={pusatWilayah!} zoom={kameraSini.length ? 12 : 8} dark={dark} cctv={kameraSini} />
             </Suspense>

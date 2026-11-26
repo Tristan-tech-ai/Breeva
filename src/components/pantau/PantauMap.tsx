@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -10,7 +10,7 @@ import { formatAngka } from '../../lib/angka';
 import type { FirePoint } from '../../lib/nasional/firms';
 import type { WindFile } from '../../lib/nasional/angin';
 import { teksCctv, warnaCctv, CCTV_LABEL, type CctvKamera } from '../../lib/nasional/cctv';
-import { bentukPanah, gayaApi, opasitasPanah, panahAngin, radiusApi, teksApi, type Panah } from '../../lib/nasional/petaPantau';
+import { bentukPanah, gabungApi, gayaApi, opasitasPanah, panahAngin, radiusApi, radiusGabung, selGabung, teksApi, teksGabung, type Panah } from '../../lib/nasional/petaPantau';
 
 /** N-24: kab/kota polygons coloured by the background PM2.5 now; a tap opens that kab/kota. */
 export interface Choropleth { url: string; nilai: Record<string, number | null>; nama: Record<string, string>; onPick: (slug: string) => void }
@@ -92,15 +92,44 @@ function Wilayah({ kab }: { kab: Choropleth }) {
 }
 
 function Titik({ fires, luar, cctv, sensors, jalur }: { fires: FirePoint[]; luar: boolean; cctv: CctvKamera[]; sensors: NonNullable<Props['sensors']>; jalur: NonNullable<Props['jalur']> }) {
+  const map = useMap();
+  // M-U04: points on their own canvas, hidden while a zoom gesture runs (Leaflet scales a canvas during the pinch, so the
+  // circles grew and every frame repainted them) and drawn once at the new zoom
+  const renderer = useMemo(() => L.canvas({ padding: 0.3 }), []);
+  const [ukuranSel, setUkuranSel] = useState(() => selGabung(map.getZoom()));
+  useEffect(() => {
+    const el = () => (renderer as unknown as { _container?: HTMLElement })._container;
+    const mulai = () => { const c = el(); if (c) c.style.visibility = 'hidden'; };
+    const selesai = () => { const c = el(); if (c) c.style.visibility = ''; setUkuranSel(selGabung(map.getZoom())); };
+    map.on('zoomstart', mulai); map.on('zoomend', selesai);
+    return () => { map.off('zoomstart', mulai); map.off('zoomend', selesai); };
+  }, [map, renderer]);
+  const sel = useMemo(() => (ukuranSel == null ? null : gabungApi(fires, ukuranSel)), [fires, ukuranSel]);
+  // objects on the point canvas, for the in-page meter (?ukur=1)
+  useEffect(() => { (window as unknown as { __pantauObjek?: number }).__pantauObjek = (sel ? sel.length : fires.length) + cctv.length + sensors.length; }, [sel, fires, cctv, sensors]);
   // tooltip texts are made when a point is hovered (functions), not for every point while the page loads (N-42)
   useLapisan(() => L.layerGroup(jalur.map((j) => L.polyline(j.map(([lon, lat]) => [lat, lon] as [number, number]),
     { color: '#7c2d12', weight: 2, opacity: 0.55, dashArray: '4 4', interactive: false }))), [jalur]);
   useLapisan(() => L.layerGroup(cctv.map((k) => L.circleMarker([k.lat, k.lon], {
-    radius: k.status === 'ok' ? Math.min(8, 3.5 + Math.sqrt(k.total ?? 0)) : 3.5, color: '#134e4a', weight: 1, fillColor: warnaCctv(k), fillOpacity: 0.85,
-  }).bindTooltip(() => `${teksCctv(k)} · ${CCTV_LABEL}`))), [cctv]);
-  useLapisan(() => L.layerGroup(sensors.map((s) => L.circleMarker([s.lat, s.lon], { radius: 6, color: '#075985', weight: 2, fillColor: '#38bdf8', fillOpacity: 0.85 })
-    .bindTooltip(s.label))), [sensors]);
-  useLapisan(() => L.layerGroup(fires.map((f) => L.circleMarker([f[1], f[0]], { radius: radiusApi(f), ...gayaApi(f, luar) }).bindTooltip(() => teksApi(f, luar)))), [fires, luar]);
+    renderer, radius: k.status === 'ok' ? Math.min(8, 3.5 + Math.sqrt(k.total ?? 0)) : 3.5, color: '#134e4a', weight: 1, fillColor: warnaCctv(k), fillOpacity: 0.85,
+  }).bindTooltip(() => `${teksCctv(k)} · ${CCTV_LABEL}`))), [cctv, renderer]);
+  useLapisan(() => L.layerGroup(sensors.map((s) => L.circleMarker([s.lat, s.lon], { renderer, radius: 6, color: '#075985', weight: 2, fillColor: '#38bdf8', fillOpacity: 0.85 })
+    .bindTooltip(s.label))), [sensors, renderer]);
+  useLapisan(() => sel ? L.layerGroup(sel.map((g) => L.circleMarker([g.lat, g.lon], { renderer, radius: radiusGabung(g.n), color: g.luar && luar ? '#475569' : '#b91c1c', weight: 1,
+    fillColor: g.luar && luar ? '#94a3b8' : g.tinggi ? '#dc2626' : '#f97316', fillOpacity: 0.75 }).bindTooltip(() => teksGabung(g)))) : null, [luar, sel, renderer]);
+  // every fire (zoom 8 and closer): added 120 per frame after paint, so no single task builds 1,883 layers (M-U04)
+  useEffect(() => {
+    if (sel) return;
+    const g = L.layerGroup().addTo(map);
+    let i = 0, batal = () => {};
+    const langkah = () => {
+      const end = Math.min(fires.length, i + 120);
+      for (; i < end; i++) { const f = fires[i]; L.circleMarker([f[1], f[0]], { renderer, radius: radiusApi(f), ...gayaApi(f, luar) }).bindTooltip(() => teksApi(f, luar)).addTo(g); }
+      if (i < fires.length) batal = sesudahLukis(langkah);
+    };
+    batal = sesudahLukis(langkah);
+    return () => { batal(); g.remove(); };
+  }, [map, fires, luar, sel, renderer]);
   return null;
 }
 

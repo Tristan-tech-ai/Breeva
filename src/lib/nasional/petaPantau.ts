@@ -15,6 +15,40 @@ export function gayaApi(f: FirePoint, luar: boolean): Gaya {
     : { color: '#b91c1c', weight: 1, fillColor: f[3] === 'h' ? '#dc2626' : '#f97316', fillOpacity: 0.75 };
 }
 
+/** M-U04: at this zoom and below the fires are merged per cell (1,883 circles were redrawn on every pinch frame). */
+export const ZOOM_GABUNG = 7;
+
+/** Cell size of the merge at a zoom: 0.5 degree up to zoom 5, 0.25 degree at 6-7, none (every fire) from zoom 8. */
+export function selGabung(zoom: number): number | null {
+  return zoom <= 5 ? 0.5 : zoom <= ZOOM_GABUNG ? 0.25 : null;
+}
+
+export interface ApiGabung { lat: number; lon: number; n: number; mw: number; tinggi: boolean; luar: boolean }
+
+/** Fires merged per `sel` degree cell: the mean position, the count, the summed power, and whether any is high confidence.
+ * A cell counts as outside Indonesia only when none of its fires has a kab/kota. */
+export function gabungApi(fires: FirePoint[], sel = 0.5): ApiGabung[] {
+  const m = new Map<string, { sx: number; sy: number; n: number; mw: number; tinggi: boolean; dalam: boolean }>();
+  for (const f of fires) {
+    const k = `${Math.floor(f[0] / sel)}|${Math.floor(f[1] / sel)}`;
+    let c = m.get(k);
+    if (!c) { c = { sx: 0, sy: 0, n: 0, mw: 0, tinggi: false, dalam: false }; m.set(k, c); }
+    c.sx += f[0]; c.sy += f[1]; c.n++; c.mw += Math.max(0, f[2]);
+    if (f[3] === 'h') c.tinggi = true;
+    if (f[6]) c.dalam = true;
+  }
+  return [...m.values()].map((c) => ({ lon: c.sx / c.n, lat: c.sy / c.n, n: c.n, mw: c.mw, tinggi: c.tinggi, luar: !c.dalam }));
+}
+
+/** Screen radius of a merged cell: grows with the count, at most 12 px. */
+export function radiusGabung(n: number): number {
+  return Math.min(12, 3 + Math.sqrt(Math.max(1, n)) * 1.2);
+}
+
+export function teksGabung(g: ApiGabung): string {
+  return `${g.n} titik api di sekitar sini (24 jam) · daya total ${formatAngka(g.mw, 0, 0)} MW${g.luar ? ' · di luar Indonesia' : ''} · perbesar untuk tiap titik`;
+}
+
 export function radiusApi(f: FirePoint): number {
   return Math.min(9, 2.5 + Math.sqrt(Math.max(0, f[2])) / 2);
 }
