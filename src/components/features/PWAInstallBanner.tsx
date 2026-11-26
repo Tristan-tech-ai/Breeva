@@ -8,10 +8,25 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+/** The install offer waits this long after the app started, so a first look (or a demo recording) is not covered by it. */
+export const TUNDA_PASANG_MS = 60_000;
+const mulai = typeof performance !== 'undefined' ? performance.timeOrigin : Date.now();
+
+/** Whether the install banner may show: an install offer exists, not dismissed, not on /developers, and late enough. */
+export function bolehTampil(adaTawaran: boolean, ditolak: boolean, pathname: string, sejakMulaiMs: number): boolean {
+  return adaTawaran && !ditolak && pathname !== '/developers' && sejakMulaiMs >= TUNDA_PASANG_MS;
+}
+
 export default function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [dismissed, setDismissed] = useState(() => sessionStorage.getItem('breeva_pwa_dismissed') === '1');
   const { pathname } = useLocation();
+  const [cukupLama, setCukupLama] = useState(() => Date.now() - mulai >= TUNDA_PASANG_MS);
+  useEffect(() => {
+    if (cukupLama) return;
+    const t = setTimeout(() => setCukupLama(true), Math.max(0, TUNDA_PASANG_MS - (Date.now() - mulai)));
+    return () => clearTimeout(t);
+  }, [cukupLama]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -45,8 +60,8 @@ export default function PWAInstallBanner() {
     sessionStorage.setItem('breeva_pwa_dismissed', '1');
   };
 
-  // Hide on the developer landing — it's a marketing hero, not an installable app surface.
-  if (!deferredPrompt || dismissed || pathname === '/developers') return null;
+  // Hide on the developer landing (a marketing hero) and during the first minute of a session.
+  if (!bolehTampil(!!deferredPrompt, dismissed, pathname, cukupLama ? TUNDA_PASANG_MS : 0)) return null;
 
   return (
     <AnimatePresence>
