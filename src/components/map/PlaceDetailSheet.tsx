@@ -223,7 +223,7 @@ export default function PlaceDetailSheet({
                   {poi.category && (
                     <>
                       {(rating != null || !!price) && <span className="text-gray-300 dark:text-gray-600">&middot;</span>}
-                      <span className="text-sm text-gray-500">{poiCategoryLabel(poi.category)}</span>
+                      <span className="text-sm text-gray-500">{poiCategoryLabel(poi.types?.[0] ?? poi.subcategory ?? poi.category)}</span>
                     </>
                   )}
                 </div>
