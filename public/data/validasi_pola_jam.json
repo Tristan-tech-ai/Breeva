@@ -1,0 +1,41 @@
+{
+ "dibuat": "2026-11-26T22:35",
+ "periode_wib": [
+  "2026-11-25 20:18",
+  "2026-11-26 22:18"
+ ],
+ "putaran": 80,
+ "catatan": "Uji pola jam lalu lintas, bukan akurasi kadar; satu hari kerja; tidak masuk angka peta.",
+ "kota": {
+  "kota_bandung": {
+   "kamera": 299,
+   "dipakai": 203,
+   "rho_median": 0.488,
+   "rho_kuartil": [
+    0.353,
+    0.595
+   ],
+   "bagian_rho_0_5": 0.463
+  },
+  "kota_bogor": {
+   "kamera": 38,
+   "dipakai": 31,
+   "rho_median": 0.566,
+   "rho_kuartil": [
+    0.524,
+    0.661
+   ],
+   "bagian_rho_0_5": 0.839
+  },
+  "kota_yogyakarta": {
+   "kamera": 147,
+   "dipakai": 117,
+   "rho_median": 0.553,
+   "rho_kuartil": [
+    0.434,
+    0.637
+   ],
+   "bagian_rho_0_5": 0.615
+  }
+ }
+}

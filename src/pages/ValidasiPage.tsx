@@ -8,6 +8,8 @@ import RunningValidation from '../components/features/RunningValidation';
 import EpaBars from '../components/viz/EpaBars';
 import ScatterChart from '../components/viz/ScatterChart';
 import Rincian from '../components/viz/Rincian';
+import KerapatanSensor from '../components/viz/KerapatanSensor';
+import PolaJamKamera from '../components/viz/PolaJamKamera';
 
 /** "18–22 Nov" from the days that actually have pairs. */
 const rentangHari = (per: Record<string, number>) => {
@@ -108,6 +110,10 @@ export default function ValidasiPage() {
             )}
 
             <RunningValidation singleDay={v.single_day} />
+
+            <KerapatanSensor />
+
+            <PolaJamKamera />
 
             <section className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 text-sm space-y-1">
