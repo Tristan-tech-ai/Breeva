@@ -507,6 +507,8 @@ export default function MapLayersSheet({
                         </div>
                         <input
                           type="range"
+                          aria-label="Jam prakiraan"
+                          aria-valuetext={forecastHour === 0 ? 'Sekarang' : `${forecastHour} jam ke depan`}
                           min={0}
                           max={24}
                           step={1}

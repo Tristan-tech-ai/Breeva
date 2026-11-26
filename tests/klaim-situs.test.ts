@@ -30,4 +30,9 @@ describe('no unsupported claims in the visible text (N-94)', () => {
     expect(s).toMatch(/bawaannya mati/);
     expect(s).toMatch(/belum dipakai untuk angka peta/);
   });
+
+  it('the forecast slider has a name and the onboarding buttons keep contrast in dark mode (N-97)', () => {
+    expect(read('src/components/map/MapLayersSheet.tsx')).toMatch(/type="range"\s+aria-label="Jam prakiraan"/);
+    expect(read('src/pages/OnboardingPage.tsx')).not.toMatch(/dark:bg-primary-600 text-white/);
+  });
 });

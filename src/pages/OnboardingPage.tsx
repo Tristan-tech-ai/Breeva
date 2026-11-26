@@ -159,7 +159,7 @@ export default function OnboardingPage() {
 
                 <button
                   onClick={goNext}
-                  className="w-full py-4 rounded-xl bg-gray-900 dark:bg-primary-600 text-white font-bold text-[15px] shadow-xl hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+                  className="w-full py-4 rounded-xl bg-gray-900 dark:bg-primary-700 text-white font-bold text-[15px] shadow-xl hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
                 >
                   Mulai
                 </button>
@@ -349,7 +349,7 @@ export default function OnboardingPage() {
                 <div className="space-y-3">
                   <button
                     onClick={handleFinish}
-                    className="w-full py-4 rounded-xl bg-gray-900 dark:bg-primary-600 text-white font-bold text-[15px] shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2"
+                    className="w-full py-4 rounded-xl bg-gray-900 dark:bg-primary-700 text-white font-bold text-[15px] shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2"
                   >
                     <Navigation2 className="w-5 h-5" />
                     Mulai jalan pertama
