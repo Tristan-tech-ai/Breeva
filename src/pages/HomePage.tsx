@@ -64,6 +64,7 @@ import type { RoadLayerMeta } from '../components/map/RoadPollutionLayer';
 import { FIELD_REGIONS, fetchManifest, fieldBase, pickRegion, rememberRegion } from '../lib/field/source';
 import { parseViewLink } from '../lib/route/share';
 import { deviceRouteAsRoute, deviceRouteStart, fieldRegionOf, routeModeFor, transportFor } from '../lib/route/appRoute';
+import { tersediaDiPeta } from '../lib/field/tersedia';
 import { pm25ToAQISimple } from '../lib/api';
 import { walkEcoPoints } from '../lib/walkPoints';
 import { pilihanPrakiraan } from '../lib/field/prakiraanPeta';
@@ -158,7 +159,7 @@ export default function HomePage() {
   const [showAQIStations, setShowAQIStations] = useState(false);
   const [showPOIs, setShowPOIs] = useState(true);
   const [highlightGreen, setHighlightGreen] = useState(false);
-  const [pollutant, setPollutant] = useState<PollutantType>('aqi');
+  const [pollutantPilih, setPollutant] = useState<PollutantType>('aqi');
   const [forecastHour, setForecastHour] = useState(0);
   // M-U07: optional fire and sensor-point layers (off by default)
   const [showTitikApi, setShowTitikApi] = useState(false);
@@ -167,7 +168,7 @@ export default function HomePage() {
   const [opsiPrakiraan, setOpsiPrakiraan] = useState<Array<{ ahead: number; label: string }> | undefined>(undefined);
   // 'traffic' (default) = the per-road traffic part (CALINE4 dispersion) on a fixed scale with a dead band;
   // 'total' = absolute pollutant level vs WHO/EPA bands, where nearly every road gets the same colour.
-  const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('traffic');
+  const [modePilih, setRoadDisplayMode] = useState<RoadDisplayMode>('traffic');
   const [roadLayerMeta, setRoadLayerMeta] = useState<RoadLayerMeta | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'voyager' | 'osm' | 'satellite'>('voyager');
@@ -195,6 +196,11 @@ export default function HomePage() {
   const schoolRegion = schoolRegionName ? pickRegion(schoolRegionName) : fieldRegionOf(userLocation) ?? fieldRegionOf(center) ?? FIELD_REGIONS[0];
   // M-U08: the forecast hours offered are those of the region in view (its manifest), never a free 0-24 slider
   const namaWilayahPandang = FIELD_STATIC ? (fieldRegionOf(center) ?? FIELD_REGIONS[0]).name : null;
+  // M-U12: the layer panel offers only what the map can draw here (same rule as /peta, M-U03); a choice it cannot draw
+  // shows as one it can, and comes back where it can
+  const tersedia = tersediaDiPeta(FIELD_STATIC, FIELD_STATIC && !fieldRegionOf(center));
+  const pollutant: PollutantType = tersedia.polutan.has(pollutantPilih) ? pollutantPilih : 'aqi';
+  const roadDisplayMode: RoadDisplayMode = tersedia.mode.has(modePilih) ? modePilih : 'traffic';
   useEffect(() => {
     if (!namaWilayahPandang) return;
     let batal = false;
@@ -955,6 +961,7 @@ export default function HomePage() {
         roadDisplayMode={roadDisplayMode}
         onRoadDisplayModeChange={setRoadDisplayMode}
         roadLayerMeta={roadLayerMeta}
+        tersedia={tersedia}
       />
 
       {/* Walk Complete modal */}

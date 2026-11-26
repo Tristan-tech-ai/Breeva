@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { ispuRingkas } from '../../lib/ispu';
 import type { AirQualityData, PollutantType, RoadDisplayMode } from '../../types';
+import type { Tersedia } from '../../lib/field/tersedia';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { POLLUTANT_OPTIONS, getColorStops } from './RoadPollutionLayer';
 import TrafficLegend from './TrafficLegend';
@@ -36,6 +37,8 @@ interface MapLayersSheetProps {
   /** M-U08: the forecast hours the field computed (static field); when given, chips replace the 0-24 slider */
   forecastOptions?: Array<{ ahead: number; label: string }>;
   roadDisplayMode?: RoadDisplayMode;
+  /** M-U12: what the map can draw where it is (lib/field/tersedia); other choices are disabled with the reason shown */
+  tersedia?: Tersedia;
   onRoadDisplayModeChange?: (m: RoadDisplayMode) => void;
   roadLayerMeta?: RoadLayerMeta | null;
 }
@@ -91,6 +94,7 @@ export default function MapLayersSheet({
   forecastOptions,
   roadDisplayMode = 'total',
   onRoadDisplayModeChange,
+  tersedia,
   roadLayerMeta,
 }: MapLayersSheetProps) {
   const activePollutant = POLLUTANT_OPTIONS.find((o) => o.id === pollutant) || POLLUTANT_OPTIONS[0];
@@ -142,7 +146,7 @@ export default function MapLayersSheet({
             <div className="flex-1 overflow-y-auto overscroll-contain pb-6">
               {/* Map Type section */}
             <div className="px-5 pb-4">
-              <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">
                 Jenis peta
               </p>
               <div className="grid grid-cols-3 gap-3">
@@ -177,7 +181,7 @@ export default function MapLayersSheet({
                       <span
                         className={`text-xs font-semibold ${
                           isActive
-                            ? 'text-primary-600 dark:text-primary-400'
+                            ? 'text-primary-700 dark:text-primary-400'
                             : 'text-gray-600 dark:text-gray-400'
                         }`}
                       >
@@ -194,7 +198,7 @@ export default function MapLayersSheet({
 
             {/* Map Details section */}
             <div className="px-5 pt-4 pb-4">
-              <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">
                 Isi peta
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -217,7 +221,7 @@ export default function MapLayersSheet({
                     <p className={`text-sm font-semibold ${showPOIs ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
                       Tempat
                     </p>
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
+                    <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5 leading-tight">
                       Kafe, taman, dan merchant
                     </p>
                   </div>
@@ -242,7 +246,7 @@ export default function MapLayersSheet({
                     <p className={`text-sm font-semibold ${showAQIOverlay ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
                       Polusi jalan
                     </p>
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
+                    <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5 leading-tight">
                       {currentAQI && ispuRingkas(currentAQI.pm25) ? `ISPU ${ispuRingkas(currentAQI.pm25)!.nilai} · ${ispuRingkas(currentAQI.pm25)!.kategori}` : 'Udara per ruas jalan'}
                     </p>
                   </div>
@@ -267,7 +271,7 @@ export default function MapLayersSheet({
                     <p className={`text-sm font-semibold ${showAQIStations ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
                       Stasiun WAQI
                     </p>
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
+                    <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5 leading-tight">
                       Angka AQI AS, Badung–Denpasar dan Kota Bogor
                     </p>
                   </div>
@@ -292,7 +296,7 @@ export default function MapLayersSheet({
                     <p className={`text-sm font-semibold ${showGreenHighlight ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
                       Ruang Hijau
                     </p>
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
+                    <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5 leading-tight">
                       Sorot taman & area hijau
                     </p>
                   </div>
@@ -345,13 +349,13 @@ export default function MapLayersSheet({
                     <div className="flex items-center gap-2 px-4 pt-3 pb-1.5">
                       <span className={`text-[10px] font-bold uppercase tracking-wider ${
                         pollutant === 'aqi'
-                          ? 'text-gray-400 dark:text-gray-500'
+                          ? 'text-gray-600 dark:text-gray-400'
                           : 'text-sky-600 dark:text-sky-400'
                       }`}>
                         {pollutant === 'aqi' ? 'Indeks kualitas udara' : 'Konsentrasi'}
                       </span>
                       <span className="text-[9px] text-gray-300 dark:text-gray-600">•</span>
-                      <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                      <span className="text-[10px] text-gray-600 dark:text-gray-400">
                         {pollutant === 'aqi' ? 'Indeks gabungan (0-500)' : `${activePollutant.label} dalam ${activePollutant.unit}`}
                       </span>
                     </div>
@@ -362,11 +366,12 @@ export default function MapLayersSheet({
                         <button
                           key={opt.id}
                           onClick={() => onPollutantChange?.(opt.id)}
+                          disabled={!!tersedia && !tersedia.polutan.has(opt.id)}
                           className={`
-                            flex-1 py-2.5 text-center text-xs font-bold uppercase tracking-wider transition-all relative
+                            flex-1 py-2.5 text-center text-xs font-bold uppercase tracking-wider transition-all relative disabled:opacity-40 disabled:cursor-not-allowed
                             ${pollutant === opt.id
                               ? 'text-sky-600 dark:text-sky-400'
-                              : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
                             }
                           `}
                         >
@@ -383,13 +388,14 @@ export default function MapLayersSheet({
 
                     {/* Display mode toggle: absolute level, the traffic part on a fixed scale, or harga hirup */}
                       <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mr-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mr-1">
                           Tampilan
                         </span>
                         <button
                           onClick={() => onRoadDisplayModeChange?.('total')}
+                          disabled={!!tersedia && !tersedia.mode.has('total')}
                           className={`
-                            px-2.5 py-1 text-[10px] font-bold rounded-md transition-all
+                            px-2.5 py-1 text-[10px] font-bold rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed
                             ${roadDisplayMode === 'total'
                               ? 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 ring-1 ring-sky-300 dark:ring-sky-700'
                               : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
@@ -401,8 +407,9 @@ export default function MapLayersSheet({
                         </button>
                         <button
                           onClick={() => onRoadDisplayModeChange?.('traffic')}
+                          disabled={!!tersedia && !tersedia.mode.has('traffic')}
                           className={`
-                            px-2.5 py-1 text-[10px] font-bold rounded-md transition-all
+                            px-2.5 py-1 text-[10px] font-bold rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed
                             ${roadDisplayMode === 'traffic'
                               ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 ring-1 ring-violet-300 dark:ring-violet-700'
                               : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
@@ -414,8 +421,9 @@ export default function MapLayersSheet({
                         </button>
                         <button
                           onClick={() => onRoadDisplayModeChange?.('harga')}
+                          disabled={!!tersedia && !tersedia.mode.has('harga')}
                           className={`
-                            px-2.5 py-1 text-[10px] font-bold rounded-md transition-all
+                            px-2.5 py-1 text-[10px] font-bold rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed
                             ${roadDisplayMode === 'harga'
                               ? 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 ring-1 ring-teal-300 dark:ring-teal-700'
                               : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
@@ -425,10 +433,13 @@ export default function MapLayersSheet({
                         >
                           Harga hirup
                         </button>
-                        <span className="ml-auto text-[9px] text-gray-400 dark:text-gray-500">
+                        <span className="ml-auto text-[9px] text-gray-600 dark:text-gray-400">
                           {roadDisplayMode === 'traffic' ? 'Perbandingan antar-jalan' : roadDisplayMode === 'harga' ? 'Siapa yang menghirup' : 'Tingkat absolut'}
                         </span>
                       </div>
+                      {tersedia?.alasan && (
+                        <p data-alasan-mode className="px-4 pb-2 text-[11px] leading-snug text-amber-900 dark:text-amber-200">{tersedia.alasan}</p>
+                      )}
                     {roadDisplayMode === 'traffic' && (
                       <div className="px-4 pb-1">
                         <TrafficLegend pollutant={pollutant} />
@@ -447,12 +458,12 @@ export default function MapLayersSheet({
                           <p className="text-sm font-bold text-gray-900 dark:text-white">
                             {activePollutant.label}
                             {activePollutant.unit && (
-                              <span className="text-xs font-normal text-gray-400 dark:text-gray-500 ml-1">
+                              <span className="text-xs font-normal text-gray-600 dark:text-gray-400 ml-1">
                                 ({activePollutant.unit})
                               </span>
                             )}
                           </p>
-                          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                          <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5">
                             {activePollutant.description}
                           </p>
                         </div>
@@ -472,25 +483,25 @@ export default function MapLayersSheet({
 
                       {/* Scale labels — show units for concentration mode */}
                       <div className="flex justify-between px-0.5">
-                        <span className="text-[9px] font-mono text-gray-400 dark:text-gray-500">
+                        <span className="text-[9px] font-mono text-gray-600 dark:text-gray-400">
                           {pollutant === 'aqi' ? 'Baik' : `${colorStops[0].v}`}
                         </span>
-                        <span className="text-[9px] font-mono text-gray-400 dark:text-gray-500">
+                        <span className="text-[9px] font-mono text-gray-600 dark:text-gray-400">
                           {colorStops[Math.floor(colorStops.length / 2)].v}{pollutant !== 'aqi' && ' µg/m³'}
                         </span>
-                        <span className="text-[9px] font-mono text-gray-400 dark:text-gray-500">
+                        <span className="text-[9px] font-mono text-gray-600 dark:text-gray-400">
                           {pollutant === 'aqi' ? 'Berbahaya' : `${colorStops[colorStops.length - 1].v}`}
                         </span>
                       </div>
 
                       {/* Inspect hint: a plain tap on a coloured road opens its estimate (static field popup) */}
-                      <p className="mt-2 text-[10px] text-gray-400 dark:text-gray-500 italic">
+                      <p className="mt-2 text-[10px] text-gray-600 dark:text-gray-400 italic">
                         Ketuk jalan berwarna untuk lihat perkiraan PM2,5, rentang, dan keyakinan.
                       </p>
 
                       {/* Weather & data status bar */}
                       {roadLayerMeta && (<>
-                        <div className="mt-3 flex items-center gap-3 text-[10px] text-gray-400 dark:text-gray-500">
+                        <div className="mt-3 flex items-center gap-3 text-[10px] text-gray-600 dark:text-gray-400">
                           <div className="flex items-center gap-1">
                             <Wind className="w-3 h-3" />
                             <span>{(roadLayerMeta.wind_speed ?? 0).toFixed(1)} m/s</span>
@@ -574,9 +585,9 @@ export default function MapLayersSheet({
                             className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-sky-200 to-sky-500 dark:from-sky-800 dark:to-sky-400 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-sky-500"
                           />
                           <div className="flex justify-between mt-1">
-                            <span className="text-[9px] text-gray-400 dark:text-gray-500">Sekarang</span>
-                            <span className="text-[9px] text-gray-400 dark:text-gray-500">+12h</span>
-                            <span className="text-[9px] text-gray-400 dark:text-gray-500">+24h</span>
+                            <span className="text-[9px] text-gray-600 dark:text-gray-400">Sekarang</span>
+                            <span className="text-[9px] text-gray-600 dark:text-gray-400">+12h</span>
+                            <span className="text-[9px] text-gray-600 dark:text-gray-400">+24h</span>
                           </div>
                           </>
                         )}
