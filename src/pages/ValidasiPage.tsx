@@ -113,7 +113,7 @@ export default function ValidasiPage() {
               <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 text-sm space-y-1">
                 <h2 className="font-semibold">Per jam (Bali)</h2>
                 <p>NRMSE {num(v.hourly.nrmse_pct, 1)}% (RMSE {num(v.hourly.rmse, 1)} µg/m³): per jam belum akurat.</p>
-                <p>Rentang 95% memuat {pct(v.hourly.pi95_coverage_calibrated)} nilai yang disembunyikan setelah kalibrasi (sebelumnya {pct(v.hourly.pi95_coverage_before)}); lebar median {num(v.hourly.pi95_median_width, 1)} µg/m³.</p>
+                <p>Rentang 95% memuat {pct(v.hourly.pi95_coverage_calibrated)} nilai yang disembunyikan setelah kalibrasi{v.hourly.pi95_noise_floor_ug_m3 ? ` dengan lantai derau sensor ${num(v.hourly.pi95_noise_floor_ug_m3, 0)} µg/m³` : ''} (sebelumnya {pct(v.hourly.pi95_coverage_before)}); lebar median {num(v.hourly.pi95_median_width, 1)} µg/m³.</p>
                 <p className="text-[11px] text-gray-500 dark:text-gray-400">{v.hourly.source}</p>
               </div>
               <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 text-sm space-y-1">

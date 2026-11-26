@@ -17,6 +17,9 @@ const statsI = read(join(P, 'stats_i.json'));
 const statsF = read(join(P, 'stats_f.json'));
 const statsG = read(join(P, 'stats_g.json'));
 const loso = read(join(F, 'validation', 'sensors_bali_loso.json'));
+// F5-30: the interval rule the live map uses since 26 Nov (sensor noise floor 6 ug/m3, factor refitted with it)
+const lantai = read(join(F, 'validation', 'sensors_bali_loso_lantai6.json'));
+const statsK = read(join(P, 'stats_k.json'));
 const time = read(join(F, 'validation', 'time_split.json'));
 const hum = read(join(F, 'validation', 'humidity_correction_bali.json'));
 const bogor = read(join(F, 'reports', 'bogor_stasiun_2026-11-17.json'));
@@ -100,8 +103,9 @@ const out = {
   daily: rows,
   hourly: {
     nrmse_pct: loso.hourly.nrmse_pct, rmse: loso.hourly.rmse, source: 'sensors_bali_loso.json hourly',
-    pi95_coverage_before: loso.pi95_hourly_coverage, pi95_coverage_calibrated: loso.pi95_calibrated.coverage_hourly,
-    pi95_median_width: loso.pi95_calibrated.median_width_ug_m3,
+    pi95_coverage_before: loso.pi95_hourly_coverage, pi95_coverage_calibrated: lantai.pi95_calibrated.coverage_hourly,
+    pi95_median_width: lantai.pi95_calibrated.median_width_ug_m3, pi95_noise_floor_ug_m3: lantai.pi95_calibrated.noise_floor_ugm3,
+    pi95_source: 'sensors_bali_loso_lantai6.json pi95_calibrated (F5-30)',
   },
   city_hourly_rmse: { global_model: statsF.E2.cams.rmse, calibrated_with_visibility: statsF.E2.lin_kosch.rmse, source: 'stats_f.json E2 (cams, lin_kosch)' },
   time_split_calibration: { loco_sep_oct: time.calibration.all.loco_sep_oct, time_and_loco: time.calibration.all.time_loco,
@@ -113,6 +117,7 @@ const out = {
     { name: 'Cuaca terukur bandara (kota tanpa stasiun)', before: statsI.kota_cuaca_terukur.dasar.rmse, after: statsI.kota_cuaca_terukur.dengan_cuaca_bandara.rmse, unit: 'RMSE per jam µg/m³ (kota disembunyikan)', source: 'stats_i.json kota_cuaca_terukur (dasar, dengan_cuaca_bandara)' },
     { name: 'AOD satelit harian (JAXA SGLI, MODIS)', before: aod.kota_disembunyikan.dasar.semua, after: best(aod.kota_disembunyikan, ['sgli', 'modis', 'gabungan']), unit: `RMSE per jam µg/m³ (kota disembunyikan; terbaik dari 3 varian, turun < 3% dan ${aod.kota_disembunyikan.sgli.wilayah_memburuk.length}+ wilayah memburuk)`, source: 'uji_aod.json kota_disembunyikan (N-31, 25 Nov)' },
     { name: 'NO2 troposfer Sentinel-5P', before: no2.kota_disembunyikan.dasar.semua, after: best(no2.kota_disembunyikan, ['no2', 'no2_kota', 'no2_keduanya']), unit: 'RMSE per jam µg/m³ (kota disembunyikan; terbaik dari 3 varian, semua lebih buruk)', source: 'uji_no2.json kota_disembunyikan (N-30, 25 Nov)' },
+    { name: 'Titik panas VIIRS 24 jam (NASA FIRMS)', before: statsK.semua.lin_kosch.rmse, after: statsK.semua.lin_api_kosch.rmse, unit: 'RMSE per jam µg/m³ (kota disembunyikan; FRP dalam 50-200 km, pra-registrasi)', source: 'stats_k.json semua (F5-33, 26 Nov)' },
     { name: 'Hitungan kendaraan CCTV (uji coba selama lomba)', before: null, after: null, unit: `belum bisa diuji: ${cctv.kamera_dengan_sensor_aktif_1km} kamera punya sensor aktif dalam 1 km; tampil di /pantau saja, tidak masuk angka peta`, source: 'uji_n34.json (N-34, 25 Nov)' },
     { name: 'Cuaca ERA5, arah angin, CO model, jarak ke pantai, ketinggian', before: null, after: null, unit: 'tidak menurunkan galat di uji lokasi disembunyikan', source: 'proposal (analisis E, H, I)' },
   ],

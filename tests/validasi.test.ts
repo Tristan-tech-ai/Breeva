@@ -26,7 +26,10 @@ describe('public validation page data', () => {
     const l = JSON.parse(readFileSync(loso, 'utf8'));
     const bali = v.daily.find((r) => r.id === 'bali_hidden')!;
     expect([bali.nrmse_pct, bali.r2, bali.slope, bali.intercept, bali.n]).toEqual([l.daily.nrmse_pct, l.daily.r_squared, l.daily.slope, l.daily.intercept, l.daily.n]);
-    expect(v.hourly.pi95_coverage_calibrated).toBe(l.pi95_calibrated.coverage_hourly);
+    const l6 = JSON.parse(readFileSync('D:/breeva-ml-data/field/validation/sensors_bali_loso_lantai6.json', 'utf8'));
+    expect(v.hourly.pi95_coverage_calibrated).toBe(l6.pi95_calibrated.coverage_hourly); // F5-30: the live rule
+    expect(v.hourly.pi95_noise_floor_ug_m3).toBe(6);
+    expect(v.hourly.pi95_coverage_before).toBe(l.pi95_hourly_coverage);
     const t = JSON.parse(readFileSync('D:/breeva-ml-data/field/validation/time_split.json', 'utf8'));
     expect(v.daily.find((r) => r.id === 'bali_sep_oct')!.nrmse_pct).toBe(t.kriging_bali.fit_may_aug.nrmse_pct);
     const s = JSON.parse(readFileSync('C:/Users/Tristan/Downloads/teknopak/sumber_proposal/data/stats_i.json', 'utf8'));
@@ -68,6 +71,8 @@ describe('N-43 traces we tested and turned down', () => {
     expect(by('NO2').before).toBe(no2.kota_disembunyikan.dasar.semua);
     expect(by('NO2').after).toBe(Math.min(no2.kota_disembunyikan.no2.semua, no2.kota_disembunyikan.no2_kota.semua, no2.kota_disembunyikan.no2_keduanya.semua));
     expect(by('CCTV').unit).toMatch(/tidak masuk angka peta/);
+    const k = JSON.parse(readFileSync('C:/Users/Tristan/Downloads/teknopak/sumber_proposal/data/stats_k.json', 'utf8'));
+    expect([by('VIIRS').before, by('VIIRS').after]).toEqual([k.semua.lin_kosch.rmse, k.semua.lin_api_kosch.rmse]); // F5-33
   });
   it('a rejected trace never shows as an improvement of 3% or more', () => {
     for (const r of v.rejected) if (r.before != null && r.after != null && r.unit.includes('RMSE')) expect((r.before - r.after) / r.before).toBeLessThan(0.03);

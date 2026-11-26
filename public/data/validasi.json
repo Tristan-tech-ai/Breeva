@@ -1,5 +1,5 @@
 {
- "built_at": "2026-11-17T18:32:04.063Z",
+ "built_at": "2026-11-26T08:04:45.013Z",
  "roadside": {
   "measured": [
    {
@@ -55,21 +55,21 @@
   "model_latest": [
    {
     "name": "badung_denpasar",
-    "run": "2026111718",
-    "hour_local": 2,
-    "median": 0.16,
-    "p90": 0.63,
-    "p99": 2.98,
-    "source": "audit/badung_denpasar/2026111718/report.json exhaust"
+    "run": "2026112607",
+    "hour_local": 15,
+    "median": 0.88,
+    "p90": 3.6,
+    "p99": 16.23,
+    "source": "audit/badung_denpasar/2026112607/report.json exhaust"
    },
    {
     "name": "kota_bogor",
-    "run": "2026111718",
-    "hour_local": 1,
-    "median": 0.29,
-    "p90": 2.37,
-    "p99": 11.84,
-    "source": "audit/kota_bogor/2026111718/report.json exhaust"
+    "run": "2026112607",
+    "hour_local": 14,
+    "median": 1.53,
+    "p90": 12.95,
+    "p99": 65.87,
+    "source": "audit/kota_bogor/2026112607/report.json exhaust"
    }
   ],
   "correction": {
@@ -208,8 +208,10 @@
   "rmse": 15.69,
   "source": "sensors_bali_loso.json hourly",
   "pi95_coverage_before": 0.844,
-  "pi95_coverage_calibrated": 0.949,
-  "pi95_median_width": 56.6
+  "pi95_coverage_calibrated": 0.944,
+  "pi95_median_width": 48.7,
+  "pi95_noise_floor_ug_m3": 6,
+  "pi95_source": "sensors_bali_loso_lantai6.json pi95_calibrated (F5-30)"
  },
  "city_hourly_rmse": {
   "global_model": 43.46,
@@ -258,6 +260,13 @@
    "after": 31.79,
    "unit": "RMSE per jam µg/m³ (kota disembunyikan; terbaik dari 3 varian, semua lebih buruk)",
    "source": "uji_no2.json kota_disembunyikan (N-30, 25 Nov)"
+  },
+  {
+   "name": "Titik panas VIIRS 24 jam (NASA FIRMS)",
+   "before": 31.58,
+   "after": 31.63,
+   "unit": "RMSE per jam µg/m³ (kota disembunyikan; FRP dalam 50-200 km, pra-registrasi)",
+   "source": "stats_k.json semua (F5-33, 26 Nov)"
   },
   {
    "name": "Hitungan kendaraan CCTV (uji coba selama lomba)",

@@ -12,7 +12,7 @@ export interface Validasi {
   standard: { name: string; nrmse_pct: number; r2: number; slope: [number, number]; intercept: number };
   rule: string;
   daily: EpaRow[];
-  hourly: { nrmse_pct: number; rmse: number; source: string; pi95_coverage_before: number; pi95_coverage_calibrated: number; pi95_median_width: number };
+  hourly: { nrmse_pct: number; rmse: number; source: string; pi95_coverage_before: number; pi95_coverage_calibrated: number; pi95_median_width: number; pi95_noise_floor_ug_m3?: number; pi95_source?: string };
   city_hourly_rmse: { global_model: number; calibrated_with_visibility: number; source: string };
   time_split_calibration: { loco_sep_oct: number; time_and_loco: number; without_palembang: number; cams_without_palembang: number; source: string };
   rejected: Array<{ name: string; before: number | null; after: number | null; unit: string; source: string }>;
