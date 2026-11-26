@@ -9,8 +9,8 @@ import { doseChip, doseRatios, schoolChip, soonChip, timeChip } from '../../lib/
 import Rincian from '../viz/Rincian';
 
 const TONE = {
-  good: 'bg-emerald-600 text-white',
-  bad: 'bg-rose-600 text-white',
+  good: 'bg-emerald-700 text-white', // 600 is 3.8:1 with white; axe (N-53) wants 4.5:1 for this size
+  bad: 'bg-rose-700 text-white',
   same: 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100',
   base: 'bg-orange-100 text-orange-900 dark:bg-orange-900/40 dark:text-orange-200',
   none: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
@@ -81,13 +81,13 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = 
         </p>
       )}
       {state.cards.length > 0 && (
-        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {state.cards.map((c, k) => {
             const chip = doseChip(c, k);
             const ratio = ratios[k];
             const t = timeChip(c), sz = schoolChip(c), soon = soonChip(c);
             return (
-              <div key={c.index} className="rounded-xl border border-gray-200 dark:border-gray-700/50 p-3" data-route-card={k}>
+              <div key={c.index} className="min-w-0 rounded-xl border border-gray-200 dark:border-gray-700/50 p-3" data-route-card={k}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 min-w-0">
                     <span className="h-2.5 w-6 shrink-0 rounded-full" style={{ background: c.color }} />
