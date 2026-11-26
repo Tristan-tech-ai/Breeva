@@ -165,7 +165,7 @@ export default function ContributionHistoryPage() {
               <h2 className="text-4xl font-extrabold tabular-nums leading-none mt-1">{count}</h2>
             </div>
             <div className="text-right">
-              <p className="text-white/70 text-[10px] uppercase tracking-wider">EcoPoints</p>
+              <p className="text-white/70 text-[10px] uppercase tracking-wider">EcoPoin</p>
               <p className="text-xl font-bold tabular-nums inline-flex items-center gap-1"><Coins className="w-4 h-4" />{points}</p>
             </div>
           </div>

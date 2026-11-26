@@ -56,7 +56,7 @@ export default function PWAStatusToast() {
           transition={{ duration: 0.2 }}
           className="fixed left-4 right-4 bottom-36 z-[120] mx-auto max-w-md"
         >
-          <div className="glass-card bg-white/95 dark:bg-gray-900/95 border border-primary-200/70 dark:border-primary-800/80 p-4 shadow-2xl">
+          <div className="rounded-2xl bg-white dark:bg-gray-900 border border-primary-200/70 dark:border-primary-800/80 p-4 shadow-2xl">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl gradient-primary text-white">
                 {icon}

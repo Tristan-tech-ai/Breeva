@@ -235,11 +235,11 @@ export default function PaparanPage() {
           <div className="relative">
             <div className="flex items-center gap-1.5 text-white/90">
               <Sparkles className="w-3.5 h-3.5" />
-              <span className="text-[10px] uppercase tracking-[0.18em] font-bold">Layer 3 · Lensa Paparan</span>
+              <span className="text-[10px] uppercase tracking-[0.18em] font-bold">Lensa Paparan</span>
             </div>
             <h2 className="mt-2 text-lg font-extrabold leading-snug">Berapa PM2.5 yang benar-benar kamu hirup?</h2>
             <p className="mt-1.5 text-[12.5px] text-white/85 leading-relaxed max-w-md">
-              Bukan sekadar AQI rata-rata — kami hitung dosis nyata dari konsentrasi per-jalan (engine v2),
+              Bukan sekadar AQI rata-rata — kami hitung dosis dari konsentrasi per ruas jalan,
               laju napas (usia & aktivitas), dan perlindungan moda perjalananmu.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-1.5">

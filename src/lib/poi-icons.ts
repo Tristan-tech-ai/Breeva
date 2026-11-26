@@ -495,8 +495,8 @@ export function getMerchantDivIcon(tier: string, name?: string): L.DivIcon {
     return icon;
   }
 
-  // Sponsored tiers: horizontal badge with "Eco Merchant" label
-  const displayName = 'Eco Merchant';
+  // Sponsored tiers: horizontal badge; the seeded merchants are demo data, so the badge says so (N-59)
+  const displayName = 'Merchant contoh';
   let tierCls: string;
   let iconSize: number;
   switch (tier) {

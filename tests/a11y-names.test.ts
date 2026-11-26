@@ -57,7 +57,7 @@ describe('touch targets at 320 px (F1-45)', () => {
     expect(src('src/pages/UjiCobaRekapPage.tsx')).toMatch(/<Link to="\/uji-coba" className="print:hidden inline-block min-h-6 py-0\.5 /);
     expect(src('src/components/map/SchoolPicker.tsx')).toMatch(/aria-label="Cari sekolah tujuan" className="min-w-0 min-h-6 /);
     const map = src('src/pages/ExploreMapPage.tsx');
-    expect((map.match(/className="inline-flex min-h-6 items-center hover:text-primary-500"/g) ?? []).length).toBe(5); // footer links
+    expect((map.match(/className="inline-flex min-h-6 items-center hover:text-primary-500"/g) ?? []).length).toBe(4); // footer links (Developer API link removed 26 Nov, N-59: legacy API)
     expect(map).not.toMatch(/text-\[11px\] text-gray-400 dark/);
     const search = renderToStaticMarkup(h(SearchBar, { filterChips: [], activeFilter: 'all', onFilterChange: () => {} } as never));
     expect(search).toMatch(/<input[^>]*id="search-input"[^>]*class="[^"]*self-stretch/);

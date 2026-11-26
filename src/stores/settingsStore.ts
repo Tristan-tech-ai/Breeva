@@ -30,7 +30,8 @@ const DEFAULTS: AppSettings = {
   high_contrast: false,
   push_notifications: true,
   quest_reminders: true,
-  anonymous_data: true,
+  // Off until the person turns it on: the trace leaves the phone (N-59, privacy default)
+  anonymous_data: false,
   profile_visible: true,
   distance_unit: 'km',
   language: 'id',

@@ -80,3 +80,6 @@ export function merchantPercobaan(m: { name?: string | null; review_count?: numb
 /** Shown above the merchant and reward lists: the seeded merchants are demo data, not real partnerships. */
 export const CATATAN_CONTOH_MERCHANT =
   'Merchant dan hadiah di sini masih data contoh untuk peragaan EcoPoin; belum ada kerja sama dengan usaha nyata.';
+
+/** While every listed merchant is seeded demo data: no contact rows (a seeded number may belong to a real person). */
+export const MERCHANT_CONTOH = true;

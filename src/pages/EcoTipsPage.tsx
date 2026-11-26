@@ -1,26 +1,25 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { ChevronLeft, Leaf, Wind, Footprints, Droplets, TreePine, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, Leaf, Wind, Footprints, TreePine, AlertTriangle } from 'lucide-react';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import PageHeader from '../components/ui/PageHeader';
 import { Seo } from '../components/Seo';
 
 const tips = [
-  { icon: Leaf, title: 'Jalan Kaki Hemat CO₂', body: 'Berjalan 1 km menghemat ~120 g CO₂ dibanding berkendara. Untuk komuter harian, itu bisa puluhan kilogram per tahun!', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' },
-  { icon: Wind, title: 'Pilih Rute Lebih Bersih', body: 'Rute dekat taman & ruang hijau bisa jauh lebih minim polusi. Mesin VAYU Breeva mencarikan jalur terbersih untukmu.', color: 'text-sky-500 bg-sky-50 dark:bg-sky-900/20' },
-  { icon: Footprints, title: '30 Menit Jalan Kaki', body: 'Berjalan 30 menit/hari menurunkan risiko penyakit jantung dan memperbaiki suasana hati. Olahraga gratis!', color: 'text-primary-500 bg-primary-50 dark:bg-primary-900/20' },
-  { icon: TreePine, title: 'Pohon = Penyaring Udara', body: 'Satu pohon dapat menyerap ~22 kg CO₂ per tahun dan menyaring partikel berbahaya. Berjalanlah dekat pepohonan bila bisa.', color: 'text-green-500 bg-green-50 dark:bg-green-900/20' },
-  { icon: Droplets, title: 'Hemat Air Juga', body: 'Mobil membutuhkan ~3,8 liter air per km (produksi + cuci). Dengan jalan kaki, kamu ikut menghemat sumber daya tersembunyi.', color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
-  { icon: Leaf, title: 'EcoPoin = Hadiah Nyata', body: 'Tukar EcoPoin di merchant ramah lingkungan untuk diskon makanan, minuman, dan produk eco. Jalan kaki benar-benar membayar!', color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/20' },
-  { icon: Wind, title: 'Jam Sibuk = Polusi Puncak', body: 'Udara terburuk saat jam sibuk (07.00–09.00 & 17.00–19.00). Jadwalkan jalanmu pagi atau sore untuk udara lebih bersih.', color: 'text-rose-500 bg-rose-50 dark:bg-rose-900/20' },
-  { icon: Footprints, title: 'Rapat Sambil Jalan', body: 'Coba rapat sambil berjalan! Berjalan terbukti meningkatkan kreativitas. Baik untukmu DAN ide-idemu.', color: 'text-violet-500 bg-violet-50 dark:bg-violet-900/20' },
+  { icon: Leaf, title: 'Jalan Kaki Hemat CO₂', body: 'Breeva menghitung 120 g CO₂ yang tidak keluar untuk setiap km yang kamu jalani, dibanding naik kendaraan.', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' },
+  { icon: Wind, title: 'Pilih Rute Lebih Bersih', body: 'Asap kendaraan paling pekat di tepi jalan ramai. Rute paling sedikit asap di Breeva menghindari jalan ramai bila tambahan waktunya kecil.', color: 'text-sky-500 bg-sky-50 dark:bg-sky-900/20' },
+  { icon: Footprints, title: '30 Menit Jalan Kaki', body: 'WHO menganjurkan sedikitnya 150 menit aktivitas sedang per pekan, misalnya jalan kaki 30 menit, 5 hari.', color: 'text-primary-500 bg-primary-50 dark:bg-primary-900/20' },
+  { icon: TreePine, title: 'Pohon = Penyaring Udara', body: 'Breeva memakai 22 kg CO₂ per tahun sebagai serapan satu pohon untuk angka “setara pohon” di profilmu.', color: 'text-green-500 bg-green-50 dark:bg-green-900/20' },
+  { icon: Leaf, title: 'EcoPoin dan hadiah', body: 'Poin dari jalan kaki dan misi bisa ditukar dengan voucher merchant mitra. Merchant yang tampil sekarang masih data contoh.', color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/20' },
+  { icon: Wind, title: 'Jam Sibuk = Polusi Puncak', body: 'Asap kendaraan paling tinggi pada jam sibuk. Bila bisa, jalan di luar jam itu, atau lewat gang di samping jalan ramai.', color: 'text-rose-500 bg-rose-50 dark:bg-rose-900/20' },
+  { icon: Footprints, title: 'Rapat Sambil Jalan', body: 'Coba ngobrol atau rapat sambil berjalan. Banyak orang merasa lebih segar berpikir sambil melangkah.', color: 'text-violet-500 bg-violet-50 dark:bg-violet-900/20' },
 ];
 
 const aqTips = [
-  { maxAqi: 50, icon: Leaf, title: 'Udara Sedang Bersih!', body: 'AQI di bawah 50 — sempurna untuk jalan kaki. Manfaatkan, jalan lebih jauh hari ini!', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' },
-  { maxAqi: 100, icon: Wind, title: 'Udara Sedang', body: 'AQI 51–100. Jalan kaki masih aman untuk kebanyakan orang. Hindari olahraga berat dekat jalan ramai.', color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/20' },
-  { maxAqi: 999, icon: AlertTriangle, title: 'Awas, Udara Buruk', body: 'AQI di atas 100. Pertimbangkan jalan lebih singkat, pakai masker, dan pilih jalur lewat taman & ruang hijau.', color: 'text-red-500 bg-red-50 dark:bg-red-900/20' },
+  { maxAqi: 50, icon: Leaf, title: 'Udara Sedang Bersih!', body: 'Udara baik untuk jalan kaki. Manfaatkan, jalan lebih jauh hari ini.', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' },
+  { maxAqi: 100, icon: Wind, title: 'Udara Sedang', body: 'Jalan kaki masih baik untuk kebanyakan orang. Kelompok sensitif: hindari olahraga berat dekat jalan ramai.', color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/20' },
+  { maxAqi: 999, icon: AlertTriangle, title: 'Awas, Udara Buruk', body: 'Pertimbangkan jalan lebih singkat, pakai masker, dan pilih rute paling sedikit asap.', color: 'text-red-500 bg-red-50 dark:bg-red-900/20' },
 ];
 
 function SwipeableCard({ tip, onDismiss }: { tip: typeof tips[number]; onDismiss: () => void }) {
@@ -80,7 +79,7 @@ export default function EcoTipsPage() {
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24">
       <Seo title="Tips Udara Bersih & Jalan Sehat — Breeva" description="Tips praktis mengurangi paparan polusi: pilih rute hijau, waktu terbaik berjalan, dan cara kurangi jejak karbon harian." path="/eco-tips" />
-      <PageHeader title="Eco Tips" onBack={() => navigate(-1)} />
+      <PageHeader title="Tips hijau" onBack={() => navigate(-1)} />
 
       <div className="px-4 pt-4 pb-12 max-w-2xl mx-auto">
         <div className="relative h-[130px] mb-5">

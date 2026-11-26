@@ -361,7 +361,6 @@ export default function ExploreMapPage() {
           <Link to="/" className="inline-flex min-h-6 items-center hover:text-primary-500">Beranda</Link>
           <Link to="/paparan" className="inline-flex min-h-6 items-center hover:text-primary-500">Kalkulator Paparan</Link>
           <Link to="/about" className="inline-flex min-h-6 items-center hover:text-primary-500">Tentang</Link>
-          <Link to="/developers" className="inline-flex min-h-6 items-center hover:text-primary-500">Developer API</Link>
           <Link to="/eco-tips" className="inline-flex min-h-6 items-center hover:text-primary-500">Tips Udara Bersih</Link>
         </nav>
       </div>

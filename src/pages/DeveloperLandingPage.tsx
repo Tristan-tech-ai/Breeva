@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowRight, ArrowUpRight, Wind, Route, Activity, KeyRound, Copy, Check,
-  ShieldCheck, Zap, Github, Terminal, ChevronRight, Database, Gauge, Lock,
+  ShieldCheck, Zap, Github, Terminal, Database, Lock,
 } from 'lucide-react';
 import { Seo } from '../components/Seo';
 
@@ -63,20 +63,12 @@ const ENDPOINTS = [
   },
 ];
 
-const TIERS = [
-  { name: 'Free', limit: '1,000', unit: 'requests / day', cta: 'Get your key', to: KEYS_PATH, featured: false,
-    feats: ['All three endpoints', 'Per-key usage analytics', 'No credit card'] },
-  { name: 'Pro', limit: '50,000', unit: 'requests / day', cta: 'Talk to us', to: KEYS_PATH, featured: true,
-    feats: ['Everything in Free', 'Higher daily quota', 'Priority support'] },
-  { name: 'Enterprise', limit: 'Unlimited', unit: 'custom volume', cta: 'Talk to us', to: KEYS_PATH, featured: false,
-    feats: ['Everything in Pro', 'Custom SLAs & data scope', 'Dedicated onboarding'] },
-];
 
 const STATS = [
-  { v: '1.4M', k: 'road segments scored' },
-  { v: '4+', k: 'Indonesian cities' },
+  { v: 'Legacy', k: 'Breeva 2 API' },
   { v: '3', k: 'REST endpoints' },
-  { v: 'Free', k: '1,000 calls / day' },
+  { v: 'Empty', k: '/road-aqi since the move to static files' },
+  { v: 'Paused', k: 'new API keys' },
 ];
 
 const fade = (d = 0) => ({
@@ -96,12 +88,12 @@ export default function DeveloperLandingPage() {
     s.text = JSON.stringify({
       '@context': 'https://schema.org', '@type': 'WebAPI',
       name: 'Breeva Developer API',
-      description: 'Calibrated per-road air-quality (AQI), pollution-aware navigation/routing, and PM2.5 exposure as a REST API. Free tier with API key, 1,000 requests/day.',
+      description: 'Calibrated per-road air-quality (AQI), pollution-aware navigation/routing, and PM2.5 exposure as a REST API (Breeva 2, legacy; new keys paused).',
       url: 'https://breeva.site/developers',
       documentation: 'https://breeva.site/openapi.json',
       termsOfService: 'https://breeva.site/terms',
       provider: { '@type': 'Organization', name: 'Breeva', url: 'https://breeva.site' },
-      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD', description: 'Free tier — 1,000 requests per day with a Breeva API key' },
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD', description: 'Legacy Breeva 2 API; new keys paused' },
     });
     document.head.appendChild(s);
     return () => { document.getElementById('breeva-dev-jsonld')?.remove(); };
@@ -121,10 +113,10 @@ export default function DeveloperLandingPage() {
   ];
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#070c0b] text-zinc-300 antialiased selection:bg-emerald-400/30">
+    <div lang="en" className="relative min-h-screen overflow-hidden bg-[#070c0b] text-zinc-300 antialiased selection:bg-emerald-400/30">
       <Seo
         title="Breeva API — Air Quality, Routing & Exposure API for Developers"
-        description="Breeva Developer API: calibrated per-road air-quality (AQI), pollution-aware navigation/routing, and PM2.5 exposure in one REST API. Get a free API key — 1,000 requests/day. API kualitas udara, navigasi rute bersih & paparan untuk developer."
+        description="Breeva Developer API: calibrated per-road air-quality (AQI), pollution-aware navigation/routing, and PM2.5 exposure in one REST API (Breeva 2, legacy). API kualitas udara, navigasi rute bersih & paparan untuk developer."
         path="/developers"
       />
       <style>{`
@@ -159,7 +151,6 @@ export default function DeveloperLandingPage() {
           <div className="hidden sm:flex items-center gap-7 text-[13px] text-zinc-400">
             <a href="#endpoints" className="inline-flex min-h-6 min-w-6 items-center justify-center hover:text-emerald-300 transition">Endpoints</a>
             <a href="#quickstart" className="inline-flex min-h-6 min-w-6 items-center justify-center hover:text-emerald-300 transition">Quickstart</a>
-            <a href="#pricing" className="inline-flex min-h-6 min-w-6 items-center justify-center hover:text-emerald-300 transition">Pricing</a>
             <a href="/openapi.json" target="_blank" rel="noreferrer" className="hover:text-emerald-300 transition flex items-center gap-1">Reference <ArrowUpRight className="w-3 h-3" /></a>
           </div>
           <Link to={KEYS_PATH} className="group flex items-center gap-1.5 rounded-full bg-emerald-400 text-emerald-950 text-[13px] font-semibold pl-4 pr-3 py-1.5 hover:bg-emerald-300 transition shadow-[0_0_24px_-4px_rgba(52,211,153,.6)]">
@@ -167,6 +158,15 @@ export default function DeveloperLandingPage() {
           </Link>
         </nav>
       </header>
+
+      {/* N-59: the legacy API is not what the Breeva 3 map runs on; say so in Indonesian before the English page */}
+      <div lang="id" className="relative z-10 mx-auto max-w-6xl px-5 sm:px-8 pt-4" data-api-lama>
+        <p className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-[13px] leading-relaxed text-amber-100">
+          Halaman untuk pengembang, berbahasa Inggris. API ini peninggalan Breeva 2 dan tidak dipakai peta Breeva 3:
+          /road-aqi kini mengembalikan daftar kosong, /aqi masih menjawab dari model lama. Tidak ada paket berbayar, dan
+          kunci API baru sedang dihentikan. Peta Breeva 3 dibaca dari berkas terbuka; kesegarannya ada di /status.
+        </p>
+      </div>
 
       {/* ── Hero ── */}
       <section className="relative z-10 mx-auto max-w-6xl px-5 sm:px-8 pt-12 sm:pt-20 pb-20 grid lg:grid-cols-[1.05fr_1fr] gap-12 items-center">
@@ -193,7 +193,6 @@ export default function DeveloperLandingPage() {
               <Terminal className="w-4 h-4 text-emerald-400" /> Quickstart
             </a>
           </div>
-          <p className="jb mt-6 text-[11px] text-zinc-600">// free tier · 1,000 req/day · no credit card</p>
         </motion.div>
 
         {/* Terminal */}
@@ -326,36 +325,6 @@ export default function DeveloperLandingPage() {
 console.<span className="text-sky-300">log</span>(data.cigarette_equivalent); <span className="text-zinc-600">// 0.018</span>
           </pre>
         </motion.div>
-      </section>
-
-      {/* ── Pricing ── */}
-      <section id="pricing" className="relative z-10 mx-auto max-w-6xl px-5 sm:px-8 py-12 scroll-mt-20">
-        <motion.p {...fade()} className="jb text-[11px] tracking-widest text-emerald-400/80">04 / PRICING</motion.p>
-        <motion.h2 {...fade(0.05)} className="mt-3 text-3xl sm:text-4xl font-bold text-white tracking-tight">Start free. Scale by request.</motion.h2>
-        <div className="mt-12 grid md:grid-cols-3 gap-5 items-start">
-          {TIERS.map((t, i) => (
-            <motion.div {...fade(i * 0.08)} key={t.name}
-              className={`relative rounded-2xl p-6 ${t.featured ? 'border border-emerald-400/40 bg-emerald-400/[0.04] shadow-[0_0_50px_-20px_rgba(52,211,153,.6)]' : 'border border-white/[0.08] bg-white/[0.02]'}`}>
-              {t.featured && <span className="jb absolute -top-2.5 left-6 text-[10px] tracking-widest bg-emerald-400 text-emerald-950 font-bold px-2 py-0.5 rounded">POPULAR</span>}
-              <h3 className="text-sm font-semibold tracking-wide text-white uppercase">{t.name}</h3>
-              <div className="mt-4 flex items-baseline gap-1.5">
-                <span className="jb text-3xl font-bold text-white">{t.limit}</span>
-                <span className="text-xs text-zinc-500">{t.unit}</span>
-              </div>
-              <ul className="mt-5 space-y-2.5">
-                {t.feats.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm text-zinc-400">
-                    <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" /> {f}
-                  </li>
-                ))}
-              </ul>
-              <Link to={t.to} className={`mt-6 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold transition ${t.featured ? 'bg-emerald-400 text-emerald-950 hover:bg-emerald-300' : 'border border-white/15 text-white hover:border-emerald-400/40'}`}>
-                {t.cta} <ChevronRight className="w-4 h-4" />
-              </Link>
-            </motion.div>
-          ))}
-        </div>
-        <p className="jb mt-5 text-[11px] text-zinc-600 flex items-center gap-1.5"><Gauge className="w-3.5 h-3.5" /> Quotas reset 00:00 UTC · every response carries X-RateLimit-Limit / Remaining.</p>
       </section>
 
       {/* ── CTA ── */}

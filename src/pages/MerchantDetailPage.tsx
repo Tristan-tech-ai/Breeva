@@ -7,6 +7,7 @@ import RewardRedemptionModal from '../components/features/RewardRedemptionModal'
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { tierFor } from '../lib/merchant-tiers';
+import { CATATAN_CONTOH_MERCHANT, MERCHANT_CONTOH } from '../lib/teksId';
 
 interface Merchant {
   id: string; name: string; description: string | null; category: string | null; address: string | null;
@@ -18,7 +19,7 @@ interface Merchant {
 interface Review { id: string; user_id: string; rating: number; comment: string | null; created_at: string; owner_reply: string | null; }
 interface RewardItem { id: string; title: string; description: string | null; points_required: number; discount_percentage: number | null; remaining_stock: number | null; }
 
-const DAYS: [string, string][] = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun']];
+const DAYS: [string, string][] = [['mon', 'Sen'], ['tue', 'Sel'], ['wed', 'Rab'], ['thu', 'Kam'], ['fri', 'Jum'], ['sat', 'Sab'], ['sun', 'Min']];
 
 export default function MerchantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -50,7 +51,7 @@ export default function MerchantDetailPage() {
       const [{ data: m }, { data: revs }, { data: rws }] = await Promise.all([
         supabase.from('merchants').select('*').eq('id', id).single(),
         supabase.from('reviews').select('id, user_id, rating, comment, created_at, owner_reply').eq('merchant_id', id).order('created_at', { ascending: false }).limit(50),
-        supabase.from('rewards').select('id, title, description, points_required, discount_percentage, remaining_stock').eq('merchant_id', id).eq('is_active', true).order('points_required', { ascending: true }),
+        supabase.from('rewards').select('id, title, description, points_required, discount_percentage, remaining_stock').eq('merchant_id', id).eq('is_active', true).gte('valid_until', new Date().toISOString().split('T')[0]).order('points_required', { ascending: true }),
       ]);
       setMerchant(m);
       setReviews((revs || []) as Review[]);
@@ -81,12 +82,12 @@ export default function MerchantDetailPage() {
 
   const handleFlagReview = async (reviewId: string) => {
     if (!user || flaggedIds.has(reviewId)) return;
-    if (!confirm('Flag this review as inappropriate?')) return;
+    if (!confirm('Laporkan ulasan ini sebagai tidak pantas?')) return;
     setFlaggedIds((prev) => new Set(prev).add(reviewId));
     await supabase.from('review_flags').insert({ review_id: reviewId, user_id: user.id, reason: 'inappropriate' });
   };
 
-  const formatDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const formatDate = (d: string) => new Date(d).toLocaleDateString('id-ID', { month: 'short', day: 'numeric', year: 'numeric' });
 
   if (isLoading) {
     return (
@@ -104,8 +105,8 @@ export default function MerchantDetailPage() {
   if (!merchant) {
     return (
       <div className="gradient-mesh-bg min-h-screen flex flex-col items-center justify-center gap-3 text-center px-6">
-        <p className="text-gray-500 dark:text-gray-400">Merchant not found</p>
-        <button onClick={() => navigate('/merchants')} className="text-primary-500 text-sm font-medium">Back to Merchants</button>
+        <p className="text-gray-500 dark:text-gray-400">Merchant tidak ditemukan</p>
+        <button onClick={() => navigate('/merchants')} className="text-primary-500 text-sm font-medium">Kembali ke daftar merchant</button>
       </div>
     );
   }
@@ -151,18 +152,19 @@ export default function MerchantDetailPage() {
                   )}
                   {merchant.is_eco_certified && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
-                      <Leaf className="w-3 h-3" /> Eco-certified {merchant.eco_badge || ''}
+                      <Leaf className="w-3 h-3" /> Bersertifikat hijau {merchant.eco_badge || ''}
                     </span>
                   )}
                 </div>
               </div>
             </div>
             {merchant.description && <p className="text-sm text-gray-600 dark:text-gray-300 mt-3">{merchant.description}</p>}
+            <p className="mt-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200/70 dark:border-amber-800/40 px-3 py-2 text-[12px] leading-relaxed text-amber-900 dark:text-amber-200" data-catatan-contoh>{CATATAN_CONTOH_MERCHANT}</p>
             <div className="mt-3 space-y-1.5">
               {merchant.address && <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400"><MapPin size={13} /> <span>{merchant.address}</span></div>}
-              {merchant.phone && <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400"><Phone size={13} /> <span>{merchant.phone}</span></div>}
-              {merchant.instagram && <div className="flex items-center gap-2 text-xs text-pink-500"><Instagram size={13} /> <span>{merchant.instagram}</span></div>}
-              {merchant.website && <div className="flex items-center gap-2 text-xs text-primary-500"><Globe size={13} /> <a href={merchant.website} target="_blank" rel="noopener noreferrer" className="truncate">{merchant.website}</a></div>}
+              {!MERCHANT_CONTOH && merchant.phone && <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400"><Phone size={13} /> <span>{merchant.phone}</span></div>}
+              {!MERCHANT_CONTOH && merchant.instagram && <div className="flex items-center gap-2 text-xs text-pink-500"><Instagram size={13} /> <span>{merchant.instagram}</span></div>}
+              {!MERCHANT_CONTOH && merchant.website && <div className="flex items-center gap-2 text-xs text-primary-500"><Globe size={13} /> <a href={merchant.website} target="_blank" rel="noopener noreferrer" className="truncate">{merchant.website}</a></div>}
             </div>
           </div>
         </motion.div>
@@ -179,7 +181,7 @@ export default function MerchantDetailPage() {
         {/* Rewards */}
         {rewards.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 px-1 flex items-center gap-1.5"><Gift className="w-4 h-4 text-primary-500" /> Rewards ({rewards.length})</h3>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 px-1 flex items-center gap-1.5"><Gift className="w-4 h-4 text-primary-500" /> Hadiah ({rewards.length})</h3>
             <div className="space-y-2">
               {rewards.map((rw) => (
                 <div key={rw.id} className="glass-card p-4 flex items-center gap-3">
@@ -187,11 +189,11 @@ export default function MerchantDetailPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{rw.title}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs font-medium text-primary-500">{rw.points_required} pts</span>
-                      {rw.discount_percentage ? <span className="text-[11px] text-gray-400">{rw.discount_percentage}% off</span> : null}
+                      <span className="text-xs font-medium text-primary-700 dark:text-primary-300">{rw.points_required} poin</span>
+                      {rw.discount_percentage ? <span className="text-[11px] text-gray-400">diskon {rw.discount_percentage}%</span> : null}
                     </div>
                   </div>
-                  <button onClick={() => setRedeemReward(rw)} disabled={!user} className="px-3.5 py-2 rounded-xl gradient-primary text-white text-xs font-semibold disabled:opacity-50 shrink-0">Redeem</button>
+                  <button onClick={() => setRedeemReward(rw)} disabled={!user} className="px-3.5 py-2 rounded-xl gradient-primary text-white text-xs font-semibold disabled:opacity-50 shrink-0">Tukar</button>
                 </div>
               ))}
             </div>
@@ -201,11 +203,11 @@ export default function MerchantDetailPage() {
         {/* Opening hours */}
         {hours && (
           <div className="glass-card p-4">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-1.5"><Clock className="w-4 h-4 text-gray-400" /> Opening hours</h3>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-1.5"><Clock className="w-4 h-4 text-gray-400" /> Jam buka</h3>
             <div className="space-y-1">
               {DAYS.map(([key, label]) => (
                 <div key={key} className={`flex items-center justify-between text-xs ${key === todayKey ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>
-                  <span>{label}{key === todayKey ? ' · Today' : ''}</span>
+                  <span>{label}{key === todayKey ? ' · Hari ini' : ''}</span>
                   <span className="tabular-nums">{hours[key] || '—'}</span>
                 </div>
               ))}
@@ -216,20 +218,20 @@ export default function MerchantDetailPage() {
         {/* Write Review */}
         {user && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card p-4">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{hasReviewed ? 'Update Your Review' : 'Write a Review'}</h3>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{hasReviewed ? 'Ubah ulasanmu' : 'Tulis ulasan'}</h3>
             <div className="flex items-center gap-1.5 mb-3">
               {[1, 2, 3, 4, 5].map((s) => <button key={s} onClick={() => setMyRating(s)}><Star size={24} className={s <= myRating ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'} fill={s <= myRating ? 'currentColor' : 'none'} /></button>)}
             </div>
-            <textarea value={myComment} onChange={(e) => setMyComment(e.target.value)} placeholder="Share your experience..." maxLength={500} rows={3} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50 text-sm text-gray-900 dark:text-white p-3 resize-none focus:outline-none focus:ring-2 focus:ring-primary-500/50" />
-            <button onClick={handleSubmitReview} disabled={myRating === 0 || isSubmitting} className="mt-2 flex items-center gap-2 px-4 py-2 rounded-xl gradient-primary text-white text-sm font-medium disabled:opacity-50"><Send size={14} />{isSubmitting ? 'Submitting...' : hasReviewed ? 'Update' : 'Submit'}</button>
+            <textarea value={myComment} onChange={(e) => setMyComment(e.target.value)} placeholder="Ceritakan pengalamanmu..." maxLength={500} rows={3} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50 text-sm text-gray-900 dark:text-white p-3 resize-none focus:outline-none focus:ring-2 focus:ring-primary-500/50" />
+            <button onClick={handleSubmitReview} disabled={myRating === 0 || isSubmitting} className="mt-2 flex items-center gap-2 px-4 py-2 rounded-xl gradient-primary text-white text-sm font-medium disabled:opacity-50"><Send size={14} />{isSubmitting ? 'Mengirim...' : hasReviewed ? 'Perbarui' : 'Kirim'}</button>
           </motion.div>
         )}
 
         {/* Reviews List */}
         <div>
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 px-1">Reviews ({reviews.length})</h3>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 px-1">Ulasan ({reviews.length})</h3>
           {reviews.length === 0 ? (
-            <div className="glass-card p-6 text-center"><p className="text-xs text-gray-400 dark:text-gray-500">No reviews yet. Be the first!</p></div>
+            <div className="glass-card p-6 text-center"><p className="text-xs text-gray-400 dark:text-gray-500">Belum ada ulasan.</p></div>
           ) : (
             <div className="space-y-2">
               {reviews.map((rev, i) => (
@@ -238,14 +240,14 @@ export default function MerchantDetailPage() {
                     <div className="flex items-center gap-1">{[1, 2, 3, 4, 5].map((s) => <Star key={s} size={11} className={s <= rev.rating ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'} fill={s <= rev.rating ? 'currentColor' : 'none'} />)}</div>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-gray-400 dark:text-gray-500">{formatDate(rev.created_at)}</span>
-                      {rev.user_id !== user?.id && <button onClick={() => handleFlagReview(rev.id)} className={`p-1 rounded transition ${flaggedIds.has(rev.id) ? 'text-red-400' : 'text-gray-300 dark:text-gray-600 hover:text-red-400'}`} title={flaggedIds.has(rev.id) ? 'Flagged' : 'Flag review'}><Flag size={11} /></button>}
+                      {rev.user_id !== user?.id && <button onClick={() => handleFlagReview(rev.id)} className={`p-1 rounded transition ${flaggedIds.has(rev.id) ? 'text-red-400' : 'text-gray-300 dark:text-gray-600 hover:text-red-400'}`} title={flaggedIds.has(rev.id) ? 'Sudah dilaporkan' : 'Laporkan ulasan'}><Flag size={11} /></button>}
                     </div>
                   </div>
                   {rev.comment && <p className="text-xs text-gray-600 dark:text-gray-300">{rev.comment}</p>}
-                  {rev.user_id === user?.id && <span className="text-[9px] text-primary-500 font-medium mt-1 inline-block">Your review</span>}
+                  {rev.user_id === user?.id && <span className="text-[9px] text-primary-500 font-medium mt-1 inline-block">Ulasanmu</span>}
                   {rev.owner_reply && (
                     <div className="mt-2 ml-2 pl-3 border-l-2 border-primary-300 dark:border-primary-700">
-                      <p className="text-[10px] font-semibold text-primary-600 dark:text-primary-400">Owner reply</p>
+                      <p className="text-[10px] font-semibold text-primary-600 dark:text-primary-400">Balasan pemilik</p>
                       <p className="text-xs text-gray-600 dark:text-gray-400">{rev.owner_reply}</p>
                     </div>
                   )}

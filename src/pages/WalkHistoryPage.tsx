@@ -17,6 +17,7 @@ import HeroCard from '../components/ui/HeroCard';
 import Segmented from '../components/ui/Segmented';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import PullToRefreshIndicator from '../components/ui/PullToRefreshIndicator';
+import { formatAngka } from '../lib/angka';
 
 interface Walk {
   id: string;
@@ -142,7 +143,7 @@ export default function WalkHistoryPage() {
         <HeroCard
           eyebrow="Total perjalanan"
           title={`${profile?.total_walks ?? 0} jalan`}
-          subtitle={`${(profile?.total_distance_km ?? 0).toFixed(1)} km · ${co2KgFromGrams(profile?.total_co2_saved_grams ?? 0).toFixed(1)} kg CO₂`}
+          subtitle={`${formatAngka(profile?.total_distance_km ?? 0, 1, 1)} km · ${formatAngka(co2KgFromGrams(profile?.total_co2_saved_grams ?? 0), 1, 1)} kg CO₂`}
           media={<div className="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center"><Footprints className="w-7 h-7 text-white" /></div>}
         />
 
@@ -157,7 +158,7 @@ export default function WalkHistoryPage() {
           <EmptyState
             icon={Footprints}
             title="Belum ada jalan"
-            description="Mulai eco-walk pertamamu untuk melihat riwayat di sini!"
+            description="Mulai jalan kaki pertamamu untuk melihat riwayat di sini."
             actionLabel="Mulai Jalan"
             onAction={() => navigate('/home')}
           />
@@ -194,7 +195,7 @@ export default function WalkHistoryPage() {
                         <div className="grid grid-cols-4 gap-2 text-center">
                           <Cell Icon={MapPin} accent="text-emerald-500" value={fmtDist(walk.distance_meters)} label="Jarak" />
                           <Cell Icon={Clock} accent="text-blue-500" value={formatDuration(walk.duration_seconds)} label="Durasi" />
-                          <Cell Icon={Leaf} accent="text-green-500" value={`${co2KgFromGrams(walk.co2_saved_grams ?? 0).toFixed(1)}kg`} label="CO₂" />
+                          <Cell Icon={Leaf} accent="text-green-500" value={`${formatAngka(co2KgFromGrams(walk.co2_saved_grams ?? 0), 1, 1)}kg`} label="CO₂" />
                           <Cell Icon={Coins} accent="text-amber-500" value={`+${formatNumber(walk.ecopoints_earned)}`} label="Poin" />
                         </div>
                       </motion.div>

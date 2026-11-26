@@ -394,7 +394,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
       // polluting the contributions table.
       // Consent gate: skip the passive trace (and its reward) if the user opted out
       // via Settings → Privacy → "VAYU Auto-trace". Read the unified settings store
-      // (cloud-synced, mirrors breeva_anonymous_data); default = enabled.
+      // (cloud-synced, mirrors breeva_anonymous_data); default = off since 26 Nov 2026 (N-59).
       // Guests send no trace: it is a server write that pays points to an account.
       const autoTraceEnabled = useSettingsStore.getState().anonymous_data;
       if (autoTraceEnabled && !guest) {

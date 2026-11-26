@@ -12,6 +12,7 @@ import SectionCard from '../components/ui/SectionCard';
 import ChartCard from '../components/ui/ChartCard';
 import Segmented from '../components/ui/Segmented';
 import { SkeletonGrid } from '../components/ui/Skeleton';
+import { formatAngka } from '../lib/angka';
 
 interface WalkRow {
   distance_meters: number;
@@ -77,7 +78,7 @@ export default function YearInReviewPage() {
   }, [walks, contribDates, year]);
 
   const handleShare = async () => {
-    const text = `🌿 Rekap Breeva ${year}:\n🚶 ${stats.walks} jalan\n📏 ${stats.distanceKm.toFixed(1)} km\n🌱 ${stats.co2Kg.toFixed(1)} kg CO₂\n🏆 ${stats.points} EcoPoin\n\nJalan hijau bareng Breeva!`;
+    const text = `🌿 Rekap Breeva ${year}:\n🚶 ${stats.walks} jalan\n📏 ${formatAngka(stats.distanceKm, 1, 1)} km\n🌱 ${formatAngka(stats.co2Kg, 1, 1)} kg CO₂\n🏆 ${stats.points} EcoPoin\n\nJalan hijau bareng Breeva!`;
     try {
       if (navigator.share) await navigator.share({ title: `Breeva Rekap ${year}`, text });
       else await navigator.clipboard.writeText(text);
@@ -99,7 +100,7 @@ export default function YearInReviewPage() {
         <HeroCard
           eyebrow="Rekap tahunan"
           title={`Perjalanan hijaumu ${year}`}
-          subtitle={`${stats.walks} jalan · ${stats.distanceKm.toFixed(1)} km`}
+          subtitle={`${stats.walks} jalan · ${formatAngka(stats.distanceKm, 1, 1)} km`}
           media={<div className="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center"><CalendarHeart className="w-7 h-7 text-white" /></div>}
         >
           {availableYears.length > 1 && (
@@ -121,7 +122,7 @@ export default function YearInReviewPage() {
               <StatTile icon={<Footprints className="w-4 h-4" />} accent="text-blue-500" label="Total Jalan" value={stats.walks} />
               <StatTile icon={<MapPin className="w-4 h-4" />} accent="text-emerald-500" label="Jarak" value={stats.distanceKm} unit="km" decimals={1} />
               <StatTile icon={<Leaf className="w-4 h-4" />} accent="text-green-500" label="CO₂ Dihemat" value={stats.co2Kg} unit="kg" decimals={1} />
-              <StatTile icon={<Trophy className="w-4 h-4" />} accent="text-amber-500" label="EcoPoin" value={stats.points} unit="poin" />
+              <StatTile icon={<Trophy className="w-4 h-4" />} accent="text-amber-500" label="EcoPoin dari jalan" value={stats.points} unit="poin" />
             </div>
 
             <SectionCard title="Jalan per bulan">
@@ -135,11 +136,11 @@ export default function YearInReviewPage() {
             <SectionCard title="Sorotan">
               <div className="space-y-2.5">
                 {[
-                  { Icon: CalendarHeart, tint: 'text-indigo-500', text: `Bulan terbaik: ${MONTHS[stats.bestIdx]} (${stats.bestWalks} jalan)` },
-                  { Icon: Flame, tint: 'text-orange-500', text: `Streak terpanjang: ${profile?.longest_streak ?? 0} hari` },
-                  { Icon: Wind, tint: 'text-cyan-500', text: `Rata-rata AQI saat jalan: ${stats.avgAqi || '—'}` },
+                  { Icon: CalendarHeart, tint: 'text-indigo-500', text: stats.walks ? `Bulan terbaik: ${MONTHS[stats.bestIdx]} (${stats.bestWalks} jalan)` : 'Bulan terbaik: belum ada jalan' },
+                  { Icon: Flame, tint: 'text-orange-500', text: `Hari beruntun terpanjang: ${profile?.longest_streak ?? 0} hari` },
+                  { Icon: Wind, tint: 'text-cyan-500', text: `Rata-rata AQI AS saat jalan: ${stats.avgAqi || '—'}` },
                   { Icon: MapPin, tint: 'text-rose-500', text: `${stats.contribs} kontribusi kualitas udara` },
-                  { Icon: TreePine, tint: 'text-green-500', text: `Setara ${treesFromCo2Kg(stats.co2Kg).toFixed(1)} pohon ditanam` },
+                  { Icon: TreePine, tint: 'text-green-500', text: `Setara serapan ${formatAngka(treesFromCo2Kg(stats.co2Kg), 1, 1)} pohon setahun` },
                 ].map((h, i) => (
                   <div key={i} className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
                     <h.Icon className={`w-4 h-4 shrink-0 ${h.tint}`} />

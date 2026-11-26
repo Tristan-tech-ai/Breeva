@@ -190,4 +190,34 @@ describe('N-57 inner pages, guest and signed in', () => {
     expect(readFileSync('src/components/exposure/RouteSelector.tsx', 'utf8')).not.toMatch(/bg-primary-500 text-white text-xs font-semibold/);
     expect(readFileSync('src/pages/ProfilePage.tsx', 'utf8')).not.toMatch(/gap-2 text-red-500/);
   });
+
+  it('N-59: contribution and trace texts say what really happens, and the trace is off by default', () => {
+    const c = readFileSync('src/pages/ContributePage.tsx', 'utf8');
+    expect(c).not.toMatch(/memberi makan engine|memperkaya peta udara/);
+    expect(c).toMatch(/belum dipakai untuk angka peta/);
+    expect(readFileSync('src/stores/settingsStore.ts', 'utf8')).toMatch(/anonymous_data: false,/);
+    expect(readFileSync('src/stores/i18nStore.ts', 'utf8')).not.toMatch(/menyempurnakan peta udara VAYU/);
+    expect(readFileSync('src/lib/poi-icons.ts', 'utf8')).not.toMatch(/'Eco Merchant'/);
+  });
+
+  it('N-59: tips, help and merchant pages make no promise the app does not keep', () => {
+    const tips = readFileSync('src/pages/EcoTipsPage.tsx', 'utf8');
+    for (const f of ['Hemat Air', 'Hadiah Nyata', '3,8 liter', 'terbukti meningkatkan', 'Jadwalkan jalanmu pagi']) expect(tips.includes(f), f).toBe(false);
+    expect(readFileSync('src/pages/HelpPage.tsx', 'utf8')).not.toMatch(/diskon & perk/);
+    const m = readFileSync('src/pages/MerchantDetailPage.tsx', 'utf8');
+    expect(m).toMatch(/\.gte\('valid_until'/);
+    expect(m).toMatch(/!MERCHANT_CONTOH && merchant\.phone/);
+    for (const f of ['Write a Review', '>Redeem<', '> Opening hours<', "'en-US'", 'Merchant not found']) expect(m.includes(f), f).toBe(false);
+    const yr = readFileSync('src/pages/YearInReviewPage.tsx', 'utf8');
+    expect(yr).not.toMatch(/pohon ditanam/);
+  });
+
+  it('N-59: the legacy developer API page says it is legacy and sells nothing', () => {
+    const d = readFileSync('src/pages/DeveloperLandingPage.tsx', 'utf8');
+    expect(d).toMatch(/<div lang="en" /);
+    expect(d).toMatch(/data-api-lama/);
+    for (const f of ['const TIERS', '#pricing', '1,000', '1.4M']) expect(d.includes(f), f).toBe(false);
+    expect(readFileSync('src/pages/ExploreMapPage.tsx', 'utf8')).not.toMatch(/to="\/developers"/);
+    expect(readFileSync('src/components/ui/PWAStatusToast.tsx', 'utf8')).not.toMatch(/glass-card/);
+  });
 });

@@ -45,7 +45,7 @@ export default function ContributePage() {
   const navigate = useNavigate();
   const reduce = useReducedMotion() ?? false;
   const user = useAuthStore((s) => s.user);
-  // Reactive VAYU auto-trace consent (mirrors breeva_anonymous_data; default on).
+  // Reactive VAYU auto-trace consent (mirrors breeva_anonymous_data; default off).
   const autoTraceOn = useSettingsStore((s) => s.anonymous_data);
 
   const [mode, setMode] = useState<Mode>('aqi');
@@ -196,7 +196,7 @@ export default function ContributePage() {
 
   return (
     <div className="gradient-mesh-bg min-h-screen pb-24">
-      <Seo title="Kontribusi Udara & Peta — Breeva" description="Laporkan kualitas udara per-jalan dan tambahkan tempat ke peta Breeva. Kontribusimu memberi makan engine VAYU dan memajukan quest harian." path="/contribute" />
+      <Seo title="Kontribusi Udara & Peta — Breeva" description="Laporkan kualitas udara per-jalan dan tambahkan tempat ke peta Breeva. Laporanmu tercatat sebagai kontribusi warga dan memajukan misi harian." path="/contribute" />
 
       {/* Header */}
       <div className="sticky top-0 z-20 glass-nav px-4 py-3 flex items-center justify-between safe-area-top">
@@ -217,13 +217,13 @@ export default function ContributePage() {
           <div className="relative">
             <div className="flex items-center gap-1.5 text-white/90">
               <Sparkles className="w-3.5 h-3.5" />
-              <span className="text-[10px] uppercase tracking-[0.18em] font-bold">Komunitas · VAYU Contributor</span>
+              <span className="text-[10px] uppercase tracking-[0.18em] font-bold">Komunitas · Kontributor VAYU</span>
             </div>
             <h2 className="mt-2 text-lg font-extrabold leading-snug">{isPoi ? 'Tambahkan tempat ke peta' : 'Laporkan kualitas udara di sekitarmu'}</h2>
             <p className="mt-1.5 text-[12.5px] text-white/85 leading-relaxed max-w-md">
               {isPoi
                 ? 'Lengkapi peta Breeva — usulanmu ditinjau lalu membantu navigasi udara bersih semua pengguna.'
-                : 'Laporanmu memberi makan engine VAYU per-jalan dan memajukan quest harian “Lapor udara”.'}
+                : 'Laporanmu tercatat sebagai kontribusi warga dan memajukan misi harian “Lapor udara”. Laporan warga belum dipakai untuk angka peta.'}
             </p>
           </div>
         </motion.div>
@@ -380,7 +380,7 @@ export default function ContributePage() {
               </span>
             </div>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed mt-0.5">
-              Jejak pergerakan anonim (bukan identitasmu) memperkaya peta udara VAYU tiap kamu jalan — +5 EcoPoints/sesi. Bisa dimatikan kapan saja.
+              Bila aktif, sesudah tiap jalan titik tengah rutemu (kotak sekitar 150 m) dan jenis kendaraan dikirim sebagai kontribusi tanpa nama, +5 EcoPoin per sesi. Jejak ini belum dipakai untuk angka peta. Bawaannya mati; bisa diubah kapan saja.
             </p>
             <div className="flex items-center gap-4 mt-2">
               <button onClick={() => navigate('/privacy')} className="text-[11px] font-semibold text-primary-600 dark:text-primary-400">Pelajari privasi →</button>

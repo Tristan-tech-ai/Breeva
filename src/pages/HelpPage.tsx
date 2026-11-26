@@ -10,14 +10,14 @@ interface FAQItem { question: string; answer: string; category: string; }
 
 const faqs: FAQItem[] = [
   { category: 'Mulai', question: 'Bagaimana cara memulai jalan?', answer: 'Buka peta (tab Beranda), cari atau ketuk tujuan, lalu tap "Mulai" pada kartu rute. Breeva melacak jalanmu dan memberi EcoPoin saat selesai.' },
-  { category: 'Mulai', question: 'Apa itu EcoPoin?', answer: 'EcoPoin adalah hadiah yang kamu dapat dari berjalan kaki dan memilih rute bersih. Tukarkan di merchant ramah lingkungan untuk diskon & perk.' },
+  { category: 'Mulai', question: 'Apa itu EcoPoin?', answer: 'EcoPoin adalah poin yang kamu dapat dari berjalan kaki, misi harian, dan pencapaian. Poin bisa ditukar dengan voucher merchant mitra; merchant yang tampil sekarang masih data contoh.' },
   { category: 'Mulai', question: 'Beda rute bersih dan rute cepat?', answer: 'Rute paling sedikit asap menghindari jalan ramai; kartunya menyebut berapa persen asap kendaraan yang kamu hirup berkurang dan berapa menit tambahannya dibanding rute tercepat.' },
   { category: 'Rute & Peta', question: 'Kenapa warna rute di peta berbeda?', answer: 'Setiap rute punya warna sendiri di peta dan di kartunya. Kartu menyebut jarak, menit, dan asap kendaraan rata-rata di rute itu.' },
   { category: 'Rute & Peta', question: 'Apa itu AQI dan dari mana datanya?', answer: 'Udara latar ditampilkan sebagai ISPU dari PM2,5, dari CAMS (lewat Open-Meteo) dan sensor warga. Asap kendaraan per ruas jalan dihitung dari perkiraan lalu lintas, angin, dan rumus sebaran panduan EPA (Badung–Denpasar dan Kota Bogor). Makin rendah, makin bersih.' },
   { category: 'Rute & Peta', question: 'Bisa pakai moda transportasi lain?', answer: 'Rute di ponsel tersedia untuk jalan kaki dan motor. Rute motor juga menunjukkan asap yang ditimbulkan bagi orang lain (harga hirup) dan menghindari gang serta jalan kecil di depan sekolah pada jam sekolah.' },
   { category: 'EcoPoin & Hadiah', question: 'Bagaimana EcoPoin dihitung?', answer: 'EcoPoin dihitung dari jarak jalan kaki yang terverifikasi, ditambah bonus dari misi harian dan pencapaian. Moda bermotor memberi poin lebih sedikit.' },
-  { category: 'EcoPoin & Hadiah', question: 'Di mana menukar EcoPoin?', answer: 'Buka tab Hadiah untuk melihat voucher dari merchant. Ketuk voucher untuk menukarnya dengan saldo EcoPoin-mu.' },
-  { category: 'Akun & Privasi', question: 'Apakah data lokasi saya privat?', answer: 'Ya. Lokasi dipakai untuk navigasi dan AQI di sekitarmu, dan tidak dijual atau dibagikan ke pihak ketiga untuk iklan. Lihat Kebijakan Privasi untuk detail.' },
+  { category: 'EcoPoin & Hadiah', question: 'Di mana menukar EcoPoin?', answer: 'Buka tab Hadiah untuk melihat voucher yang sedang berlaku. Saat ini belum ada: merchant dan hadiah yang tampil masih data contoh untuk peragaan.' },
+  { category: 'Akun & Privasi', question: 'Apakah data lokasi saya privat?', answer: 'Rute dihitung di ponselmu dan kartu udara memakai lokasi yang dibulatkan. Di mode tamu, catatan jalan tetap di perangkat. Bila kamu masuk dengan akun dan menyelesaikan jalan, jalur jalan itu disimpan di akunmu untuk riwayat dan bisa dihapus dari Pengaturan. Jejak kontribusi (titik tengah rute, kotak sekitar 150 m) hanya dikirim bila kamu menyalakan VAYU Auto-trace. Data tidak dijual atau dibagikan untuk iklan.' },
   { category: 'Akun & Privasi', question: 'Bagaimana menghapus akun?', answer: 'Buka Profil → Pengaturan, atau hubungi kami di halo@breeva.site. Penghapusan bersifat permanen.' },
 ];
 

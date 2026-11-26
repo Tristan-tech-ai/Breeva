@@ -25,7 +25,7 @@ const features = [
   { Icon: Leaf, tint: 'text-emerald-500', label: 'EcoPoin & Level', desc: 'Hadiah untuk jalan kaki' },
   { Icon: BarChart3, tint: 'text-violet-500', label: 'Kalkulator Paparan', desc: 'Dosis PM2.5 per rute' },
   { Icon: Trophy, tint: 'text-amber-500', label: 'Papan Peringkat', desc: 'Desa → Nasional' },
-  { Icon: Store, tint: 'text-orange-500', label: 'Merchant Eco', desc: 'Tukar poin jadi hadiah' },
+  { Icon: Store, tint: 'text-orange-500', label: 'Merchant', desc: 'Tukar poin jadi hadiah (masih data contoh)' },
 ];
 
 export default function AboutPage() {
