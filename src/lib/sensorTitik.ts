@@ -41,6 +41,19 @@ export function jenisKata(j: string): string {
 }
 
 /** One point in plain words: what opens if a sensor stands there. */
+/** M-T10: the ten 2027 cities on the app layer. Bali is left out: the pilot points of Badung-Denpasar are finer there. */
+export function kotaLapisan(kota: KotaTitik[]): KotaTitik[] {
+  return kota.filter((k) => !/^Bali\b/.test(k.kota));
+}
+
+/** M-T10: title and popup sentence of one city point (indicative, the placement method is not validated). */
+export function teksTitikKota(k: KotaTitik, t: KotaTitik['titik'][number]): { judul: string; kalimat: string } {
+  return {
+    judul: `${k.kota} 2027, titik sensor ${t.peringkat}: ${t.nama}`,
+    kalimat: `Mengurangi kebutaan peta kota ini sekitar ${formatAngka(t.manfaat_pct, 1, 1)}%. Indikatif: cara memilih titik belum lolos uji kami.`,
+  };
+}
+
 export function kalimatTitik(t: TitikSensor): string {
   const bagian = [`Membuka ${formatAngka(t.dJ_marginal_pct, 1, 1)}% kabut kebutaan wilayah ini`];
   if (t.bangunan_baru_1km_pct_wilayah > 0) bagian.push(`${formatAngka(t.bangunan_baru_1km_pct_wilayah, 1, 1)}% bangunan wilayah baru masuk 1 km dari sensor`);
