@@ -46,6 +46,9 @@ describe('N-67 the index does one level of work and is built in idle time', () =
   it('POILayer builds the index in idle time when a POI pack arrives', () => {
     const s = readFileSync('src/components/map/POILayer.tsx', 'utf8');
     expect(s).toMatch(/requestIdleCallback\(\(\) => bangunIndeks\(ctxRef\.current\.greenOnly\)/);
+    // N-73: the idle build starts only after the load window
+    expect(s).toMatch(/export const TUNDA_INDEKS_MS = 8000;/);
+    expect(s).toMatch(/window\.setTimeout\(\(\) => \{\s*idle = /);
     expect(s).toMatch(/\}, \[serial\]\);/);
   });
 });

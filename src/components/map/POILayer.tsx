@@ -55,6 +55,9 @@ interface POILayerProps {
   isDark?: boolean;
 }
 
+/** N-73: how long after a POI pack arrives the index waits before an idle build (keeps it out of the load window). */
+export const TUNDA_INDEKS_MS = 8000;
+
 /** Build the POI spatial index when the POI set changed (cheap no-op otherwise). */
 function bangunIndeks(greenOnly: boolean): void {
   const st = usePoiStore.getState();
@@ -230,11 +233,18 @@ export default function POILayer({
   // Initial fetch on mount / filter change
   useEffect(() => { triggerFetch(); }, [triggerFetch]);
 
-  // N-67: build the index in idle time when a POI pack arrives, not at the end of the first zoom gesture
+  // N-67/N-73: build the index in idle time when a POI pack arrives, not at the end of the first zoom gesture, and only
+  // after the page has settled (TUNDA_INDEKS_MS) so it stays out of the load window; an earlier view-end builds it anyway
   useEffect(() => {
     const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
-    const id = w.requestIdleCallback ? w.requestIdleCallback(() => bangunIndeks(ctxRef.current.greenOnly), { timeout: 2000 }) : window.setTimeout(() => bangunIndeks(ctxRef.current.greenOnly), 300);
-    return () => { if (w.cancelIdleCallback) w.cancelIdleCallback(id); else window.clearTimeout(id); };
+    let idle = 0;
+    const tunda = window.setTimeout(() => {
+      idle = w.requestIdleCallback ? w.requestIdleCallback(() => bangunIndeks(ctxRef.current.greenOnly), { timeout: 4000 }) : window.setTimeout(() => bangunIndeks(ctxRef.current.greenOnly), 300);
+    }, TUNDA_INDEKS_MS);
+    return () => {
+      window.clearTimeout(tunda);
+      if (idle) { if (w.cancelIdleCallback) w.cancelIdleCallback(idle); else window.clearTimeout(idle); }
+    };
   }, [serial]);
 
   // moveend fires on pan AND zoom; zoomend updates the integer zoom for merchant gating.
