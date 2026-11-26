@@ -58,6 +58,9 @@ export default function KartuRuas({ wadah }: { wadah?: HTMLElement | null }) {
       onPointerDown={(e) => { geser.current = e.clientY; }}
       onPointerUp={(e) => { if (geser.current != null && e.clientY - geser.current > 40) tutupKartu(); geser.current = null; }}
       onPointerCancel={() => { geser.current = null; }}
+      // /home: the page's own gestures can cancel the pointer events, so a touch swipe is read from touch events too
+      onTouchStart={(e) => { geser.current = e.touches[0]?.clientY ?? null; }}
+      onTouchEnd={(e) => { const y = e.changedTouches[0]?.clientY; if (geser.current != null && y != null && y - geser.current > 40) tutupKartu(); geser.current = null; }}
     >
       {/* touch-action none: a swipe down on the top rows closes the card instead of scrolling the page */}
       <div style={{ touchAction: 'none' }}>

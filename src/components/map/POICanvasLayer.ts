@@ -21,6 +21,7 @@ import type { ClusterFeature } from '../../lib/poi-cluster';
 import type { LabelPlacement } from '../../lib/label-collision';
 import { getSprite, spriteSize, setAtlasOnReady, clearSpriteCache, prewarmAtlas } from '../../lib/poi-sprite-atlas';
 import { resolveIcon, isGreenSpace } from '../../lib/poi-icons';
+import { kenaIkon } from '../../lib/map/sentuhIkon';
 
 export interface ComputeResult {
   features: ClusterFeature[];
@@ -151,9 +152,8 @@ export class POICanvasLayer {
     // Reverse order = topmost first (points are drawn after clusters; selected last).
     for (let i = this.hits.length - 1; i >= 0; i--) {
       const h = this.hits[i];
-      const pad = h.isCluster ? 4 : 6; // finger-friendly slop on points
-      if (Math.abs(containerPoint.x - h.cx) <= h.half + pad &&
-          Math.abs(containerPoint.y - h.cy) <= h.half + pad) {
+      // M-U11: a place icon takes a tap only within 14 px, so the coloured road beside it gets the tap
+      if (kenaIkon(containerPoint.x - h.cx, containerPoint.y - h.cy, h.half, !!h.isCluster)) {
         if (h.isCluster) this.onClusterTap?.(h.lat, h.lng, h.expansionZoom ?? 0);
         else if (h.poi) this.onPointTap?.(h.poi);
         return true;
