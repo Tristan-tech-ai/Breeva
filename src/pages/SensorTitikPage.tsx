@@ -122,9 +122,41 @@ export default function SensorTitikPage() {
             {kota && kota.length > 0 && (
               <section aria-label="Sepuluh kota" data-titik-kota>
                 <h2 className="text-sm font-bold">Sepuluh kota 2027: tiga titik sensor pertama</h2>
-                <ul className="mt-1 space-y-0.5 text-[13px]">
-                  {kota.map((k) => <li key={k.kota}><b>{k.kota}:</b> {k.titik.map((t) => `${t.peringkat}. ${t.nama} (+${formatAngka(t.manfaat_pct, 1, 1)}%)`).join('; ')}</li>)}
-                </ul>
+                <p className="mt-1 text-[12px] text-gray-700 dark:text-gray-300">
+                  Grid penduduk 1 km (WorldPop 2025). Angka dalam kurung: berapa persen kebutaan kota itu berkurang oleh titik tersebut.
+                  Indikatif: cara memilih titik belum lolos uji kami.
+                </p>
+                <div className="mt-1 overflow-x-auto">
+                  <table className="w-full min-w-[520px] text-left text-[12px]" data-tabel-kota>
+                    <caption className="sr-only">Tiga titik sensor pertama untuk sepuluh kota 2027</caption>
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-gray-700">
+                        <th scope="col" className="py-1 pr-2">Kota</th>
+                        <th scope="col" className="py-1 pr-2">Sensor sekarang</th>
+                        <th scope="col" className="py-1 pr-2">Titik 1</th>
+                        <th scope="col" className="py-1 pr-2">Titik 2</th>
+                        <th scope="col" className="py-1">Titik 3</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {kota.map((k) => (
+                        <tr key={k.kota} className="border-b border-gray-100 align-top dark:border-gray-800">
+                          <th scope="row" className="py-1 pr-2 font-semibold">{k.kota}</th>
+                          <td className="py-1 pr-2">{k.sensor_ada ?? 0}</td>
+                          {[0, 1, 2].map((j) => {
+                            const t = k.titik[j];
+                            return (
+                              <td key={j} className="py-1 pr-2">
+                                {t ? <a className="text-sky-800 underline dark:text-sky-300" href={`https://www.openstreetmap.org/?mlat=${t.lat}&mlon=${t.lon}#map=15/${t.lat}/${t.lon}`} target="_blank" rel="noreferrer">{t.nama}</a> : '-'}
+                                {t && ` (−${formatAngka(t.manfaat_pct, 1, 1)}%)`}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </section>
             )}
             <p className="text-[12px] text-gray-700 dark:text-gray-300">

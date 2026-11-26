@@ -89,5 +89,5 @@ export function kalimatPeran(t: TitikSensor): string {
   return `Peran ${PERAN[t.peran] ?? t.peran}${t.peran === 'strata' ? strata : ''}. Nilai ${f(t.nilai_total)} poin = kabut ${f(t.nilai_kabut)} + penjaga asap ${f(t.nilai_penjaga_asap)} + strata ${f(t.nilai_strata)} + kalibrasi ${f(t.nilai_kalibrasi)}.`;
 }
 
-export interface KotaTitik { kota: string; titik: Array<{ peringkat: number; nama: string; lat: number; lon: number; manfaat_pct: number }> }
+export interface KotaTitik { kota: string; sensor_ada?: number; titik: Array<{ peringkat: number; nama: string; lat: number; lon: number; manfaat_pct: number }> }
 export interface KabTitik { peringkat: number; nama: string; provinsi?: string; skor: number; alasan: string }
