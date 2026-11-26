@@ -12,6 +12,8 @@ import AQICard from '../components/features/AQICard';
 import SearchBar from '../components/map/SearchBar';
 import { CITIES } from '../lib/cities';
 import TrafficLegend from '../components/map/TrafficLegend';
+import { tersediaDiPeta } from '../lib/field/tersedia';
+import { FIELD_LAYER_SOURCE } from '../lib/field/areaReading';
 import HargaLegend from '../components/map/HargaLegend';
 import WalkRouteCards from '../components/map/WalkRouteCards';
 import SchoolPicker from '../components/map/SchoolPicker';
@@ -92,11 +94,23 @@ export default function ExploreMapPage() {
   const isDark = useIsDark();
   const currentAQI = useMapStore((s) => s.currentAQI);
   // The value card follows the map: field reading for the centre when the area has a field, else the API.
-  const onViewChange = useCallback((c: Coordinate) => { void useMapStore.getState().fetchAreaReading(c); }, []);
+  // M-U03: the region chips and the available modes follow the map centre (outside the pilot regions: indicative exhaust only)
+  const [luar, setLuar] = useState(false);
+  const onViewChange = useCallback((c: Coordinate) => {
+    void useMapStore.getState().fetchAreaReading(c);
+    if (!FIELD_STATIC) return;
+    const r = FIELD_REGIONS.find((x) => x.bounds[0][0] <= c.lat && c.lat <= x.bounds[1][0] && x.bounds[0][1] <= c.lng && c.lng <= x.bounds[1][1]);
+    setLuar(!r);
+    if (r) setRegion(r.name);
+  }, []);
   const [located, setLocated] = useState(false);
-  const [pollutant, setPollutant] = useState<PollutantType>('aqi');
+  const [pollutantPilih, setPollutant] = useState<PollutantType>('aqi');
   // exhaust first: in the total view every road of a town has nearly the same colour (the background dominates)
-  const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('traffic');
+  const [modePilih, setRoadDisplayMode] = useState<RoadDisplayMode>('traffic');
+  const tersedia = tersediaDiPeta(FIELD_STATIC, luar);
+  // a choice the map cannot draw here shows as one it can (the reason sentence stays visible); it comes back where it can
+  const pollutant: PollutantType = tersedia.polutan.has(pollutantPilih) ? pollutantPilih : 'aqi';
+  const roadDisplayMode: RoadDisplayMode = tersedia.mode.has(modePilih) ? modePilih : 'traffic';
   const [walkMode, setWalkMode] = useState(!!link || !!destParam);
   const [walkState, setWalkState] = useState<WalkRoutingState | null>(null);
   const [routeMode, setRouteMode] = useState<'walk' | 'motor'>(link?.mode ?? 'walk');
@@ -182,16 +196,19 @@ export default function ExploreMapPage() {
                 <button
                   key={p.id}
                   onClick={() => setPollutant(p.id)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
+                  disabled={!tersedia.polutan.has(p.id)}
+                  aria-pressed={pollutant === p.id}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 disabled:line-through ${
                     pollutant === p.id
                       ? 'gradient-primary text-white shadow-sm'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
                 >
                   {p.label}
                 </button>
               ))}
             </div>
+            {tersedia.alasan && <p className="mt-2 text-[12px] leading-snug text-amber-900 dark:text-amber-200" data-alasan-mode>{tersedia.alasan}</p>}
           </div>
           {showRoadModes && (
             <div>
@@ -201,7 +218,9 @@ export default function ExploreMapPage() {
                   <button
                     key={m}
                     onClick={() => setRoadDisplayMode(m)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
+                    disabled={!tersedia.mode.has(m)}
+                    aria-pressed={roadDisplayMode === m}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 disabled:line-through ${
                       roadDisplayMode === m
                         ? 'bg-sky-700 text-white shadow-sm'
                         : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -213,6 +232,7 @@ export default function ExploreMapPage() {
               </div>
               <Rincian summary="Arti tiap mode" className="mt-2">
                 <p><b>Asap kendaraan</b>: gas buang dan jelaga dari kendaraan di ruas itu dan sekitarnya; inilah yang berbeda antara jalan ramai dan gang, dan yang bisa dihindari lewat pilihan jalan.</p>
+                <p className="mt-1">Angka asap kendaraan adalah perkiraan model dari kelas jalan, pola jam, dan angin. Belum memakai data kamera lalu lintas (CCTV) dan belum diuji di pinggir jalan.</p>
                 <p className="mt-1"><b>Udara total</b>: PM2,5 dan ISPU, hampir sama di seluruh kota karena didominasi udara latar.</p>
                 <p className="mt-1"><b>Harga hirup</b>: seberapa banyak orang menghirup gas buang ruas itu.</p>
               </Rincian>
@@ -223,10 +243,11 @@ export default function ExploreMapPage() {
         {/* Field regions: jump to one */}
         {FIELD_STATIC && (
           <div className="flex flex-wrap gap-2" role="group" aria-label="Wilayah">
+            {luar && <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-900 dark:bg-amber-900/40 dark:text-amber-100" data-wilayah-lain>Wilayah lain (indikatif)</span>}
             {FIELD_REGIONS.map((r) => (
-              <button key={r.name} aria-pressed={region === r.name}
+              <button key={r.name} aria-pressed={!luar && region === r.name}
                 onClick={() => { setRegion(r.name); rememberRegion(r.name); setSchoolDest(null); useMapStore.getState().setCenter(r.home); void useMapStore.getState().fetchAreaReading(r.home); }}
-                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${region === r.name ? 'bg-sky-700 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
+                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${!luar && region === r.name ? 'bg-sky-700 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'}`}>
                 {r.label}
               </button>
             ))}
@@ -273,17 +294,17 @@ export default function ExploreMapPage() {
         )}
 
         {/* Live AQI card, below the map so the map's data attribution stays visible */}
-        {currentAQI && <AQICard data={currentAQI} />}
+        {currentAQI && <AQICard data={currentAQI} indikatif={luar && currentAQI.layer_source !== FIELD_LAYER_SOURCE} />}
 
         {/* Legend — reflects the selected pollutant / road mode */}
-        <div className="glass-card p-4">
-          {FIELD_STATIC && <FieldAgeNote region={region} className="mb-2" />}
+        <div className="glass-card p-4" data-legenda>
+          {FIELD_STATIC && !luar && <FieldAgeNote region={region} className="mb-2" />}
           <p className="text-xs font-semibold text-gray-900 dark:text-white mb-2.5">
-            Arti warna jalan — {activeP.label}
-            {roadDisplayMode === 'traffic' ? ' · asap kendaraan' : roadDisplayMode === 'harga' ? ' · harga hirup' : ''}
+            {luar ? 'Arti warna jalan — asap kendaraan (NO₂ dari knalpot), indikatif' : <>Arti warna jalan — {activeP.label}
+            {roadDisplayMode === 'traffic' ? ' · asap kendaraan' : roadDisplayMode === 'harga' ? ' · harga hirup' : ''}</>}
           </p>
           {roadDisplayMode === 'traffic' ? (
-            <TrafficLegend pollutant={pollutant} />
+            <TrafficLegend pollutant={luar ? 'no2' : pollutant} />
           ) : roadDisplayMode === 'harga' ? (
             <HargaLegend />
           ) : pollutant === 'aqi' ? (

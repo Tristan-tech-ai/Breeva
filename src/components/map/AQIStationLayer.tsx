@@ -2,6 +2,9 @@ import { useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import { waqiCredit } from '../../lib/attribution';
 import { bboxParam, coarseBbox } from '../../lib/stationBbox';
+import { inPilot } from '../../lib/nasional/ubinView';
+
+const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -52,12 +55,12 @@ function aqiColor(aqi: number): string {
 }
 
 function aqiLabel(aqi: number): string {
-  if (aqi <= 50) return 'Good';
-  if (aqi <= 100) return 'Moderate';
-  if (aqi <= 150) return 'Unhealthy for Sensitive Groups';
-  if (aqi <= 200) return 'Unhealthy';
-  if (aqi <= 300) return 'Very Unhealthy';
-  return 'Hazardous';
+  if (aqi <= 50) return 'Baik';
+  if (aqi <= 100) return 'Sedang';
+  if (aqi <= 150) return 'Tidak sehat bagi kelompok sensitif';
+  if (aqi <= 200) return 'Tidak sehat';
+  if (aqi <= 300) return 'Sangat tidak sehat';
+  return 'Berbahaya';
 }
 
 // ── Fetch helpers (via Vercel proxy, no token in browser) ────────────
@@ -113,11 +116,11 @@ function timeAgo(iso: string): string {
   if (!iso) return '';
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins} min ago`;
+  if (mins < 1) return 'baru saja';
+  if (mins < 60) return `${mins} menit lalu`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  if (hrs < 24) return `${hrs} jam lalu`;
+  return `${Math.floor(hrs / 24)} hari lalu`;
 }
 
 function popupHtml(d: WAQIFeedData): string {
@@ -125,40 +128,22 @@ function popupHtml(d: WAQIFeedData): string {
   const label = aqiLabel(d.aqi);
   const name = esc(d.city.name);
 
-  const pills = ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co']
-    .filter((p) => d.iaqi[p])
-    .map((p) => {
-      const v = d.iaqi[p].v;
-      return `<span style="display:inline-flex;align-items:center;gap:2px;margin:2px 4px">
-        <span style="width:8px;height:8px;border-radius:50%;background:${aqiColor(v)};display:inline-block"></span>
-        <span style="font-size:11px;color:#64748b">${PLABEL[p]}</span>
-        <span style="font-size:12px;font-weight:600">${v}</span>
-      </span>`;
-    })
-    .join('');
-
-  const wx: string[] = [];
-  if (d.iaqi.t) wx.push(`🌡 ${d.iaqi.t.v}°C`);
-  if (d.iaqi.h) wx.push(`💧 ${d.iaqi.h.v}%`);
-  if (d.iaqi.w) wx.push(`🌬 ${d.iaqi.w.v} m/s`);
-
   const src = waqiCredit(d.attributions, esc);
 
   const ago = timeAgo(d.time.iso);
 
-  return `<div style="min-width:220px;max-width:280px;font-family:system-ui,-apple-system,sans-serif">
+  return `<div style="min-width:200px;max-width:260px;font-family:system-ui,-apple-system,sans-serif">
     <div style="font-weight:700;font-size:13px;line-height:1.3">${name}</div>
-    <div style="font-size:11px;color:#94a3b8;margin-bottom:8px">Updated ${ago}</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <div style="width:42px;height:42px;border-radius:10px;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:16px">${d.aqi}</div>
+    <div style="font-size:11px;color:#475569;margin-bottom:6px">Stasiun WAQI · diperbarui ${ago}</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="min-width:42px;height:42px;border-radius:10px;background:${color};display:flex;align-items:center;justify-content:center;color:#111;font-weight:800;font-size:16px">${d.aqi}</div>
       <div>
-        <div style="font-size:12px;font-weight:600;color:${color}">${label}</div>
-        <div style="font-size:10px;color:#94a3b8">Dominant: ${esc(PLABEL[d.dominentpol] ?? d.dominentpol)}</div>
+        <div style="font-size:12px;font-weight:700;color:#111">AQI AS · ${label}</div>
+        <div style="font-size:11px;color:#475569">Polutan utama: ${esc(PLABEL[d.dominentpol] ?? d.dominentpol)}</div>
       </div>
     </div>
-    ${pills ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:6px">${pills}</div>` : ''}
-    ${wx.length ? `<div style="font-size:11px;color:#64748b;margin-bottom:4px">${wx.join('  ')}</div>` : ''}
-    <div style="font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:4px;margin-top:4px">${src}</div>
+    <div style="font-size:11px;color:#334155;margin-bottom:4px">Indeks AS dari WAQI, bukan ISPU. Angka jalan di peta Breeva memakai ISPU dan µg/m³.</div>
+    <div style="font-size:10px;color:#475569;border-top:1px solid #e2e8f0;padding-top:4px;margin-top:4px">${src}</div>
   </div>`;
 }
 
@@ -183,6 +168,8 @@ export function useAQIStationLayer(map: L.Map, visible: boolean): void {
     for (const s of stations) {
       const val = parseInt(s.aqi, 10);
       if (isNaN(val) || val < 0) continue;
+      // M-U03: outside the pilot regions the map shows only indicative exhaust; a US AQI pin there read as a Breeva number
+      if (FIELD_STATIC && !inPilot(s.lat, s.lon)) continue;
 
       const color = aqiColor(val);
 
@@ -190,10 +177,10 @@ export function useAQIStationLayer(map: L.Map, visible: boolean): void {
         className: 'aqi-badge-wrapper',
         html: `<div class="aqi-badge" style="background:${color}">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a7.5 7.5 0 1 0-10.6 10.6L12 23l4.9-4.7a7.5 7.5 0 0 0 .8-10.6z"/><circle cx="12" cy="12" r="3"/></svg>
-          <span>${val}</span>
+          <span>${val}</span><small style="font-size:8px;font-weight:700;margin-left:2px;opacity:.9">AQI AS</small>
         </div>`,
-        iconSize: [44, 24],
-        iconAnchor: [22, 12],
+        iconSize: [72, 24],
+        iconAnchor: [36, 12],
         popupAnchor: [0, -14],
       });
 

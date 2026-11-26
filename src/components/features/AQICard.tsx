@@ -12,11 +12,13 @@ interface AQICardProps {
   className?: string;
   /** Called when the card expands/collapses, so the parent can grow the bottom sheet. */
   onExpandChange?: (expanded: boolean) => void;
+  /** M-U03: the reading is outside the pilot regions (a global model): say it is indicative */
+  indikatif?: boolean;
 }
 
 type DetailLevel = 'glance' | 'detail' | 'expert';
 
-export default function AQICard({ data, className = '', onExpandChange }: AQICardProps) {
+export default function AQICard({ data, className = '', onExpandChange, indikatif = false }: AQICardProps) {
   const [level, setLevel] = useState<DetailLevel>('glance');
   // Index shown is ISPU (Permen LHK P.14/2020) from PM2.5, the usual critical parameter.
   const index = ispuRounded('pm25', data.pm25) ?? 0;
@@ -101,6 +103,7 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
             </span>
             {/* T1-19: this is the median of the roads around the map centre, not the tapped road (the road card says "di ruas ini") */}
             {data.layer_source === FIELD_LAYER_SOURCE && <span className="text-[12px] font-medium text-gray-600 dark:text-gray-400">sekitar pusat peta</span>}
+            {indikatif && <span className="rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">indikatif, model global</span>}
           </div>
           <p className="mt-0.5 text-[13px] leading-snug text-gray-600 dark:text-gray-400">{cat.advice}</p>
           {personal && (

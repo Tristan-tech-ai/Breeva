@@ -541,7 +541,8 @@ function MapController({
   );
   const roadMeta = useMvt ? (FIELD_STATIC ? fieldMeta : mvtMeta) : vectorMeta;
   // N-21: outside the pilot regions, exhaust per road computed on the phone (zoom 13+, indicative)
-  useNationalExhaust(map, !!showAQIOverlay && useMvt && FIELD_STATIC);
+  // M-U03: outside the pilot only the exhaust exists (indicative); other modes draw no road colour there
+  useNationalExhaust(map, !!showAQIOverlay && useMvt && FIELD_STATIC && roadDisplayMode === 'traffic');
   useWalkRouting(map, !!walkRouting, onWalkRouting, routeMode ?? 'walk', routeLink, routeDest, routeDepart, routeStart);
 
   // Forward road layer meta to parent
