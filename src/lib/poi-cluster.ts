@@ -28,11 +28,14 @@ export type ClusterFeature = ClusterPoint | ClusterGroup;
 
 type PointProps = { poiId: string; name: string; category: string; priority: number };
 
+// The index is queried at zoom 21, above maxZoom, so it never returns clusters: it is a spatial index and the
+// marker budget lives in poiThin.ts. minZoom = maxZoom keeps load() to the point tree plus one cluster pass instead
+// of one pass per zoom 0-20 (N-67: within/_cluster inside the first pinch on /home).
 const index = new Supercluster<PointProps, Record<string, never>>({
-  radius: 60,     // cluster radius in pixels
-  maxZoom: 20,     // keep clustering dense pockets up to z20 — caps marker count in dense
-                   // cities (Jakarta) instead of exploding into hundreds of DOM markers at z18+
-  minPoints: 3,    // need 3+ to form a cluster
+  radius: 60,
+  minZoom: 20,
+  maxZoom: 20,
+  minPoints: 3,
 });
 
 // Hard render budget: cap individual (non-cluster) markers per viewport so dense areas

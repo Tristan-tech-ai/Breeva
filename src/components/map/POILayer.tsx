@@ -55,6 +55,17 @@ interface POILayerProps {
   isDark?: boolean;
 }
 
+/** Build the POI spatial index when the POI set changed (cheap no-op otherwise). */
+function bangunIndeks(greenOnly: boolean): void {
+  const st = usePoiStore.getState();
+  if (!needsReindex(st.serial, true, greenOnly)) return;
+  let pois = st.getPOIArray().filter((p) => !(p as POI & { _isMerchant?: boolean })._isMerchant);
+  if (greenOnly) pois = pois.filter((p) => isGreenSpace(p.types || []));
+  diagStart('reindex');
+  reindex(pois, st.serial, true, greenOnly);
+  diagEnd('reindex', { pois: pois.length });
+}
+
 export default function POILayer({
   visible = true,
   activeFilter = null,
@@ -91,7 +102,6 @@ export default function POILayer({
   // Returns null when nothing should render. Reads the store + ctxRef live (no
   // stale closure) so it can be set on the layer once and reused.
   const computeFeatures = useCallback((bounds: L.LatLngBounds, zoom: number): ComputeResult | null => {
-    const st = usePoiStore.getState();
     const ctx = ctxRef.current;
     if (!ctx.visible || zoom < 14) return null;
 
@@ -99,13 +109,7 @@ export default function POILayer({
     const showAll = !!ctx.activeFilter || currentZoom >= 17;
 
     // Build the index only when the POI set changed, not on every zoom level (N-67)
-    if (needsReindex(st.serial, true, ctx.greenOnly)) {
-      let pois = st.getPOIArray().filter((p) => !(p as POI & { _isMerchant?: boolean })._isMerchant);
-      if (ctx.greenOnly) pois = pois.filter((p) => isGreenSpace(p.types || []));
-      diagStart('reindex');
-      reindex(pois, st.serial, true, ctx.greenOnly);
-      diagEnd('reindex', { pois: pois.length });
-    }
+    bangunIndeks(ctx.greenOnly);
 
     const latPad = (bounds.getNorth() - bounds.getSouth()) * 0.15;
     const lngPad = (bounds.getEast() - bounds.getWest()) * 0.15;
@@ -225,6 +229,13 @@ export default function POILayer({
 
   // Initial fetch on mount / filter change
   useEffect(() => { triggerFetch(); }, [triggerFetch]);
+
+  // N-67: build the index in idle time when a POI pack arrives, not at the end of the first zoom gesture
+  useEffect(() => {
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    const id = w.requestIdleCallback ? w.requestIdleCallback(() => bangunIndeks(ctxRef.current.greenOnly), { timeout: 2000 }) : window.setTimeout(() => bangunIndeks(ctxRef.current.greenOnly), 300);
+    return () => { if (w.cancelIdleCallback) w.cancelIdleCallback(id); else window.clearTimeout(id); };
+  }, [serial]);
 
   // moveend fires on pan AND zoom; zoomend updates the integer zoom for merchant gating.
   useMapEvents({
