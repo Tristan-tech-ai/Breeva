@@ -120,3 +120,49 @@ def test_public_summary_index_needs_three_hours_and_carries_no_url():
     assert b["rata_jam"] == 2.0 and b["indeks"] is None and b["tingkat"] is None  # 2 runs: no typical level yet
     assert pub["label"] == LABEL == LABEL_APP and "belum lolos uji" in pub["catatan"].lower()
     assert "m3u8" not in json.dumps(pub) and "url" not in a
+
+
+class Bingkai:
+    def __init__(self, key: bool, tag: str):
+        self.key_frame, self.tag = key, tag
+
+
+def test_frame_choice_waits_for_a_keyframe_and_gives_up_after_the_limit():
+    from hitung import pilih_bingkai
+
+    assert pilih_bingkai(iter([Bingkai(True, "a"), Bingkai(False, "b")])).tag == "a"
+    assert pilih_bingkai(iter([Bingkai(False, "a"), Bingkai(False, "b"), Bingkai(True, "c")])).tag == "c"
+    assert pilih_bingkai(iter([Bingkai(False, str(i)) for i in range(10)]), maks=4).tag == "3"
+    assert pilih_bingkai(iter([])) is None
+
+
+def test_streams_per_server_are_limited_and_offline_cameras_are_retried_once():
+    import threading
+    from hitung import jalankan
+
+    kam = [{"id": str(i), "kota": "k", "url": f"https://satu.example/{i}.m3u8"} for i in range(12)] + \
+          [{"id": "y", "kota": "y", "url": "https://dua.example/y.m3u8"}]
+    lock, now, peak, calls = threading.Lock(), [0], [0], {}
+
+    def ambil(url):
+        import time
+        with lock:
+            calls[url] = calls.get(url, 0) + 1
+            if "satu" in url:
+                now[0] += 1
+                peak[0] = max(peak[0], now[0])
+        time.sleep(0.02)
+        with lock:
+            if "satu" in url:
+                now[0] -= 1
+        # camera 0 is offline on the first try only, camera 1 always offline
+        if url.endswith("/0.m3u8") and calls[url] == 1 or url.endswith("/1.m3u8"):
+            return None
+        return gambar(True)
+
+    run = jalankan(kam, Palsu(), ambil=ambil, paralel=8, per_host=3, ulang_jeda_s=0)
+    by = {h["id"]: h for h in run["hasil"]}
+    assert peak[0] <= 3
+    assert by["0"]["status"] == "ok" and by["1"]["status"] == "offline"
+    assert calls["https://satu.example/0.m3u8"] == 2 and calls["https://satu.example/2.m3u8"] == 1
+    assert run["diulang"] == 2 and run["berhasil"] == 12
