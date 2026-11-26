@@ -1,8 +1,9 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Map, Satellite, Mountain, Wind, Store,
-  TreePine, Activity, Clock, Radio, ShieldCheck, Radar, Trees,
+  TreePine, Activity, Clock, Radio, ShieldCheck, Radar, Trees, Flame, MapPin,
 } from 'lucide-react';
+import { ispuRingkas } from '../../lib/ispu';
 import type { AirQualityData, PollutantType, RoadDisplayMode } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { POLLUTANT_OPTIONS, getColorStops } from './RoadPollutionLayer';
@@ -18,6 +19,11 @@ interface MapLayersSheetProps {
   onAQIOverlayToggle: () => void;
   showAQIStations: boolean;
   onAQIStationsToggle: () => void;
+  /** M-U07 */
+  showTitikApi?: boolean;
+  onTitikApiToggle?: () => void;
+  showTitikSensor?: boolean;
+  onTitikSensorToggle?: () => void;
   showPOIs: boolean;
   onPOIsToggle: () => void;
   showGreenHighlight: boolean;
@@ -27,6 +33,8 @@ interface MapLayersSheetProps {
   onPollutantChange?: (p: PollutantType) => void;
   forecastHour?: number;
   onForecastHourChange?: (h: number) => void;
+  /** M-U08: the forecast hours the field computed (static field); when given, chips replace the 0-24 slider */
+  forecastOptions?: Array<{ ahead: number; label: string }>;
   roadDisplayMode?: RoadDisplayMode;
   onRoadDisplayModeChange?: (m: RoadDisplayMode) => void;
   roadLayerMeta?: RoadLayerMeta | null;
@@ -35,19 +43,19 @@ interface MapLayersSheetProps {
 const mapTypes: { id: 'voyager' | 'osm' | 'satellite'; label: string; icon: typeof Map; preview: string }[] = [
   {
     id: 'voyager',
-    label: 'Default',
+    label: 'Bawaan',
     icon: Map,
     preview: 'linear-gradient(135deg, #d4ecd4 0%, #e8f5e9 30%, #f1f8e9 60%, #fff 100%)',
   },
   {
     id: 'satellite',
-    label: 'Satellite',
+    label: 'Satelit',
     icon: Satellite,
     preview: 'linear-gradient(135deg, #1a3a2a 0%, #2d5a3d 40%, #1a4a2a 100%)',
   },
   {
     id: 'osm',
-    label: 'Terrain',
+    label: 'Medan',
     icon: Mountain,
     preview: 'linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 30%, #dce775 60%, #e8d5b7 100%)',
   },
@@ -67,6 +75,10 @@ export default function MapLayersSheet({
   onAQIOverlayToggle,
   showAQIStations,
   onAQIStationsToggle,
+  showTitikApi = false,
+  onTitikApiToggle,
+  showTitikSensor = false,
+  onTitikSensorToggle,
   showPOIs,
   onPOIsToggle,
   showGreenHighlight,
@@ -76,6 +88,7 @@ export default function MapLayersSheet({
   onPollutantChange,
   forecastHour = 0,
   onForecastHourChange,
+  forecastOptions,
   roadDisplayMode = 'total',
   onRoadDisplayModeChange,
   roadLayerMeta,
@@ -115,7 +128,7 @@ export default function MapLayersSheet({
                 <div className="w-8 h-8 rounded-xl bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center">
                   <TreePine className="w-4 h-4 text-primary-600 dark:text-primary-400" />
                 </div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Map Layers</h2>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Lapisan peta</h2>
               </div>
               <button aria-label="Tutup"
                 onClick={onClose}
@@ -130,7 +143,7 @@ export default function MapLayersSheet({
               {/* Map Type section */}
             <div className="px-5 pb-4">
               <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
-                Map Type
+                Jenis peta
               </p>
               <div className="grid grid-cols-3 gap-3">
                 {mapTypes.map((type) => {
@@ -182,7 +195,7 @@ export default function MapLayersSheet({
             {/* Map Details section */}
             <div className="px-5 pt-4 pb-4">
               <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
-                Map Details
+                Isi peta
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {/* Places toggle */}
@@ -202,10 +215,10 @@ export default function MapLayersSheet({
                   </div>
                   <div>
                     <p className={`text-sm font-semibold ${showPOIs ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
-                      Places
+                      Tempat
                     </p>
                     <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
-                      Restaurants, parks & eco merchants
+                      Kafe, taman, dan merchant
                     </p>
                   </div>
                 </button>
@@ -227,10 +240,10 @@ export default function MapLayersSheet({
                   </div>
                   <div>
                     <p className={`text-sm font-semibold ${showAQIOverlay ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
-                      Road Pollution
+                      Polusi jalan
                     </p>
                     <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
-                      {currentAQI ? `AQI ${currentAQI.aqi} — ${currentAQI.level.replace('-', ' ')}` : 'Street-level air quality'}
+                      {currentAQI && ispuRingkas(currentAQI.pm25) ? `ISPU ${ispuRingkas(currentAQI.pm25)!.nilai} · ${ispuRingkas(currentAQI.pm25)!.kategori}` : 'Udara per ruas jalan'}
                     </p>
                   </div>
                 </button>
@@ -252,10 +265,10 @@ export default function MapLayersSheet({
                   </div>
                   <div>
                     <p className={`text-sm font-semibold ${showAQIStations ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
-                      AQI Stations
+                      Stasiun WAQI
                     </p>
                     <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
-                      10,000+ global monitors
+                      Angka AQI AS, Badung–Denpasar dan Kota Bogor
                     </p>
                   </div>
                 </button>
@@ -282,6 +295,36 @@ export default function MapLayersSheet({
                     <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
                       Sorot taman & area hijau
                     </p>
+                  </div>
+                </button>
+
+                {/* M-U07: fires of the last 24 hours */}
+                <button
+                  onClick={onTitikApiToggle}
+                  aria-pressed={showTitikApi}
+                  className={`flex flex-col items-start gap-2 p-3.5 rounded-2xl border-2 transition-all text-left ${showTitikApi ? 'border-red-500 bg-red-50/50 dark:bg-red-900/20' : 'border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700'}`}
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: showTitikApi ? '#dc262618' : undefined }}>
+                    <Flame className="w-4.5 h-4.5" style={{ color: showTitikApi ? '#dc2626' : '#9ca3af' }} />
+                  </div>
+                  <div>
+                    <p className={`text-sm font-semibold ${showTitikApi ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Titik api</p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Satelit NASA, 24 jam terakhir</p>
+                  </div>
+                </button>
+
+                {/* M-U07: next sensor points */}
+                <button
+                  onClick={onTitikSensorToggle}
+                  aria-pressed={showTitikSensor}
+                  className={`flex flex-col items-start gap-2 p-3.5 rounded-2xl border-2 transition-all text-left ${showTitikSensor ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-900/20' : 'border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700'}`}
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: showTitikSensor ? '#15803d18' : undefined }}>
+                    <MapPin className="w-4.5 h-4.5" style={{ color: showTitikSensor ? '#15803d' : '#9ca3af' }} />
+                  </div>
+                  <div>
+                    <p className={`text-sm font-semibold ${showTitikSensor ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Titik sensor</p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Di mana sensor baru paling berguna</p>
                   </div>
                 </button>
               </div>
@@ -505,22 +548,38 @@ export default function MapLayersSheet({
                             }
                           </span>
                         </div>
+                        {forecastOptions ? (
+                          <>
+                            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Jam prakiraan">
+                              {[{ ahead: 0, label: 'Sekarang' }, ...forecastOptions].map((o) => (
+                                <button key={o.ahead} type="button" aria-pressed={forecastHour === o.ahead} onClick={() => onForecastHourChange?.(o.ahead)}
+                                  className={`min-h-8 rounded-full px-2.5 text-[11px] font-semibold ${forecastHour === o.ahead ? 'bg-sky-700 text-white' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'}`}>
+                                  {o.label}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="mt-1.5 text-[10.5px] leading-snug text-gray-600 dark:text-gray-400">Prakiraan hanya untuk asap kendaraan (mode Asap kendaraan): angin prakiraan dan pola lalu lintas jam itu. Udara latar tetap jam ini.</p>
+                          </>
+                        ) : (
+                          <>
                         <input
-                          type="range"
-                          aria-label="Jam prakiraan"
-                          aria-valuetext={forecastHour === 0 ? 'Sekarang' : `${forecastHour} jam ke depan`}
-                          min={0}
-                          max={24}
-                          step={1}
-                          value={forecastHour}
-                          onChange={(e) => onForecastHourChange?.(parseInt(e.target.value))}
-                          className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-sky-200 to-sky-500 dark:from-sky-800 dark:to-sky-400 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-sky-500"
-                        />
-                        <div className="flex justify-between mt-1">
-                          <span className="text-[9px] text-gray-400 dark:text-gray-500">Sekarang</span>
-                          <span className="text-[9px] text-gray-400 dark:text-gray-500">+12h</span>
-                          <span className="text-[9px] text-gray-400 dark:text-gray-500">+24h</span>
-                        </div>
+                            type="range"
+                            aria-label="Jam prakiraan"
+                            aria-valuetext={forecastHour === 0 ? 'Sekarang' : `${forecastHour} jam ke depan`}
+                            min={0}
+                            max={24}
+                            step={1}
+                            value={forecastHour}
+                            onChange={(e) => onForecastHourChange?.(parseInt(e.target.value))}
+                            className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-sky-200 to-sky-500 dark:from-sky-800 dark:to-sky-400 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-sky-500"
+                          />
+                          <div className="flex justify-between mt-1">
+                            <span className="text-[9px] text-gray-400 dark:text-gray-500">Sekarang</span>
+                            <span className="text-[9px] text-gray-400 dark:text-gray-500">+12h</span>
+                            <span className="text-[9px] text-gray-400 dark:text-gray-500">+24h</span>
+                          </div>
+                          </>
+                        )}
                       </div>
 
                       {/* Description tip */}

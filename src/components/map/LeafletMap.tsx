@@ -35,6 +35,7 @@ import { FIELD_REGIONS } from '../../lib/field/source';
 import { onFirstDraw } from '../../lib/field/firstDraw';
 import { PETA_HEMAT } from '../../lib/mapPerf';
 import KartuRuas from './KartuRuas';
+import { useTitikApiPeta, useTitikSensorPeta } from './LapisanAplikasi';
 import { lipatAtribusi } from '../../lib/map/lipatAtribusi';
 import { kartuTerbuka, tutupKartu } from '../../lib/field/kartu';
 
@@ -137,6 +138,10 @@ interface LeafletMapProps {
   isDarkMode?: boolean;
   showAQIOverlay?: boolean;
   showAQIStations?: boolean;
+  /** M-U07: fires of the last 24 hours */
+  showTitikApi?: boolean;
+  /** M-U07: next sensor points of the pilot regions */
+  showTitikSensor?: boolean;
   showPOIs?: boolean;
   showMerchants?: boolean;
   highlightGreen?: boolean;
@@ -182,6 +187,8 @@ function MapController({
   isDarkMode,
   showAQIOverlay,
   showAQIStations,
+  showTitikApi,
+  showTitikSensor,
   showPOIs,
   showMerchants,
   highlightGreen,
@@ -199,7 +206,7 @@ function MapController({
   routeDest,
   routeDepart,
   routeStart,
-}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId' | 'walkRouting' | 'onWalkRouting' | 'routeMode' | 'routeLink' | 'routeDest' | 'routeDepart' | 'routeStart'>) {
+}: Pick<LeafletMapProps, 'isDarkMode' | 'showAQIOverlay' | 'showAQIStations' | 'showTitikApi' | 'showTitikSensor' | 'showPOIs' | 'showMerchants' | 'highlightGreen' | 'activeFilter' | 'pollutant' | 'forecastHour' | 'roadDisplayMode' | 'onRoadLayerMeta' | 'onPlaceSelect' | 'selectedPoiId' | 'walkRouting' | 'onWalkRouting' | 'routeMode' | 'routeLink' | 'routeDest' | 'routeDepart' | 'routeStart'>) {
   const map = useMap();
   const {
     center,
@@ -519,7 +526,8 @@ function MapController({
   // viewport-relative Kontras mode and forecast hours stay on the vector layer.
   // VectorGrid (MVT) now renders total / delta / contrast for current data; the dynamic
   // vector layer is only needed for forecast hours (tiles are current-data only).
-  const useMvt = (forecastHour || 0) === 0;
+  // M-U08: with the static field the forecast is drawn by the field layer itself; the old server layer never runs
+  const useMvt = FIELD_STATIC || (forecastHour || 0) === 0;
   const mvtMeta = useRoadMvtLayer(
     map,
     !!showAQIOverlay && useMvt && !FIELD_STATIC,
@@ -532,6 +540,7 @@ function MapController({
     pollutant || 'aqi',
     roadDisplayMode || 'total',
     !!routeLink,
+    forecastHour || 0,
   );
   const vectorMeta = useRoadPollutionLayer(
     map,
@@ -542,6 +551,9 @@ function MapController({
   );
   const roadMeta = useMvt ? (FIELD_STATIC ? fieldMeta : mvtMeta) : vectorMeta;
   // N-21: outside the pilot regions, exhaust per road computed on the phone (zoom 13+, indicative)
+  // M-U07: optional layers of the in-app map
+  useTitikApiPeta(map, !!showTitikApi);
+  useTitikSensorPeta(map, !!showTitikSensor);
   // M-U05: attribution visible at load, folded to (i) after 5 s or the first touch
   useEffect(() => lipatAtribusi(map), [map]);
   // M-U03: outside the pilot only the exhaust exists (indicative); other modes draw no road colour there
@@ -622,6 +634,8 @@ export default function LeafletMap({
   isDarkMode = false,
   showAQIOverlay = false,
   showAQIStations = false,
+  showTitikApi = false,
+  showTitikSensor = false,
   showPOIs = true,
   showMerchants = true,
   highlightGreen = false,
@@ -690,6 +704,8 @@ export default function LeafletMap({
           isDarkMode={isDarkMode}
           showAQIOverlay={showAQIOverlay}
           showAQIStations={showAQIStations}
+          showTitikApi={showTitikApi}
+          showTitikSensor={showTitikSensor}
           showPOIs={showPOIs}
           showMerchants={showMerchants}
           highlightGreen={highlightGreen}

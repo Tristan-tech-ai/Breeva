@@ -61,11 +61,12 @@ import type { RouteDest, WalkRoutingState } from '../components/map/WalkRouteLay
 import type { POI } from '../lib/poi-api';
 import type { PollutantType, RoadDisplayMode, SavedPlace } from '../types';
 import type { RoadLayerMeta } from '../components/map/RoadPollutionLayer';
-import { FIELD_REGIONS, pickRegion, rememberRegion } from '../lib/field/source';
+import { FIELD_REGIONS, fetchManifest, fieldBase, pickRegion, rememberRegion } from '../lib/field/source';
 import { parseViewLink } from '../lib/route/share';
 import { deviceRouteAsRoute, deviceRouteStart, fieldRegionOf, routeModeFor, transportFor } from '../lib/route/appRoute';
 import { pm25ToAQISimple } from '../lib/api';
 import { walkEcoPoints } from '../lib/walkPoints';
+import { pilihanPrakiraan } from '../lib/field/prakiraanPeta';
 
 // Static field build: routes are computed on the device (Web Worker), as on /peta, and only inside field regions.
 const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
@@ -159,6 +160,11 @@ export default function HomePage() {
   const [highlightGreen, setHighlightGreen] = useState(false);
   const [pollutant, setPollutant] = useState<PollutantType>('aqi');
   const [forecastHour, setForecastHour] = useState(0);
+  // M-U07: optional fire and sensor-point layers (off by default)
+  const [showTitikApi, setShowTitikApi] = useState(false);
+  const [showTitikSensor, setShowTitikSensor] = useState(false);
+  // M-U08: forecast hours the field computed for the region in view
+  const [opsiPrakiraan, setOpsiPrakiraan] = useState<Array<{ ahead: number; label: string }> | undefined>(undefined);
   // 'traffic' (default) = the per-road traffic part (CALINE4 dispersion) on a fixed scale with a dead band;
   // 'total' = absolute pollutant level vs WHO/EPA bands, where nearly every road gets the same colour.
   const [roadDisplayMode, setRoadDisplayMode] = useState<RoadDisplayMode>('traffic');
@@ -187,6 +193,16 @@ export default function HomePage() {
   const [schoolOpen, setSchoolOpen] = useState(false);
   const [schoolRegionName, setSchoolRegionName] = useState<string | null>(null);
   const schoolRegion = schoolRegionName ? pickRegion(schoolRegionName) : fieldRegionOf(userLocation) ?? fieldRegionOf(center) ?? FIELD_REGIONS[0];
+  // M-U08: the forecast hours offered are those of the region in view (its manifest), never a free 0-24 slider
+  const namaWilayahPandang = FIELD_STATIC ? (fieldRegionOf(center) ?? FIELD_REGIONS[0]).name : null;
+  useEffect(() => {
+    if (!namaWilayahPandang) return;
+    let batal = false;
+    fetchManifest(fieldBase(), namaWilayahPandang)
+      .then((m) => { if (!batal) setOpsiPrakiraan(pilihanPrakiraan(m.forecast_runs, m.valid_hour_local)); })
+      .catch(() => { if (!batal) setOpsiPrakiraan([]); });
+    return () => { batal = true; };
+  }, [namaWilayahPandang]);
 
   const findDeviceRoutes = () => {
     setWalkState(null);
@@ -292,6 +308,8 @@ export default function HomePage() {
           isDarkMode={isDark}
           showAQIOverlay={showAQIOverlay}
           showAQIStations={showAQIStations}
+          showTitikApi={showTitikApi}
+          showTitikSensor={showTitikSensor}
           showPOIs={showPOIs}
           highlightGreen={highlightGreen}
           mapStyle={mapStyle}
@@ -920,6 +938,10 @@ export default function HomePage() {
         onAQIOverlayToggle={() => setShowAQIOverlay(!showAQIOverlay)}
         showAQIStations={showAQIStations}
         onAQIStationsToggle={() => setShowAQIStations(!showAQIStations)}
+        showTitikApi={showTitikApi}
+        onTitikApiToggle={() => setShowTitikApi((v) => !v)}
+        showTitikSensor={showTitikSensor}
+        onTitikSensorToggle={() => setShowTitikSensor((v) => !v)}
         showPOIs={showPOIs}
         onPOIsToggle={() => setShowPOIs(!showPOIs)}
         showGreenHighlight={highlightGreen}
@@ -929,6 +951,7 @@ export default function HomePage() {
         onPollutantChange={setPollutant}
         forecastHour={forecastHour}
         onForecastHourChange={setForecastHour}
+        forecastOptions={FIELD_STATIC ? opsiPrakiraan ?? [] : undefined}
         roadDisplayMode={roadDisplayMode}
         onRoadDisplayModeChange={setRoadDisplayMode}
         roadLayerMeta={roadLayerMeta}
