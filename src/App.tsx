@@ -49,6 +49,7 @@ const YearInReviewPage = lazy(() => import('./pages/YearInReviewPage'));
 const PaparanPage = lazy(() => import('./pages/PaparanPage'));
 const PrioritasPage = lazy(() => import('./pages/PrioritasPage'));
 const ValidasiPage = lazy(() => import('./pages/ValidasiPage'));
+const SensorTitikPage = lazy(() => import('./pages/SensorTitikPage'));
 const StatusPage = lazy(() => import('./pages/StatusPage'));
 const UjiCobaPage = lazy(() => import('./pages/UjiCobaPage'));
 const UjiCobaRekapPage = lazy(() => import('./pages/UjiCobaRekapPage'));
@@ -355,6 +356,7 @@ function App() {
             <Route path="/pemerintah" element={<PemerintahPage />} />
             <Route path="/sensor" element={<SensorPage />} />
             <Route path="/validasi" element={<ValidasiPage />} />
+            <Route path="/sensor/titik" element={<SensorTitikPage />} />
             <Route path="/status" element={<StatusPage />} />
             <Route path="/uji-coba" element={<UjiCobaPage />} />
             <Route path="/uji-coba/rekap" element={<UjiCobaRekapPage />} />

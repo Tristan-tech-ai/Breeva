@@ -900,3 +900,6 @@ html.dark .leaflet-bar a.leaflet-disabled {
 .atribusi-tombol { width: 28px; height: 28px; border-radius: 9999px; background: rgba(255,255,255,.95); color: #0f172a; font: 700 14px/28px system-ui;
   text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.25); border: 1px solid rgba(0,0,0,.1); cursor: pointer; }
 .dark .atribusi-tombol { background: rgba(17,24,39,.92); color: #f1f5f9; border-color: rgba(255,255,255,.15); }
+
+/* M-T06: the blindness fog image keeps its 250 m cells sharp */
+.kabut-piksel { image-rendering: pixelated; }

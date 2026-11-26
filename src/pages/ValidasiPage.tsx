@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { Seo } from '../components/Seo';
 import { epaFlags, measuredLine, modelLine, num, pct, verdict, type Validasi } from '../lib/validasi';
@@ -159,6 +159,7 @@ export default function ValidasiPage() {
                 ))}
               </ul>
             </Rincian>
+            <p className="text-sm"><Link to="/sensor/titik" className="font-semibold text-sky-800 underline dark:text-sky-300">Titik sensor berikutnya</Link>: di mana sensor baru paling banyak menurunkan galat peta.</p>
             <p className="text-[11px] text-gray-500 dark:text-gray-400">Dibangun {new Date(v.built_at).toLocaleString('id-ID')} dari berkas validasi; kode dan skrip uji ada di repositori Breeva.</p>
           </>
         )}

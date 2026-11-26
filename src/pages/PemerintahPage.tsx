@@ -120,6 +120,7 @@ export default function PemerintahPage() {
             <li>Sumber: OpenStreetMap (ODbL), NASA FIRMS, CAMS dan ECMWF lewat Open-Meteo (CC BY 4.0), sensor warga OpenAQ (CC BY 4.0).</li>
           </ul>
         </Rincian>
+        <p className="text-sm"><Link to="/sensor/titik" className="font-semibold text-sky-800 underline dark:text-sky-300">Di mana sensor berikutnya paling berguna?</Link> Peta kebutaan dan titik sensor berperingkat untuk Badung–Denpasar dan Kota Bogor (CSV).</p>
       </div>
     </main>
   );

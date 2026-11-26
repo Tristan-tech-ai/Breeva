@@ -185,6 +185,7 @@ export default function PantauPage() {
             <p className="text-xs text-gray-600 dark:text-gray-300">
               Tingkat keyakinan: <b>{region.tingkat === 'terukur' ? 'terukur' : 'indikatif'}</b>
               {manifest?.sensors_used != null && ` · ${manifest.sensors_used} sensor warga jam ini`}
+              {' · '}<Link to={`/sensor/titik?wilayah=${region.field}`} className="font-semibold text-sky-800 underline dark:text-sky-300">titik sensor berikutnya</Link>
             </p>
             {top.length > 0 && (
               <div className="rounded-2xl bg-white dark:bg-gray-900 p-4">
