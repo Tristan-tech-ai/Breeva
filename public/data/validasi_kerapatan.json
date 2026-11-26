@@ -1,0 +1,99 @@
+{
+ "periode": [
+  "2026-09-01",
+  "2026-11-25"
+ ],
+ "sensor": 28,
+ "n_untuk_4_dari_4": 24,
+ "kurva": [
+  {
+   "n": 3,
+   "lolos_median": 1.0,
+   "nrmse_median": 29.9,
+   "titik_potong_median": 9.94,
+   "lolos_p25_p75": [
+    1.0,
+    2.0
+   ]
+  },
+  {
+   "n": 5,
+   "lolos_median": 2.0,
+   "nrmse_median": 28.1,
+   "titik_potong_median": 9.04,
+   "lolos_p25_p75": [
+    2.0,
+    2.0
+   ]
+  },
+  {
+   "n": 8,
+   "lolos_median": 2.0,
+   "nrmse_median": 26.8,
+   "titik_potong_median": 7.78,
+   "lolos_p25_p75": [
+    2.0,
+    2.0
+   ]
+  },
+  {
+   "n": 12,
+   "lolos_median": 2.5,
+   "nrmse_median": 25.4,
+   "titik_potong_median": 6.0,
+   "lolos_p25_p75": [
+    2.0,
+    3.0
+   ]
+  },
+  {
+   "n": 16,
+   "lolos_median": 3.0,
+   "nrmse_median": 24.6,
+   "titik_potong_median": 6.51,
+   "lolos_p25_p75": [
+    2.0,
+    3.0
+   ]
+  },
+  {
+   "n": 20,
+   "lolos_median": 3.0,
+   "nrmse_median": 23.9,
+   "titik_potong_median": 4.08,
+   "lolos_p25_p75": [
+    2.25,
+    4.0
+   ]
+  },
+  {
+   "n": 24,
+   "lolos_median": 4.0,
+   "nrmse_median": 23.4,
+   "titik_potong_median": 2.53,
+   "lolos_p25_p75": [
+    2.0,
+    4.0
+   ]
+  }
+ ],
+ "kelas": {
+  "permukiman": {
+   "n": 19,
+   "nrmse_median": 11.2
+  },
+  "dataran tinggi": {
+   "n": 1,
+   "nrmse_median": 162.4
+  },
+  "pinggir jalan ramai": {
+   "n": 3,
+   "nrmse_median": 18.3
+  },
+  "pesisir": {
+   "n": 5,
+   "nrmse_median": 11.6
+  }
+ },
+ "sumber": "akar_galat_2026-11-27.json (M-A03)"
+}
