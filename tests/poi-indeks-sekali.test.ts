@@ -39,9 +39,9 @@ describe('N-67 POI index built once per POI set, tiers applied at query time', (
 
 import { readFileSync } from 'node:fs';
 describe('N-67 the index does one level of work and is built in idle time', () => {
-  it('supercluster is limited to one zoom level (it is only queried above maxZoom)', () => {
+  it('supercluster builds no cluster level at all (it is only queried above maxZoom)', () => {
     const s = readFileSync('src/lib/poi-cluster.ts', 'utf8');
-    expect(s).toMatch(/minZoom: 20,\s*\n\s*maxZoom: 20,/);
+    expect(s).toMatch(/minZoom: 21,\s*\n\s*maxZoom: 20,/);
   });
   it('POILayer builds the index in idle time when a POI pack arrives', () => {
     const s = readFileSync('src/components/map/POILayer.tsx', 'utf8');

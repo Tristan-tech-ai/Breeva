@@ -29,11 +29,12 @@ export type ClusterFeature = ClusterPoint | ClusterGroup;
 type PointProps = { poiId: string; name: string; category: string; priority: number };
 
 // The index is queried at zoom 21, above maxZoom, so it never returns clusters: it is a spatial index and the
-// marker budget lives in poiThin.ts. minZoom = maxZoom keeps load() to the point tree plus one cluster pass instead
-// of one pass per zoom 0-20 (N-67: within/_cluster inside the first pinch on /home).
+// marker budget lives in poiThin.ts. With minZoom = maxZoom + 1, load() builds only the point tree (supercluster
+// 8.0.1 clusters from maxZoom down to minZoom, and clamps queries to max(minZoom, min(z, maxZoom + 1)) = 21), instead
+// of one cluster pass per zoom 0-20 (N-67: within/_cluster inside the first pinch and the load of /home).
 const index = new Supercluster<PointProps, Record<string, never>>({
   radius: 60,
-  minZoom: 20,
+  minZoom: 21,
   maxZoom: 20,
   minPoints: 3,
 });
