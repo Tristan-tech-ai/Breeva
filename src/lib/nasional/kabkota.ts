@@ -41,8 +41,9 @@ export function muatIndeksKabKota(base: string): Promise<KabKota[]> {
 
 export const TINGKAT_LABEL: Record<Tingkat, string> = {
   terukur: 'terukur: sensor warga dalam 25 km',
-  // N-90: without a measurement point the level is indicative; the 150 km ratio correction has no hidden-location test yet
-  terkalibrasi: 'indikatif: belum ada titik ukur dalam 25 km; latar dikoreksi sensor warga dalam 150 km, koreksi ini belum diuji dengan lokasi disembunyikan',
+  // N-90/N-91: without a measurement point the level is indicative; the 150 km correction was tested with hidden sensors
+  // (latar150_uji_2026-11-26.json: daily NRMSE 51.6 -> 32.6 % for the current hour, still above the 30 % target)
+  terkalibrasi: 'indikatif: belum ada titik ukur dalam 25 km; latar dikoreksi sensor warga dalam 150 km (uji sensor disembunyikan: galat harian 52% menjadi 33%, target 30%; jam-jam ke depan lebih kasar)',
   indikatif: 'indikatif: belum ada titik ukur di dekatnya',
 };
 

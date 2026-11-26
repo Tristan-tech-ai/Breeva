@@ -80,7 +80,7 @@ describe('honest national levels (N-90)', () => {
     const { TINGKAT_LABEL, TINGKAT_NILAI, tingkatCatatan } = await import('../src/lib/nasional/kabkota');
     expect(TINGKAT_NILAI).toEqual({ terukur: 'terukur', terkalibrasi: 'indikatif', indikatif: 'indikatif' });
     expect(TINGKAT_LABEL.terkalibrasi.startsWith('indikatif')).toBe(true);
-    expect(TINGKAT_LABEL.terkalibrasi).toMatch(/belum diuji dengan lokasi disembunyikan/);
+    expect(TINGKAT_LABEL.terkalibrasi).toMatch(/uji sensor disembunyikan: galat harian 52% menjadi 33%, target 30%/);
     expect(Object.values(TINGKAT_LABEL).some((x) => x.startsWith('terkalibrasi'))).toBe(false);
     expect(tingkatCatatan('terkalibrasi', 0)).toBe('0 sensor dalam 25 km; dikoreksi sensor ≤ 150 km');
     expect(tingkatCatatan('terukur', 3)).toBe('3 sensor dalam 25 km');
