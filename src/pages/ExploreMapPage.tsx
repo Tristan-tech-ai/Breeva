@@ -187,7 +187,7 @@ export default function ExploreMapPage() {
 
         {/* Interactive map (progressive enhancement) */}
         {/* peta-tombol-kiri: the attribution keeps clear of the bottom-left route button (index.css, X-W52) */}
-        <div className={`relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg${FIELD_STATIC ? ' peta-tombol-kiri' : ''}`} style={{ height: 'min(66svh, 600px)' }} data-peta-utama>
+        <div className={`relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700/40 shadow-lg${FIELD_STATIC ? ' peta-tombol-kiri' : ''}`} style={{ height: 'min(60svh, 500px)' }} data-peta-utama>
           <Suspense fallback={<div className="absolute inset-0 bg-gray-100 dark:bg-gray-900 animate-pulse" />}>
             <LeafletMap className="absolute inset-0" isDarkMode={isDark} showAQIOverlay showAQIStations showPOIs={false} mapStyle="voyager" onViewChange={onViewChange} pollutant={pollutant} roadDisplayMode={roadDisplayMode} walkRouting={walkMode} onWalkRouting={setWalkState} routeMode={routeMode} routeLink={link} routeDest={schoolDest} routeDepart={depart} routeStart={walkMode ? fromHere.start : null} wheelNeedsModifier initialCenter={view && !link && !destParam ? view : FIELD_STATIC ? startRegion.home : undefined} initialZoom={view && !link && !destParam ? view.zoom : undefined} />
           </Suspense>
