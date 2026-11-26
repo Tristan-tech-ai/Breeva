@@ -41,7 +41,7 @@ export function popupHtml(v: CellValue | undefined, name: string | undefined, sr
     `<div style="font-size:11px;color:#444">ISPU ${index} · ${band.name} · rentang 95%: ${formatAngka(lo, 0, 0)}–${formatAngka(hi, 0, 0)} µg/m³</div>` +
     `<div style="font-size:11px;color:#444"><b>Asap kendaraan</b> (NOx lalu lintas): ${formatAngka(v.no2_delta, 1, 1)} µg/m³ · PM2,5 dari knalpot +${formatAngka(v.pm25_delta, 2, 2)}</div>` +
     hargaLine(src, c, i) +
-    (v.ood ? `<div style="font-size:11px;color:#6b7280">di luar wilayah terkalibrasi</div>` : '') +
+    (v.ood ? `<div style="font-size:11px;color:#6b7280">di luar rentang data model; angka lebih kasar</div>` : '') +
     (src.manifest?.indicative ? `<div style="font-size:11px;color:#b45309">Indikatif: belum ada stasiun ukur di wilayah ini</div>` : '') +
     `<div style="font-size:10px;color:#6b7280;margin-top:3px">dihitung ${age}${stale}</div></div>`;
 }

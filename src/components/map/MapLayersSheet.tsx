@@ -305,11 +305,11 @@ export default function MapLayersSheet({
                           ? 'text-gray-400 dark:text-gray-500'
                           : 'text-sky-600 dark:text-sky-400'
                       }`}>
-                        {pollutant === 'aqi' ? 'Air Quality Index' : 'Concentration'}
+                        {pollutant === 'aqi' ? 'Indeks kualitas udara' : 'Konsentrasi'}
                       </span>
                       <span className="text-[9px] text-gray-300 dark:text-gray-600">•</span>
                       <span className="text-[10px] text-gray-400 dark:text-gray-500">
-                        {pollutant === 'aqi' ? 'Composite index (0-500)' : `${activePollutant.label} in ${activePollutant.unit}`}
+                        {pollutant === 'aqi' ? 'Indeks gabungan (0-500)' : `${activePollutant.label} dalam ${activePollutant.unit}`}
                       </span>
                     </div>
 
@@ -341,7 +341,7 @@ export default function MapLayersSheet({
                     {/* Display mode toggle: absolute level, the traffic part on a fixed scale, or harga hirup */}
                       <div className="flex items-center gap-2 px-4 pt-3 pb-2">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mr-1">
-                          View
+                          Tampilan
                         </span>
                         <button
                           onClick={() => onRoadDisplayModeChange?.('total')}
@@ -352,7 +352,7 @@ export default function MapLayersSheet({
                               : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                             }
                           `}
-                          title="Absolute concentration vs EPA/WHO breakpoints"
+                          title="Konsentrasi mutlak dibanding batas EPA/WHO"
                         >
                           Total
                         </button>
@@ -430,13 +430,13 @@ export default function MapLayersSheet({
                       {/* Scale labels — show units for concentration mode */}
                       <div className="flex justify-between px-0.5">
                         <span className="text-[9px] font-mono text-gray-400 dark:text-gray-500">
-                          {pollutant === 'aqi' ? 'Good' : `${colorStops[0].v}`}
+                          {pollutant === 'aqi' ? 'Baik' : `${colorStops[0].v}`}
                         </span>
                         <span className="text-[9px] font-mono text-gray-400 dark:text-gray-500">
                           {colorStops[Math.floor(colorStops.length / 2)].v}{pollutant !== 'aqi' && ' µg/m³'}
                         </span>
                         <span className="text-[9px] font-mono text-gray-400 dark:text-gray-500">
-                          {pollutant === 'aqi' ? 'Hazardous' : `${colorStops[colorStops.length - 1].v}`}
+                          {pollutant === 'aqi' ? 'Berbahaya' : `${colorStops[colorStops.length - 1].v}`}
                         </span>
                       </div>
 
@@ -465,7 +465,7 @@ export default function MapLayersSheet({
                             </div>
                           )}
                           <div className="ml-auto flex items-center gap-1">
-                            <span>{roadLayerMeta.count} roads</span>
+                            <span>{roadLayerMeta.count} ruas</span>
                           </div>
                         </div>
                         {roadLayerMeta.iqair_validation && (
@@ -495,12 +495,12 @@ export default function MapLayersSheet({
                           <div className="flex items-center gap-1.5">
                             <Clock className="w-3.5 h-3.5 text-sky-500" />
                             <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
-                              Forecast
+                              Prakiraan
                             </span>
                           </div>
                           <span className="text-xs font-bold text-sky-600 dark:text-sky-400">
                             {forecastHour === 0
-                              ? 'Now'
+                              ? 'Sekarang'
                               : `+${forecastHour}h — ${clockIn(forecastHour)}`
                             }
                           </span>
@@ -515,7 +515,7 @@ export default function MapLayersSheet({
                           className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-sky-200 to-sky-500 dark:from-sky-800 dark:to-sky-400 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-sky-500"
                         />
                         <div className="flex justify-between mt-1">
-                          <span className="text-[9px] text-gray-400 dark:text-gray-500">Now</span>
+                          <span className="text-[9px] text-gray-400 dark:text-gray-500">Sekarang</span>
                           <span className="text-[9px] text-gray-400 dark:text-gray-500">+12h</span>
                           <span className="text-[9px] text-gray-400 dark:text-gray-500">+24h</span>
                         </div>
@@ -526,8 +526,8 @@ export default function MapLayersSheet({
                         <Activity className="w-3.5 h-3.5 text-sky-500 mt-0.5 flex-shrink-0" />
                         <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">
                           {pollutant === 'aqi'
-                            ? 'Air Quality Index (AQI) combines all pollutants into a single 0-500 index. Road colors are mostly uniform since AQI smooths local differences. Switch to a pollutant tab to see per-road concentration detail.'
-                            : `${activePollutant.label} concentration per road segment based on traffic emissions, street canyon trapping, vegetation absorption, and ${forecastHour > 0 ? 'forecast' : 'real-time'} weather. Calibrated with nearest WAQI ground station.`
+                            ? 'Indeks kualitas udara menggabungkan semua pencemar menjadi satu angka 0-500, sehingga warna jalan hampir seragam. Pilih tab pencemar untuk melihat beda antar-ruas.'
+                            : `Konsentrasi ${activePollutant.label} per ruas: udara latar dari sensor warga (Badung–Denpasar) atau model CAMS (Kota Bogor, indikatif), ditambah asap kendaraan dari lalu lintas dan angin ${forecastHour > 0 ? 'prakiraan' : 'jam ini'}. Ketuk jalan untuk melihat rentang 95%.`
                           }
                         </p>
                       </div>

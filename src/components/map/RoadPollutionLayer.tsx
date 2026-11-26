@@ -650,11 +650,11 @@ export function useRoadPollutionLayer(
 // ── Pollutant selector labels ────────────────────────────────
 
 export const POLLUTANT_OPTIONS: { id: PollutantType; label: string; unit: string; description: string }[] = [
-  { id: 'aqi', label: 'AQI', unit: '', description: 'Air Quality Index (US EPA)' },
-  { id: 'pm25', label: 'PM₂.₅', unit: 'μg/m³', description: 'Fine particulate matter' },
-  { id: 'no2', label: 'NO₂', unit: 'μg/m³', description: 'Nitrogen dioxide' },
-  { id: 'o3', label: 'O₃', unit: 'μg/m³', description: 'Ozone (inverted near traffic)' },
-  { id: 'pm10', label: 'PM₁₀', unit: 'μg/m³', description: 'Coarse particulate matter' },
+  { id: 'aqi', label: 'AQI', unit: '', description: 'Indeks kualitas udara (US EPA)' },
+  { id: 'pm25', label: 'PM₂.₅', unit: 'μg/m³', description: 'Partikel halus' },
+  { id: 'no2', label: 'NO₂', unit: 'μg/m³', description: 'Nitrogen dioksida' },
+  { id: 'o3', label: 'O₃', unit: 'μg/m³', description: 'Ozon (lebih rendah di dekat lalu lintas)' },
+  { id: 'pm10', label: 'PM₁₀', unit: 'μg/m³', description: 'Partikel kasar' },
 ];
 
 // Export color stops for legend rendering

@@ -151,7 +151,7 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
                     }`}
                   >
                     <ShieldCheck size={11} strokeWidth={2.4} />
-                    {data.confidence >= 0.7 ? 'Akurat' : data.confidence >= 0.4 ? 'Estimasi' : 'Kasar'}
+                    {data.confidence >= 0.7 ? 'Keyakinan tinggi' : data.confidence >= 0.4 ? 'Estimasi' : 'Kasar'}
                   </span>
                 )}
                 {data.timestamp && (
@@ -171,7 +171,7 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
                     : data.layer_source === 4 ? 'Prediksi ML'
                     : data.layer_source === FIELD_LAYER_SOURCE ? 'Medan Breeva: median ruas di sekitar titik tengah peta (model)'
                     : data.layer_source === 0 ? 'Model atmosfer global (Open-Meteo), tanpa koreksi Breeva'
-                    : 'Model Breeva (latar CAMS lewat Open-Meteo, terkalibrasi, + lalu lintas)'}
+                    : 'Model Breeva (latar CAMS lewat Open-Meteo, dikoreksi sensor, + lalu lintas)'}
                 </span>
               </div>
 

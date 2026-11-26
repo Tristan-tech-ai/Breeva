@@ -113,7 +113,7 @@ export default function OnboardingPage() {
           onClick={handleFinish}
           className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 dark:text-gray-600 transition-colors"
         >
-          Skip
+          Lewati
         </button>
       </div>
 
@@ -151,17 +151,17 @@ export default function OnboardingPage() {
                   </div>
                 )}
                 <h1 className="text-2xl font-black text-gray-900 dark:text-white mb-3 tracking-tight">
-                  Welcome to Breeva
+                  Selamat datang di Breeva
                 </h1>
                 <p className="text-gray-500 dark:text-gray-400 text-[15px] leading-relaxed mb-10">
-                  Earn real rewards for choosing healthier, eco-friendly routes. Walk more, earn EcoPoints, and redeem them at sustainable merchants.
+                  Pilih jalan dengan asap kendaraan paling sedikit. Setiap jalan kaki memberi EcoPoin; merchant dan hadiah di aplikasi ini masih data contoh peragaan.
                 </p>
 
                 <button
                   onClick={goNext}
                   className="w-full py-4 rounded-xl bg-gray-900 dark:bg-primary-600 text-white font-bold text-[15px] shadow-xl hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
                 >
-                  Get Started
+                  Mulai
                 </button>
               </div>
             </motion.div>
@@ -206,19 +206,19 @@ export default function OnboardingPage() {
 
               <div className="glass-card p-10 border border-white/40 dark:border-gray-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]">
                 <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
-                  Enable Location
+                  Nyalakan lokasi
                 </h2>
                 <p className="text-gray-500 dark:text-gray-400 text-[15px] mb-8 leading-relaxed">
-                  We use your location to map eco-friendly routes and track your rewards.
+                  Lokasi dipakai untuk titik berangkat rute dan mencatat jalan kakimu.
                 </p>
 
                 {/* Benefits Checklist */}
                 <div className="text-left space-y-4 mb-10">
                   {[
-                    'Find eco-merchants near you',
-                    'Track your walking distance',
-                    'Show real-time air quality',
-                    'Calculate earned EcoPoints',
+                    'Rute dari tempatmu berdiri',
+                    'Mencatat jarak jalan kaki',
+                    'Kualitas udara di sekitarmu, diperbarui tiap jam',
+                    'Menghitung EcoPoin',
                   ].map((benefit) => (
                     <div key={benefit} className="flex items-center gap-3.5">
                       <div className="flex items-center justify-center flex-shrink-0">
@@ -234,13 +234,13 @@ export default function OnboardingPage() {
                     onClick={handleEnableLocation}
                     className="w-full py-4 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-[15px] shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200"
                   >
-                    Enable Location
+                    Nyalakan lokasi
                   </button>
                   <button
                     onClick={goNext}
                     className="w-full py-3.5 text-sm font-semibold text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                   >
-                    Skip for now
+                    Lewati dulu
                   </button>
                 </div>
               </div>
@@ -272,16 +272,16 @@ export default function OnboardingPage() {
 
               <div className="glass-card p-10 border border-white/40 dark:border-gray-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]">
                 <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
-                  Motion Tracking
+                  Sensor gerak
                 </h2>
                 <p className="text-gray-500 dark:text-gray-400 text-[15px] mb-8 leading-relaxed">
-                  Allow motion access to accurately verify your steps and earn full rewards.
+                  Izinkan sensor gerak supaya langkahmu tercatat lebih rapi.
                 </p>
 
                 <div className="mb-8 p-4 rounded-xl bg-orange-50 dark:bg-orange-950/30 border border-orange-100 dark:border-orange-900/40 flex gap-3 text-left">
                   <Activity className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
                   <p className="text-[13px] text-orange-800 dark:text-orange-400 font-medium leading-relaxed">
-                    Without motion access, your walks may not be verified fully, yielding reduced rewards (50% EcoPoints).
+                    Tanpa izin ini jalan kakimu tetap tercatat dari GPS.
                   </p>
                 </div>
 
@@ -290,13 +290,13 @@ export default function OnboardingPage() {
                     onClick={handleRequestMotion}
                     className="w-full py-4 rounded-xl bg-violet-500 hover:bg-violet-600 text-white font-bold text-[15px] shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200"
                   >
-                    Enable Motion
+                    Izinkan sensor gerak
                   </button>
                   <button
                     onClick={goNext}
                     className="w-full py-3.5 text-sm font-semibold text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                   >
-                    Skip for now
+                    Lewati dulu
                   </button>
                 </div>
               </div>
@@ -328,10 +328,10 @@ export default function OnboardingPage() {
 
               <div className="glass-card p-10 border border-white/40 dark:border-gray-800/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]">
                 <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
-                  Welcome Bonus!
+                  Bonus selamat datang
                 </h2>
                 <p className="text-gray-500 dark:text-gray-400 text-[15px] mb-8 leading-relaxed">
-                  Start your first eco-walk right now and unlock a special welcome bonus!
+                  Bonus ini masuk ke akunmu begitu langkah ini selesai, sekali per akun.
                 </p>
 
                 {/* Bonus Display */}
@@ -340,9 +340,9 @@ export default function OnboardingPage() {
                   <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
                   
                   <div className="relative z-10">
-                    <p className="text-[13px] font-bold text-emerald-100 uppercase tracking-widest mb-1 shadow-sm">Welcome Reward</p>
+                    <p className="text-[13px] font-bold text-emerald-100 uppercase tracking-widest mb-1 shadow-sm">Bonus awal</p>
                     <div className="text-4xl font-black mb-1 drop-shadow-md">+100 EP</div>
-                    <p className="text-[13px] text-emerald-100 font-medium">On your first completed walk</p>
+                    <p className="text-[13px] text-emerald-100 font-medium">sekali per akun, saat langkah ini selesai</p>
                   </div>
                 </div>
 
@@ -352,13 +352,13 @@ export default function OnboardingPage() {
                     className="w-full py-4 rounded-xl bg-gray-900 dark:bg-primary-600 text-white font-bold text-[15px] shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2"
                   >
                     <Navigation2 className="w-5 h-5" />
-                    Start My First Walk
+                    Mulai jalan pertama
                   </button>
                   <button
                     onClick={handleFinish}
                     className="w-full py-3.5 text-sm font-semibold text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                   >
-                    I'll do it later
+                    Nanti saja
                   </button>
                 </div>
               </div>

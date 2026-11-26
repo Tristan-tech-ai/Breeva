@@ -24,7 +24,7 @@ export default function PrivacyPage() {
             <Sub title="b) Data Lokasi" body="Kami mengakses lokasi perangkat untuk navigasi, pelacakan rute, dan info kualitas udara. Lokasi dipakai real-time dan disimpan sebagai riwayat jalan di akunmu." />
             <Sub title="c) Data Jalan & Aktivitas" body="Jarak, durasi, koordinat rute, moda transportasi, dan EcoPoin disimpan untuk dasbor dampak lingkungan, riwayat jalan, dan pencapaian." />
             <Sub title="d) Konten dari Pengguna" body="Laporan via fitur Kontribusi (mis. tempat hilang, laporan udara) disimpan dan dapat berisi lokasi serta teks deskripsi." />
-            <Sub title="e) Jejak Udara Pasif (VAYU)" body="Saat menyelesaikan jalan, Breeva dapat merekam jejak pergerakan untuk membangun peta AQI per-ruas jalan: ruas/­sel grid kasar (~150 m) yang kamu lewati, perkiraan kecepatan, dan moda — tanpa nama, email, atau jejak GPS presisi. Karena kamu mendapat +5 EcoPoin per sesi, jejak ini terhubung ke akunmu lewat ledger (pseudonim, bukan sepenuhnya anonim). Bisa dimatikan di Pengaturan → Privasi." />
+            <Sub title="e) Jejak Udara Pasif (VAYU)" body="Bila kamu menyalakannya (bawaannya mati), saat menyelesaikan jalan Breeva merekam jejak pergerakan untuk peta per ruas di masa depan; saat ini jejak belum dipakai untuk angka peta. Yang direkam: ruas/­sel grid kasar (~150 m) yang kamu lewati, perkiraan kecepatan, dan moda — tanpa nama, email, atau jejak GPS presisi. Karena kamu mendapat +5 EcoPoin per sesi, jejak ini terhubung ke akunmu lewat ledger (pseudonim, bukan sepenuhnya anonim). Bisa dimatikan di Pengaturan → Privasi." />
           </Section>
 
           <Section title="3. Cara Kami Memakai Data">
