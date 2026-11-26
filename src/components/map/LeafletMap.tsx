@@ -313,6 +313,8 @@ function MapController({
         userMarkerRef.current = L.marker([livePos.lat, livePos.lng], {
           icon: createUserIcon(),
           interactive: false,
+          // not a control: without this Leaflet gives the puck role=button and tabindex=0 with no name (axe, M-U09)
+          keyboard: false,
           zIndexOffset: 1000,
         }).addTo(map);
       } else {
@@ -422,6 +424,7 @@ function MapController({
       if (!destMarkerRef.current) {
         destMarkerRef.current = L.marker([destination.lat, destination.lng], {
           icon: createDestIcon(),
+          title: 'Tujuan rute',
           zIndexOffset: 900,
         })
           .bindPopup(popupHtml, { offset: [0, 0], closeButton: false, className: 'glass-popup' })

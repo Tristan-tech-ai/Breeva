@@ -377,7 +377,7 @@ export default function HomePage() {
                       </div>
                     )}
                   </div>
-                  <div className="absolute -bottom-1 -right-1 bg-amber-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-sm border border-white dark:border-gray-900">
+                  <div className="absolute -bottom-1 -right-1 bg-amber-700 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-sm border border-white dark:border-gray-900">
                     {profile?.ecopoints_balance || 0}
                   </div>
                   <span className="sr-only">EcoPoints</span>
