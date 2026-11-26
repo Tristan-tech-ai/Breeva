@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { csvTitik, jenisKata, kalimatTitik, warnaKabut, type DataTitik, type TitikSensor } from '../src/lib/sensorTitik';
+import { csvTitik, jenisKata, kalimatPeran, kalimatTitik, warnaKabut, type DataTitik, type TitikSensor } from '../src/lib/sensorTitik';
 
 const t: TitikSensor = {
   peringkat: 1, nama: 'Sekolah Luar Biasa A Negeri Denpasar', jenis: 'school', lat: -8.67, lon: 115.22, dJ_marginal_pct: 11.8, dJ_kumulatif_pct: 11.8,
@@ -22,5 +22,10 @@ describe('M-T06 halaman titik sensor', () => {
     expect(jenisKata('lain')).toBe('lain');
     expect(warnaKabut(0)).toBeNull();
     expect(warnaKabut(255)).toBe('rgba(194,38,6,0.85)');
+  });
+  it('peran dan komponen nilai', () => {
+    expect(kalimatPeran(t)).toBe('');
+    expect(kalimatPeran({ ...t, peran: 'strata', stratum: 'sawah', nilai_kabut: 11.8, nilai_penjaga_asap: 0.4, nilai_strata: 2, nilai_kalibrasi: 0, nilai_total: 14.2 }))
+      .toBe('Peran strata: mewakili jenis tempat yang belum punya sensor (sawah). Nilai 14,2 poin = kabut 11,8 + penjaga asap 0,4 + strata 2,0 + kalibrasi 0,0.');
   });
 });

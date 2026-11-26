@@ -329,7 +329,8 @@ export default function ExploreMapPage() {
 
         <p className="text-[11px] text-gray-500 dark:text-gray-400">
           Seberapa akurat? <Link to="/validasi" className="font-semibold text-sky-700 dark:text-sky-300 underline">Cara kami menguji akurasi</Link> ·{' '}
-          <Link to="/prioritas" className="font-semibold text-sky-700 dark:text-sky-300 underline">Prioritas sekolah dan faskes</Link>
+          <Link to="/prioritas" className="font-semibold text-sky-700 dark:text-sky-300 underline">Prioritas sekolah dan faskes</Link> ·{' '}
+          <Link to="/sensor/titik" className="font-semibold text-sky-700 dark:text-sky-300 underline">Titik sensor berikutnya</Link>
         </p>
 
         {/* How it works (folded: N-04) */}

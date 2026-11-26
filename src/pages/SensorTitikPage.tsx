@@ -6,7 +6,7 @@ import Rincian from '../components/viz/Rincian';
 import BarChart from '../components/viz/BarChart';
 import { useIsDark } from '../stores/settingsStore';
 import { formatAngka } from '../lib/angka';
-import { csvTitik, jenisKata, kalimatTitik, WILAYAH_TITIK, type DataTitik } from '../lib/sensorTitik';
+import { csvTitik, jenisKata, kalimatPeran, kalimatTitik, WILAYAH_TITIK, type DataTitik, type KabTitik, type KotaTitik } from '../lib/sensorTitik';
 
 const PetaTitik = lazy(() => import('../components/sensor/PetaTitik'));
 
@@ -29,6 +29,13 @@ export default function SensorTitikPage() {
     return () => { batal = true; };
   }, [wil]);
   const onPilih = useCallback((n: number) => setPilih(n), []);
+  // M-T05 / M-T08: national and ten-city tables, shown once their files are published (a missing file hides the section)
+  const [nasional, setNasional] = useState<KabTitik[] | null>(null);
+  const [kota, setKota] = useState<KotaTitik[] | null>(null);
+  useEffect(() => {
+    fetch('/data/titik_sensor/nasional.json').then((r) => (r.ok ? r.json() : null)).then((d) => setNasional(d?.kabkota ?? null)).catch(() => setNasional(null));
+    fetch('/data/titik_sensor/sepuluh_kota.json').then((r) => (r.ok ? r.json() : null)).then((d) => setKota(d?.kota ?? null)).catch(() => setKota(null));
+  }, []);
   const label = WILAYAH_TITIK.find((w) => w.name === wil)?.label ?? wil;
   const titik = data?.titik.find((t) => t.peringkat === pilih) ?? null;
   const unduh = useMemo(() => (data ? URL.createObjectURL(new Blob([csvTitik(data)], { type: 'text/csv;charset=utf-8' })) : ''), [data]);
@@ -76,6 +83,7 @@ export default function SensorTitikPage() {
               <section className="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900" aria-live="polite" data-kartu-titik>
                 <p className="text-sm font-bold">{titik.peringkat}. {titik.nama} <span className="font-medium text-gray-700 dark:text-gray-300">({jenisKata(titik.jenis)})</span></p>
                 <p className="mt-1 text-[13px] leading-snug">{kalimatTitik(titik)}</p>
+                {kalimatPeran(titik) && <p className="mt-1 text-[12px] leading-snug text-gray-700 dark:text-gray-300">{kalimatPeran(titik)}</p>}
                 <a className="mt-1 inline-block text-[12px] font-semibold text-sky-800 underline dark:text-sky-300" href={`https://www.openstreetmap.org/?mlat=${titik.lat}&mlon=${titik.lon}#map=18/${titik.lat}/${titik.lon}`} target="_blank" rel="noreferrer">Lihat lokasinya di OpenStreetMap</a>
               </section>
             )}
@@ -97,11 +105,27 @@ export default function SensorTitikPage() {
             <Rincian summary="Cara membaca dan cara menghitung">
               <div className="space-y-2 text-[13px] leading-snug">
                 <p>Kebutaan sebuah tempat = berapa orang di sana (luas bangunan OpenStreetMap), ditambah bobot untuk sekolah dan faskes dalam 500 m, dikali kadar udara dan galat perkiraan per jam di tempat itu. Galat perkiraan dihitung dari jarak dan kemiripan sensor (kriging), lalu dikalibrasi dengan sensor yang disembunyikan.</p>
-                <p>Titik dipilih satu per satu: tiap langkah memilih sekolah, faskes, atau kantor desa (paling dekat 50 m dari jalan utama, antar titik baru paling dekat 500 m) yang paling banyak membuka kabut. Dua titik pertama hasil cara ini {formatAngka(data.cek_dua_titik.greedy_pct, 2, 2)}%, sama dengan pencarian semua pasangan ({formatAngka(data.cek_dua_titik.terbaik_lengkap_pct, 2, 2)}%).</p>
+                <p>Titik dipilih satu per satu dari sekolah, faskes, kampus, dan kantor desa (paling dekat 50 m dari jalan utama, antar titik baru paling dekat 500 m). Nilainya: kabut yang terbuka, ditambah poin untuk penjaga asap kebakaran, jenis tempat yang belum punya sensor (strata), dan kedekatan dengan stasiun rujukan (kalibrasi). Dua titik pertama hasil cara ini bernilai {formatAngka(data.cek_dua_titik.greedy_total ?? data.cek_dua_titik.greedy_pct ?? 0, 2, 2)}, pencarian semua pasangan {formatAngka(data.cek_dua_titik.terbaik_lengkap_total ?? data.cek_dua_titik.terbaik_lengkap_pct ?? 0, 2, 2)}.{data.ketahanan?.kehilangan_kabut_terbesar_pct != null ? ` Bila satu sensor baru mati, paling banyak ${formatAngka(data.ketahanan.kehilangan_kabut_terbesar_pct, 1, 1)}% kabut kembali tertutup.` : ''}</p>
                 <p>Peringkat peka terhadap cara menimbang: dengan bobot penduduk saja, {data.kepekaan.utama_vs_penduduk} dari {data.kepekaan.pembanding_n} titik teratas sama. Karena itu daftar ini usulan awal untuk dibahas bersama dinas dan sekolah, bukan keputusan akhir.</p>
                 <p>Sumber: bangunan dan fasilitas OpenStreetMap (ODbL), sensor warga OpenAQ (AirGradient, CC BY 4.0), daftar prioritas Breeva. Galat per jam median {formatAngka(data.e_median, 1, 1)} µg/m³ sekarang.</p>
               </div>
             </Rincian>
+            {nasional && nasional.length > 0 && (
+              <section aria-label="Nasional" data-titik-nasional>
+                <h2 className="text-sm font-bold">Nasional: kabupaten/kota yang paling butuh titik ukur pertama</h2>
+                <ol className="mt-1 space-y-0.5 text-[13px]">
+                  {nasional.map((k) => <li key={k.peringkat}><b>{k.peringkat}.</b> {k.nama}{k.provinsi ? `, ${k.provinsi}` : ''}: {k.alasan}</li>)}
+                </ol>
+              </section>
+            )}
+            {kota && kota.length > 0 && (
+              <section aria-label="Sepuluh kota" data-titik-kota>
+                <h2 className="text-sm font-bold">Sepuluh kota 2027: tiga titik sensor pertama</h2>
+                <ul className="mt-1 space-y-0.5 text-[13px]">
+                  {kota.map((k) => <li key={k.kota}><b>{k.kota}:</b> {k.titik.map((t) => `${t.peringkat}. ${t.nama} (+${formatAngka(t.manfaat_pct, 1, 1)}%)`).join('; ')}</li>)}
+                </ul>
+              </section>
+            )}
             <p className="text-[12px] text-gray-700 dark:text-gray-300">
               <Link to="/validasi" className="font-semibold text-sky-800 underline dark:text-sky-300">Cara kami menguji akurasi</Link> ·{' '}
               <Link to="/pemerintah" className="font-semibold text-sky-800 underline dark:text-sky-300">Halaman pemerintah daerah</Link>

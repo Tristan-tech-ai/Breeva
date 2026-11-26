@@ -9,6 +9,9 @@ export interface TitikSensor {
   dJ_marginal_pct: number; dJ_kumulatif_pct: number;
   bangunan_baru_1km_m2: number; bangunan_baru_1km_pct_wilayah: number; fasilitas_baru_1km: number;
   e_sekitar_1km_sebelum: number | null; e_sekitar_1km_sesudah: number | null; jarak_sensor_terdekat_km: number | null;
+  /** M-T03 complete: role and the four value components (percentage points of the region's fog) */
+  peran?: string; stratum?: string; nilai_kabut?: number; nilai_penjaga_asap?: number; nilai_strata?: number; nilai_kalibrasi?: number; nilai_total?: number;
+  km2_terbuka_1km?: number; bangunan_pindah_ke_terukur_pct?: number; jarak_rujukan_km?: number | null;
 }
 
 export interface DataTitik {
@@ -18,7 +21,8 @@ export interface DataTitik {
   cakupan: Record<'<1 km' | '1-2 km' | '>2 km', { bangunan_pct: number; fasilitas_pct: number; sel: number }>;
   fasilitas_jarak: { '<1 km': number; '1-2 km': number; '>2 km': number; total: number };
   kurva_manfaat_pct: number[];
-  cek_dua_titik: { dicari_di?: number; greedy_pct: number; terbaik_lengkap_pct: number; rasio: number | null };
+  cek_dua_titik: { dicari_di?: number; greedy_pct?: number; terbaik_lengkap_pct?: number; greedy_total?: number; terbaik_lengkap_total?: number; rasio: number | null };
+  ketahanan?: { kehilangan_kabut_terbesar_pct: number | null };
   kepekaan: { utama_vs_penduduk: number; utama_vs_separuh: number; pembanding_n: number };
   titik: TitikSensor[];
   sensor: Array<[number, number]>;
@@ -69,3 +73,21 @@ export const WILAYAH_TITIK = [
   { name: 'badung_denpasar', label: 'Badung–Denpasar' },
   { name: 'kota_bogor', label: 'Kota Bogor' },
 ] as const;
+
+const PERAN: Record<string, string> = {
+  latar: 'latar: mengukur udara umum lingkungan, jauh dari jalan utama',
+  'penjaga asap': 'penjaga asap: di arah datang asap kebakaran, memberi tanda lebih awal',
+  strata: 'strata: mewakili jenis tempat yang belum punya sensor',
+  kalibrasi: 'kalibrasi: dekat stasiun rujukan, untuk menyetel sensor murah di sekitarnya',
+};
+
+/** The role of a point and its value components, in plain words (empty when the file has no components). */
+export function kalimatPeran(t: TitikSensor): string {
+  if (!t.peran || t.nilai_total == null) return '';
+  const f = (x: number | undefined) => formatAngka(x ?? 0, 1, 1);
+  const strata = t.stratum ? ` (${t.stratum})` : '';
+  return `Peran ${PERAN[t.peran] ?? t.peran}${t.peran === 'strata' ? strata : ''}. Nilai ${f(t.nilai_total)} poin = kabut ${f(t.nilai_kabut)} + penjaga asap ${f(t.nilai_penjaga_asap)} + strata ${f(t.nilai_strata)} + kalibrasi ${f(t.nilai_kalibrasi)}.`;
+}
+
+export interface KotaTitik { kota: string; titik: Array<{ peringkat: number; nama: string; lat: number; lon: number; manfaat_pct: number }> }
+export interface KabTitik { peringkat: number; nama: string; provinsi?: string; skor: number; alasan: string }
