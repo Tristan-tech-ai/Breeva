@@ -16,6 +16,11 @@ import {
 import type { GMapPlaceDetail, GMapPhoto, GMapReview } from '../../lib/searchapi';
 import type { POI } from '../../lib/poi-api';
 import type { Coordinate } from '../../types';
+import { tabTempat } from '../../lib/tabTempat';
+import { poiCategoryLabel } from '../../lib/poiPack';
+
+// M-U10: Google place details only without the static field (decision 18 Nov 2026: places from Overture and OSM)
+const SUMBER_GOOGLE = import.meta.env.VITE_FIELD_STATIC !== 'true';
 
 type Tab = 'overview' | 'reviews' | 'photos' | 'about';
 
@@ -64,8 +69,10 @@ export default function PlaceDetailSheet({
     }
 
     let cancelled = false;
-    setLoading(true);
     setPhotoIdx(0);
+    // M-U10: with the static field the places are Overture/OSM only; no Google lookup (and no skeleton that never fills)
+    if (!SUMBER_GOOGLE) return () => { cancelled = true; };
+    setLoading(true);
 
     (async () => {
       // 1. Try existing Google IDs first
@@ -155,12 +162,7 @@ export default function PlaceDetailSheet({
 
   const isOpen = openState ? openState.toLowerCase().includes('open') : null;
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'overview', label: 'Ringkasan' },
-    { key: 'reviews', label: 'Ulasan' },
-    { key: 'photos', label: 'Foto' },
-    { key: 'about', label: 'Tentang' },
-  ];
+  const tabs: { key: Tab; label: string }[] = tabTempat(SUMBER_GOOGLE);
 
   return (
     <AnimatePresence>
@@ -214,14 +216,14 @@ export default function PlaceDetailSheet({
                   )}
                   {price && (
                     <>
-                      <span className="text-gray-300 dark:text-gray-600">&middot;</span>
+                      {rating != null && <span className="text-gray-300 dark:text-gray-600">&middot;</span>}
                       <span className="text-sm text-gray-500">{price}</span>
                     </>
                   )}
                   {poi.category && (
                     <>
-                      <span className="text-gray-300 dark:text-gray-600">&middot;</span>
-                      <span className="text-sm text-gray-500">{poi.category}</span>
+                      {(rating != null || !!price) && <span className="text-gray-300 dark:text-gray-600">&middot;</span>}
+                      <span className="text-sm text-gray-500">{poiCategoryLabel(poi.category)}</span>
                     </>
                   )}
                 </div>
@@ -252,7 +254,7 @@ export default function PlaceDetailSheet({
                   }}
                   className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === tab.key
-                      ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                      ? 'border-primary-500 text-primary-700 dark:text-primary-400'
                       : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
@@ -271,7 +273,7 @@ export default function PlaceDetailSheet({
                   <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
                     <button
                       onClick={() => { onNavigate(poi.coordinate, poi.name); onClose(); }}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary-500 text-white text-sm font-semibold shadow-md shadow-primary-500/20 hover:bg-primary-600 active:scale-95 transition-all flex-shrink-0"
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary-700 text-white text-sm font-semibold shadow-md shadow-primary-500/20 hover:bg-primary-800 active:scale-95 transition-all flex-shrink-0"
                     >
                       <Navigation className="w-4 h-4" />
                       Rute

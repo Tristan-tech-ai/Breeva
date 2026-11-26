@@ -55,7 +55,7 @@ const LABELS: Array<[string, string]> = [
   ['service.financial.atm', 'ATM'], ['service.financial.bank', 'Bank'], ['service.vehicle.fuel', 'SPBU'], ['service.police', 'Polisi'],
   ['education.kindergarten', 'TK atau PAUD'], ['education.university', 'Kampus'], ['education.college', 'Kampus'],
   ['education.library', 'Perpustakaan'], ['education', 'Sekolah'],
-  ['healthcare.hospital', 'Rumah sakit'], ['healthcare.pharmacy', 'Apotek'], ['healthcare.dentist', 'Dokter gigi'], ['healthcare', 'Klinik'],
+  ['healthcare.hospital', 'Rumah sakit'], ['healthcare.pharmacy', 'Apotek'], ['healthcare.dentist', 'Dokter gigi'], ['healthcare.clinic', 'Klinik'], ['healthcare', 'Fasilitas kesehatan'],
   ['leisure.playground', 'Taman bermain'], ['leisure.fitness', 'Pusat kebugaran'], ['leisure.swimming', 'Kolam renang'],
   ['leisure.sport', 'Tempat olahraga'], ['leisure', 'Taman'],
   ['entertainment.museum', 'Museum'], ['entertainment.cinema', 'Bioskop'], ['entertainment', 'Hiburan'],
