@@ -10,7 +10,7 @@ import { decodeTileLines, type MvtTileLine } from '../../lib/nasional/mvt';
 import { gambarUbin, type GayaRuas } from '../../lib/field/gambarRuas';
 import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS, regionGate, routeSettled, markFieldDrawn } from '../../lib/field/firstDraw';
 import { HARGA_COLORS } from '../../lib/field/harga';
-import { popupHtml } from '../../lib/field/popup';
+import { bukaKartu, kartuRuas, kartuTerbuka, KARTU_TUTUP } from '../../lib/field/kartu';
 import { nearestFeature, tileFraction, unitsPerPixel, type TileFeature } from '../../lib/field/tap';
 
 // Road colors from the static field (VITE_FIELD_STATIC): geometry from a PMTiles archive, values from BVF1 cells.
@@ -45,6 +45,32 @@ export function useFieldLayer(
     const created: unknown[] = [];
     // Decoded native tiles (z <= 14) per region, for tapping (see lib/field/tap.ts).
     const tapSources: Array<{ src: FieldSource; bounds: L.LatLngBounds; tiles: Map<string, TileFeature[]> }> = [];
+    // M-U01: a tapped road opens the card at the bottom edge (KartuRuas), not a Leaflet popup; the map does not move.
+    let lastTap: { src: FieldSource; c: number; i: number; name: string | undefined } | null = null;
+    let tanda: L.CircleMarker | null = null;
+    const tandai = (ll: L.LatLng) => {
+      tanda?.remove();
+      tanda = L.circleMarker(ll, { radius: 7, color: '#0f172a', weight: 2.5, fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(map);
+    };
+    const lepasTanda = () => { tanda?.remove(); tanda = null; lastTap = null; };
+    window.addEventListener(KARTU_TUTUP, lepasTanda);
+    const kirimKartu = (baru: boolean) => {
+      if (!lastTap) return;
+      const { src, c, i, name } = lastTap;
+      const v = src.value(c, i);
+      const m = src.manifest;
+      const { pollutant: p, displayMode: mode } = modeRef.current;
+      bukaKartu({
+        id: `${src.region.name}:${c}:${i}`,
+        kartu: kartuRuas(v, name, src, c, i, p, mode),
+        // N-04: the road's exhaust now and at the run's forecast hours, loaded only when the card opens
+        seri: baru && v && m?.forecast_runs?.length
+          ? () => import('../../lib/field/roadSeries').then(({ roadSeries, sparkSvg }) =>
+            roadSeries(src.base, src.region.name, m, c, i, v.no2_delta).then((pts) => ({ pts, svg: sparkSvg(pts, 260, 52) })))
+          : undefined,
+      });
+    };
+    (map as unknown as { __kartuUlang?: () => void }).__kartuUlang = () => { if (kartuTerbuka()) kirimKartu(false); };
     const tapAt = (latlng: L.LatLng): boolean => {
       const zoom = map.getZoom();
       const z = Math.min(MAX_NATIVE, Math.round(zoom));
@@ -59,19 +85,9 @@ export function useFieldLayer(
         if (!hit) continue;
         const pr = hit.feature.properties;
         const c = Number(pr.c), i = Number(pr.i);
-        const v = t.src.value(c, i);
-        const html = popupHtml(v, pr.n as string | undefined, t.src, c, i);
-        const m = t.src.manifest;
-        const more = !!(v && m?.forecast_runs?.length);
-        const pop = L.popup({ closeButton: true, className: 'glass-popup', offset: [0, -2], autoPan: true })
-          .setLatLng(latlng).setContent(html + (more ? '<div data-spark style="font-size:10px;color:#6b7280;margin-top:4px">Memuat jam berikutnya…</div>' : '')).openOn(map);
-        // N-04: the road's exhaust now and at the run's forecast hours, loaded only on tap
-        if (more && v && m) {
-          void import('../../lib/field/roadSeries')
-            .then(({ roadSeries, sparkBlock }) => roadSeries(t.src.base, t.src.region.name, m, c, i, v.no2_delta).then((pts) => sparkBlock(pts)))
-            .catch(() => '')
-            .then((block) => { if (pop.isOpen()) pop.setContent(html + block); });
-        }
+        lastTap = { src: t.src, c, i, name: pr.n as string | undefined };
+        tandai(latlng);
+        kirimKartu(true);
         return true;
       }
       return false;
@@ -179,6 +195,9 @@ export function useFieldLayer(
     return () => {
       cancelled = true;
       delete (map as unknown as { __fieldTap?: unknown }).__fieldTap;
+      delete (map as unknown as { __kartuUlang?: unknown }).__kartuUlang;
+      window.removeEventListener(KARTU_TUTUP, lepasTanda);
+      tanda?.remove();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const l of created as any[]) l.remove?.();
       layersRef.current = [];
@@ -191,7 +210,8 @@ export function useFieldLayer(
   useEffect(() => {
     if (displayMode === 'harga') for (const s of sourcesRef.current) void s.ensureHarga();
     for (const l of layersRef.current) l.redraw?.();
-  }, [pollutant, displayMode]);
+    (map as unknown as { __kartuUlang?: () => void } | null)?.__kartuUlang?.(); // the open card follows the mode
+  }, [pollutant, displayMode, map]);
 
   return enabled ? FIELD_META : null;
 }

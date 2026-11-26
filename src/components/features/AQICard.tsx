@@ -99,6 +99,8 @@ export default function AQICard({ data, className = '', onExpandChange }: AQICar
             <span className="text-[15px] font-bold leading-tight" style={{ color }}>
               {cat.name}
             </span>
+            {/* T1-19: this is the median of the roads around the map centre, not the tapped road (the road card says "di ruas ini") */}
+            {data.layer_source === FIELD_LAYER_SOURCE && <span className="text-[12px] font-medium text-gray-600 dark:text-gray-400">sekitar pusat peta</span>}
           </div>
           <p className="mt-0.5 text-[13px] leading-snug text-gray-600 dark:text-gray-400">{cat.advice}</p>
           {personal && (

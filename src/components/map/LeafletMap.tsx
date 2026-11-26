@@ -34,6 +34,8 @@ import WheelGuard from './WheelGuard';
 import { FIELD_REGIONS } from '../../lib/field/source';
 import { onFirstDraw } from '../../lib/field/firstDraw';
 import { PETA_HEMAT } from '../../lib/mapPerf';
+import KartuRuas from './KartuRuas';
+import { kartuTerbuka, tutupKartu } from '../../lib/field/kartu';
 
 const toTuple = (wp: Coordinate): L.LatLngTuple => [wp.lat, wp.lng];
 
@@ -265,6 +267,8 @@ function MapController({
       // Then to a road of the static field (opens its popup).
       const fieldTap = (map as unknown as { __fieldTap?: { tapAt(ll: L.LatLng): boolean } }).__fieldTap;
       if (fieldTap && fieldTap.tapAt(e.latlng)) return;
+      // M-U01: with a road card open, a tap elsewhere on the map only closes the card
+      if (kartuTerbuka()) { tutupKartu(); return; }
       setDestination({ lat: e.latlng.lat, lng: e.latlng.lng });
     },
     dragstart() {
@@ -648,9 +652,12 @@ export default function LeafletMap({
   const waitRoute = !!routeLink;
   useEffect(() => (baseOn ? undefined : onFirstDraw(() => setBaseOn(true), window, undefined, waitRoute)), [baseOn, waitRoute]);
   const [internalMeta, setInternalMeta] = useState<RoadLayerMeta | null>(null);
+  // the element holding the map and the page's overlay buttons: the road card is drawn there, above those buttons
+  const [wadah, setWadah] = useState<HTMLElement | null>(null);
 
   return (
     <div
+      ref={(el) => { const p = el?.parentElement ?? null; if (p !== wadah) setWadah(p); }}
       className={className}
       role="region"
       aria-label="Peta kualitas udara interaktif. Ketuk jalan berwarna untuk angkanya; ketuk tempat lain untuk memilih tujuan."
@@ -701,6 +708,7 @@ export default function LeafletMap({
           routeStart={routeStart}
         />
       </MapContainer>
+      {FIELD_STATIC && <KartuRuas wadah={wadah} />}
       <NavControls />
       {/* legacy GCN legend of the server road layer; the static field (production) has no GCN part */}
       {!FIELD_STATIC && showAQIOverlay && internalMeta && (internalMeta.gcn_applied_count ?? 0) > 0 && (
