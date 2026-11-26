@@ -74,3 +74,15 @@ describe('N-49 kab/kota in the main map search', () => {
     expect(readFileSync('src/components/map/LeafletMap.tsx', 'utf8')).toContain('viewTarget.zoom ?? Math.max(map.getZoom(), 16)');
   });
 });
+
+describe('honest national levels (N-90)', () => {
+  it('a kab/kota without a sensor within 25 km is indicative, also when corrected by sensors within 150 km', async () => {
+    const { TINGKAT_LABEL, TINGKAT_NILAI, tingkatCatatan } = await import('../src/lib/nasional/kabkota');
+    expect(TINGKAT_NILAI).toEqual({ terukur: 'terukur', terkalibrasi: 'indikatif', indikatif: 'indikatif' });
+    expect(TINGKAT_LABEL.terkalibrasi.startsWith('indikatif')).toBe(true);
+    expect(TINGKAT_LABEL.terkalibrasi).toMatch(/belum diuji dengan lokasi disembunyikan/);
+    expect(Object.values(TINGKAT_LABEL).some((x) => x.startsWith('terkalibrasi'))).toBe(false);
+    expect(tingkatCatatan('terkalibrasi', 0)).toBe('0 sensor dalam 25 km; dikoreksi sensor ≤ 150 km');
+    expect(tingkatCatatan('terukur', 3)).toBe('3 sensor dalam 25 km');
+  });
+});

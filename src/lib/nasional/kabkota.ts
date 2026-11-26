@@ -41,9 +41,16 @@ export function muatIndeksKabKota(base: string): Promise<KabKota[]> {
 
 export const TINGKAT_LABEL: Record<Tingkat, string> = {
   terukur: 'terukur: sensor warga dalam 25 km',
-  terkalibrasi: 'terkalibrasi: dikoreksi sensor dalam 150 km',
+  // N-90: without a measurement point the level is indicative; the 150 km ratio correction has no hidden-location test yet
+  terkalibrasi: 'indikatif: belum ada titik ukur dalam 25 km; latar dikoreksi sensor warga dalam 150 km, koreksi ini belum diuji dengan lokasi disembunyikan',
   indikatif: 'indikatif: belum ada titik ukur di dekatnya',
 };
+
+/** The one-word level shown on the card: only a sensor within 25 km makes it 'terukur'. */
+export const TINGKAT_NILAI: Record<Tingkat, string> = { terukur: 'terukur', terkalibrasi: 'indikatif', indikatif: 'indikatif' };
+
+/** The card's note under the level. */
+export const tingkatCatatan = (t: Tingkat, s: number) => (t === 'terkalibrasi' ? `${s} sensor dalam 25 km; dikoreksi sensor ≤ 150 km` : `${s} sensor dalam 25 km`);
 
 /** Current background value and level of one kab/kota, with the hour index closest to now. */
 export function latarSini(l: LatarFile | null, slug: string, now = Date.now()): { v: number | null; t: Tingkat; s: number; seri: (number | null)[]; jam: string[]; i: number } | null {

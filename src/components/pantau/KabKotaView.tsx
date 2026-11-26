@@ -8,7 +8,7 @@ import type { FireFile } from '../../lib/nasional/firms';
 import { windAt, type WindFile } from '../../lib/nasional/angin';
 import type { LatarFile } from '../../lib/nasional/latar';
 import type { AsapFile } from '../../lib/nasional/asap';
-import { apiSini, kabKotaCsv, latarSini, TINGKAT_LABEL, type KabKota } from '../../lib/nasional/kabkota';
+import { apiSini, kabKotaCsv, latarSini, TINGKAT_LABEL, TINGKAT_NILAI, tingkatCatatan, type KabKota } from '../../lib/nasional/kabkota';
 import { kameraKabKota, type CctvFile } from '../../lib/nasional/cctv';
 import CctvRingkas from './CctvRingkas';
 
@@ -42,7 +42,7 @@ export default function KabKotaView({ k, latar, fires, wind, hour, dark, asap = 
       <p className="text-xs text-gray-600 dark:text-gray-300">{k.provinsi}</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <StatCard label="PM2,5 latar" value={n(l?.v, 0)} unit="µg/m³" note={cat ? cat.name : 'memuat'} tone={l?.v != null && l.v > 55 ? 'warn' : 'neutral'} />
-        <StatCard label="Tingkat" value={l ? l.t : '…'} note={l ? `${l.s} sensor dalam 25 km` : ''} icon={<Radio className="h-3.5 w-3.5" aria-hidden="true" />} />
+        <StatCard label="Tingkat" value={l ? TINGKAT_NILAI[l.t] : '…'} note={l ? tingkatCatatan(l.t, l.s) : ''} icon={<Radio className="h-3.5 w-3.5" aria-hidden="true" />} />
         <StatCard label="Titik api" value={n(api.dalam.length)} note={`di dalam, 24 jam; ${n(api.dekat.length)} lagi dalam 50 km`} tone={api.dalam.length ? 'warn' : 'good'} icon={<Flame className="h-3.5 w-3.5" aria-hidden="true" />} />
         <StatCard label="Angin" value={angin ? `${n(angin.speed, 1)} m/s` : '…'} note={angin ? `dari ${ARAH[Math.round(angin.from / 45) % 8]}` : ''} icon={<Wind className="h-3.5 w-3.5" aria-hidden="true" />} />
       </div>
