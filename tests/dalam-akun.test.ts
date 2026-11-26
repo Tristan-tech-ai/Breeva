@@ -219,5 +219,6 @@ describe('N-57 inner pages, guest and signed in', () => {
     for (const f of ['const TIERS', '#pricing', '1,000', '1.4M']) expect(d.includes(f), f).toBe(false);
     expect(readFileSync('src/pages/ExploreMapPage.tsx', 'utf8')).not.toMatch(/to="\/developers"/);
     expect(readFileSync('src/components/ui/PWAStatusToast.tsx', 'utf8')).not.toMatch(/glass-card/);
+    expect(readFileSync('src/components/ui/PWAStatusToast.tsx', 'utf8')).not.toMatch(/initial=\{\{ opacity: 0/);
   });
 });

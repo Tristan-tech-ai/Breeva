@@ -50,8 +50,9 @@ export default function PWAStatusToast() {
     <AnimatePresence>
       {notice && (
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
+          // slide only: a fading toast is read at partial opacity (axe dark-mode pass, N-58) and is harder to read
+          initial={{ y: 16 }}
+          animate={{ y: 0 }}
           exit={{ opacity: 0, y: 16 }}
           transition={{ duration: 0.2 }}
           className="fixed left-4 right-4 bottom-36 z-[120] mx-auto max-w-md"

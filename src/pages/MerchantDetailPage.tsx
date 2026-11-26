@@ -7,7 +7,7 @@ import RewardRedemptionModal from '../components/features/RewardRedemptionModal'
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { tierFor } from '../lib/merchant-tiers';
-import { CATATAN_CONTOH_MERCHANT, MERCHANT_CONTOH } from '../lib/teksId';
+import { CATATAN_CONTOH_MERCHANT, MERCHANT_CONTOH, kategoriMerchant } from '../lib/teksId';
 
 interface Merchant {
   id: string; name: string; description: string | null; category: string | null; address: string | null;
@@ -139,7 +139,7 @@ export default function MerchantDetailPage() {
                   <h2 className="text-lg font-bold text-gray-900 dark:text-white">{merchant.name}</h2>
                   {merchant.is_verified && <BadgeCheck size={16} className="text-primary-500 flex-shrink-0" />}
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{merchant.category || 'General'}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{kategoriMerchant(merchant.category)}</p>
                 <div className="flex items-center gap-1 mt-1">
                   {[1, 2, 3, 4, 5].map((s) => <Star key={s} size={14} className={s <= Math.round(merchant.rating) ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'} fill={s <= Math.round(merchant.rating) ? 'currentColor' : 'none'} />)}
                   <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">{merchant.rating?.toFixed(1)} ({merchant.review_count})</span>
