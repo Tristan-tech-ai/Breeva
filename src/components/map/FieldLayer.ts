@@ -11,6 +11,8 @@ import { gambarUbin, type GayaRuas } from '../../lib/field/gambarRuas';
 import { FIELD_FAILED_EVENT, FIRST_DRAW_FALLBACK_MS, regionGate, routeSettled, markFieldDrawn } from '../../lib/field/firstDraw';
 import { HARGA_COLORS } from '../../lib/field/harga';
 import { bukaKartu, kartuRuas, kartuTerbuka, KARTU_TUTUP } from '../../lib/field/kartu';
+import { decodeExhaust } from '../../lib/field/forecast';
+import { trafficColor } from '../../lib/roadColors';
 import { nearestFeature, tileFraction, unitsPerPixel, type TileFeature } from '../../lib/field/tap';
 
 // Road colors from the static field (VITE_FIELD_STATIC): geometry from a PMTiles archive, values from BVF1 cells.
@@ -21,6 +23,26 @@ const MAX_NATIVE = 14;
 /** How far from a road a tap still selects it, in screen pixels. */
 const TAP_PX = 10;
 const TILE_CACHE = 96;
+// M-U08: decoded forecast exhaust files (one per region, run and hour), shared by every map on the page
+const prakiraanSiap = new Map<string, Map<number, Float32Array> | null>();
+const prakiraanMuat = new Map<string, Promise<void>>();
+function urlPrakiraan(src: FieldSource, ahead: number): string | null {
+  const m = src.manifest;
+  const e = m?.forecast_runs?.find((x) => x.ahead === ahead);
+  return m && e ? `${src.base}/v/${src.region.name}/${m.run}/${e.key}` : null;
+}
+function muatPrakiraan(src: FieldSource, ahead: number): Promise<void> {
+  const url = urlPrakiraan(src, ahead);
+  if (!url || prakiraanSiap.has(url)) return Promise.resolve();
+  let p = prakiraanMuat.get(url);
+  if (!p) {
+    p = fetch(url).then(async (r) => { prakiraanSiap.set(url, r.ok ? decodeExhaust(new Uint8Array(await r.arrayBuffer())) : null); })
+      .catch(() => { prakiraanSiap.set(url, null); });
+    prakiraanMuat.set(url, p);
+  }
+  return p;
+}
+
 const FIELD_META: RoadLayerMeta = {
   wind_speed: 0, waqi_station: null, satellite_no2: false, iqair_aqi: null, iqair_city: null, iqair_validation: null, count: 0,
 };
@@ -32,12 +54,14 @@ export function useFieldLayer(
   displayMode: RoadDisplayMode = 'total',
   /** a route link is open: every region, the one in view too (F1-63), waits for its first route (F1-53) */
   waitRoute = false,
+  /** M-U08: hours ahead of the forecast shown (0 = this hour); exhaust mode only */
+  prakiraan = 0,
 ): RoadLayerMeta | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layersRef = useRef<any[]>([]);
   const sourcesRef = useRef<FieldSource[]>([]);
-  const modeRef = useRef({ pollutant, displayMode });
-  modeRef.current = { pollutant, displayMode };
+  const modeRef = useRef({ pollutant, displayMode, prakiraan });
+  modeRef.current = { pollutant, displayMode, prakiraan };
 
   useEffect(() => {
     if (!map || !enabled) return;
@@ -152,6 +176,13 @@ export function useFieldLayer(
               color = h == null || !src.harga ? '#cbd5e1' : HARGA_COLORS[src.harga.klass(h)];
             } else {
               color = fieldColor(v, p, m);
+              // M-U08: a forecast hour recolours the exhaust from that hour's file (the forecast covers exhaust only)
+              const ah = modeRef.current.prakiraan;
+              if (m === 'traffic' && ah > 0) {
+                const url = urlPrakiraan(src, ah);
+                const d = url ? prakiraanSiap.get(url)?.get(Number(props.c))?.[Number(props.i)] : undefined;
+                if (d != null && Number.isFinite(d)) color = trafficColor('no2', d);
+              }
             }
             return { color, weight: weightFor(highway, zoom), opacity: opacityFor(highway, zoom, v.ood ? 0.5 : src.isStale() ? 0.55 : 0.9) };
           };
@@ -213,6 +244,14 @@ export function useFieldLayer(
     for (const l of layersRef.current) l.redraw?.();
     (map as unknown as { __kartuUlang?: () => void } | null)?.__kartuUlang?.(); // the open card follows the mode
   }, [pollutant, displayMode, map]);
+
+  // M-U08: load the chosen forecast hour of every region, then redraw
+  useEffect(() => {
+    let batal = false;
+    if (!prakiraan) { for (const l of layersRef.current) l.redraw?.(); return; }
+    void Promise.all(sourcesRef.current.map((s) => muatPrakiraan(s, prakiraan))).then(() => { if (!batal) for (const l of layersRef.current) l.redraw?.(); });
+    return () => { batal = true; };
+  }, [prakiraan]);
 
   return enabled ? FIELD_META : null;
 }
