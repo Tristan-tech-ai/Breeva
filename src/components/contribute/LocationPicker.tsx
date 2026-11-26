@@ -6,6 +6,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { basemap } from '../../lib/basemap';
+import LipatAtribusi from '../map/LipatAtribusi';
 
 const PICKER_BASE = basemap('voyager', false);
 
@@ -51,6 +52,7 @@ export default function LocationPicker({
           },
         }}
       />
+      <LipatAtribusi />
     </MapContainer>
   );
 }

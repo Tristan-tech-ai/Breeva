@@ -11,6 +11,7 @@ import { formatDistance, formatDuration, formatNumber } from '../lib/utils';
 import { useDistanceUnit } from '../stores/settingsStore';
 import { basemap } from '../lib/basemap';
 import { walkRouteCoords } from '../lib/walkRoute';
+import LipatAtribusi from '../components/map/LipatAtribusi';
 
 const WALK_BASE = basemap('voyager', false);
 
@@ -351,6 +352,7 @@ ${points}
               {/* Start/End markers */}
               <CircleMarker center={routeCoords[0]} radius={5} pathOptions={{ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1 }} />
               <CircleMarker center={routeCoords[routeCoords.length - 1]} radius={5} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1 }} />
+              <LipatAtribusi />
             </MapContainer>
           </motion.div>
         )}
