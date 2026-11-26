@@ -72,7 +72,13 @@ export function isMinorRoad(highway: string): boolean {
 }
 
 // F1-70: lanes stay thin until the user zooms in, so at z15 the town is not a mesh of colour (Tristan, 18 Nov 2026)
-const MINOR_STOPS: Array<[number, number]> = [[13, 0.4], [14, 0.5], [15, 0.9], [16, 1.4], [17, 2.0], [18, 2.4], [19, 2.6]];
+// M-U02 (26 Nov): below z12 lanes are not drawn at all (tampilDiZoom), at z12 they are a hairline
+const MINOR_STOPS: Array<[number, number]> = [[12, 0.3], [13, 0.4], [14, 0.5], [15, 0.9], [16, 1.4], [17, 2.0], [18, 2.4], [19, 2.6]];
+
+/** Whether a road class is drawn at this zoom: from z12 every road, below z12 only main and primary roads (M-U02). */
+export function tampilDiZoom(highway: string, zoom: number): boolean {
+  return zoom >= 12 || !isMinorRoad(highway);
+}
 
 export function weightFor(highway: string, zoom: number): number {
   if (isMinorRoad(highway)) {
@@ -84,6 +90,8 @@ export function weightFor(highway: string, zoom: number): number {
     }
     return MINOR_STOPS[MINOR_STOPS.length - 1][1];
   }
+  // below z12 only main roads remain, and thin (M-U02: a zoomed-out island was a mesh of colour)
+  if (zoom < 12) return MAJOR.has(highway) ? 1.2 : 0.8;
   const t = Math.max(0, (zoom - 12) / 4);
   const lo = MAJOR.has(highway) ? 1.6 : 1.1;
   const hi = MAJOR.has(highway) ? 6 : 4;
@@ -92,7 +100,9 @@ export function weightFor(highway: string, zoom: number): number {
 
 /** Line opacity of a coloured road: lanes are quieter below z16 so the main roads read first. */
 export function opacityFor(highway: string, zoom: number, base: number): number {
-  return isMinorRoad(highway) && zoom < 16 ? Math.min(base, 0.6) : base;
+  if (!isMinorRoad(highway)) return base;
+  // lanes fade further at z12-13 (M-U02), stay quiet up to z15, full from z16
+  return Math.min(base, zoom < 13 ? 0.4 : zoom < 14 ? 0.5 : zoom < 16 ? 0.6 : base);
 }
 
 export function aqiBand(aqi: number): { label: string; color: string } {

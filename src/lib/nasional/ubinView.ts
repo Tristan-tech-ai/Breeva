@@ -17,3 +17,9 @@ export function viewTiles(b: { west: number; south: number; east: number; north:
 /** True when the point lies in a pilot region (those show the cloud field instead). */
 export const inPilot = (lat: number, lon: number) => FIELD_REGIONS.some((r) => lat >= r.bounds[0][0] && lat <= r.bounds[1][0] && lon >= r.bounds[0][1] && lon <= r.bounds[1][1]);
 
+/** Drawn tile keys that are no longer wanted in the view (M-U02: tiles left behind stayed on the canvas). */
+export function ubinLuarPandang(drawn: Iterable<string>, view: ReadonlySet<string>): string[] {
+  const out: string[] = [];
+  for (const k of drawn) if (!view.has(k)) out.push(k);
+  return out;
+}

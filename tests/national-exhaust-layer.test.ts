@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inPilot, viewTiles } from '../src/lib/nasional/ubinView';
+import { inPilot, ubinLuarPandang, viewTiles } from '../src/lib/nasional/ubinView';
 import { tileOf } from '../src/lib/nasional/mvt';
 
 describe('N-21 national exhaust layer', () => {
@@ -14,5 +14,13 @@ describe('N-21 national exhaust layer', () => {
     expect(inPilot(-8.67, 115.21)).toBe(true); // Denpasar
     expect(inPilot(-6.59, 106.80)).toBe(true); // Kota Bogor
     expect(inPilot(-5.14, 119.43)).toBe(false); // Makassar
+  });
+  it('M-U02: drops drawn tiles that left the view, keeps the rest', () => {
+    const drawn = ['14/1/1@h', '14/1/2@h', '14/9/9@h'];
+    expect(ubinLuarPandang(drawn, new Set(['14/1/1@h', '14/1/2@h']))).toEqual(['14/9/9@h']);
+    expect(ubinLuarPandang(drawn, new Set())).toEqual(drawn);
+    expect(ubinLuarPandang([], new Set(['14/1/1@h']))).toEqual([]);
+    // a new hour makes every tile of the old hour stale
+    expect(ubinLuarPandang(['14/1/1@h'], new Set(['14/1/1@h2']))).toEqual(['14/1/1@h']);
   });
 });

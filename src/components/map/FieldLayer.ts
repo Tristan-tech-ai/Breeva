@@ -3,7 +3,7 @@ import L from 'leaflet';
 import type { PollutantType, RoadDisplayMode } from '../../types';
 import type { RoadLayerMeta } from './RoadPollutionLayer';
 import { UBIN_HEMAT } from '../../lib/mapPerf';
-import { weightFor, opacityFor } from '../../lib/roadColors';
+import { weightFor, opacityFor, tampilDiZoom } from '../../lib/roadColors';
 import { fieldColor } from '../../lib/field/color';
 import { FIELD_DRAWN_EVENT, FIELD_REGIONS, FieldSource, type Box } from '../../lib/field/source';
 import { decodeTileLines, type MvtTileLine } from '../../lib/nasional/mvt';
@@ -143,6 +143,7 @@ export function useFieldLayer(
           const gaya = (zoom: number) => (props: MvtTileLine['props']): GayaRuas | null => {
             const v = src.value(Number(props.c), Number(props.i));
             const highway = src.highway(Number(props.h));
+            if (!tampilDiZoom(highway, zoom)) return null; // M-U02: zoomed out, only main roads
             if (!v) return { color: '#cbd5e1', weight: weightFor(highway, zoom), opacity: 0.35 };
             const { pollutant: p, displayMode: m } = modeRef.current;
             let color: string;

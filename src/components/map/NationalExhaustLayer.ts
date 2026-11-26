@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { fieldBase } from '../../lib/field/source';
 import { trafficColor } from '../../lib/roadColors';
-import { inPilot, NATIONAL_MIN_ZOOM, viewTiles } from '../../lib/nasional/ubinView';
+import { inPilot, NATIONAL_MIN_ZOOM, ubinLuarPandang, viewTiles } from '../../lib/nasional/ubinView';
 import type { AsapReq, AsapTile } from '../../workers/asapNasional.worker';
 
 /**
@@ -15,7 +15,10 @@ export function useNationalExhaust(map: L.Map | null, enabled: boolean, onState?
     if (!map || !enabled) return;
     const layer = L.layerGroup().addTo(map);
     const renderer = L.canvas({ padding: 0.2 });
-    const drawn = new Set<string>();
+    // M-U02: one group per tile, so tiles that leave the view (or every tile, when zoomed out below the threshold) are
+    // removed from the canvas instead of staying under the next view
+    const drawn = new Map<string, L.LayerGroup>();
+    let aktifNow = false;
     let req = 0;
     const ms: number[] = [];
     const label = new L.Control({ position: 'bottomright' });
@@ -32,9 +35,13 @@ export function useNationalExhaust(map: L.Map | null, enabled: boolean, onState?
     const update = () => {
       const z = map.getZoom(), c = map.getCenter();
       const aktif = z >= NATIONAL_MIN_ZOOM && !inPilot(c.lat, c.lng);
+      aktifNow = aktif;
       if (!aktif) {
         if (labelOn) { label.remove(); labelOn = false; }
-        onState?.({ aktif: false, ubin: drawn.size, ms });
+        for (const g of drawn.values()) g.remove();
+        drawn.clear();
+        req++; // tiles still on their way belong to a view that is gone
+        onState?.({ aktif: false, ubin: 0, ms });
         return;
       }
       if (!labelOn) { label.addTo(map); labelOn = true; }
@@ -42,22 +49,26 @@ export function useNationalExhaust(map: L.Map | null, enabled: boolean, onState?
       const now = new Date();
       const hourLocal = (now.getUTCHours() + Math.round(c.lng / 15) + 24) % 24; // the place's solar hour, WIB/WITA/WIT alike
       const hourKey = now.toISOString().slice(0, 13);
-      const want = viewTiles({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() }, { lon: c.lng, lat: c.lat })
-        .filter(([tz, x, y]) => !drawn.has(`${tz}/${x}/${y}@${hourKey}`));
+      const inView = viewTiles({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() }, { lon: c.lng, lat: c.lat });
+      const viewKeys = new Set(inView.map(([tz, x, y]) => `${tz}/${x}/${y}@${hourKey}`));
+      for (const k of ubinLuarPandang(drawn.keys(), viewKeys)) { drawn.get(k)?.remove(); drawn.delete(k); }
+      const want = inView.filter(([tz, x, y]) => !drawn.has(`${tz}/${x}/${y}@${hourKey}`));
       if (!want.length) return;
       // two workers on phones with the cores for it: the tiles of a screen are computed side by side
       const n = Math.max(1, Math.min(2, (navigator.hardwareConcurrency || 2) - 1));
       while (workerRef.current.length < n) workerRef.current.push(new Worker(new URL('../../workers/asapNasional.worker.ts', import.meta.url), { type: 'module' }));
       const id = ++req;
       const onTile = (ev: MessageEvent<{ id: number; tile?: AsapTile; done?: boolean }>) => {
-        if (ev.data.id !== id || !ev.data.tile) return;
+        if (ev.data.id !== id || !ev.data.tile || !aktifNow) return;
         const t = ev.data.tile;
-        drawn.add(t.key);
+        if (drawn.has(t.key)) return;
+        const group = L.layerGroup().addTo(layer);
+        drawn.set(t.key, group);
         ms.push(Math.round(t.ms));
         for (let i = 0; i + 1 < t.offs.length; i++) {
           const pts: L.LatLngExpression[] = [];
           for (let o = t.offs[i]; o < t.offs[i + 1]; o++) pts.push([t.coords[2 * o + 1], t.coords[2 * o]]);
-          L.polyline(pts, { renderer, color: trafficColor('no2', t.nox[i]), weight: t.k[i] <= 3 ? 4 : t.k[i] <= 5 ? 3 : 2, opacity: 0.85, interactive: false }).addTo(layer);
+          L.polyline(pts, { renderer, color: trafficColor('no2', t.nox[i]), weight: t.k[i] <= 3 ? 4 : t.k[i] <= 5 ? 3 : 2, opacity: 0.85, interactive: false }).addTo(group);
         }
         // what was drawn and how long each tile took, for the speed check (data-ubin, data-ms)
         if (labelEl) { labelEl.dataset.ubin = String(drawn.size); labelEl.dataset.ms = ms.join(','); }
