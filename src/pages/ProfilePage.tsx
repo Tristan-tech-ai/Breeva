@@ -17,6 +17,7 @@ import type { HeatmapCategory } from '../components/features/StreakHeatmap';
 import { supabase } from '../lib/supabase';
 import { co2KgFromGrams, treesFromCo2Kg, caloriesFromKm } from '../lib/metrics';
 import NextBadgeCard from '../components/features/NextBadgeCard';
+import { formatAngka } from '../lib/angka';
 
 export default function ProfilePage() {
   const { profile, user, signOut, isLoading, leaveGuest } = useAuthStore();
@@ -407,7 +408,7 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                   <span className="text-xs text-gray-600 dark:text-gray-400">Jarak</span>
-                  <span className="text-xs font-bold text-gray-900 dark:text-white ml-auto">{(profile?.total_distance_km || 0).toFixed(1)} km</span>
+                  <span className="text-xs font-bold text-gray-900 dark:text-white ml-auto">{formatAngka(profile?.total_distance_km || 0, 1, 1)} km</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
@@ -455,7 +456,7 @@ export default function ProfilePage() {
                 <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 mb-1.5">
                   <Leaf size={18} className="text-emerald-500" />
                 </div>
-                <div className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">{co2Saved} kg</div>
+                <div className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">{co2Saved.replace('.', ',')} kg</div>
                 <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">CO₂ dihemat</div>
               </div>
               <div>
@@ -469,7 +470,7 @@ export default function ProfilePage() {
                 <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-green-50 dark:bg-green-500/10 mb-1.5">
                   <TreePine size={18} className="text-green-600" />
                 </div>
-                <div className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">{treesEquivalent}</div>
+                <div className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">{treesEquivalent.replace('.', ',')}</div>
                 <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">Setara pohon</div>
               </div>
             </div>
@@ -514,7 +515,7 @@ export default function ProfilePage() {
         >
           <button
             onClick={handleSignOut}
-            className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm w-full py-4 px-5 flex items-center justify-center gap-2 text-red-500 hover:bg-red-50/50 dark:hover:bg-red-900/10 transition-colors"
+            className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm w-full py-4 px-5 flex items-center justify-center gap-2 text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/10 transition-colors"
           >
             <LogOut size={18} />
             <span className="text-sm font-medium">{guest ? 'Keluar dari mode tamu' : 'Keluar'}</span>

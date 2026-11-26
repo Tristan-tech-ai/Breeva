@@ -1,4 +1,5 @@
 import { useAnimatedNumber } from '../../hooks/useAnimatedNumber';
+import { formatAngka } from '../../lib/angka';
 
 interface AnimatedNumberProps {
   value: number;
@@ -15,7 +16,7 @@ interface AnimatedNumberProps {
 
 export default function AnimatedNumber({ value, duration = 800, decimals = 0, prefix = '', suffix = '', className }: AnimatedNumberProps) {
   const animated = useAnimatedNumber(value, duration);
-  const formatted = decimals > 0 ? animated.toFixed(decimals) : Math.round(animated).toLocaleString();
+  const formatted = decimals > 0 ? formatAngka(animated, decimals, decimals) : formatAngka(Math.round(animated), 0, 0);
 
   return <span className={className}>{prefix}{formatted}{suffix}</span>;
 }

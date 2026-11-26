@@ -229,7 +229,7 @@ export default function RouteSelector({
           </p>
           <button
             onClick={() => navigate('/')}
-            className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary-500 text-white text-xs font-semibold hover:bg-primary-600 transition"
+            className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary-700 text-white text-xs font-semibold hover:bg-primary-800 transition"
           >
             <MapPin className="w-3.5 h-3.5" /> Buka peta <ArrowRight className="w-3.5 h-3.5" />
           </button>

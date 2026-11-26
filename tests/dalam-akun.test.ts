@@ -184,5 +184,10 @@ describe('N-57 inner pages, guest and signed in', () => {
     expect(readFileSync('src/components/exposure/ProfileForm.tsx', 'utf8')).toMatch(/<select\s+aria-label="Moda perjalanan"/);
     expect(readFileSync('src/components/features/StreakHeatmap.tsx', 'utf8')).not.toMatch(/text-\[9px\] text-gray-400/);
     expect(readFileSync('src/components/ui/PWAStatusToast.tsx', 'utf8')).not.toMatch(/leading-5 text-gray-600/);
+    // second axe pass on a8a16cc: 3 contrast findings left (sign-out red, tour button, settings pills, exposure button)
+    expect(readFileSync('src/pages/SettingsPage.tsx', 'utf8')).not.toMatch(/text-(emerald|amber)-600 dark|text-gray-400 dark:text-gray-500'/);
+    expect(readFileSync('src/components/features/OnboardingTour.tsx', 'utf8')).not.toMatch(/bg-primary-500 text-white/);
+    expect(readFileSync('src/components/exposure/RouteSelector.tsx', 'utf8')).not.toMatch(/bg-primary-500 text-white text-xs font-semibold/);
+    expect(readFileSync('src/pages/ProfilePage.tsx', 'utf8')).not.toMatch(/gap-2 text-red-500/);
   });
 });

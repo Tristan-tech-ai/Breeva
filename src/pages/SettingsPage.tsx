@@ -21,10 +21,10 @@ type Tone = 'active' | 'off' | 'warn';
 function Pill({ tone, children }: { tone: Tone; children: ReactNode }) {
   const cls =
     tone === 'active'
-      ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
+      ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-300'
       : tone === 'warn'
-      ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
-      : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500';
+      ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300'
+      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300';
   return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${cls}`}>{children}</span>;
 }
 

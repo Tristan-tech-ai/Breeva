@@ -166,7 +166,7 @@ export default function OnboardingTour({ tourId, steps, delay = 1500 }: Onboardi
                 )}
                 <button
                   onClick={next}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary-500 text-white text-xs font-medium hover:bg-primary-600 transition-colors"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary-700 text-white text-xs font-medium hover:bg-primary-800 transition-colors"
                 >
                   {currentStep === steps.length - 1 ? 'Mengerti' : 'Lanjut'}
                   {currentStep < steps.length - 1 && <ChevronRight className="w-3 h-3" />}

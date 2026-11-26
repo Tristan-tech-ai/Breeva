@@ -16,6 +16,7 @@ import CelebrationBurst from '../components/ui/CelebrationBurst';
 import IconBadge from '../components/features/IconBadge';
 import { useAchievementUnlocks } from '../components/features/useAchievementUnlocks';
 import { deskripsiPencapaian, namaPencapaian } from '../lib/teksId';
+import { formatAngka } from '../lib/angka';
 
 interface ProgressRow {
   achievement_id: string;
@@ -39,8 +40,8 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 function remainingLabel(r: ProgressRow): string {
   switch (r.requirement_type) {
-    case 'total_distance': return `${(r.remaining / 1000).toFixed(1)} km lagi`;
-    case 'co2_saved': return `${co2KgFromGrams(r.remaining).toFixed(1)} kg CO₂ lagi`;
+    case 'total_distance': return `${formatAngka(r.remaining / 1000, 1, 1)} km lagi`;
+    case 'co2_saved': return `${formatAngka(co2KgFromGrams(r.remaining), 1, 1)} kg CO₂ lagi`;
     case 'walks': return `${r.remaining} jalan lagi`;
     case 'streak': return `${r.remaining} hari lagi`;
     case 'total_points': return `${r.remaining} poin lagi`;

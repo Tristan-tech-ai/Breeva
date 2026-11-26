@@ -6,6 +6,7 @@ import { co2KgFromGrams } from '../../lib/metrics';
 import IconBadge from './IconBadge';
 import ProgressBar from '../ui/ProgressBar';
 import { namaPencapaian } from '../../lib/teksId';
+import { formatAngka } from '../../lib/angka';
 
 interface ProgressRow {
   achievement_id: string;
@@ -23,8 +24,8 @@ interface ProgressRow {
 
 function remainingLabel(r: ProgressRow): string {
   switch (r.requirement_type) {
-    case 'total_distance': return `${(r.remaining / 1000).toFixed(1)} km lagi`;
-    case 'co2_saved': return `${co2KgFromGrams(r.remaining).toFixed(1)} kg CO₂ lagi`;
+    case 'total_distance': return `${formatAngka(r.remaining / 1000, 1, 1)} km lagi`;
+    case 'co2_saved': return `${formatAngka(co2KgFromGrams(r.remaining), 1, 1)} kg CO₂ lagi`;
     case 'walks': return `${r.remaining} jalan lagi`;
     case 'streak': return `${r.remaining} hari beruntun lagi`;
     case 'total_points': return `${r.remaining} poin lagi`;
