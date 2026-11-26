@@ -2,20 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X } from 'lucide-react';
+import { bolehTampil, TUNDA_PASANG_MS } from '../../lib/pasang';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-/** The install offer waits this long after the app started, so a first look (or a demo recording) is not covered by it. */
-export const TUNDA_PASANG_MS = 60_000;
 const mulai = typeof performance !== 'undefined' ? performance.timeOrigin : Date.now();
-
-/** Whether the install banner may show: an install offer exists, not dismissed, not on /developers, and late enough. */
-export function bolehTampil(adaTawaran: boolean, ditolak: boolean, pathname: string, sejakMulaiMs: number): boolean {
-  return adaTawaran && !ditolak && pathname !== '/developers' && sejakMulaiMs >= TUNDA_PASANG_MS;
-}
 
 export default function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);

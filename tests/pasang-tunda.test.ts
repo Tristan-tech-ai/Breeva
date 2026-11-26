@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bolehTampil, TUNDA_PASANG_MS } from '../src/components/features/PWAInstallBanner';
+import { bolehTampil, TUNDA_PASANG_MS } from '../src/lib/pasang';
 
 describe('install banner waits a minute (N-104)', () => {
   it('stays hidden in the first minute of a session, then shows when Chrome offers an install', () => {
