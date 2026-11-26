@@ -32,8 +32,8 @@ interface StreakHeatmapProps {
   loading?: boolean;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const DAY_LABELS = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const DAY_LABELS = ['', 'Sen', '', 'Rab', '', 'Jum', ''];
 
 const CELL_SIZE = 11;
 const GAP = 3;
@@ -107,7 +107,7 @@ function getMonthLabels(weeks: number) {
 
 function formatTooltipDate(dateStr: string) {
   const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString('id-ID', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 /** Fixed-position tooltip rendered via portal so it never clips */
@@ -150,8 +150,8 @@ function HeatmapTooltip({ anchor, value, date, unit }: {
 
   const formattedDate = formatTooltipDate(date);
   const label = value === 0
-    ? `No ${unit} on ${formattedDate}`
-    : `${value} ${value === 1 ? unit.replace(/s$/, '') : unit} on ${formattedDate}`;
+    ? `Tidak ada ${unit} pada ${formattedDate}`
+    : `${value} ${unit} pada ${formattedDate}`;
 
   // Compute arrow left relative to tooltip
   const arrowLeft = Math.max(8, Math.min(anchor.left + anchor.width / 2 - pos.x - 4, pos.w - 16)); // width measured with the position (no ref read while rendering)
@@ -279,8 +279,8 @@ export default function StreakHeatmap({ categories, weeks: weeksProp, loading = 
                 onClick={() => setActiveKey(cat.key)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
                   isActive
-                    ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 shadow-sm border border-primary-200 dark:border-primary-800'
-                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 border border-transparent'
+                    ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-800 dark:text-primary-300 shadow-sm border border-primary-200 dark:border-primary-800'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50 border border-transparent'
                 }`}
               >
                 <Icon size={12} strokeWidth={isActive ? 2.5 : 2} />
@@ -295,11 +295,11 @@ export default function StreakHeatmap({ categories, weeks: weeksProp, loading = 
       <div className="flex items-baseline gap-1.5 mb-3">
         <span className="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{totalActivity}</span>
         <span className="text-xs text-gray-500 dark:text-gray-400">
-          {activeCategory.unit} in the last {weeks >= 48 ? 'year' : `${weeks} weeks`}
+          {activeCategory.unit} dalam {weeks >= 48 ? 'setahun terakhir' : `${weeks} pekan terakhir`}
         </span>
         {activeDays > 0 && (
-          <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto tabular-nums">
-            {activeDays} active day{activeDays !== 1 ? 's' : ''}
+          <span className="text-[10px] text-gray-600 dark:text-gray-400 ml-auto tabular-nums">
+            {activeDays} hari aktif
           </span>
         )}
       </div>
@@ -323,7 +323,7 @@ export default function StreakHeatmap({ categories, weeks: weeksProp, loading = 
             label ? (
               <span
                 key={i}
-                className="absolute text-[9px] text-gray-400 dark:text-gray-500 select-none"
+                className="absolute text-[9px] text-gray-600 dark:text-gray-400 select-none"
                 style={{
                   top: 18 + i * STEP + CELL_SIZE / 2,
                   left: 0,
@@ -361,16 +361,16 @@ export default function StreakHeatmap({ categories, weeks: weeksProp, loading = 
 
       {/* Legend row */}
       <div className="flex items-center justify-between mt-2.5">
-        <span className="text-[10px] text-gray-400 dark:text-gray-500">
-          Learn how we count {activeCategory.label.toLowerCase()}
+        <span className="text-[10px] text-gray-600 dark:text-gray-400">
+          Satu kotak = satu hari
         </span>
         <div className="flex items-center gap-[3px]">
-          <span className="text-[9px] text-gray-400 dark:text-gray-500 mr-1">Less</span>
+          <span className="text-[9px] text-gray-600 dark:text-gray-400 mr-1">Sedikit</span>
           <div style={{ width: CELL_SIZE - 1, height: CELL_SIZE - 1 }} className={`rounded-[2px] ${activeCategory.empty}`} />
           {activeCategory.colors.map((c, i) => (
             <div key={i} style={{ width: CELL_SIZE - 1, height: CELL_SIZE - 1 }} className={`rounded-[2px] ${c}`} />
           ))}
-          <span className="text-[9px] text-gray-400 dark:text-gray-500 ml-1">More</span>
+          <span className="text-[9px] text-gray-600 dark:text-gray-400 ml-1">Banyak</span>
         </div>
       </div>
 

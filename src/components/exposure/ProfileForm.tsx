@@ -67,7 +67,7 @@ export default function ProfileForm({
                     transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
                   />
                 )}
-                <span className={`relative ${active ? 'text-primary-600 dark:text-primary-300' : 'text-gray-500 dark:text-gray-400'}`}>
+                <span className={`relative ${active ? 'text-primary-800 dark:text-primary-300' : 'text-gray-700 dark:text-gray-300'}`}>
                   {AGE_LABELS[a]}
                 </span>
               </button>
@@ -81,6 +81,7 @@ export default function ProfileForm({
         <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block">Moda perjalanan</label>
         <div className="relative">
           <select
+            aria-label="Moda perjalanan"
             value={profile.mode}
             onChange={(e) => onChange({ ...profile, mode: e.target.value as ExposureMode })}
             className="w-full appearance-none px-3 py-2.5 pr-9 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition"

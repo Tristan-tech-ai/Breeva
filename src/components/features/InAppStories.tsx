@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight, Leaf, Wind, Footprints, Gift, Sparkles, type LucideIcon } from 'lucide-react';
+import { CO2_GRAMS_PER_KM, TREE_KG_CO2_PER_YEAR } from '../../lib/metrics';
 
 interface Story {
   id: string;
@@ -13,53 +14,53 @@ interface Story {
 const stories: Story[] = [
   {
     id: 'air-quality',
-    title: 'Air Quality',
+    title: 'Kualitas udara',
     icon: Wind,
     gradient: 'from-sky-400 to-cyan-500',
     slides: [
-      { heading: 'Understanding AQI', body: 'Air Quality Index (AQI) measures how clean the air is. Lower is better!', emoji: '🌬️' },
-      { heading: 'Best Time to Walk', body: 'Air is cleanest early morning (6-8 AM) and after rain. Avoid rush hours.', emoji: '🌅' },
-      { heading: 'Green Routes Help', body: 'Breeva compares the air along each route and shows how sure the estimate is.', emoji: '🗺️' },
+      { heading: 'Membaca ISPU', body: 'ISPU adalah indeks kualitas udara resmi Indonesia. Makin kecil makin baik; 0-50 Baik.', emoji: '🌬️' },
+      { heading: 'Asap kendaraan', body: 'Asap kendaraan paling pekat di tepi jalan ramai dan pada jam sibuk. Gang di sebelahnya sering jauh lebih bersih.', emoji: '🚗' },
+      { heading: 'Rute paling sedikit asap', body: 'Breeva membandingkan asap kendaraan di sepanjang tiap rute dan menulis seberapa yakin perkiraannya.', emoji: '🗺️' },
     ],
   },
   {
     id: 'eco-tips',
-    title: 'Eco Tips',
+    title: 'Tips hijau',
     icon: Leaf,
     gradient: 'from-emerald-400 to-green-500',
     slides: [
-      { heading: 'Every Step Counts', body: 'Walking 1 km saves ~170g CO₂ vs driving. Small changes, big impact!', emoji: '👣' },
-      { heading: 'Trees Are Filters', body: 'A single tree absorbs 22 kg CO₂/year. Walk near trees for cleaner air.', emoji: '🌳' },
+      { heading: 'Setiap langkah dihitung', body: `Breeva menghitung ${CO2_GRAMS_PER_KM} g CO₂ yang tidak keluar untuk setiap km yang kamu jalani, dibanding naik kendaraan.`, emoji: '👣' },
+      { heading: 'Setara pohon', body: `Di profil, CO₂ itu dibandingkan dengan serapan satu pohon, ${TREE_KG_CO2_PER_YEAR} kg CO₂ per tahun.`, emoji: '🌳' },
     ],
   },
   {
     id: 'rewards',
-    title: 'Rewards',
+    title: 'Hadiah',
     icon: Gift,
     gradient: 'from-amber-400 to-yellow-500',
     slides: [
-      { heading: 'Earn While Walking', body: 'Every walk earns EcoPoints. Longer walks = more points!', emoji: '🎯' },
-      { heading: 'Redeem at Merchants', body: 'Use EcoPoints for discounts at eco-friendly cafes, shops, and more.', emoji: '🛍️' },
+      { heading: 'Poin dari berjalan', body: 'Setiap jalan kaki yang selesai memberi EcoPoin; misi harian memberi tambahan.', emoji: '🎯' },
+      { heading: 'Tukar di merchant', body: 'EcoPoin ditukar dengan voucher merchant mitra. Merchant yang tampil sekarang masih data contoh.', emoji: '🛍️' },
     ],
   },
   {
     id: 'walking',
-    title: 'Walking',
+    title: 'Jalan kaki',
     icon: Footprints,
     gradient: 'from-primary-400 to-primary-600',
     slides: [
-      { heading: '30 Min Daily', body: 'Walking 30 min/day reduces heart disease risk by 20%. Free healthcare!', emoji: '❤️' },
-      { heading: 'Track Your Impact', body: 'See CO₂ saved, calories burned, and trees equivalent on your profile.', emoji: '📊' },
+      { heading: '30 menit sehari', body: 'WHO menganjurkan sedikitnya 150 menit aktivitas sedang per pekan, misalnya jalan kaki 30 menit, 5 hari.', emoji: '❤️' },
+      { heading: 'Lihat dampakmu', body: 'Profil menampilkan CO₂ yang dihemat, kalori, dan setara pohon dari jalanmu.', emoji: '📊' },
     ],
   },
   {
     id: 'new-features',
-    title: "What's New",
+    title: 'Baru',
     icon: Sparkles,
     gradient: 'from-purple-400 to-pink-500',
     slides: [
-      { heading: 'Activity Heatmap', body: 'Check your GitHub-style contribution graph on your Profile page!', emoji: '📅' },
-      { heading: 'Streak Tracker', body: 'Build daily walking streaks and earn bonus EcoPoints!', emoji: '🔥' },
+      { heading: 'Peta aktivitas', body: 'Profil menampilkan hari-hari kamu berjalan; satu kotak satu hari.', emoji: '📅' },
+      { heading: 'Hari beruntun', body: 'Jalan kaki setiap hari menambah hari beruntun dan bonus EcoPoin.', emoji: '🔥' },
     ],
   },
 ];

@@ -56,18 +56,18 @@ export default function PWAStatusToast() {
           transition={{ duration: 0.2 }}
           className="fixed left-4 right-4 bottom-36 z-[120] mx-auto max-w-md"
         >
-          <div className="glass-card border border-primary-200/70 dark:border-primary-800/80 p-4 shadow-2xl">
+          <div className="glass-card bg-white/95 dark:bg-gray-900/95 border border-primary-200/70 dark:border-primary-800/80 p-4 shadow-2xl">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl gradient-primary text-white">
                 {icon}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-gray-900 dark:text-white">{notice.title}</p>
-                <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-300">{notice.message}</p>
+                <p className="mt-1 text-xs leading-5 text-gray-700 dark:text-gray-200">{notice.message}</p>
               </div>
               <button
                 onClick={() => setNotice(null)}
-                className="text-xs font-medium text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
+                className="text-xs font-medium text-gray-700 transition hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
               >
                 Tutup
               </button>

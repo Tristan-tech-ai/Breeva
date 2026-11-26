@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { co2KgFromGrams } from '../../lib/metrics';
 import IconBadge from './IconBadge';
 import ProgressBar from '../ui/ProgressBar';
+import { namaPencapaian } from '../../lib/teksId';
 
 interface ProgressRow {
   achievement_id: string;
@@ -60,7 +61,7 @@ export default function NextBadgeCard({ className }: { className?: string }) {
           </span>
           <span className="text-[11px] font-extrabold text-accent-500 shrink-0">+{row.points_reward}</span>
         </div>
-        <div className="text-sm font-bold text-gray-900 dark:text-white truncate">{row.name}</div>
+        <div className="text-sm font-bold text-gray-900 dark:text-white truncate">{namaPencapaian(row.name)}</div>
         <ProgressBar value={row.progress_pct} className="my-1.5" height={6} />
         <div className="text-[11px] text-gray-500 dark:text-gray-400">{remainingLabel(row)}</div>
       </div>

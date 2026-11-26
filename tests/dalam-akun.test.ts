@@ -153,4 +153,36 @@ describe('N-57 inner pages, guest and signed in', () => {
     expect(home).toMatch(/\{CHAT_AKTIF && <button\s+onClick=\{\(\) => setShowChat\(true\)\}/);
     expect(home).toMatch(/\{CHAT_AKTIF && showChat && \(/);
   });
+
+  it('profile stories, activity map, eco impact and the weekly card are in Indonesian', () => {
+    const cek: [string, string[]][] = [
+      ['src/components/features/InAppStories.tsx', ["What's New", 'Air Quality', 'Every Step Counts', '170g', 'heart disease risk by 20%', '6-8 AM']],
+      ['src/components/features/StreakHeatmap.tsx', ["'May'", "'Mon'", 'in the last', 'Learn how we count', '>Less<', '>More<', "'en-US'"]],
+      ['src/pages/EcoImpactPage.tsx', ['Water Saved', 'Clean Air Impact', 'particulate matter avoided', 'Weekly Goal', '            Milestones\n', 'Unlocked', 'alert(']],
+      ['src/components/features/WeeklySummaryCard.tsx', ['This Week', 'points earned', 'day streak', 'Join the eco-walk']],
+      ['src/pages/ProfilePage.tsx', ["'Sign Out'", "label: 'Contributions'"]],
+    ];
+    for (const [p, frasa] of cek) {
+      const s = readFileSync(p, 'utf8');
+      for (const f of frasa) expect(s.includes(f), `${p}: ${f}`).toBe(false);
+    }
+  });
+
+  it('the weekly goal and the weekly card count this WIB week, not total km modulo the goal', () => {
+    const s = readFileSync('src/pages/EcoImpactPage.tsx', 'utf8');
+    expect(s).not.toMatch(/totalKm % weeklyGoal/);
+    expect(s).toMatch(/wibWeekStart\(\)/);
+    expect(s).toMatch(/distanceKm=\{pekanIni\.km\}/);
+  });
+
+  it('the axe findings on the inner pages are fixed at the source', () => {
+    const set = readFileSync('src/pages/SettingsPage.tsx', 'utf8');
+    expect(set).toMatch(/aria-label=\{label\}/);
+    expect((set.match(/<Toggle label=\{t\('settings\./g) || []).length).toBe(7);
+    expect(set).not.toMatch(/'bg-primary-500 text-white'/);
+    expect(readFileSync('src/pages/ProfilePage.tsx', 'utf8')).toMatch(/onClick=\{\(\) => navigate\(-1\)\}\s+aria-label="Kembali"/);
+    expect(readFileSync('src/components/exposure/ProfileForm.tsx', 'utf8')).toMatch(/<select\s+aria-label="Moda perjalanan"/);
+    expect(readFileSync('src/components/features/StreakHeatmap.tsx', 'utf8')).not.toMatch(/text-\[9px\] text-gray-400/);
+    expect(readFileSync('src/components/ui/PWAStatusToast.tsx', 'utf8')).not.toMatch(/leading-5 text-gray-600/);
+  });
 });

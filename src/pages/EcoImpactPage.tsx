@@ -1,13 +1,15 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Leaf, TreePine, Droplets, Wind, Flame, TrendingUp, Award, Footprints, Share2, Users } from 'lucide-react';
+import { ChevronLeft, Leaf, TreePine, Flame, TrendingUp, Award, Footprints, Share2, Users } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { wibWeekStart } from '../lib/wibWeek';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
 import BottomNavigation from '../components/layout/BottomNavigation';
 import AnimatedNumber from '../components/ui/AnimatedNumber';
 import WeeklySummaryCard from '../components/features/WeeklySummaryCard';
-import { co2KgFromGrams, treesFromCo2Kg, caloriesFromKm, waterFromKm, WEEKLY_GOAL_KM } from '../lib/metrics';
+import { co2KgFromGrams, treesFromCo2Kg, caloriesFromKm, WEEKLY_GOAL_KM } from '../lib/metrics';
 
 const LazyCharts = lazy(() => import('recharts').then(m => ({
   default: ({ data, tab }: { data: WeeklyData[]; tab: 'co2' | 'distance' }) => (
@@ -16,14 +18,14 @@ const LazyCharts = lazy(() => import('recharts').then(m => ({
         <m.BarChart data={data}>
           <m.XAxis dataKey="week" tick={{ fontSize: 10 }} stroke="#9ca3af" />
           <m.YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" width={30} />
-          <m.Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(v) => [`${v} kg`, 'CO₂ Saved']} />
+          <m.Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(v) => [`${v} kg`, 'CO₂ dihemat']} />
           <m.Bar dataKey="co2" fill="#10b981" radius={[4, 4, 0, 0]} />
         </m.BarChart>
       ) : (
         <m.LineChart data={data}>
           <m.XAxis dataKey="week" tick={{ fontSize: 10 }} stroke="#9ca3af" />
           <m.YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" width={30} />
-          <m.Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(v) => [`${v} km`, 'Distance']} />
+          <m.Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(v) => [`${v} km`, 'Jarak']} />
           <m.Line type="monotone" dataKey="distance" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
         </m.LineChart>
       )}
@@ -44,6 +46,9 @@ export default function EcoImpactPage() {
   const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([]);
   const [chartTab, setChartTab] = useState<'co2' | 'distance'>('co2');
   const [avgStats, setAvgStats] = useState<{ km: number; co2: number; walks: number } | null>(null);
+  // Distance walked in this WIB week (N-57: the 'weekly goal' bar used total km modulo the goal)
+  const [pekanIni, setPekanIni] = useState({ km: 0, walks: 0, co2: 0 });
+  const kmPekanIni = pekanIni.km;
 
   useEffect(() => {
     if (!user) return;
@@ -58,6 +63,13 @@ export default function EcoImpactPage() {
         .order('completed_at', { ascending: true });
 
       if (!walks?.length) return;
+      const mulai = Date.parse(`${wibWeekStart()}T00:00:00+07:00`);
+      const ini = walks.filter((w) => Date.parse(w.completed_at) >= mulai);
+      setPekanIni({
+        km: ini.reduce((t, w) => t + (w.distance_meters || 0) / 1000, 0),
+        walks: ini.length,
+        co2: ini.reduce((t, w) => t + (w.co2_saved_grams || 0) / 1000, 0),
+      });
 
       const buckets: Record<string, { co2: number; distance: number; walks: number }> = {};
       for (const w of walks) {
@@ -98,17 +110,16 @@ export default function EcoImpactPage() {
   const co2Saved = co2KgFromGrams(profile?.total_co2_saved_grams || 0).toFixed(1);
   const treesEquivalent = treesFromCo2Kg(Number(co2Saved)).toFixed(2);
   const caloriesBurned = caloriesFromKm(totalKm);
-  const waterSaved = waterFromKm(totalKm).toFixed(0);
   const currentStreak = profile?.current_streak || 0;
 
   const handleShareImpact = async () => {
-    const text = `\ud83c\udf3f My Breeva Eco Impact\n\ud83d\udeb6 ${totalKm.toFixed(1)} km walked (${totalWalks} walks)\n\ud83c\udf31 ${co2Saved} kg CO\u2082 saved\n\ud83c\udf32 ${treesEquivalent} trees worth\n\ud83d\udca7 ${waterSaved}L water saved\n\ud83d\udd25 ${currentStreak} day streak\n\nJoin the eco-walk movement at breeva.site`;
+    const text = `Dampak jalan kakiku di Breeva\n${totalKm.toLocaleString('id-ID', { maximumFractionDigits: 1 })} km (${totalWalks} jalan)\n${co2Saved.replace('.', ',')} kg CO\u2082 dihemat\nsetara ${treesEquivalent.replace('.', ',')} pohon\n${currentStreak} hari beruntun\n\nbreeva.site`;
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'My Eco Impact - Breeva', text });
+        await navigator.share({ title: 'Dampak jalan kakiku - Breeva', text });
       } else {
         await navigator.clipboard.writeText(text);
-        alert('Eco impact copied to clipboard!');
+        toast.success('Ringkasan dampak disalin');
       }
     } catch { /* cancelled */ }
   };
@@ -116,47 +127,31 @@ export default function EcoImpactPage() {
   const impactCards = [
     {
       icon: Leaf,
-      label: 'CO₂ Saved',
-      value: `${co2Saved} kg`,
-      description: 'vs driving the same distance',
+      label: 'CO₂ dihemat',
+      value: `${co2Saved.replace('.', ',')} kg`,
+      description: 'dibanding naik kendaraan sejauh itu',
       color: 'from-emerald-400 to-green-500',
       bg: 'bg-emerald-50 dark:bg-emerald-900/20',
     },
     {
       icon: TreePine,
-      label: 'Trees Equivalent',
-      value: treesEquivalent,
-      description: 'trees worth of CO₂ absorbed',
+      label: 'Setara pohon',
+      value: treesEquivalent.replace('.', ','),
+      description: 'serapan CO₂ satu pohon setahun',
       color: 'from-green-400 to-emerald-600',
       bg: 'bg-green-50 dark:bg-green-900/20',
-    },
-    {
-      icon: Droplets,
-      label: 'Water Saved',
-      value: `${waterSaved} L`,
-      description: 'water not used by cars',
-      color: 'from-blue-400 to-cyan-500',
-      bg: 'bg-blue-50 dark:bg-blue-900/20',
-    },
-    {
-      icon: Wind,
-      label: 'Clean Air Impact',
-      value: `${(Number(co2Saved) * 0.3).toFixed(0)} g`,
-      description: 'particulate matter avoided',
-      color: 'from-sky-400 to-blue-500',
-      bg: 'bg-sky-50 dark:bg-sky-900/20',
     },
   ];
 
   const weeklyGoal = WEEKLY_GOAL_KM;
-  const weeklyProgress = Math.min((totalKm % weeklyGoal) / weeklyGoal * 100, 100);
+  const weeklyProgress = Math.min(kmPekanIni / weeklyGoal * 100, 100);
 
   const milestones = [
-    { distance: 10, label: 'First 10 km', icon: '🌱', unlocked: totalKm >= 10 },
-    { distance: 50, label: '50 km Walker', icon: '🚶', unlocked: totalKm >= 50 },
-    { distance: 100, label: 'Century Club', icon: '💯', unlocked: totalKm >= 100 },
-    { distance: 500, label: 'Eco Warrior', icon: '🌿', unlocked: totalKm >= 500 },
-    { distance: 1000, label: '1000 km Legend', icon: '🏆', unlocked: totalKm >= 1000 },
+    { distance: 10, label: '10 km pertama', icon: '🌱', unlocked: totalKm >= 10 },
+    { distance: 50, label: 'Pejalan 50 km', icon: '🚶', unlocked: totalKm >= 50 },
+    { distance: 100, label: 'Klub 100 km', icon: '💯', unlocked: totalKm >= 100 },
+    { distance: 500, label: 'Pejuang hijau', icon: '🌿', unlocked: totalKm >= 500 },
+    { distance: 1000, label: 'Legenda 1.000 km', icon: '🏆', unlocked: totalKm >= 1000 },
   ];
 
   return (
@@ -166,7 +161,7 @@ export default function EcoImpactPage() {
         <button aria-label="Kembali" onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-300 p-1">
           <ChevronLeft className="w-6 h-6" />
         </button>
-        <h1 className="text-base font-semibold text-gray-900 dark:text-white">Eco Impact</h1>
+        <h1 className="text-base font-semibold text-gray-900 dark:text-white">Dampak lingkungan</h1>
         <button aria-label="Bagikan" onClick={handleShareImpact} className="text-primary-500 p-1">
           <Share2 className="w-5 h-5" />
         </button>
@@ -180,14 +175,14 @@ export default function EcoImpactPage() {
           className="gradient-primary rounded-2xl p-6 text-center shadow-lg shadow-primary-500/20"
         >
           <Leaf className="w-8 h-8 text-white/80 mx-auto mb-2" />
-          <p className="text-white/70 text-xs uppercase tracking-wider mb-1">Your Total Eco Impact</p>
+          <p className="text-white/70 text-xs uppercase tracking-wider mb-1">Total jalan kakimu</p>
           <AnimatedNumber value={totalKm} decimals={1} suffix=" km" className="text-4xl font-bold text-white tabular-nums" />
-          <p className="text-white/60 text-xs mt-1">{totalWalks} eco-walks completed</p>
+          <p className="text-white/60 text-xs mt-1">{totalWalks} jalan selesai</p>
 
           {/* Streak */}
           <div className="flex items-center justify-center gap-2 mt-3 bg-white/20 backdrop-blur-sm rounded-xl py-2 px-4">
             <Flame className="w-4 h-4 text-amber-300" />
-            <span className="text-white text-sm font-medium">{currentStreak} day streak</span>
+            <span className="text-white text-sm font-medium">{currentStreak} hari beruntun</span>
           </div>
         </motion.div>
 
@@ -201,9 +196,9 @@ export default function EcoImpactPage() {
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-primary-500" />
-              Weekly Goal
+              Target pekan ini
             </h3>
-            <span className="text-xs text-gray-400 dark:text-gray-500">{(totalKm % weeklyGoal).toFixed(1)} / {weeklyGoal} km</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">{kmPekanIni.toLocaleString('id-ID', { maximumFractionDigits: 1 })} / {weeklyGoal} km</span>
           </div>
           <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
             <motion.div
@@ -214,15 +209,15 @@ export default function EcoImpactPage() {
             />
           </div>
           <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5">
-            {weeklyProgress >= 100 ? '🎉 Goal achieved! Keep going!' : `${(weeklyGoal - (totalKm % weeklyGoal)).toFixed(1)} km to go`}
+            {weeklyProgress >= 100 ? 'Target pekan ini tercapai' : `${Math.max(0, weeklyGoal - kmPekanIni).toLocaleString('id-ID', { maximumFractionDigits: 1 })} km lagi`}
           </p>
         </motion.div>
 
         {/* Weekly Summary Card */}
         <WeeklySummaryCard
-          distanceKm={weeklyData.length > 0 ? weeklyData[weeklyData.length - 1].distance : 0}
-          walks={weeklyData.length > 0 ? weeklyData[weeklyData.length - 1].walks : 0}
-          co2Kg={weeklyData.length > 0 ? weeklyData[weeklyData.length - 1].co2 : 0}
+          distanceKm={pekanIni.km}
+          walks={pekanIni.walks}
+          co2Kg={pekanIni.co2}
           streak={currentStreak}
           pointsEarned={profile?.ecopoints_balance || 0}
         />
@@ -258,7 +253,7 @@ export default function EcoImpactPage() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-primary-500" />
-                Weekly Trends
+                Tren pekanan
               </h3>
               <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
                 <button
@@ -271,7 +266,7 @@ export default function EcoImpactPage() {
                   onClick={() => setChartTab('distance')}
                   className={`px-3 py-1 text-[10px] font-medium transition ${chartTab === 'distance' ? 'bg-primary-500 text-white' : 'text-gray-500 dark:text-gray-400'}`}
                 >
-                  Distance
+                  Jarak
                 </button>
               </div>
             </div>
@@ -292,20 +287,20 @@ export default function EcoImpactPage() {
         >
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
             <Footprints className="w-4 h-4 text-primary-500" />
-            Health Benefits
+            Manfaat kesehatan (perkiraan)
           </h3>
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>
-              <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">{caloriesBurned.toLocaleString()}</p>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500">Calories Burned</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">{caloriesBurned.toLocaleString('id-ID')}</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500">Kalori</p>
             </div>
             <div>
-              <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">{Math.round(totalKm * 1312).toLocaleString()}</p>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500">Approx Steps</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">{Math.round(totalKm * 1312).toLocaleString('id-ID')}</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500">Perkiraan langkah</p>
             </div>
             <div>
               <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">{Math.round(totalKm / 5 * 30)}</p>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500">Minutes Active</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500">Menit aktif</p>
             </div>
           </div>
         </motion.div>
@@ -320,13 +315,13 @@ export default function EcoImpactPage() {
           >
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
               <Users className="w-4 h-4 text-primary-500" />
-              vs Average Breeva User
+              Dibanding rata-rata pengguna Breeva
             </h3>
             <div className="space-y-3">
               {[
-                { label: 'Distance', yours: totalKm, avg: avgStats.km, unit: 'km' },
-                { label: 'CO\u2082 Saved', yours: Number(co2Saved), avg: avgStats.co2, unit: 'kg' },
-                { label: 'Walks', yours: totalWalks, avg: avgStats.walks, unit: '' },
+                { label: 'Jarak', yours: totalKm, avg: avgStats.km, unit: 'km' },
+                { label: 'CO\u2082 dihemat', yours: Number(co2Saved), avg: avgStats.co2, unit: 'kg' },
+                { label: 'Jalan', yours: totalWalks, avg: avgStats.walks, unit: '' },
               ].map((stat) => {
                 const pct = stat.avg > 0 ? Math.round(((stat.yours - stat.avg) / stat.avg) * 100) : 0;
                 return (
@@ -346,8 +341,8 @@ export default function EcoImpactPage() {
                       />
                     </div>
                     <div className="flex justify-between text-[9px] text-gray-400 dark:text-gray-500 mt-0.5">
-                      <span>You: {stat.yours.toFixed(1)} {stat.unit}</span>
-                      <span>Avg: {stat.avg.toFixed(1)} {stat.unit}</span>
+                      <span>Kamu: {stat.yours.toLocaleString('id-ID', { maximumFractionDigits: 1 })} {stat.unit}</span>
+                      <span>Rata-rata: {stat.avg.toLocaleString('id-ID', { maximumFractionDigits: 1 })} {stat.unit}</span>
                     </div>
                   </div>
                 );
@@ -360,7 +355,7 @@ export default function EcoImpactPage() {
         <div>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2 px-1">
             <Award className="w-4 h-4 text-amber-500" />
-            Milestones
+            Tonggak
           </h3>
           <div className="space-y-2">
             {milestones.map((milestone, i) => (
@@ -376,13 +371,13 @@ export default function EcoImpactPage() {
                 <div className="text-2xl">{milestone.icon}</div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">{milestone.label}</p>
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500">{milestone.distance} km total</p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">total {milestone.distance.toLocaleString('id-ID')} km</p>
                 </div>
                 {milestone.unlocked ? (
-                  <div className="text-primary-500 text-xs font-bold">✓ Unlocked</div>
+                  <div className="text-primary-500 text-xs font-bold">✓ Terbuka</div>
                 ) : (
                   <div className="text-[10px] text-gray-400 dark:text-gray-500">
-                    {(milestone.distance - totalKm).toFixed(1)} km left
+                    {(milestone.distance - totalKm).toLocaleString('id-ID', { maximumFractionDigits: 1 })} km lagi
                   </div>
                 )}
               </motion.div>

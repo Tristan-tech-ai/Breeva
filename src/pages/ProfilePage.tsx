@@ -106,11 +106,11 @@ export default function ProfilePage() {
       hexEmpty: '#ebedf0',
       hexEmptyDark: '#1e293b',
       empty: 'bg-gray-100 dark:bg-gray-800/80',
-      unit: 'walks',
+      unit: 'jalan',
     },
     {
       key: 'contributions',
-      label: 'Contributions',
+      label: 'Kontribusi',
       icon: MapPin,
       data: guest ? {} : contributionDays,
       colors: [
@@ -124,7 +124,7 @@ export default function ProfilePage() {
       hexEmpty: '#ebedf0',
       hexEmptyDark: '#1e293b',
       empty: 'bg-gray-100 dark:bg-gray-800/80',
-      unit: 'contributions',
+      unit: 'kontribusi',
     },
   ];
 
@@ -282,6 +282,7 @@ export default function ProfilePage() {
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             onClick={() => navigate(-1)}
+            aria-label="Kembali"
             className="text-white/80 hover:text-white mb-6 p-1 -ml-1"
           >
             <ChevronLeft size={24} />
@@ -516,7 +517,7 @@ export default function ProfilePage() {
             className="rounded-2xl bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700/30 shadow-sm w-full py-4 px-5 flex items-center justify-center gap-2 text-red-500 hover:bg-red-50/50 dark:hover:bg-red-900/10 transition-colors"
           >
             <LogOut size={18} />
-            <span className="text-sm font-medium">{guest ? 'Keluar dari mode tamu' : 'Sign Out'}</span>
+            <span className="text-sm font-medium">{guest ? 'Keluar dari mode tamu' : 'Keluar'}</span>
           </button>
         </motion.div>
       </div>
