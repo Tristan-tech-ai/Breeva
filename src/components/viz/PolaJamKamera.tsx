@@ -29,7 +29,7 @@ export default function PolaJamKamera() {
         dan sepi dalam sehari dibandingkan dengan kurva jam di model (korelasi peringkat, 1 = urutannya sama persis). Ini menguji pola jam
         lalu lintas, bukan ketepatan angka polusi, dan tidak dipakai untuk angka peta.
       </p>
-      <div className="mt-2 overflow-x-auto">
+      <div className="mt-2 overflow-x-auto" tabIndex={0} role="region" aria-label="Tabel korelasi pola jam kamera, bisa digeser">
         <table className="w-full min-w-[420px] text-left text-[13px]">
           <caption className="sr-only">Korelasi pola jam kamera dengan model per kota</caption>
           <thead>
