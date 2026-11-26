@@ -440,9 +440,9 @@ export default function MapLayersSheet({
                         </span>
                       </div>
 
-                      {/* Inspect hint: long-press / right-click a road for its v2 estimate + uncertainty */}
+                      {/* Inspect hint: a plain tap on a coloured road opens its estimate (static field popup) */}
                       <p className="mt-2 text-[10px] text-gray-400 dark:text-gray-500 italic">
-                        Tahan (long-press) jalan untuk lihat estimasi PM2.5, rentang & keyakinan.
+                        Ketuk jalan berwarna untuk lihat perkiraan PM2,5, rentang, dan keyakinan.
                       </p>
 
                       {/* Weather & data status bar */}

@@ -52,8 +52,10 @@ describe('road popup', () => {
     const r = want.rows[10];
     const src = { ageHours: () => 0.5, isStale: () => false, manifest: null, harga: h };
     const html = popupHtml(v, 'Jalan Teuku Umar', src, r.c, r.i);
-    expect(html).toContain(`harga hirup ${r.h.toFixed(2)}× median wilayah`);
-    expect(html).toContain('(NOx lalu lintas): 10.5 µg/m³');
+    expect(html).toContain(`harga hirup ${r.h.toFixed(2).replace('.', ',')}× median wilayah`);
+    expect(html).toContain('(NOx lalu lintas): 10,5 µg/m³'); // N-68: Indonesian decimals
+    expect(html).toContain('PM2,5 24,3 µg/m³');
+    expect(html).not.toMatch(/\d\.\d/);
     expect(popupHtml(v, undefined, { ...src, harga: null }, r.c, r.i)).not.toContain('harga hirup');
   });
 });

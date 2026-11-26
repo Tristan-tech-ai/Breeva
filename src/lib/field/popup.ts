@@ -1,5 +1,6 @@
 /** Popup of one road of the static field: value, ISPU, interval, traffic part, harga hirup, freshness. No Leaflet here. */
 import { ispuRounded, pm25Category } from '../ispu';
+import { formatAngka } from '../angka';
 import type { CellValue } from './cells';
 import { HARGA_LABELS } from './harga';
 import { ageLabel, type FieldSource } from './source';
@@ -22,7 +23,7 @@ export function interval95(v: Pick<CellValue, 'pm25' | 'pm25_delta' | 'pi_half'>
 export function hargaLine(src: PopupSource, c: number, i: number): string {
   const h = src.harga?.value(c, i);
   if (h == null || !src.harga) return '';
-  return `<div style="font-size:11px;color:#444">harga hirup ${h.toFixed(2)}× median wilayah (${HARGA_LABELS[src.harga.klass(h)]})</div>`;
+  return `<div style="font-size:11px;color:#444">harga hirup ${formatAngka(h, 2, 2)}× median wilayah (${HARGA_LABELS[src.harga.klass(h)]})</div>`;
 }
 
 export function popupHtml(v: CellValue | undefined, name: string | undefined, src: PopupSource, c: number, i: number): string {
@@ -36,9 +37,9 @@ export function popupHtml(v: CellValue | undefined, name: string | undefined, sr
   return `<div style="min-width:180px">${title}` +
     `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">` +
     `<span style="width:9px;height:9px;border-radius:50%;background:${band.color};display:inline-block;box-shadow:0 0 0 1px rgba(0,0,0,.15)"></span>` +
-    `<span style="font-weight:700;font-size:13px;color:#111">PM2.5 ${v.pm25.toFixed(1)} µg/m³</span></div>` +
-    `<div style="font-size:11px;color:#444">ISPU ${index} · ${band.name} · rentang 95%: ${lo.toFixed(0)}–${hi.toFixed(0)} µg/m³</div>` +
-    `<div style="font-size:11px;color:#444"><b>Asap kendaraan</b> (NOx lalu lintas): ${v.no2_delta.toFixed(1)} µg/m³ · PM2.5 dari knalpot +${v.pm25_delta.toFixed(2)}</div>` +
+    `<span style="font-weight:700;font-size:13px;color:#111">PM2,5 ${formatAngka(v.pm25, 1, 1)} µg/m³</span></div>` +
+    `<div style="font-size:11px;color:#444">ISPU ${index} · ${band.name} · rentang 95%: ${formatAngka(lo, 0, 0)}–${formatAngka(hi, 0, 0)} µg/m³</div>` +
+    `<div style="font-size:11px;color:#444"><b>Asap kendaraan</b> (NOx lalu lintas): ${formatAngka(v.no2_delta, 1, 1)} µg/m³ · PM2,5 dari knalpot +${formatAngka(v.pm25_delta, 2, 2)}</div>` +
     hargaLine(src, c, i) +
     (v.ood ? `<div style="font-size:11px;color:#6b7280">di luar wilayah terkalibrasi</div>` : '') +
     (src.manifest?.indicative ? `<div style="font-size:11px;color:#b45309">Indikatif: belum ada stasiun ukur di wilayah ini</div>` : '') +
