@@ -217,13 +217,13 @@ export default function PlaceDetailSheet({
                   {price && (
                     <>
                       {rating != null && <span className="text-gray-300 dark:text-gray-600">&middot;</span>}
-                      <span className="text-sm text-gray-500">{price}</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">{price}</span>
                     </>
                   )}
                   {poi.category && (
                     <>
                       {(rating != null || !!price) && <span className="text-gray-300 dark:text-gray-600">&middot;</span>}
-                      <span className="text-sm text-gray-500">{poiCategoryLabel(poi.types?.[0] ?? poi.subcategory ?? poi.category)}</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">{poiCategoryLabel(poi.types?.[0] ?? poi.subcategory ?? poi.category)}</span>
                     </>
                   )}
                 </div>
@@ -333,7 +333,7 @@ export default function PlaceDetailSheet({
                             <Leaf className="w-3 h-3" />
                             {tierLabel}
                           </span>
-                          <span className="text-xs text-gray-400">Eco-verified merchant</span>
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Merchant ramah lingkungan</span>
                         </div>
                         {/* Vouchers */}
                         <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-200/60 dark:border-emerald-800/40">
@@ -504,7 +504,7 @@ export default function PlaceDetailSheet({
                     <div className="mt-4 p-4 rounded-2xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
                       <div className="flex items-center gap-2 mb-3">
                         <BarChart3 className="w-4 h-4 text-gray-500" />
-                        <h4 className="text-sm font-bold text-gray-900 dark:text-white">Popular times</h4>
+                        <h4 className="text-sm font-bold text-gray-900 dark:text-white">Jam ramai</h4>
                       </div>
                       {popularTimes.live && (
                         <div className="mb-3 flex items-center gap-2">
@@ -513,7 +513,7 @@ export default function PlaceDetailSheet({
                           {popularTimes.live.typical_time_spent && (
                             <>
                               <span className="text-gray-300 dark:text-gray-600">&middot;</span>
-                              <span className="text-xs text-gray-500">{popularTimes.live.typical_time_spent}</span>
+                              <span className="text-xs text-gray-600 dark:text-gray-400">{popularTimes.live.typical_time_spent}</span>
                             </>
                           )}
                         </div>
@@ -568,7 +568,7 @@ export default function PlaceDetailSheet({
                             >
                               <div>
                                 <p className="text-sm font-medium text-gray-900 dark:text-white">{opt.title}</p>
-                                {opt.official_site && <span className="text-[10px] text-green-600">Official site</span>}
+                                {opt.official_site && <span className="text-[10px] text-green-600">Situs resmi</span>}
                               </div>
                               {opt.price && <span className="text-sm font-bold text-primary-600 dark:text-primary-400">{opt.price}</span>}
                             </a>
@@ -646,7 +646,7 @@ export default function PlaceDetailSheet({
                   {/* People Also Search For */}
                   {peopleAlso && peopleAlso.length > 0 && (
                     <div className="mt-4">
-                      <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2">People also search for</h4>
+                      <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2">Orang juga mencari</h4>
                       <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
                         {peopleAlso.slice(0, 8).map((place, i) => (
                           <div
@@ -847,7 +847,7 @@ export default function PlaceDetailSheet({
                   ) : (
                     <div className="text-center py-12">
                       <Star className="w-10 h-10 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
-                      <p className="text-sm text-gray-400">No reviews yet</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Belum ada ulasan</p>
                     </div>
                   )}
                 </div>
@@ -915,7 +915,7 @@ export default function PlaceDetailSheet({
                   ) : (
                     <div className="text-center py-12">
                       <Image className="w-10 h-10 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
-                      <p className="text-sm text-gray-400">No photos available</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Belum ada foto</p>
                     </div>
                   )}
                 </div>
@@ -1034,7 +1034,7 @@ export default function PlaceDetailSheet({
                     <div className="mt-5">
                       <div className="flex items-center gap-2 mb-2.5">
                         <Users className="w-4 h-4 text-gray-500" />
-                        <h4 className="text-sm font-bold text-gray-900 dark:text-white">At this place</h4>
+                        <h4 className="text-sm font-bold text-gray-900 dark:text-white">Di tempat ini</h4>
                       </div>
                       {atThisPlace.categories && atThisPlace.categories.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mb-2">
@@ -1083,7 +1083,7 @@ export default function PlaceDetailSheet({
                   {!extensions && !openHours && !(poi.types && poi.types.length > 0) && !qna && !atThisPlace && !loading && (
                     <div className="text-center py-12">
                       <MapPin className="w-10 h-10 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
-                      <p className="text-sm text-gray-400">No additional info available</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Belum ada info tambahan</p>
                     </div>
                   )}
 
