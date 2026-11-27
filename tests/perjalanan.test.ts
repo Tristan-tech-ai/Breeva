@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { batasKeluar, garisPerjalanan, meterAntara, namaTujuan, nilaiKeluar, teksJarak, teksKm, TUJUAN_TANPA_NAMA } from '../src/lib/route/perjalanan';
+import { batasKeluar, garisPerjalanan, kecepatanSisa, meterAntara, namaTujuan, nilaiKeluar, teksJarak, teksKm, TUJUAN_TANPA_NAMA } from '../src/lib/route/perjalanan';
 import { deviceRouteAsRoute } from '../src/lib/route/appRoute';
 import { getRouteColor } from '../src/components/map/mapColors';
 
@@ -62,5 +62,19 @@ describe('walk screen', () => {
     expect(teksKm(1234)).toBe('1,23');
     expect(teksJarak(1234)).toBe('1,2 km');
     expect(teksJarak(350.4)).toBe('350 m');
+  });
+
+  it("the time left starts at the card time and follows the walker pace once they have walked a while", () => {
+    const rencana = 1258 / (16.1 * 60); // the card: 1,26 km in 16 min
+    // three seconds in, nothing walked: the card's speed (the screen said 30 min here)
+    expect(1200 / kecepatanSisa(rencana, 0, 3) / 60).toBeCloseTo(15.4, 0);
+    // a slow first 100 m moves it only a little; after 500 m the measured pace counts fully
+    expect(kecepatanSisa(rencana, 100, 120)).toBeGreaterThan(1.1);
+    expect(kecepatanSisa(rencana, 600, 600)).toBeCloseTo(1, 5);
+    // a GPS jump (300 m in 10 s) does not make the walker a runner
+    expect(kecepatanSisa(rencana, 300, 10)).toBeLessThan(2.2);
+    expect(kecepatanSisa(NaN, 0, 0)).toBe(1.3);
+    // the walk screen uses it
+    expect(readFileSync('src/stores/walkStore.ts', 'utf8')).toMatch(/kecepatanSisa\(rencana, distanceMeters, durationSeconds/);
   });
 });

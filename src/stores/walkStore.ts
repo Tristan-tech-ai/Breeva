@@ -12,7 +12,7 @@ import { formatLocalDateYYYYMMDD } from '../lib/utils';
 import { computeDose, type ExposureMode, type ExposureDoseResult, type UserExposureProfile } from '../lib/exposure';
 import { saveExposureLedger } from '../lib/exposure-ledger';
 import { bearing, smoothHeading, routeProgress, withinGeofence } from '../lib/geo';
-import { nilaiKeluar } from '../lib/route/perjalanan';
+import { kecepatanSisa, nilaiKeluar } from '../lib/route/perjalanan';
 import { daftarPenjaga } from '../lib/penjaga-muat';
 
 // Map the walk's transport mode to the exposure dose model's mode.
@@ -223,7 +223,9 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
                   const { distanceMeters, durationSeconds } = get();
                   // ETA from the rolling average speed, floored so a brief stop
                   // doesn't blow the estimate to infinity.
-                  const spd = durationSeconds > 0 ? Math.max(0.7, distanceMeters / durationSeconds) : 1.2;
+                  // the route's planned speed (the card's time) until some ground is covered, then the measured pace
+                  const rencana = route?.duration_seconds ? (route.distance_meters ?? 0) / route.duration_seconds : NaN;
+                  const spd = kecepatanSisa(rencana, distanceMeters, durationSeconds, get().activeTransportMode !== 'motorcycle');
                   // off the route only when really off: the fix's own error is counted and it takes two fixes in a row
                   // (one wobbly fix at the start showed "Kamu keluar dari rute" while the walker stood at the start)
                   const k = nilaiKeluar(prog.perpMeters, position.coords.accuracy, get()._keluarBeruntun);

@@ -64,3 +64,19 @@ export function teksJarak(m: number): string {
 export function teksKm(m: number): string {
   return (m / 1000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+/**
+ * Speed for the time left on a walk (Tristan, 27 Nov: the card said 16 min and the walk screen 30 min). The walk screen
+ * divided the distance left by the average speed so far, floored at 0.7 m/s: three seconds in, nothing walked yet, that
+ * floor made 1.2 km into 30 min. Now the planned speed of the route (the card's own) counts until the walker has covered
+ * some ground, then the measured average takes over gradually (fully after 500 m); the measured average is kept to
+ * 0.5-2.2 m/s for walking (2-20 m/s otherwise) so a GPS jump or a long stop does not swing the estimate.
+ */
+export function kecepatanSisa(rencanaMps: number, jarakM: number, waktuS: number, jalanKaki = true): number {
+  const rencana = Number.isFinite(rencanaMps) && rencanaMps > 0 ? rencanaMps : (jalanKaki ? 1.3 : 8);
+  if (!(waktuS > 0) || !(jarakM > 0)) return rencana;
+  const [lo, hi] = jalanKaki ? [0.5, 2.2] : [2, 20];
+  const ukur = Math.min(hi, Math.max(lo, jarakM / waktuS));
+  const bobot = Math.min(1, jarakM / 500);
+  return (1 - bobot) * rencana + bobot * ukur;
+}
