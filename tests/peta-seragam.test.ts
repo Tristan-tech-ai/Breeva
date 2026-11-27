@@ -7,7 +7,7 @@ import { opacityFor, weightFor } from '../src/lib/roadColors';
 import { stationAsBadge, STATION_BADGE_ZOOM } from '../src/lib/stationBbox';
 import { firstFixView } from '../src/stores/mapStore';
 import { sudahDibaca, tandaiDibaca } from '../src/lib/map/catatanDibaca';
-import { ikonUsulan, kmAntara, LEGENDA_BUTA, SLUG_KABUT_PILOT, slugBerisiTitik, slugButa, slugDenganStasiun, slugTerukur, titikDalamPoligon, TOP_NASIONAL, usulanUntukZoom, ZOOM_SEMUA_KABKOTA, ZOOM_TITIK_KOTA, type Usulan } from '../src/lib/sensorTitik';
+import { BBOX_INDONESIA, gabungStasiun, ikonUsulan, kmAntara, petakBbox, PETAK_STASIUN, LEGENDA_BUTA, SLUG_KABUT_PILOT, slugBerisiTitik, slugButa, slugDenganStasiun, slugTerukur, titikDalamPoligon, TOP_NASIONAL, usulanUntukZoom, ZOOM_SEMUA_KABKOTA, ZOOM_TITIK_KOTA, type Usulan } from '../src/lib/sensorTitik';
 
 // Tristan, 27 Nov 2026 (T6): the pilot regions looked like a different map, the map jumped back on its own, the note on
 // national roads said nothing to a user, WAQI stations could not be seen, and proposed sensor points read as stations.
@@ -173,7 +173,7 @@ describe('a place with a station is not blind (T9)', () => {
     expect(slugDenganStasiun(kab, [{ lat: -6.6, lon: 107.2 }]).size).toBe(0); // about 63 km
     expect(slugDenganStasiun(kab, []).size).toBe(0);
     expect(LEGENDA_BUTA).toMatch(/sensor warga atau stasiun/);
-    expect(readFileSync('src/components/map/LapisanAplikasi.ts', 'utf8')).toMatch(/waqi-stations\?bbox=-11\.5,94\.5,6\.5,141\.5/);
+    expect(readFileSync('src/components/map/LapisanAplikasi.ts', 'utf8')).toMatch(/petakBbox\(BBOX_INDONESIA[\s\S]{0,120}waqi-stations\?bbox=/);
   });
 });
 
@@ -191,5 +191,21 @@ describe('a kab/kota with its own station is green, however big (T9)', () => {
     const fc = { features: [{ properties: { s: 'kab-besar' }, geometry: kotak(119, -2, 121, 0) }, { properties: { s: 'kab-lain' }, geometry: kotak(121, -2, 122, 0) }] };
     expect([...slugBerisiTitik(fc, [{ lat: -0.5, lon: 119.9 }])]).toEqual(['kab-besar']);
     expect(slugDenganStasiun([{ slug: 'kab-besar', lat: -1, lon: 120.4 }], [{ lat: -0.5, lon: 119.9 }]).size).toBe(0); // the old rule missed it
+  });
+});
+
+describe('the stations of the country are asked tile by tile (one wide box comes back thinned, 27 Nov)', () => {
+  it('the tiles cover Indonesia without gaps or overlap beyond the edges', () => {
+    const t = petakBbox(BBOX_INDONESIA, PETAK_STASIUN[0], PETAK_STASIUN[1]).map((b) => b.split(',').map(Number));
+    expect(t.length).toBeLessThanOrEqual(24); // a few requests, not one per city
+    const luas = t.reduce((a, [s, w, n, e]) => a + (n - s) * (e - w), 0);
+    const [s, w, n, e] = BBOX_INDONESIA;
+    expect(luas).toBeCloseTo((n - s) * (e - w), 6);
+    for (const [s1, w1, n1, e1] of t) { expect(s1).toBeGreaterThanOrEqual(s); expect(w1).toBeGreaterThanOrEqual(w); expect(n1).toBeLessThanOrEqual(n); expect(e1).toBeLessThanOrEqual(e); }
+    expect(petakBbox([0, 0, 3, 5], 2, 2)).toEqual(['0,0,2,2', '0,2,2,4', '0,4,2,5', '2,0,3,2', '2,2,3,4', '2,4,3,5']);
+  });
+  it('a station on a tile edge is kept once; a failed tile does not lose the others', () => {
+    const a = { uid: 1, lat: -0.14, lon: 109.45 }, b = { uid: 2, lat: -2.68, lon: 111.63 }, c = { lat: -3.87, lon: 102.31 };
+    expect(gabungStasiun([[a, b], null, [b, { ...c }], [c], [{ lat: NaN, lon: 1 }]])).toEqual([a, b, c]);
   });
 });

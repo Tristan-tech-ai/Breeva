@@ -233,3 +233,34 @@ export function slugBerisiTitik(fc: { features: Array<{ properties: unknown; geo
   }
   return out;
 }
+
+/** Indonesia and its edges, as the WAQI proxy takes a bbox: south, west, north, east. */
+export const BBOX_INDONESIA: readonly [number, number, number, number] = [-11.5, 94.5, 6.5, 141.5];
+
+/**
+ * The WAQI map query thins its answer for a wide box: a station near another one is left out (27 Nov: 185 stations for the
+ * whole country in one box, Bengkulu, Pontianak, Semarang Mijen among those missing). In 18 tiles of 6 x 8 degrees 218 of
+ * the 237 found with 2 x 3 degree tiles come back, and each one left out is within 6.4 km of one that does.
+ */
+/** Tile size for the station list of the country, degrees of latitude and longitude (measured 27 Nov, see petakBbox). */
+export const PETAK_STASIUN: readonly [number, number] = [6, 8];
+
+export function petakBbox(bbox: readonly [number, number, number, number], dLat: number, dLon: number): string[] {
+  const [s, w, n, e] = bbox;
+  const out: string[] = [];
+  for (let la = s; la < n - 1e-9; la += dLat) {
+    for (let lo = w; lo < e - 1e-9; lo += dLon) out.push([la, lo, Math.min(la + dLat, n), Math.min(lo + dLon, e)].map((v) => +v.toFixed(4)).join(','));
+  }
+  return out;
+}
+
+/** One list from the tiles' answers: a station on a tile edge comes back twice, kept once (by uid, else by place). */
+export function gabungStasiun<T extends { lat: number; lon: number; uid?: number | string }>(jawaban: ReadonlyArray<ReadonlyArray<T> | null | undefined>): T[] {
+  const lihat = new Map<string, T>();
+  for (const daftar of jawaban) for (const st of daftar ?? []) {
+    if (!Number.isFinite(st.lat) || !Number.isFinite(st.lon)) continue;
+    const k = st.uid != null ? `u${st.uid}` : `${st.lat.toFixed(4)},${st.lon.toFixed(4)}`;
+    if (!lihat.has(k)) lihat.set(k, st);
+  }
+  return [...lihat.values()];
+}

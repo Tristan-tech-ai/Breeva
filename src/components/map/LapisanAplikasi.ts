@@ -4,7 +4,7 @@ import { fieldBase } from '../../lib/field/source';
 import type { FireFile, FirePoint } from '../../lib/nasional/firms';
 import { gabungApi, gayaApi, radiusApi, radiusGabung, selGabung, teksApi, teksGabung } from '../../lib/nasional/petaPantau';
 import { catatanSekali } from '../../lib/map/catatanSekali';
-import { ikonUsulan, kalimatTitik, kmAntara, kotaLapisan, LEGENDA_BUTA, slugBerisiTitik, slugButa, slugDenganStasiun, slugTerukur, teksTitikKota, usulanUntukZoom, ZOOM_TITIK_KOTA, type DataTitik, type KotaTitik, type Usulan } from '../../lib/sensorTitik';
+import { BBOX_INDONESIA, gabungStasiun, ikonUsulan, kalimatTitik, petakBbox, PETAK_STASIUN, kmAntara, kotaLapisan, LEGENDA_BUTA, slugBerisiTitik, slugButa, slugDenganStasiun, slugTerukur, teksTitikKota, usulanUntukZoom, ZOOM_TITIK_KOTA, type DataTitik, type KotaTitik, type Usulan } from '../../lib/sensorTitik';
 import { bacaIndeks, type KabKota, type KabKotaIndeks } from '../../lib/nasional/kabkota';
 
 /**
@@ -134,8 +134,11 @@ export function useTitikSensorPeta(map: L.Map | null, enabled: boolean) {
       fetch(`${base}/v/nasional/latar.json`).then((r) => (r.ok ? r.json() : null)),
       fetch(`${base}/v/nasional/kabkota_indeks.json`).then((r) => (r.ok ? r.json() : null)),
       fetch(`${base}/v/nasional/butuh_sensor.json`).then((r) => (r.ok ? r.json() : null)),
-      // every monitoring station in and around Indonesia (WAQI, through the proxy): a place with one is not blind
-      fetch('/api/vayu/waqi-stations?bbox=-11.5,94.5,6.5,141.5').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      // every monitoring station in and around Indonesia (WAQI, through the proxy, tile by tile: one wide box comes back
+      // thinned): a place with one is not blind
+      Promise.all(petakBbox(BBOX_INDONESIA, PETAK_STASIUN[0], PETAK_STASIUN[1]).map((b) => fetch(`/api/vayu/waqi-stations?bbox=${b}`)
+        .then((r) => (r.ok ? r.json() : null)).then((j: { data?: Array<{ lat: number; lon: number; uid?: number; station?: { name?: string } }> } | null) => j?.data ?? null).catch(() => null)))
+        .then((daftar) => ({ data: gabungStasiun(daftar) })),
     ]).then(([fc, latar, indeks, butuh, waqi]: [GeoJSON.FeatureCollection | null, { wilayah?: Record<string, { t: string }> } | null, KabKotaIndeks | null, { kabkota?: Array<{ peringkat: number; slug: string; alasan?: string }> } | null, { data?: Array<{ lat: number; lon: number; station?: { name?: string } }> } | null]) => {
       if (batal || !fc || !latar?.wilayah) return null;
       const kab = bacaIndeks(indeks);
