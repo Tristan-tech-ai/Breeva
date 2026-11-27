@@ -160,7 +160,7 @@ interface LeafletMapProps {
   /** Walking routes computed on the device: taps set start and destination (static field regions). */
   walkRouting?: boolean;
   onWalkRouting?: (s: WalkRoutingState) => void;
-  /** Mode of the on-device routes: walking (NO2 Pareto) or motor (own + imposed exposure, zona napas). */
+  /** Mode of the on-device routes: walking (least exhaust within a time budget) or motor (own + imposed exposure, zona napas). */
   routeMode?: 'walk' | 'motor';
   /** Route link (?rute=) played once when routing starts. */
   routeLink?: RouteLink | null;

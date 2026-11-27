@@ -28,13 +28,16 @@ export function no2AtHour(no2Now: Float64Array, exhaustNow: Float64Array, exhaus
   return out;
 }
 
-/** Mean exhaust along a route's edges (time-weighted with the route's own speed), ug/m3. */
-export function meanAlong(g: Pick<WalkGraph, 'lenDm'>, edges: readonly number[], timeS: number, lengthM: number, x: Float64Array): number {
+/**
+ * Mean exhaust along a route's edges (time-weighted with the route's own speed), ug/m3. An edge without a field road
+ * counts as `missing` (walking: that hour's median road, as in the route's own mean; motor: 0).
+ */
+export function meanAlong(g: Pick<WalkGraph, 'lenDm'>, edges: readonly number[], timeS: number, lengthM: number, x: Float64Array, missing = 0): number {
   let dose = 0, t = 0;
   for (const e of edges) {
     const tS = (g.lenDm[e] / 10) * (timeS / Math.max(1, lengthM));
     t += tS;
-    dose += (Number.isFinite(x[e]) ? x[e] : 0) * tS;
+    dose += (Number.isFinite(x[e]) ? x[e] : missing) * tS;
   }
   return t > 0 ? dose / t : 0;
 }

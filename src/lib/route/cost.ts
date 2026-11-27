@@ -3,7 +3,8 @@
  *
  *   c_e = t_e * (1 + w * E_e + lambda * eps_m * H_e)
  *
- * E_e own exposure of the edge (field NO2 over the region's median), H_e harga hirup (1 = the region's median road),
+ * E_e own exposure of the edge (motor: field NO2 over the region's median; walking routes use the road's vehicle
+ * exhaust with a time budget instead, walkExhaust.ts, T7), H_e harga hirup (1 = the region's median road),
  * eps_m the mode's emission share (0 walking and cycling). Motor modes also keep the zona napas: no local street
  * (residential, living_street, service, unclassified gang) except inside the access zone around the start and the
  * destination, and never footways, paths or steps; during school hours also no edge past a school that is not the trip's

@@ -178,6 +178,68 @@ export function pareto(g: WalkGraph, s: number, t: number, o: SearchOptions & { 
   return [...found.values()].sort((x, y) => x.timeS - y.timeS);
 }
 
+/**
+ * Share of extra time a walking route may take over the fastest one to breathe less exhaust (T7, 27 Nov 2026). Chosen by
+ * a rule written before the bench ran: the smallest of 0.10, 0.15, 0.25, 0.35, 0.50 that reaches 85 % of the median dose
+ * reduction of 0.50 in both regions (200 seeded pairs each on the published field, t7_bangku_2026-11-27.json).
+ */
+export const WALK_BUDGET = 0.35;
+/** An alternative is offered only when its exposure is at least this share below the fastest route's. */
+export const MIN_GAIN = 0.05;
+
+export interface BudgetOptions extends SearchOptions {
+  /** Extra time allowed over the fastest route, as a share of its time (0.25 = a quarter longer). */
+  budget?: number;
+  /** Heaviest exposure weight tried: its route is close to the least exposure there is. */
+  wMax?: number;
+  /** Least exposure gain against the fastest route for a route to be offered. */
+  minGain?: number;
+  /** Searches spent on finding the last supported route inside the budget. */
+  steps?: number;
+}
+
+/**
+ * Walking routes by time and exposure (T7): the fastest route, and the supported Pareto route with the least exposure
+ * whose time stays within (1 + budget) x the fastest time, plus one supported route between the two when it is clearly
+ * different from both. Sorted fastest first, so the last one is the cleanest. Only the fastest comes back when no route
+ * inside the budget breathes at least minGain less.
+ *
+ * Why not pareto() with a fixed weight: a fixed weight fixes the exchange rate between time and exposure, so on one trip
+ * it stops at the first lane and on another it doubles the walk. The budget says what the walker is asked to give (time)
+ * and the search spends it where it buys the most. The last supported route inside the budget is found by weight
+ * bisection between the fastest route and the one at wMax (each step lands on a supported route between the two).
+ */
+export function withinBudget(g: WalkGraph, s: number, t: number, o: BudgetOptions): RouteResult[] {
+  const budget = o.budget ?? WALK_BUDGET, wMax = o.wMax ?? 64, minGain = o.minGain ?? MIN_GAIN, steps = o.steps ?? 10;
+  const fast = route(g, s, t, 0, o);
+  if (!fast) return [];
+  const limit = fast.timeS * (1 + budget);
+  const key = (r: RouteResult) => r.edges.join(',');
+  /** The supported route between a and b at their own exchange rate, or null when there is none. */
+  const between = (a: RouteResult, b: RouteResult): RouteResult | null => {
+    if (!(a.exposure > b.exposure && b.timeS > a.timeS)) return null;
+    const ws = (b.timeS - a.timeS) / (a.exposure - b.exposure);
+    const r = route(g, s, t, ws, o)!;
+    return r.timeS + ws * r.exposure < a.timeS + ws * a.exposure - 1e-9 ? r : null;
+  };
+  let hi = route(g, s, t, wMax, o)!;
+  let clean = fast;
+  if (hi.timeS <= limit) clean = hi;
+  else {
+    for (let k = 0; k < steps; k++) {
+      const r = between(clean, hi);
+      if (!r) break;
+      if (r.timeS <= limit) clean = r; else hi = r;
+    }
+  }
+  if (key(clean) === key(fast) || !(clean.exposure <= fast.exposure * (1 - minGain))) return [fast];
+  const mid = between(fast, clean);
+  // one alternative, only when it is a real third choice: clearly less exposure than the fastest, clearly more than the
+  // cleanest, and at least a minute quicker than the cleanest
+  const useMid = mid && mid.exposure <= fast.exposure * (1 - minGain) && mid.exposure >= clean.exposure * (1 + minGain) && clean.timeS - mid.timeS >= 60;
+  return useMid ? [fast, mid, clean] : [fast, clean];
+}
+
 /** Grid index of node positions (about 110 m cells) for snapping a point to its nearest node. */
 export class NodeIndex {
   private readonly cells = new Map<number, number[]>();

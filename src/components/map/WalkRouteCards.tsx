@@ -142,7 +142,7 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = 
           <p>
             {mode === 'motor'
               ? 'Motor: biaya rute menghitung paparan diri dan paparan yang ditimbulkan bagi warga sekitar (harga hirup); gang dan jalan lingkungan hanya dipakai dekat titik berangkat dan tujuan (zona napas); pada jam masuk 06.30–07.30 dan pulang 12.00–13.30 jalan kecil di depan sekolah juga dihindari. Rute darurat paling cepat dan tidak memberi poin, tetapi tetap menjauhi gang.'
-              : 'Asap kendaraan (gas buang dan jelaga knalpot) paling pekat di jalan ramai dan cepat menipis begitu menjauh, jadi rute dipilih menurut asap kendaraan yang dihirup.'}
+              : 'Asap kendaraan (gas buang dan jelaga knalpot) paling pekat di jalan ramai dan cepat menipis begitu menjauh, jadi rute dipilih menurut asap kendaraan yang dihirup. Rute paling sedikit asap dicari di antara rute yang paling lama 35% lebih lama dari rute tercepat, dan hanya tampil bila asapnya sedikitnya 5% lebih sedikit.'}
           </p>
           <p>Udara latar kota (PM2,5 sekitar {Math.round(state.cards[0].pm25)} µg/m³, dari pembakaran dan asap jauh) sama di semua rute dan tidak bisa dihindari lewat pilihan jalan.</p>
           <p>Angka adalah perkiraan model per ruas pada jam data peta, bukan pengukuran di tempat. {state.status}</p>

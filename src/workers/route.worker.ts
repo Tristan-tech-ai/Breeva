@@ -2,8 +2,9 @@
 /**
  * Routing off the main thread. Messages:
  *   { id, type: 'init', base, region: { name, geometry } }  loads graph + field (Cache API, so it also works offline)
- *   { id, type: 'route', from: {lat, lng}, to: {lat, lng}, mode?, departLocal? } Pareto walking routes (exposure = NO2
- *     of the field roads), or motor routes with the zona napas and, when the departure (local "HH:MM", default now)
+ *   { id, type: 'route', from: {lat, lng}, to: {lat, lng}, mode?, departLocal? } walking routes by time and vehicle
+ *     exhaust (the fastest, and the least exhaust within the time budget, router.ts withinBudget; exposure = the exhaust
+ *     of the field roads, the number the map colours), or motor routes with the zona napas and, when the departure (local "HH:MM", default now)
  *     falls in school hours, the school zone; a departure later than now uses the exhaust forecast of that hour
  *     (BXF1, src/lib/field/forecast.ts) and a departure now also reports the next hours of the cleanest route, in a
  *     second reply { id, type: 'soon', ok: true, soon } sent after the routes (the route reply says soonPending)
@@ -12,7 +13,7 @@
 import { sameRoute } from '../lib/route/sameRoute';
 import { decodeShapes } from '../lib/route/shapeCodec';
 import { WalkGraph } from '../lib/route/walkGraph';
-import { NodeIndex, pareto, route, type RouteResult } from '../lib/route/router';
+import { NodeIndex, route, type RouteResult } from '../lib/route/router';
 import { motorNode } from '../lib/route/cost';
 import { localTimeToMs, motorRouteAt, schoolEdges, type SchoolFile, type SchoolZone } from '../lib/route/schoolZone';
 import { HargaIndex } from '../lib/field/harga';
@@ -23,8 +24,8 @@ import { decodeCell } from '../lib/field/cells';
 import { decodeExhaust, pickForecast, SOON_HOURS, type ForecastEntry } from '../lib/field/forecast';
 import { edgeExhaust, forecastPrefetchUrl, meanAlong, no2AtHour, startThenWait, type SoonHour } from '../lib/route/departForecast';
 import { fieldMedian } from '../lib/route/fieldMedian';
+import { exhaustRef, walkExhaust, walkRoutes } from '../lib/route/walkExhaust';
 
-const SPEED = 1.3; // m/s
 let graph: WalkGraph | null = null;
 let index: NodeIndex | null = null;
 let no2: Float64Array | null = null;
@@ -71,7 +72,7 @@ async function init(base: string, region: { name: string; geometry: string }, me
   // the shapes only after everything a walking route needs, so they do not share the link with it
   shapesReady = cachedBytes(files.shapesUrl, { cacheFirst: true }).then((b) => g.attachShapes(decodeShapes(b, g)), (e) => console.warn('[route] shapes', e));
   graph = g; index = new NodeIndex(g); no2 = n; pm25 = p; exhaust = x; harga = hi ? h : null; run = manifest.run;
-  fieldMedian(n); // computed while loading, so the first route does not pay for it
+  fieldMedian(n); exhaustRef(x); // computed while loading, so the first route does not pay for it
   schoolFile = sf; schools = null;
   fieldRoot = `${base}/v/${region.name}/${manifest.run}`;
   forecasts = Array.isArray(manifest.forecast_runs) ? manifest.forecast_runs : [];
@@ -109,6 +110,10 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
   const s = index.nearest(from.lat, from.lng, 500, keep), t = index.nearest(to.lat, to.lng, 500, keep);
   if (s < 0 || t < 0) throw new Error('titik di luar jaringan jalan wilayah ini');
   const nArr = field?.no2 ?? no2, pArr = pm25, hArr = harga, xArr = field?.exhaust ?? exhaust;
+  // exhaust breathed on an edge: for a walker an edge without a field road counts as the median road, in the search and
+  // in the card's dose alike (walkExhaust.ts); motor cards keep 0 there, as before
+  const walkX = mode !== 'motor' && xArr ? walkExhaust(xArr) : null;
+  const xOf = (e: number) => (walkX ? walkX(e) : xArr && Number.isFinite(xArr[e]) ? xArr[e] : 0);
   let routes: Array<RouteResult & { kind?: 'dua-angka' | 'darurat'; school?: 'off' | 'kept' | 'lifted-near-ends';
     schoolCost?: { extraM: number; extraS: number; changed: boolean }; sameAsFastest?: boolean }>;
   if (mode === 'motor') {
@@ -132,8 +137,11 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
       : [{ ...emer.route, kind: 'darurat', school: emer.school, schoolCost: emer.school !== 'off' ? costOf(emer.route, true) : undefined },
         { ...two.route, kind: 'dua-angka', school: two.school, schoolCost: twoCost }];
   } else {
-    const medN = fieldMedian(nArr); // once per field array, not per request (F3-20)
-    routes = pareto(g, s, t, { speed: SPEED, exposureOf: (e) => (Number.isFinite(nArr[e]) ? nArr[e] / medN : 1) });
+    // T7 (27 Nov): the walker's exposure is the vehicle exhaust of the road, the number the map colours and the card
+    // compares. It was total NO2 (background + exhaust, stored in whole ug/m3): a lane and a busier street differed by
+    // 10-20 %, so the route called cleanest kept to the street. Edges without a field road (paths) count as the median.
+    if (!xArr) throw new Error('router not initialised');
+    routes = walkRoutes(g, s, t, xArr);
   }
   const raw = routes;
   const out = routes.map((r) => {
@@ -144,7 +152,7 @@ function routeBetween(from: { lat: number; lng: number }, to: { lat: number; lng
       tSum += tS;
       pmDose += (Number.isFinite(pArr[e]) ? pArr[e] : 0) * tS;
       no2Dose += (Number.isFinite(nArr[e]) ? nArr[e] : 0) * tS;
-      xDose += (xArr && Number.isFinite(xArr[e]) ? xArr[e] : 0) * tS;
+      xDose += xOf(e) * tS;
       hDose += (hArr && Number.isFinite(hArr[e]) ? hArr[e] : 1) * tS;
     });
     coords.push(...coordsOf(g, r));
@@ -191,7 +199,10 @@ async function routeAt(from: { lat: number; lng: number }, to: { lat: number; ln
     soonPlan = async () => {
       const soon: SoonHour[] = [];
       for (const e of soonHours) {
-        try { soon.push({ local_hour: e.local_hour, ahead: e.ahead, exhMean: meanAlong(g, last.edges, last.timeS, last.lengthM, await exhaustOf(e)) }); } catch { /* skip that hour */ }
+        try {
+          const xh = await exhaustOf(e);
+          soon.push({ local_hour: e.local_hour, ahead: e.ahead, exhMean: meanAlong(g, last.edges, last.timeS, last.lengthM, xh, mode === 'motor' ? 0 : exhaustRef(xh)) });
+        } catch { /* skip that hour */ }
       }
       return soon;
     };
