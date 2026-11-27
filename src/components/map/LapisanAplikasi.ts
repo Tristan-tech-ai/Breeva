@@ -4,7 +4,7 @@ import { fieldBase } from '../../lib/field/source';
 import type { FireFile, FirePoint } from '../../lib/nasional/firms';
 import { gabungApi, gayaApi, radiusApi, radiusGabung, selGabung, teksApi, teksGabung } from '../../lib/nasional/petaPantau';
 import { catatanSekali } from '../../lib/map/catatanSekali';
-import { ikonUsulan, kalimatTitik, kmAntara, kotaLapisan, LEGENDA_BUTA, slugButa, slugTerukur, teksTitikKota, usulanUntukZoom, ZOOM_TITIK_KOTA, type DataTitik, type KotaTitik, type Usulan } from '../../lib/sensorTitik';
+import { ikonUsulan, kalimatTitik, kmAntara, kotaLapisan, LEGENDA_BUTA, slugButa, slugDenganStasiun, slugTerukur, teksTitikKota, usulanUntukZoom, ZOOM_TITIK_KOTA, type DataTitik, type KotaTitik, type Usulan } from '../../lib/sensorTitik';
 import { bacaIndeks, type KabKota, type KabKotaIndeks } from '../../lib/nasional/kabkota';
 
 /**
@@ -134,15 +134,25 @@ export function useTitikSensorPeta(map: L.Map | null, enabled: boolean) {
       fetch(`${base}/v/nasional/latar.json`).then((r) => (r.ok ? r.json() : null)),
       fetch(`${base}/v/nasional/kabkota_indeks.json`).then((r) => (r.ok ? r.json() : null)),
       fetch(`${base}/v/nasional/butuh_sensor.json`).then((r) => (r.ok ? r.json() : null)),
-    ]).then(([fc, latar, indeks, butuh]: [GeoJSON.FeatureCollection | null, { wilayah?: Record<string, { t: string }> } | null, KabKotaIndeks | null, { kabkota?: Array<{ peringkat: number; slug: string; alasan?: string }> } | null]) => {
+      // every monitoring station in and around Indonesia (WAQI, through the proxy): a place with one is not blind
+      fetch('/api/vayu/waqi-stations?bbox=-11.5,94.5,6.5,141.5').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([fc, latar, indeks, butuh, waqi]: [GeoJSON.FeatureCollection | null, { wilayah?: Record<string, { t: string }> } | null, KabKotaIndeks | null, { kabkota?: Array<{ peringkat: number; slug: string; alasan?: string }> } | null, { data?: Array<{ lat: number; lon: number; station?: { name?: string } }> } | null]) => {
       if (batal || !fc || !latar?.wilayah) return null;
+      const kab = bacaIndeks(indeks);
+      const stasiun = (waqi?.data ?? []).filter((st) => Number.isFinite(st.lat) && Number.isFinite(st.lon));
+      const berStasiun = slugDenganStasiun(kab, stasiun);
       const buta = slugButa(latar.wilayah), terukur = slugTerukur(latar.wilayah);
+      for (const sl of berStasiun) { buta.delete(sl); if (latar.wilayah[sl] && !['kota-bogor', 'kabupaten-badung', 'kota-denpasar'].includes(sl)) terukur.add(sl); }
+      for (const st of stasiun) {
+        L.circleMarker([st.lat, st.lon], { renderer: kanvasTitik, radius: 5, color: '#0c4a6e', weight: 1.5, fillColor: '#38bdf8', fillOpacity: 0.95 })
+          .bindTooltip(`Stasiun pemantau yang ada: ${st.station?.name ?? 'WAQI'} (belum dipakai angka peta)`).addTo(g);
+      }
       const slugOf = (f: GeoJSON.Feature) => String((f.properties as { s?: string } | null)?.s);
       // Leaflet hands these options to every polygon it makes: one canvas in the fog pane, no events
       L.geoJSON(fc, { filter: (f) => buta.has(slugOf(f)), renderer: kanvasKabut, pane: PANE, interactive: false, style: { stroke: false, fillColor: '#f97316', fillOpacity: 0.22 } } as L.GeoJSONOptions).addTo(g);
       L.geoJSON(fc, { filter: (f) => terukur.has(slugOf(f)), renderer: kanvasKabut, pane: PANE, interactive: false, style: { stroke: false, fillColor: '#16a34a', fillOpacity: 0.18 } } as L.GeoJSONOptions).addTo(g);
       const urutan = new Map((butuh?.kabkota ?? []).map((k) => [k.slug, k] as const));
-      return { buta, urutan, kab: bacaIndeks(indeks) };
+      return { buta, urutan, kab };
     }).catch(() => null);
 
     // the kab/kota centres wait for the city points, so a centre near a city with its own points is left out

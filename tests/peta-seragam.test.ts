@@ -7,7 +7,7 @@ import { opacityFor, weightFor } from '../src/lib/roadColors';
 import { stationAsBadge, STATION_BADGE_ZOOM } from '../src/lib/stationBbox';
 import { firstFixView } from '../src/stores/mapStore';
 import { sudahDibaca, tandaiDibaca } from '../src/lib/map/catatanDibaca';
-import { ikonUsulan, kmAntara, LEGENDA_BUTA, SLUG_KABUT_PILOT, slugButa, slugTerukur, TOP_NASIONAL, usulanUntukZoom, ZOOM_SEMUA_KABKOTA, ZOOM_TITIK_KOTA, type Usulan } from '../src/lib/sensorTitik';
+import { ikonUsulan, kmAntara, LEGENDA_BUTA, SLUG_KABUT_PILOT, slugButa, slugDenganStasiun, slugTerukur, TOP_NASIONAL, usulanUntukZoom, ZOOM_SEMUA_KABKOTA, ZOOM_TITIK_KOTA, type Usulan } from '../src/lib/sensorTitik';
 
 // Tristan, 27 Nov 2026 (T6): the pilot regions looked like a different map, the map jumped back on its own, the note on
 // national roads said nothing to a user, WAQI stations could not be seen, and proposed sensor points read as stations.
@@ -117,7 +117,7 @@ describe('blind areas, not pins that read as stations (M-U14)', () => {
 
   it('the legend names the three things on the layer in plain words', () => {
     expect(LEGENDA_BUTA).toMatch(/peta buta/);
-    expect(LEGENDA_BUTA).toMatch(/sensor yang ada/);
+    expect(LEGENDA_BUTA).toMatch(/sensor dan stasiun yang ada/);
     expect(LEGENDA_BUTA).toMatch(/usulan sensor baru/);
     const layer = readFileSync('src/components/map/LapisanAplikasi.ts', 'utf8');
     expect(layer).toMatch(/ikonUsulan\(u\.teks/);
@@ -163,5 +163,16 @@ describe('covered places green, proposals that do not pile up, one in every blin
     const layer = readFileSync('src/components/map/LapisanAplikasi.ts', 'utf8');
     expect(layer).toMatch(/fillColor: '#16a34a'/);
     expect(layer).toMatch(/butuh_sensor\.json/);
+  });
+});
+
+describe('a place with a station is not blind (T9)', () => {
+  it('kab/kota with a station within 25 km of the centre count as reached', () => {
+    const kab = [{ slug: 'kota-a', lat: -6.2, lon: 106.8 }, { slug: 'kab-b', lat: -7.5, lon: 110.0 }];
+    expect([...slugDenganStasiun(kab, [{ lat: -6.3, lon: 106.85 }])]).toEqual(['kota-a']); // about 12 km
+    expect(slugDenganStasiun(kab, [{ lat: -6.6, lon: 107.2 }]).size).toBe(0); // about 63 km
+    expect(slugDenganStasiun(kab, []).size).toBe(0);
+    expect(LEGENDA_BUTA).toMatch(/sensor warga atau stasiun/);
+    expect(readFileSync('src/components/map/LapisanAplikasi.ts', 'utf8')).toMatch(/waqi-stations\?bbox=-11\.5,94\.5,6\.5,141\.5/);
   });
 });

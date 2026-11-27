@@ -132,7 +132,7 @@ export function slugButa(wilayah: Record<string, { t: string }>, kecuali: readon
 }
 
 /** The one line that says what the layer shows. */
-export const LEGENDA_BUTA = 'Hijau: sudah ada alat ukur di dekatnya. Jingga: peta buta. Titik biru: sensor yang ada. Lingkaran putus-putus: usulan sensor baru (angka = urutan prioritas).';
+export const LEGENDA_BUTA = 'Hijau: sudah ada alat ukur di dekatnya (sensor warga atau stasiun). Jingga: peta buta. Titik biru: sensor dan stasiun yang ada. Lingkaran putus-putus: usulan sensor baru (angka = urutan prioritas).';
 
 /** T9 (Tristan, 27 Nov): covered places are green, not left white. Kab/kota with a sensor within 25 km ('terukur'). */
 export function slugTerukur(wilayah: Record<string, { t: string }>, kecuali: readonly string[] = SLUG_KABUT_PILOT): Set<string> {
@@ -191,4 +191,16 @@ export function usulanUntukZoom(daftar: readonly Usulan[], zoom: number): Penand
 export function kmAntara(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
   const r = Math.PI / 180;
   return 6371 * Math.hypot((b.lon - a.lon) * r * Math.cos(((a.lat + b.lat) / 2) * r), (b.lat - a.lat) * r);
+}
+
+
+/**
+ * T9 (Tristan, 27 Nov: "what is already reached by a station or a sensor should be green"): kab/kota whose centre has a
+ * monitoring station (WAQI: government and other networks) within `km`. The map's numbers do not use those stations
+ * (licence), but the place is not blind: someone measures there.
+ */
+export function slugDenganStasiun(kab: ReadonlyArray<{ slug: string; lat: number; lon: number }>, stasiun: ReadonlyArray<{ lat: number; lon: number }>, km = 25): Set<string> {
+  const out = new Set<string>();
+  for (const k of kab) if (stasiun.some((st) => kmAntara(st, k) <= km)) out.add(k.slug);
+  return out;
 }
