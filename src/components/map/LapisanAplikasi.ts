@@ -4,7 +4,7 @@ import { fieldBase } from '../../lib/field/source';
 import type { FireFile, FirePoint } from '../../lib/nasional/firms';
 import { gabungApi, gayaApi, radiusApi, radiusGabung, selGabung, teksApi, teksGabung } from '../../lib/nasional/petaPantau';
 import { catatanSekali } from '../../lib/map/catatanSekali';
-import { ikonUsulan, kalimatTitik, kmAntara, kotaLapisan, LEGENDA_BUTA, slugButa, slugDenganStasiun, slugTerukur, teksTitikKota, usulanUntukZoom, ZOOM_TITIK_KOTA, type DataTitik, type KotaTitik, type Usulan } from '../../lib/sensorTitik';
+import { ikonUsulan, kalimatTitik, kmAntara, kotaLapisan, LEGENDA_BUTA, slugBerisiTitik, slugButa, slugDenganStasiun, slugTerukur, teksTitikKota, usulanUntukZoom, ZOOM_TITIK_KOTA, type DataTitik, type KotaTitik, type Usulan } from '../../lib/sensorTitik';
 import { bacaIndeks, type KabKota, type KabKotaIndeks } from '../../lib/nasional/kabkota';
 
 /**
@@ -140,7 +140,9 @@ export function useTitikSensorPeta(map: L.Map | null, enabled: boolean) {
       if (batal || !fc || !latar?.wilayah) return null;
       const kab = bacaIndeks(indeks);
       const stasiun = (waqi?.data ?? []).filter((st) => Number.isFinite(st.lat) && Number.isFinite(st.lon));
+      // reached: a station within 25 km of the centre, or inside the kab/kota itself (big kabupaten, T9)
       const berStasiun = slugDenganStasiun(kab, stasiun);
+      for (const sl of slugBerisiTitik(fc as unknown as Parameters<typeof slugBerisiTitik>[0], stasiun)) berStasiun.add(sl);
       const buta = slugButa(latar.wilayah), terukur = slugTerukur(latar.wilayah);
       for (const sl of berStasiun) { buta.delete(sl); if (latar.wilayah[sl] && !['kota-bogor', 'kabupaten-badung', 'kota-denpasar'].includes(sl)) terukur.add(sl); }
       for (const st of stasiun) {
@@ -151,6 +153,8 @@ export function useTitikSensorPeta(map: L.Map | null, enabled: boolean) {
       // Leaflet hands these options to every polygon it makes: one canvas in the fog pane, no events
       L.geoJSON(fc, { filter: (f) => buta.has(slugOf(f)), renderer: kanvasKabut, pane: PANE, interactive: false, style: { stroke: false, fillColor: '#f97316', fillOpacity: 0.22 } } as L.GeoJSONOptions).addTo(g);
       L.geoJSON(fc, { filter: (f) => terukur.has(slugOf(f)), renderer: kanvasKabut, pane: PANE, interactive: false, style: { stroke: false, fillColor: '#16a34a', fillOpacity: 0.18 } } as L.GeoJSONOptions).addTo(g);
+      // and the reach of each station itself (10 km), also where its kab/kota stays orange elsewhere
+      for (const st of stasiun) L.circle([st.lat, st.lon], { renderer: kanvasKabut, pane: PANE, radius: 10000, stroke: false, fillColor: '#16a34a', fillOpacity: 0.25, interactive: false }).addTo(g);
       const urutan = new Map((butuh?.kabkota ?? []).map((k) => [k.slug, k] as const));
       return { buta, urutan, kab };
     }).catch(() => null);

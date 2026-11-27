@@ -7,7 +7,7 @@ import { opacityFor, weightFor } from '../src/lib/roadColors';
 import { stationAsBadge, STATION_BADGE_ZOOM } from '../src/lib/stationBbox';
 import { firstFixView } from '../src/stores/mapStore';
 import { sudahDibaca, tandaiDibaca } from '../src/lib/map/catatanDibaca';
-import { ikonUsulan, kmAntara, LEGENDA_BUTA, SLUG_KABUT_PILOT, slugButa, slugDenganStasiun, slugTerukur, TOP_NASIONAL, usulanUntukZoom, ZOOM_SEMUA_KABKOTA, ZOOM_TITIK_KOTA, type Usulan } from '../src/lib/sensorTitik';
+import { ikonUsulan, kmAntara, LEGENDA_BUTA, SLUG_KABUT_PILOT, slugBerisiTitik, slugButa, slugDenganStasiun, slugTerukur, titikDalamPoligon, TOP_NASIONAL, usulanUntukZoom, ZOOM_SEMUA_KABKOTA, ZOOM_TITIK_KOTA, type Usulan } from '../src/lib/sensorTitik';
 
 // Tristan, 27 Nov 2026 (T6): the pilot regions looked like a different map, the map jumped back on its own, the note on
 // national roads said nothing to a user, WAQI stations could not be seen, and proposed sensor points read as stations.
@@ -174,5 +174,22 @@ describe('a place with a station is not blind (T9)', () => {
     expect(slugDenganStasiun(kab, []).size).toBe(0);
     expect(LEGENDA_BUTA).toMatch(/sensor warga atau stasiun/);
     expect(readFileSync('src/components/map/LapisanAplikasi.ts', 'utf8')).toMatch(/waqi-stations\?bbox=-11\.5,94\.5,6\.5,141\.5/);
+  });
+});
+
+describe('a kab/kota with its own station is green, however big (T9)', () => {
+  const kotak = (x0: number, y0: number, x1: number, y1: number) => ({ type: 'Polygon', coordinates: [[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]] });
+  it('point in polygon, also a MultiPolygon and a hole', () => {
+    expect(titikDalamPoligon(1, 1, kotak(0, 0, 2, 2))).toBe(true);
+    expect(titikDalamPoligon(3, 1, kotak(0, 0, 2, 2))).toBe(false);
+    expect(titikDalamPoligon(5, 5, { type: 'MultiPolygon', coordinates: [kotak(0, 0, 2, 2).coordinates, kotak(4, 4, 6, 6).coordinates] })).toBe(true);
+    const berlubang = { type: 'Polygon', coordinates: [kotak(0, 0, 4, 4).coordinates[0], kotak(1, 1, 3, 3).coordinates[0]] };
+    expect(titikDalamPoligon(2, 2, berlubang)).toBe(false);
+    expect(titikDalamPoligon(0.5, 0.5, berlubang)).toBe(true);
+  });
+  it('a station 60 km from the centre of its big kabupaten still makes it reached', () => {
+    const fc = { features: [{ properties: { s: 'kab-besar' }, geometry: kotak(119, -2, 121, 0) }, { properties: { s: 'kab-lain' }, geometry: kotak(121, -2, 122, 0) }] };
+    expect([...slugBerisiTitik(fc, [{ lat: -0.5, lon: 119.9 }])]).toEqual(['kab-besar']);
+    expect(slugDenganStasiun([{ slug: 'kab-besar', lat: -1, lon: 120.4 }], [{ lat: -0.5, lon: 119.9 }]).size).toBe(0); // the old rule missed it
   });
 });

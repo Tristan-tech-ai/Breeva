@@ -204,3 +204,32 @@ export function slugDenganStasiun(kab: ReadonlyArray<{ slug: string; lat: number
   for (const k of kab) if (stasiun.some((st) => kmAntara(st, k) <= km)) out.add(k.slug);
   return out;
 }
+
+
+/** Ray casting over every ring of a Polygon or MultiPolygon (holes by the even-odd rule). Coordinates are [lon, lat]. */
+export function titikDalamPoligon(lon: number, lat: number, geom: { type: string; coordinates: unknown }): boolean {
+  const polys = (geom.type === 'Polygon' ? [geom.coordinates] : geom.type === 'MultiPolygon' ? geom.coordinates : []) as number[][][][];
+  let dalam = false;
+  for (const poly of polys) for (const ring of poly) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i], [xj, yj] = ring[j];
+      if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) dalam = !dalam;
+    }
+  }
+  return dalam;
+}
+
+/**
+ * T9 (Tristan, 27 Nov: "places that already have a sensor are still orange"): kab/kota whose own polygon holds a station
+ * or sensor. Checking only 25 km from the centre left big kabupaten orange around their own station (Palu, Kendari).
+ */
+export function slugBerisiTitik(fc: { features: Array<{ properties: unknown; geometry: { type: string; coordinates: unknown } | null }> },
+  titik: ReadonlyArray<{ lat: number; lon: number }>): Set<string> {
+  const out = new Set<string>();
+  for (const f of fc.features) {
+    const slug = String((f.properties as { s?: string } | null)?.s ?? '');
+    if (!slug || !f.geometry) continue;
+    if (titik.some((t) => titikDalamPoligon(t.lon, t.lat, f.geometry!))) out.add(slug);
+  }
+  return out;
+}
