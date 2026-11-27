@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Wind, ShieldCheck, ShieldAlert, ChevronUp, ChevronDown } from 'lucide-react';
-import { CIG_UG, riskBand } from '../../lib/exposure';
+import { riskBand } from '../../lib/exposure';
 
 interface LiveExposureTrackerProps {
   /** Current AQI value (updates in real-time) */
@@ -51,7 +51,6 @@ export default function LiveExposureTracker({ currentAQI, isPaused }: LiveExposu
   // set when a tick starts (not during render); the first tick of an interval counts from its start
   const lastTickRef = useRef<number | null>(null);
   const [displayDose, setDisplayDose] = useState(0);
-  const [displayCig, setDisplayCig] = useState(0);
 
   // Accumulate dose every second based on current AQI
   useEffect(() => {
@@ -69,9 +68,7 @@ export default function LiveExposureTracker({ currentAQI, isPaused }: LiveExposu
       cumulativeDoseRef.current += doseDelta;
 
       setDisplayDose(cumulativeDoseRef.current);
-      // Unified cigarette benchmark = CIG_UG (660 µg PM2.5 ≈ 1 cig, Pope 2009) — shared with the
-      // /paparan calculator + RouteCard + WalkComplete so the whole app reports ONE number.
-      setDisplayCig(cumulativeDoseRef.current / CIG_UG);
+      // the walk shows micrograms breathed (lib/exposure keeps the cigarette benchmark for /paparan)
     }, 2000);
 
     return () => clearInterval(interval);
@@ -92,7 +89,7 @@ export default function LiveExposureTracker({ currentAQI, isPaused }: LiveExposu
         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
           Paparan langsung
         </span>
-        <span className="ml-auto text-[10px] text-gray-400">Sampling air quality…</span>
+        <span className="ml-auto text-[10px] text-gray-400">Membaca kualitas udara…</span>
       </div>
     );
   }
@@ -115,8 +112,9 @@ export default function LiveExposureTracker({ currentAQI, isPaused }: LiveExposu
         <span className={`text-[10px] font-bold ${cfg.color} uppercase tracking-wider`}>
           Paparan langsung
         </span>
+        {/* the PM2.5 breathed so far, in micrograms (a cigarette figure of "<0.01" told a walker nothing, Tristan 27 Nov) */}
         <span className={`ml-auto text-xs font-bold tabular-nums ${cfg.color}`}>
-          {displayCig < 0.01 ? '<0.01' : displayCig.toFixed(2)} 🚬
+          {displayDose.toLocaleString('id-ID', { maximumFractionDigits: 1 })} µg PM2,5 dihirup
         </span>
         {expanded ? <ChevronDown size={12} className="text-gray-400" /> : <ChevronUp size={12} className="text-gray-400" />}
       </button>
@@ -134,15 +132,15 @@ export default function LiveExposureTracker({ currentAQI, isPaused }: LiveExposu
             <div className="px-3 py-2.5 grid grid-cols-3 gap-2 bg-white/50 dark:bg-gray-900/30">
               <div className="text-center">
                 <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">
-                  {pm25Now.toFixed(1)}
+                  {pm25Now.toLocaleString('id-ID', { maximumFractionDigits: 1 })}
                 </p>
-                <p className="text-[9px] text-gray-500 dark:text-gray-400">µg/m³ now</p>
+                <p className="text-[9px] text-gray-500 dark:text-gray-400">µg/m³ sekarang</p>
               </div>
               <div className="text-center">
                 <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">
-                  {displayDose.toFixed(1)}
+                  {displayDose.toLocaleString('id-ID', { maximumFractionDigits: 1 })}
                 </p>
-                <p className="text-[9px] text-gray-500 dark:text-gray-400">µg total</p>
+                <p className="text-[9px] text-gray-500 dark:text-gray-400">µg dihirup</p>
               </div>
               <div className="text-center">
                 <p className={`text-sm font-bold ${cfg.color}`}>

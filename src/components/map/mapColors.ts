@@ -3,6 +3,7 @@ import type { Route } from '../../types';
 // ── Route / AQI color helpers ────────────────────────────────────────
 
 export function getRouteColor(route: Route): string {
+  if (route.route_color) return route.route_color;
   if (route.route_type === 'eco') return '#22c55e';
   if (route.route_type === 'balanced') return '#3b82f6';
   return '#f59e0b';

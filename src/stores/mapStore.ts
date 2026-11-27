@@ -25,6 +25,7 @@ import { parseViewLink } from '../lib/route/share';
 import { basemapRegion } from '../lib/basemapVector';
 import { fieldBase } from '../lib/field/source';
 import { loadPoiPack, poiCategoryLabel, searchPoiPack } from '../lib/poiPack';
+import { namaTujuan, TUJUAN_TANPA_NAMA } from '../lib/route/perjalanan';
 import { daftarPenjaga } from '../lib/penjaga-muat';
 
 const FIELD_STATIC_STORE = import.meta.env.VITE_FIELD_STATIC === 'true';
@@ -362,9 +363,25 @@ export const useMapStore = create<MapState>()((set, get) => ({
   setViewTarget: (coord) => set({ viewTarget: coord }),
 
   setDestination: async (coord, name) => {
+    // A walk keeps its destination (Tristan, 27 Nov): a tap on the map moved the pin and the "Menuju" name while the
+    // line and the arrival check still followed the old route. End the walk first to choose another place.
+    const { useWalkStore } = await import('./walkStore');
+    if (useWalkStore.getState().isTracking) {
+      const { default: toast } = await import('react-hot-toast');
+      toast('Sedang berjalan: akhiri perjalanan dulu untuk memilih tujuan lain.', { id: 'tujuan-terkunci' });
+      return;
+    }
     if (!name) {
-      const { address } = await reverseGeocode(coord);
-      name = address || `${coord.lat.toFixed(4)}, ${coord.lng.toFixed(4)}`;
+      // the region's place pack names the spot ("Dekat ..."); the old reverse geocoder (ORS) answers 410 since it moved
+      const region = FIELD_STATIC_STORE ? basemapRegion(coord.lat, coord.lng) : null;
+      if (region) {
+        try { name = namaTujuan(await loadPoiPack(fieldBase(), region), coord) ?? undefined; } catch { /* no pack: below */ }
+      }
+      if (!name && !FIELD_STATIC_STORE) {
+        const { address } = await reverseGeocode(coord);
+        name = address ?? undefined;
+      }
+      name = name || TUJUAN_TANPA_NAMA;
     }
     set({
       destination: coord,

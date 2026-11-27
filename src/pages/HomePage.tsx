@@ -64,6 +64,7 @@ import type { RoadLayerMeta } from '../components/map/RoadPollutionLayer';
 import { FIELD_REGIONS, fetchManifest, fieldBase, pickRegion, rememberRegion } from '../lib/field/source';
 import { parseViewLink } from '../lib/route/share';
 import { deviceRouteAsRoute, deviceRouteStart, fieldRegionOf, routeModeFor, transportFor } from '../lib/route/appRoute';
+import { teksJarak, teksKm } from '../lib/route/perjalanan';
 import { tersediaDiPeta } from '../lib/field/tersedia';
 import { pm25ToAQISimple } from '../lib/api';
 import { walkEcoPoints } from '../lib/walkPoints';
@@ -224,6 +225,7 @@ export default function HomePage() {
     const last = (walkState?.routes?.length ?? 1) - 1;
     const route = deviceRouteAsRoute(r, {
       id: crypto.randomUUID(), userId: user?.id ?? 'guest', cleanest: k === last && k > 0, avgAqi, points: walkEcoPoints(r.lengthM, avgAqi),
+      awal: routeStart, tujuan: destination, warna: walkState?.cards?.[k]?.color,
     });
     useMapStore.setState({ routes: [route], selectedRoute: route });
     void requestDeviceHeadingPermission();
@@ -302,7 +304,7 @@ export default function HomePage() {
     const m = mins % 60;
     return m ? `${h} jam ${m} mnt` : `${h} jam`;
   };
-  const formatDistance = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+  const formatDistance = teksJarak;
 
   return (
     // home-map + --sheet-h: the map attribution sits above the bottom sheet, not under it (X-W54)
@@ -556,7 +558,7 @@ export default function HomePage() {
                 <div className="flex items-center justify-around mb-4">
                   <div className="text-center">
                     <p className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">
-                      {(distanceMeters / 1000).toFixed(2)}
+                      {teksKm(distanceMeters)}
                     </p>
                     <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wider">km</p>
                   </div>

@@ -6,6 +6,7 @@
 import { FIELD_REGIONS, type FieldRegion } from '../field/source';
 import type { WalkRoute } from './client';
 import type { Route, TransportMode } from '../../types';
+import { garisPerjalanan } from './perjalanan';
 
 export interface P { lat: number; lng: number }
 
@@ -37,8 +38,10 @@ export function transportFor(m: 'walk' | 'motor'): TransportMode {
  */
 export function deviceRouteAsRoute(r: WalkRoute, o: {
   id: string; userId: string; cleanest: boolean; avgAqi: number; points: number; now?: Date;
+  /** where the walker stands and the destination pin: the line is joined to both when they are near its ends */
+  awal?: { lat: number; lng: number } | null; tujuan?: { lat: number; lng: number } | null; warna?: string;
 }): Route {
-  const waypoints = r.coords.map(([lon, lat]) => ({ lat, lng: lon }));
+  const waypoints = garisPerjalanan(r.coords.map(([lon, lat]) => ({ lat, lng: lon })), o.awal, o.tujuan);
   const first = waypoints[0] ?? { lat: 0, lng: 0 };
   const last = waypoints[waypoints.length - 1] ?? first;
   return {
@@ -55,6 +58,7 @@ export function deviceRouteAsRoute(r: WalkRoute, o: {
     route_type: o.cleanest ? 'eco' : 'fast',
     created_at: (o.now ?? new Date()).toISOString(),
     aqi_estimate: 'model',
+    ...(o.warna ? { route_color: o.warna } : {}),
   };
 }
 

@@ -11,7 +11,8 @@ import { showNotification, isNotificationEnabled } from '../lib/notifications';
 import { formatLocalDateYYYYMMDD } from '../lib/utils';
 import { computeDose, type ExposureMode, type ExposureDoseResult, type UserExposureProfile } from '../lib/exposure';
 import { saveExposureLedger } from '../lib/exposure-ledger';
-import { bearing, smoothHeading, routeProgress, isOffRoute, withinGeofence } from '../lib/geo';
+import { bearing, smoothHeading, routeProgress, withinGeofence } from '../lib/geo';
+import { nilaiKeluar } from '../lib/route/perjalanan';
 import { daftarPenjaga } from '../lib/penjaga-muat';
 
 // Map the walk's transport mode to the exposure dose model's mode.
@@ -63,6 +64,8 @@ interface WalkTrackingState {
   // Live AQI refresh throttle — last time we asked mapStore to refetch AQI
   // for the user's current location during a walk.
   _lastAqiAt: number;
+  /** fixes in a row beyond the off-route limit (lib/route/perjalanan.ts nilaiKeluar) */
+  _keluarBeruntun: number;
 
   // Navigation: live heading (deg, de-jittered), progress along the selected
   // route, off-route flag, and arrival latch (consumed by HomePage to auto-finish).
@@ -130,6 +133,7 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
   activeTransportMode: 'walking',
   routePm25: null,
   _lastAqiAt: 0,
+  _keluarBeruntun: 0,
   heading: null,
   navProgress: null,
   offRoute: false,
@@ -220,13 +224,17 @@ export const useWalkStore = create<WalkTrackingState>()((set, get) => ({
                   // ETA from the rolling average speed, floored so a brief stop
                   // doesn't blow the estimate to infinity.
                   const spd = durationSeconds > 0 ? Math.max(0.7, distanceMeters / durationSeconds) : 1.2;
+                  // off the route only when really off: the fix's own error is counted and it takes two fixes in a row
+                  // (one wobbly fix at the start showed "Kamu keluar dari rute" while the walker stood at the start)
+                  const k = nilaiKeluar(prog.perpMeters, position.coords.accuracy, get()._keluarBeruntun);
                   set({
+                    _keluarBeruntun: k.beruntun,
                     navProgress: {
                       fraction: prog.fraction,
                       metersRemaining: prog.metersRemaining,
                       etaSeconds: Math.round(prog.metersRemaining / spd),
                     },
-                    offRoute: isOffRoute(prog.perpMeters, 30),
+                    offRoute: k.keluar,
                   });
                 }
               }

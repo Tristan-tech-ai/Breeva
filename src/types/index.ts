@@ -68,6 +68,8 @@ export interface Route {
   aqi_confidence?: number;     // 0-100: confidence in estimated AQI
   /** 'model' = scored by the VAYU engine; 'rough' = fallback heuristic from map features, not a measurement. */
   aqi_estimate?: 'model' | 'rough';
+  /** Colour of the route card the walk was started from (on-device routes), so the line matches the card. */
+  route_color?: string;
   road_summary?: string;       // e.g. "Through parks and green areas"
   aqi_factors?: string[];      // e.g. ["Near major roads (+20%)", "Park area (-15%)"]
 
