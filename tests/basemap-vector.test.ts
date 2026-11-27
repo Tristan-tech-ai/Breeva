@@ -17,11 +17,17 @@ describe('vector basemap', () => {
     expect(basemapRegion(-6.2088, 106.8456)).toBeNull(); // Jakarta: no basemap file, the muted raster is used
   });
 
-  it('paints every road class the same neutral colour in light and dark', () => {
+  it('paints roads in one neutral grey family (main roads a step darker), visible on the land, in light and dark', () => {
     for (const [base, dark] of [[WHITE, false], [DARK, true]] as const) {
       const f = breevaFlavor(base, dark);
-      const roads = [f.highway, f.major, f.minor_a, f.minor_b, f.minor_service, f.link, f.other, f.bridges_major, f.tunnel_highway];
-      expect(new Set(roads).size).toBe(1);
+      const kecil = [f.minor_a, f.minor_b, f.minor_service, f.link, f.other];
+      const utama = [f.highway, f.major, f.bridges_major, f.tunnel_highway];
+      expect(new Set(kecil).size).toBe(1);
+      expect(new Set(utama).size).toBe(1);
+      // T9 (27 Nov): with the pollution layer off, white roads on white land vanished
+      expect(f.minor_a).not.toBe(f.earth);
+      expect(f.major).not.toBe(f.earth);
+      for (const c of [...kecil, ...utama]) expect(c).toMatch(/^#[0-9a-f]{6}$/);
       const casings = [f.highway_casing_early, f.major_casing_late, f.minor_casing, f.link_casing];
       expect(new Set(casings).size).toBe(1);
       expect(f.pois).toBeUndefined();

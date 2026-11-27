@@ -18,8 +18,8 @@ export const TOTAL_STOPS: Record<string, [number, string][]> = {
 export const TRAFFIC_DEADBAND: Record<'pm25' | 'no2' | 'pm10', number> = { pm25: 1, no2: 2, pm10: 2 };
 export const TRAFFIC_GREY = '#d1d5db';
 /**
- * Roads with practically no exhaust in the NOx view: a calm teal, so a clean lane reads as "clean" and not as a road
- * whose value has not loaded (those are grey). Not a health colour either.
+ * Roads with practically no exhaust (NOx, PM2.5 and PM10 views alike): a calm teal, so a clean lane reads as "clean" and
+ * not as a road whose value has not loaded or a plain street of the basemap (those are grey). Not a health colour either.
  */
 export const TRAFFIC_CLEAN = '#5eead4';
 export const TRAFFIC_STOPS: Record<'pm25' | 'no2' | 'pm10', [number, string][]> = {
@@ -36,7 +36,8 @@ export function trafficPollutant(p: string): 'pm25' | 'no2' | 'pm10' {
 export function trafficColor(pollutant: string, delta: number): string {
   const p = trafficPollutant(pollutant);
   if (!Number.isFinite(delta)) return TRAFFIC_GREY;
-  if (!(delta >= TRAFFIC_DEADBAND[p])) return p === 'no2' ? TRAFFIC_CLEAN : TRAFFIC_GREY;
+  // T9 (Tristan, 27 Nov): below the dead band every pollutant is the calm teal; grey was read as an ordinary road
+  if (!(delta >= TRAFFIC_DEADBAND[p])) return TRAFFIC_CLEAN;
   return lerpColor(TRAFFIC_STOPS[p], delta);
 }
 

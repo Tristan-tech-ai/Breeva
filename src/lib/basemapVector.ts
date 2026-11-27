@@ -57,10 +57,14 @@ const ROAD_CASINGS = ['highway_casing_early', 'highway_casing_late', 'major_casi
 
 /** A Protomaps flavour with one neutral road colour (no class colours) and no POI palette. */
 export function breevaFlavor(baseFlavor: Flavor, dark: boolean): Flavor {
-  const fill = dark ? '#2b3442' : '#ffffff';
-  const casing = dark ? '#1e2530' : '#dfe3e8';
+  // T9 (Tristan, 27 Nov): with "Polusi jalan" off the streets vanished: the WHITE flavour's land is #ffffff and the roads
+  // were white too, so only a hairline casing showed. Roads are now a quiet grey on the white land (main roads a step
+  // darker), still one neutral family so only Breeva's colours carry meaning.
+  const fill = dark ? '#3a4452' : '#e4e8ed';
+  const utama = dark ? '#4a5566' : '#d3d9e0';
+  const casing = dark ? '#1e2530' : '#c9d0d8';
   const f: Flavor = { ...baseFlavor, pois: undefined, railway: dark ? '#3a4352' : '#c9ced6' };
-  for (const k of ROAD_FILLS) f[k] = fill;
+  for (const k of ROAD_FILLS) f[k] = /highway|major/.test(k) ? utama : fill;
   for (const k of ROAD_CASINGS) f[k] = casing;
   return f;
 }

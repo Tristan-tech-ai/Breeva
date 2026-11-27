@@ -7,7 +7,7 @@ import { opacityFor, weightFor } from '../src/lib/roadColors';
 import { stationAsBadge, STATION_BADGE_ZOOM } from '../src/lib/stationBbox';
 import { firstFixView } from '../src/stores/mapStore';
 import { sudahDibaca, tandaiDibaca } from '../src/lib/map/catatanDibaca';
-import { ikonUsulan, LEGENDA_BUTA, SLUG_KABUT_PILOT, slugButa } from '../src/lib/sensorTitik';
+import { ikonUsulan, kmAntara, LEGENDA_BUTA, SLUG_KABUT_PILOT, slugButa, slugTerukur, TOP_NASIONAL, usulanUntukZoom, ZOOM_SEMUA_KABKOTA, ZOOM_TITIK_KOTA, type Usulan } from '../src/lib/sensorTitik';
 
 // Tristan, 27 Nov 2026 (T6): the pilot regions looked like a different map, the map jumped back on its own, the note on
 // national roads said nothing to a user, WAQI stations could not be seen, and proposed sensor points read as stations.
@@ -120,7 +120,48 @@ describe('blind areas, not pins that read as stations (M-U14)', () => {
     expect(LEGENDA_BUTA).toMatch(/sensor yang ada/);
     expect(LEGENDA_BUTA).toMatch(/usulan sensor baru/);
     const layer = readFileSync('src/components/map/LapisanAplikasi.ts', 'utf8');
-    expect(layer).toMatch(/ikonUsulan\('\+'\)/);
+    expect(layer).toMatch(/ikonUsulan\(u\.teks/);
     expect(layer).not.toMatch(/background:#15803d;color:#fff/); // the old filled green pin
+  });
+});
+
+describe('covered places green, proposals that do not pile up, one in every blind kab/kota (T9)', () => {
+  const u = (grup: string, peringkat: number, lat: number, lon: number, urutanNasional?: number): Usulan =>
+    ({ lat, lon, grup, peringkat, nama: `${grup} ${peringkat}`, judul: `${grup} ${peringkat}`, kalimat: '', tautan: '/', teksTautan: '', urutanNasional });
+  const daftar = [
+    u('Kota Bogor', 2, -6.60, 106.80), u('Kota Bogor', 1, -6.59, 106.79), u('Kota Bogor', 3, -6.58, 106.78),
+    u('Bandung', 1, -6.91, 107.61),
+    u('nasional', 1, -6.2, 107.1, 1), u('nasional', 40, -7.0, 110.0, 40), u('nasional', 999, -3.0, 120.0),
+  ];
+
+  it('zoomed out: one marker per city with its count, at its first point; a tap zooms in', () => {
+    const m = usulanUntukZoom(daftar, ZOOM_TITIK_KOTA - 1);
+    const bogor = m.filter((x) => x.judul.includes('Kota Bogor'));
+    expect(bogor).toHaveLength(1);
+    expect(bogor[0]).toMatchObject({ teks: '3', lat: -6.59, perbesar: true });
+    expect(m.find((x) => x.judul === 'Bandung 1')?.teks).toBe('1'); // a city with one point shows it
+  });
+
+  it('zoomed in: every city point with its rank', () => {
+    const m = usulanUntukZoom(daftar, ZOOM_TITIK_KOTA);
+    expect(m.filter((x) => x.judul.startsWith('Kota Bogor')).map((x) => x.teks)).toEqual(['1', '2', '3']);
+  });
+
+  it('kab/kota centres: the national top 30 always, every blind one from zoom 8', () => {
+    const jauh = usulanUntukZoom(daftar, ZOOM_SEMUA_KABKOTA - 1).filter((x) => x.teks === '+');
+    expect(jauh).toHaveLength(1);
+    expect(TOP_NASIONAL).toBe(30);
+    expect(usulanUntukZoom(daftar, ZOOM_SEMUA_KABKOTA).filter((x) => x.teks === '+')).toHaveLength(3);
+  });
+
+  it('green where a sensor is within 25 km, orange elsewhere, the pilot images left to themselves', () => {
+    const wilayah = { 'kota-bandung': { t: 'indikatif' }, 'kabupaten-gianyar': { t: 'terukur' }, 'kota-denpasar': { t: 'terukur' }, 'kota-medan': { t: 'terkalibrasi' } };
+    expect([...slugTerukur(wilayah)]).toEqual(['kabupaten-gianyar']);
+    expect([...slugButa(wilayah)].sort()).toEqual(['kota-bandung', 'kota-medan']);
+    expect(LEGENDA_BUTA).toMatch(/^Hijau: sudah ada alat ukur/);
+    expect(kmAntara({ lat: -6.59, lon: 106.79 }, { lat: -6.59, lon: 106.97 })).toBeGreaterThan(19);
+    const layer = readFileSync('src/components/map/LapisanAplikasi.ts', 'utf8');
+    expect(layer).toMatch(/fillColor: '#16a34a'/);
+    expect(layer).toMatch(/butuh_sensor\.json/);
   });
 });

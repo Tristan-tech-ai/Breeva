@@ -1,4 +1,4 @@
-import { TRAFFIC_CLEAN, TRAFFIC_DEADBAND, TRAFFIC_GREY, TRAFFIC_STOPS, trafficPollutant } from '../../lib/roadColors';
+import { TRAFFIC_CLEAN, TRAFFIC_DEADBAND, TRAFFIC_STOPS, trafficPollutant } from '../../lib/roadColors';
 
 const NAME: Record<'pm25' | 'no2' | 'pm10', string> = { pm25: 'PM2.5 knalpot', no2: 'NOx lalu lintas', pm10: 'PM10 lalu lintas' };
 
@@ -10,7 +10,7 @@ export default function TrafficLegend({ pollutant }: { pollutant: string }) {
     <div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-5 rounded-full" style={{ background: p === 'no2' ? TRAFFIC_CLEAN : TRAFFIC_GREY }} />
+          <span className="h-2.5 w-5 rounded-full" style={{ background: TRAFFIC_CLEAN }} />
           <span className="text-[10.5px] text-gray-600 dark:text-gray-300">&lt; {TRAFFIC_DEADBAND[p]}</span>
         </span>
         {stops.map(([v, c]) => (

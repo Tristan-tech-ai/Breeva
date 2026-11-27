@@ -8,8 +8,8 @@ const base = { pm25: 24.3, pm25_delta: 0, no2: 8, no2_delta: 0, confidence: 'hig
 
 describe('traffic view colours', () => {
   it('PM differences below the dead band are grey; a road with practically no exhaust is teal, not grey', () => {
-    expect(trafficColor('pm25', 0.05)).toBe(TRAFFIC_GREY);  // median local street in Badung-Denpasar, 16 Nov
-    expect(trafficColor('pm25', 0.7)).toBe(TRAFFIC_GREY);   // median big road
+    expect(trafficColor('pm25', 0.05)).toBe(TRAFFIC_CLEAN);  // median local street in Badung-Denpasar, 16 Nov (T9: teal, not grey)
+    expect(trafficColor('pm25', 0.7)).toBe(TRAFFIC_CLEAN);   // median big road
     expect(trafficColor('no2', 1.9)).toBe(TRAFFIC_CLEAN);   // a lane away from any busy road
     expect(trafficColor('no2', Number.NaN)).toBe(TRAFFIC_GREY); // no value yet
     expect(trafficColor('pm25', Number.NaN)).toBe(TRAFFIC_GREY);

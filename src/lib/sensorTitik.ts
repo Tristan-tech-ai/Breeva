@@ -132,4 +132,63 @@ export function slugButa(wilayah: Record<string, { t: string }>, kecuali: readon
 }
 
 /** The one line that says what the layer shows. */
-export const LEGENDA_BUTA = 'Jingga: peta buta, belum ada alat ukur di dekatnya. Titik biru: sensor yang ada. Lingkaran putus-putus +: usulan sensor baru (belum ada alatnya).';
+export const LEGENDA_BUTA = 'Hijau: sudah ada alat ukur di dekatnya. Jingga: peta buta. Titik biru: sensor yang ada. Lingkaran putus-putus: usulan sensor baru (angka = urutan prioritas).';
+
+/** T9 (Tristan, 27 Nov): covered places are green, not left white. Kab/kota with a sensor within 25 km ('terukur'). */
+export function slugTerukur(wilayah: Record<string, { t: string }>, kecuali: readonly string[] = SLUG_KABUT_PILOT): Set<string> {
+  const out = new Set<string>();
+  for (const [slug, w] of Object.entries(wilayah)) if (w.t === 'terukur' && !kecuali.includes(slug)) out.add(slug);
+  return out;
+}
+
+/** One proposed sensor point on the app layer. grup = the city or region it belongs to ('nasional' for a kab/kota centre). */
+export interface Usulan {
+  lat: number; lon: number; grup: string; peringkat: number; nama?: string;
+  judul: string; kalimat: string; tautan: string; teksTautan: string;
+  /** national rank of a kab/kota centre (1 = the most people moved from indicative to measured), else undefined */
+  urutanNasional?: number;
+}
+export interface PenandaUsulan { lat: number; lon: number; teks: string; judul: string; kalimat: string; tautan: string; teksTautan: string; perbesar?: boolean }
+
+/** From this zoom every point of a city shows with its rank; below it one marker per city with the count. */
+export const ZOOM_TITIK_KOTA = 11;
+/** From this zoom every blind kab/kota shows its own proposal; below it only the national top 30. */
+export const ZOOM_SEMUA_KABKOTA = 8;
+export const TOP_NASIONAL = 30;
+
+/**
+ * T9 (Tristan, 27 Nov: "the sensors sit on top of each other; if they are all crammed together why compute them", and "many
+ * blind places have no proposal"): what the layer draws at a zoom. City points: one marker per city with their count when
+ * zoomed out (a tap zooms in), each point with its rank from ZOOM_TITIK_KOTA. Kab/kota centres: the national top 30 at any
+ * zoom, every blind kab/kota from ZOOM_SEMUA_KABKOTA. Pure, tested.
+ */
+export function usulanUntukZoom(daftar: readonly Usulan[], zoom: number): PenandaUsulan[] {
+  const out: PenandaUsulan[] = [];
+  const kota = new Map<string, Usulan[]>();
+  for (const u of daftar) {
+    if (u.grup === 'nasional') {
+      if (zoom >= ZOOM_SEMUA_KABKOTA || (u.urutanNasional != null && u.urutanNasional <= TOP_NASIONAL)) {
+        out.push({ lat: u.lat, lon: u.lon, teks: '+', judul: u.judul, kalimat: u.kalimat, tautan: u.tautan, teksTautan: u.teksTautan });
+      }
+      continue;
+    }
+    const l = kota.get(u.grup); if (l) l.push(u); else kota.set(u.grup, [u]);
+  }
+  for (const [grup, l] of kota) {
+    const urut = [...l].sort((a, b) => a.peringkat - b.peringkat);
+    if (zoom >= ZOOM_TITIK_KOTA || urut.length === 1) {
+      for (const u of urut) out.push({ lat: u.lat, lon: u.lon, teks: String(u.peringkat), judul: u.judul, kalimat: u.kalimat, tautan: u.tautan, teksTautan: u.teksTautan });
+    } else {
+      const u = urut[0];
+      out.push({ lat: u.lat, lon: u.lon, teks: String(urut.length), judul: `${urut.length} usulan sensor di ${grup}`,
+        kalimat: `Ketuk untuk memperbesar dan melihat tiap titik. Yang pertama paling berguna: ${u.nama ?? u.judul}.`, tautan: u.tautan, teksTautan: u.teksTautan, perbesar: true });
+    }
+  }
+  return out;
+}
+
+/** Distance in km between two points (for leaving out a kab/kota centre near a city that already has its own points). */
+export function kmAntara(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+  const r = Math.PI / 180;
+  return 6371 * Math.hypot((b.lon - a.lon) * r * Math.cos(((a.lat + b.lat) / 2) * r), (b.lat - a.lat) * r);
+}
