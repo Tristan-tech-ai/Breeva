@@ -1,28 +1,33 @@
 /**
- * Breeva's vector basemap inside a field region (F1-68, lib/basemapVector.ts); elsewhere the muted OpenStreetMap raster
- * (lib/basemap.ts). protomaps-leaflet and the flavours load in their own chunk after the map exists, so the first
- * screen does not wait for them. If the vector basemap cannot load, the raster stays.
+ * Breeva's vector basemap (F1-68, lib/basemapVector.ts): the national file anywhere in Indonesia (M-U16), offline the
+ * saved pilot region's own file; outside Indonesia the muted OpenStreetMap raster (lib/basemap.ts). protomaps-leaflet and
+ * the flavours load in their own chunk after the map exists, so the first screen does not wait for them. If the vector
+ * basemap cannot load, the raster stays.
  */
 import { useEffect, useState } from 'react';
 import type L from 'leaflet';
 import { TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import type { Basemap } from '../../lib/basemap';
-import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_DATA_ZOOM, basemapRegion, basemapUrl, breevaFlavor, pendingTileColor, withoutPoiLabels } from '../../lib/basemapVector';
+import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_DATA_ZOOM, BASEMAP_NATIONAL, basemapFile, basemapUrl, breevaFlavor, pendingTileColor, withoutPoiLabels } from '../../lib/basemapVector';
 import { fieldBase } from '../../lib/field/source';
 import { readAheadHeader, sharedRangeSource } from '../../lib/cachedRangeSource';
 import { dprPetaDasar, UBIN_HEMAT } from '../../lib/mapPerf';
 
 export default function BasemapLayer({ raster, dark, vector }: { raster: Basemap; dark: boolean; vector: boolean }) {
   const map = useMap();
-  const [region, setRegion] = useState<string | null>(() => (vector ? basemapRegion(map.getCenter().lat, map.getCenter().lng) : null));
+  const online = () => typeof navigator === 'undefined' || navigator.onLine !== false;
+  const pilih = () => { const c = map.getCenter(); return basemapFile(c.lat, c.lng, online()); };
+  const [region, setRegion] = useState<string | null>(() => (vector ? pilih() : null));
   const [failed, setFailed] = useState(false);
-  useMapEvents({
-    moveend: () => {
-      if (!vector) return;
-      const c = map.getCenter();
-      setRegion(basemapRegion(c.lat, c.lng));
-    },
-  });
+  useMapEvents({ moveend: () => { if (vector) setRegion(pilih()); } });
+  // going offline or back: the saved region file takes over, or the national file returns
+  useEffect(() => {
+    if (!vector) return;
+    const ganti = () => setRegion(pilih());
+    window.addEventListener('online', ganti); window.addEventListener('offline', ganti);
+    return () => { window.removeEventListener('online', ganti); window.removeEventListener('offline', ganti); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vector, map]);
 
   const useVector = vector && !!region && !failed;
   useEffect(() => {
@@ -30,14 +35,18 @@ export default function BasemapLayer({ raster, dark, vector }: { raster: Basemap
     let layer: L.Layer | null = null;
     let restoreBg: string | null = null;
     let cancelled = false;
-    const src = sharedRangeSource(basemapUrl(fieldBase(), region));
-    readAheadHeader(src); // the header downloads while the modules load (X-W51)
+    // a region file keeps its ranges in Cache Storage for offline use (X-W40); the national file is read straight from
+    // the CDN (the browser's own cache holds what was seen): keeping every range of a country would fill the phone
+    const nasional = region === BASEMAP_NATIONAL.name;
+    const alamat = basemapUrl(fieldBase(), region);
+    const src = nasional ? null : sharedRangeSource(alamat);
+    if (src) readAheadHeader(src); // the header downloads while the modules load (X-W51)
     void Promise.all([import('protomaps-leaflet'), import('@protomaps/basemaps'), import('pmtiles')]).then(([pl, pb, pm]) => {
       if (cancelled) return;
       const flavor = breevaFlavor(dark ? pb.DARK : pb.WHITE, dark);
       const l = pl.leafletLayer({
         // ranges kept in Cache Storage by the page itself, also before the service worker controls it (X-W40)
-        url: new pm.PMTiles(src) as unknown as string,
+        url: (src ? new pm.PMTiles(src) : new pm.PMTiles(alamat)) as unknown as string,
         paintRules: pl.paintRules(flavor),
         labelRules: withoutPoiLabels(pl.labelRules(flavor, 'id')),
         backgroundColor: flavor.background,

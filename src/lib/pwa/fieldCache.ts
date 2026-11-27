@@ -13,6 +13,8 @@ export type FieldKind = 'geometry' | 'manifest' | 'cells' | 'harga';
 export function fieldKind(url: URL, ownOrigin: string): FieldKind | null {
   if (url.origin === ownOrigin) return null;
   const p = url.pathname;
+  // the national basemap (M-U16) is not kept: a range per tile of a whole country would fill the phone's storage
+  if (/^\/tiles\/basemap\/[\w-]+\/indonesia\.pmtiles$/.test(p)) return null;
   // road geometry (tiles/<run>/<region>.pmtiles) and Breeva's basemap (tiles/basemap/<build>/<region>.pmtiles, F1-68)
   if (/^\/tiles\/(?:basemap\/)?[\w-]+\/[\w-]+\.pmtiles$/.test(p)) return 'geometry';
   if (/^\/v\/[\w-]+\/manifest\.json$/.test(p)) return 'manifest';

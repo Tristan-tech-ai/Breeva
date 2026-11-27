@@ -79,7 +79,7 @@ export default function SensorTitikPage() {
             <Suspense fallback={<div className="animate-pulse rounded-2xl bg-gray-200/60 dark:bg-gray-800/60" style={{ height: 'min(60svh, 520px)' }} />}>
               <PetaTitik data={data} dark={dark} pilih={pilih} onPilih={onPilih} />
             </Suspense>
-            <p className="text-[12px] text-gray-700 dark:text-gray-300">Oranye pekat: tempat peta paling buta bagi orang yang tinggal dan bersekolah di sana. Titik biru: sensor yang ada. Angka hijau: titik sensor berikutnya, ketuk untuk rinciannya.</p>
+            <p className="text-[12px] text-gray-700 dark:text-gray-300">Oranye pekat: tempat peta paling buta bagi orang yang tinggal dan bersekolah di sana. Titik biru: sensor yang ada. Lingkaran putus-putus bernomor: usulan sensor baru (belum ada alatnya), ketuk untuk rinciannya.</p>
             {titik && (
               <section className="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900" aria-live="polite" data-kartu-titik>
                 <p className="text-sm font-bold">{titik.peringkat}. {titik.nama} <span className="font-medium text-gray-700 dark:text-gray-300">({jenisKata(titik.jenis)})</span></p>

@@ -272,7 +272,7 @@ export default function MapLayersSheet({
                       Stasiun WAQI
                     </p>
                     <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5 leading-tight">
-                      Angka AQI AS, Badung–Denpasar dan Kota Bogor
+                      Stasiun pemantau resmi di seluruh peta, angka AQI AS
                     </p>
                   </div>
                 </button>
@@ -327,8 +327,8 @@ export default function MapLayersSheet({
                     <MapPin className="w-4.5 h-4.5" style={{ color: showTitikSensor ? '#15803d' : '#9ca3af' }} />
                   </div>
                   <div>
-                    <p className={`text-sm font-semibold ${showTitikSensor ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Titik sensor</p>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Di mana sensor baru paling berguna</p>
+                    <p className={`text-sm font-semibold ${showTitikSensor ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Area buta sensor</p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Di mana peta belum punya alat ukur, dan usulan sensor baru</p>
                   </div>
                 </button>
               </div>

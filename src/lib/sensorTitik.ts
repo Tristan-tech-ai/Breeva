@@ -49,8 +49,8 @@ export function kotaLapisan(kota: KotaTitik[]): KotaTitik[] {
 /** M-T10: title and popup sentence of one city point (indicative, the placement method is not validated). */
 export function teksTitikKota(k: KotaTitik, t: KotaTitik['titik'][number]): { judul: string; kalimat: string } {
   return {
-    judul: `${k.kota} 2027, titik sensor ${t.peringkat}: ${t.nama}`,
-    kalimat: `Mengurangi kebutaan peta kota ini sekitar ${formatAngka(t.manfaat_pct, 1, 1)}%. Indikatif: cara memilih titik belum lolos uji kami.`,
+    judul: `${k.kota} 2027, usulan sensor ke-${t.peringkat}: ${t.nama}`,
+    kalimat: `Belum ada sensor di sini. Sensor di titik ini mengurangi kebutaan peta kota ini sekitar ${formatAngka(t.manfaat_pct, 1, 1)}%. Indikatif (perkiraan): cara memilih titik belum lolos uji kami.`,
   };
 }
 
@@ -104,3 +104,32 @@ export function kalimatPeran(t: TitikSensor): string {
 
 export interface KotaTitik { kota: string; sensor_ada?: number; titik: Array<{ peringkat: number; nama: string; lat: number; lon: number; manfaat_pct: number }> }
 export interface KabTitik { peringkat: number; nama: string; provinsi?: string; skor: number; alasan: string }
+
+/**
+ * M-U14 (Tristan, 27 Nov): a PROPOSED sensor point must not look like a station that exists. Its marker is hollow with
+ * a dashed rim (a plus in the app layer, the rank on /sensor/titik); the sensors that exist are the filled blue dots.
+ */
+export function ikonUsulan(isi: string, o: { ukuran?: number; aktif?: boolean } = {}): string {
+  const u = o.ukuran ?? 24;
+  const warna = o.aktif ? '#0f172a' : '#15803d';
+  return `<span aria-hidden="true" data-usulan-sensor style="display:block;box-sizing:border-box;width:${u}px;height:${u}px;border-radius:9999px;`
+    + `border:2px dashed ${warna};background:rgba(255,255,255,.92);color:${warna};font:700 ${Math.round(u * 0.5)}px/${u - 4}px system-ui;`
+    + `text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.25)">${isi}</span>`;
+}
+
+/** Kab/kota whose blindness is drawn from the pilot's own 250 m image, so the national polygon is not laid over it. */
+export const SLUG_KABUT_PILOT: readonly string[] = ['kota-bogor', 'kabupaten-badung', 'kota-denpasar'];
+
+/**
+ * M-U14: the kab/kota the map is blind in, for the national fog: every one without a sensor within 25 km (the level
+ * 'terukur' of v/nasional/latar.json is the only one with a measurement, kabkota.ts TINGKAT_NILAI), minus those drawn
+ * from a pilot image.
+ */
+export function slugButa(wilayah: Record<string, { t: string }>, kecuali: readonly string[] = SLUG_KABUT_PILOT): Set<string> {
+  const out = new Set<string>();
+  for (const [slug, w] of Object.entries(wilayah)) if (w.t !== 'terukur' && !kecuali.includes(slug)) out.add(slug);
+  return out;
+}
+
+/** The one line that says what the layer shows. */
+export const LEGENDA_BUTA = 'Jingga: peta buta, belum ada alat ukur di dekatnya. Titik biru: sensor yang ada. Lingkaran putus-putus +: usulan sensor baru (belum ada alatnya).';

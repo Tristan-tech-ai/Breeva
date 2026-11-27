@@ -1,10 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import { waqiCredit } from '../../lib/attribution';
-import { bboxParam, coarseBbox } from '../../lib/stationBbox';
-import { inPilot } from '../../lib/nasional/ubinView';
-
-const FIELD_STATIC = import.meta.env.VITE_FIELD_STATIC === 'true';
+import { bboxParam, coarseBbox, stationAsBadge } from '../../lib/stationBbox';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -150,7 +147,7 @@ function popupHtml(d: WAQIFeedData): string {
 function loadingHtml(name: string): string {
   return `<div style="min-width:180px;font-family:system-ui;text-align:center;padding:8px">
     <div style="font-weight:600;font-size:13px;margin-bottom:8px">${esc(name)}</div>
-    <div style="font-size:12px;color:#94a3b8">Loading…</div>
+    <div style="font-size:12px;color:#64748b">Memuat…</div>
   </div>`;
 }
 
@@ -158,6 +155,7 @@ function loadingHtml(name: string): string {
 
 export function useAQIStationLayer(map: L.Map, visible: boolean): void {
   const groupRef = useRef(L.layerGroup());
+  const rendererRef = useRef(L.canvas({ padding: 0.3 }));
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 2026-05-24 SECURITY: VITE_WAQI_TOKEN removed. All WAQI calls go through server-side proxy.
 
@@ -168,10 +166,22 @@ export function useAQIStationLayer(map: L.Map, visible: boolean): void {
     for (const s of stations) {
       const val = parseInt(s.aqi, 10);
       if (isNaN(val) || val < 0) continue;
-      // M-U03: outside the pilot regions the map shows only indicative exhaust; a US AQI pin there read as a Breeva number
-      if (FIELD_STATIC && !inPilot(s.lat, s.lon)) continue;
-
+      // M-U17 (Tristan, 27 Nov): stations show everywhere. M-U03 had hidden them outside the pilot regions because a bare
+      // number read as a Breeva value; the badge now says "AQI AS" and the popup names WAQI, so they stay visible.
       const color = aqiColor(val);
+
+      if (!stationAsBadge(map.getZoom())) {
+        // zoomed out: a dot on the canvas, the number on a tap
+        const dot = L.circleMarker([s.lat, s.lon], { renderer: rendererRef.current, radius: 6, color: '#ffffff', weight: 1.5, fillColor: color, fillOpacity: 0.95, bubblingMouseEvents: false });
+        dot.bindTooltip(`Stasiun WAQI: ${s.station.name} · AQI AS ${val}`);
+        dot.on('click', async () => {
+          dot.bindPopup(loadingHtml(s.station.name), { maxWidth: 300, className: 'aqi-station-popup' }).openPopup();
+          const feed = await fetchFeed(s.uid);
+          dot.setPopupContent(feed ? popupHtml(feed) : '<div style="font-family:system-ui;padding:8px;color:#b91c1c">Data stasiun tidak bisa dimuat</div>');
+        });
+        groupRef.current.addLayer(dot);
+        continue;
+      }
 
       const icon = L.divIcon({
         className: 'aqi-badge-wrapper',
@@ -199,7 +209,7 @@ export function useAQIStationLayer(map: L.Map, visible: boolean): void {
         marker.setPopupContent(
           feed
             ? popupHtml(feed)
-            : '<div style="font-family:system-ui;padding:8px;color:#ef4444">Failed to load data</div>',
+            : '<div style="font-family:system-ui;padding:8px;color:#b91c1c">Data stasiun tidak bisa dimuat</div>',
         );
       });
 

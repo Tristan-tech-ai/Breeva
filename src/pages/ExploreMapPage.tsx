@@ -145,7 +145,7 @@ export default function ExploreMapPage() {
 
   const useMyLocation = () => {
     setLocated(true);
-    useMapStore.getState().startLocating(); // opt-in geolocation (sets center + AQI)
+    useMapStore.getState().startLocating(true); // opt-in geolocation: the user asked, so the map goes there (sets center + AQI)
   };
 
   return (

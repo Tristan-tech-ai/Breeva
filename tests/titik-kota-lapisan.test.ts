@@ -26,7 +26,9 @@ describe('teksTitikKota', () => {
   it('names the city, the rank and says indikatif with an Indonesian percentage', () => {
     const k: KotaTitik = { kota: 'Bandung', sensor_ada: 0, titik: [{ peringkat: 1, nama: 'Kota Bandung', lat: -6.9, lon: 107.6, manfaat_pct: 63.35 }] };
     const r = teksTitikKota(k, k.titik[0]);
-    expect(r.judul).toBe('Bandung 2027, titik sensor 1: Kota Bandung');
+    // M-U14: the words say it is a proposal and that no sensor stands there
+    expect(r.judul).toBe('Bandung 2027, usulan sensor ke-1: Kota Bandung');
+    expect(r.kalimat).toMatch(/^Belum ada sensor di sini\./);
     expect(r.kalimat).toContain('63,4%');
     expect(r.kalimat).toMatch(/Indikatif/);
   });

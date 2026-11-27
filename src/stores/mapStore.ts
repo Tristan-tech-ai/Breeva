@@ -99,7 +99,11 @@ interface MapState {
   setZoom: (zoom: number) => void;
   setViewTarget: (coord: (Coordinate & { zoom?: number }) | null) => void;
   setUserLocation: (location: Coordinate | null) => void;
-  startLocating: () => void;
+  /** force: the user asked for their position (a locate button), so the map goes there even after they moved it */
+  startLocating: (force?: boolean) => void;
+  /** M-U16: the user has touched the map; a first GPS fix arriving later must not pull the view away from where they look */
+  userMovedMap: boolean;
+  noteUserMovedMap: () => void;
   stopLocating: () => void;
   setSearchQuery: (query: string) => void;
   search: (query: string) => Promise<void>;
@@ -122,6 +126,12 @@ interface MapState {
   toggleNavCameraMode: () => void;
   setFollowing: (v: boolean) => void;
   recenter: () => void;
+}
+
+/** What a first GPS fix does to the store (M-U16): the position always, the map centre only when the view is still the
+ * app's own (the user has not moved the map) or the user asked for their position. Pure, tested. */
+export function firstFixView(location: Coordinate, centre: Coordinate, userMoved: boolean, force: boolean): { userLocation: Coordinate; center: Coordinate; isLocating: false } {
+  return { userLocation: location, center: force || !userMoved ? location : centre, isLocating: false };
 }
 
 // Load recent searches from localStorage
@@ -196,7 +206,10 @@ export const useMapStore = create<MapState>()((set, get) => ({
   setFollowing: (v) => set({ isFollowing: v }),
   recenter: () => set((s) => ({ isFollowing: true, recenterNonce: s.recenterNonce + 1 })),
 
-  startLocating: () => {
+  userMovedMap: false,
+  noteUserMovedMap: () => { if (!get().userMovedMap) set({ userMovedMap: true }); },
+
+  startLocating: (force = false) => {
     if (!navigator.geolocation) {
       set({ locationError: 'Geolocation is not supported by your browser' });
       return;
@@ -211,7 +224,9 @@ export const useMapStore = create<MapState>()((set, get) => ({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
-        set({ userLocation: location, center: location, isLocating: false });
+        // M-U16: the first fix centres the map only while the user has not touched it (it used to arrive seconds after
+        // they had zoomed out or panned elsewhere and fly the view back), or when they asked for it
+        set(firstFixView(location, get().center, get().userMovedMap, force));
 
         // Fetch AQI for the user's area: only a rounded point (about 1 km) leaves the device (F3-14)
         get().fetchAirQuality(coarsePoint(location));

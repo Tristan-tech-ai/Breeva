@@ -234,6 +234,16 @@ function MapController({
   const deviceHeading = useDeviceHeading(isTracking);
   const puckHeading = deviceHeading ?? heading;
 
+  // M-U16: the first touch, press or wheel on the map says the user is looking somewhere of their own choosing; a first
+  // GPS fix that arrives after it leaves the view alone (mapStore.firstFixView)
+  useEffect(() => {
+    const el = map.getContainer();
+    const tandai = () => useMapStore.getState().noteUserMovedMap();
+    const jenis = ['pointerdown', 'touchstart', 'wheel'] as const;
+    for (const j of jenis) el.addEventListener(j, tandai, { passive: true, once: true });
+    return () => { for (const j of jenis) el.removeEventListener(j, tandai); };
+  }, [map]);
+
   // Start from where the map really is, not from the store: the store centre can change between the map being
   // created and this controller mounting (e.g. a page setting its start area), and that change must still move the map.
   const prevCenterRef = useRef<Coordinate>((() => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng }; })());

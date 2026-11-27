@@ -15,8 +15,29 @@ export const BASEMAP_BUILD = '2026-11-17';
 export const BASEMAP_MAX_DATA_ZOOM = 14;
 export const BASEMAP_ATTRIBUTION = '<a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>; tempat: <a href="https://overturemaps.org">Overture Maps</a> (Meta, Microsoft, Foursquare dkk.)';
 
+/**
+ * The national file (M-U16, 27 Nov 2026): the same Protomaps layers for all of Indonesia (z0-14, build 2026-11-26,
+ * 875 MB on the CDN, read by range like the region files). Until then only the two pilot regions had Breeva's basemap and
+ * everywhere else fell back to the muted OpenStreetMap raster, so the pilot regions looked like a different map
+ * (Tristan, 27 Nov).
+ */
+export const BASEMAP_NATIONAL = { name: 'indonesia', build: '2026-11-26', bounds: [[-11, 95], [6, 141.2]] } as const;
+
 export function basemapUrl(base: string, region: string): string {
-  return `${base}/tiles/basemap/${BASEMAP_BUILD}/${region}.pmtiles`;
+  return region === BASEMAP_NATIONAL.name
+    ? `${base}/tiles/basemap/${BASEMAP_NATIONAL.build}/${BASEMAP_NATIONAL.name}.pmtiles`
+    : `${base}/tiles/basemap/${BASEMAP_BUILD}/${region}.pmtiles`;
+}
+
+/**
+ * The basemap file that draws a view centred here (M-U16). Online: the national file anywhere in Indonesia, also inside
+ * a pilot region, so crossing a region's edge changes nothing. Offline: the pilot region's own file when the centre lies
+ * in one (the file "Simpan wilayah" keeps whole), else none. Null means the raster fallback.
+ */
+export function basemapFile(lat: number, lng: number, online: boolean): string | null {
+  if (!online) return basemapRegion(lat, lng);
+  const [[s, w], [n, e]] = BASEMAP_NATIONAL.bounds;
+  return lat >= s && lat <= n && lng >= w && lng <= e ? BASEMAP_NATIONAL.name : null;
 }
 
 /** The field region whose basemap file covers this point (its bounds plus a small margin), else null. */

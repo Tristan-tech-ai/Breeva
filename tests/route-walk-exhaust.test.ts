@@ -80,6 +80,12 @@ describe('walking routes by exhaust within a time budget (T7)', () => {
     expect(meanAlong(buduk.g, edges, 100, 130, x)).toBe(0);
   });
 
+  it('a fastest route without any exhaust has no alternative (no twin of the same time)', () => {
+    // two ways of the same length, both without exhaust: only one comes back
+    const twin = graph(3, [[0, 1, 500], [0, 2, 250], [2, 1, 250]]);
+    expect(walkRoutes(twin.g, 0, 1, twin.perEdge([0, 0, 0]))).toHaveLength(1);
+  });
+
   it('a quiet night does not make a detour out of almost nothing', () => {
     // street 0.2, lanes 0.1: the reference stays at the floor, both routes are "almost none"; the search may still
     // prefer the lanes, but the reference never drops below the floor

@@ -8,10 +8,9 @@ import { pasquillClass } from '../../../api/vayu/_caline4';
 import { windAt, type WindFile } from './angin';
 import type { MvtLine } from './mvt';
 
-/** Class code of the national tiles (.claude/loop/nasional/ekstrak_jalan.py: links share their road's code). */
-export const KODE_KELAS: Record<number, string> = {
-  1: 'motorway', 2: 'trunk', 3: 'primary', 4: 'secondary', 5: 'tertiary', 6: 'unclassified', 7: 'residential', 8: 'living_street', 9: 'service',
-};
+import { KODE_KELAS } from './ubinView';
+
+export { KODE_KELAS };
 
 /** Median per class of the two pilot packs 2026-11 (Badung-Denpasar 60,961 and Kota Bogor 19,362 roads): vehicles per
  * hour before the hour curve (traffic_base_estimate x calibration), road-class factor, carriageway width in metres.

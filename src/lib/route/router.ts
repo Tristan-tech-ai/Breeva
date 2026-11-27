@@ -213,6 +213,8 @@ export function withinBudget(g: WalkGraph, s: number, t: number, o: BudgetOption
   const budget = o.budget ?? WALK_BUDGET, wMax = o.wMax ?? 64, minGain = o.minGain ?? MIN_GAIN, steps = o.steps ?? 10;
   const fast = route(g, s, t, 0, o);
   if (!fast) return [];
+  // nothing to gain where the fastest route already breathes none (quiet lanes at night): no twin route of the same time
+  if (!(fast.exposure > 0)) return [fast];
   const limit = fast.timeS * (1 + budget);
   const key = (r: RouteResult) => r.edges.join(',');
   /** The supported route between a and b at their own exchange rate, or null when there is none. */

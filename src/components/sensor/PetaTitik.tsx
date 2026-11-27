@@ -6,9 +6,10 @@ import BasemapLayer from '../map/VectorBasemap';
 import { PETA_HEMAT } from '../../lib/mapPerf';
 import { basemap } from '../../lib/basemap';
 import { lipatAtribusi } from '../../lib/map/lipatAtribusi';
-import type { DataTitik } from '../../lib/sensorTitik';
+import { ikonUsulan, type DataTitik } from '../../lib/sensorTitik';
 
-/** M-T06: the blindness fog (250 m cells), the sensors that exist, and the ranked new points as numbered pins. */
+/** M-T06: the blindness fog (250 m cells), the sensors that exist (filled blue), and the ranked proposed points as
+ * hollow dashed numbers (M-U14: a filled pin read as a station that exists). */
 function Lapisan({ data, pilih, onPilih }: { data: DataTitik; pilih: number | null; onPilih: (n: number) => void }) {
   const map = useMap();
   const renderer = useMemo(() => L.canvas({ padding: 0.3 }), []);
@@ -28,9 +29,8 @@ function Lapisan({ data, pilih, onPilih }: { data: DataTitik; pilih: number | nu
       const aktif = pilih === t.peringkat;
       // Leaflet makes the marker itself the button (role, tabindex, keyboard); the number inside is plain text
       L.marker([t.lat, t.lon], {
-        title: `Titik ${t.peringkat}: ${t.nama}`,
-        icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13],
-          html: `<span aria-hidden="true" style="display:block;width:26px;height:26px;border-radius:9999px;border:2px solid #fff;background:${aktif ? '#0f172a' : '#15803d'};color:#fff;font:700 12px/22px system-ui;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.35)">${t.peringkat}</span>` }),
+        title: `Usulan sensor ke-${t.peringkat}: ${t.nama}`,
+        icon: L.divIcon({ className: '', iconSize: [28, 28], iconAnchor: [14, 14], html: ikonUsulan(String(t.peringkat), { ukuran: 28, aktif }) }),
         zIndexOffset: aktif ? 1000 : 0,
       }).on('click', () => onPilih(t.peringkat)).addTo(g);
     }

@@ -1,25 +1,21 @@
-/** N-21: which national road tiles a map view needs, and where the pilot regions take over. Pure. */
+/** N-21: the national exhaust roads of the map: their class codes, zoom, note, and where the pilot regions take over. Pure. */
 import { FIELD_REGIONS } from '../field/source';
-import { tileOf } from './mvt';
+
+/** Class code of the national tiles (.claude/loop/nasional/ekstrak_jalan.py: links share their road's code). Kept in this
+ * light module so the map layer can style a road by its class without loading the exhaust kernel. */
+export const KODE_KELAS: Record<number, string> = {
+  1: 'motorway', 2: 'trunk', 3: 'primary', 4: 'secondary', 5: 'tertiary', 6: 'unclassified', 7: 'residential', 8: 'living_street', 9: 'service',
+};
 
 /** Zoom from which the phone computes exhaust per road outside the pilot regions (N-21). */
 export const NATIONAL_MIN_ZOOM = 13;
-const TILE_Z = 14;
 
-/** z14 tiles covering the map view (at most 30, the centre first). */
-export function viewTiles(b: { west: number; south: number; east: number; north: number }, centre: { lon: number; lat: number }, max = 30): Array<[number, number, number]> {
-  const [x0, y0] = tileOf(b.west, b.north, TILE_Z), [x1, y1] = tileOf(b.east, b.south, TILE_Z), [cx, cy] = tileOf(centre.lon, centre.lat, TILE_Z);
-  const out: Array<[number, number, number]> = [];
-  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) out.push([TILE_Z, x, y]);
-  return out.sort((a, b) => Math.hypot(a[1] - cx, a[2] - cy) - Math.hypot(b[1] - cx, b[2] - cy)).slice(0, max);
-}
+/**
+ * The note on the map while those roads show (M-U15, Tristan 27 Nov: "Asap kendaraan di ponsel: indikatif" told a user
+ * nothing). Plain words for what it is: an estimate from the road class and the wind. Where it is computed is no concern
+ * of the reader, and it changes nothing about how good the number is.
+ */
+export const LABEL_ASAP_NASIONAL = 'Asap kendaraan: perkiraan dari jenis jalan dan angin';
 
 /** True when the point lies in a pilot region (those show the cloud field instead). */
 export const inPilot = (lat: number, lon: number) => FIELD_REGIONS.some((r) => lat >= r.bounds[0][0] && lat <= r.bounds[1][0] && lon >= r.bounds[0][1] && lon <= r.bounds[1][1]);
-
-/** Drawn tile keys that are no longer wanted in the view (M-U02: tiles left behind stayed on the canvas). */
-export function ubinLuarPandang(drawn: Iterable<string>, view: ReadonlySet<string>): string[] {
-  const out: string[] = [];
-  for (const k of drawn) if (!view.has(k)) out.push(k);
-  return out;
-}

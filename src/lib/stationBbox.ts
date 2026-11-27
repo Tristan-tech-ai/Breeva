@@ -18,3 +18,10 @@ export function coarseBbox(view: Bbox, cell = CELL_DEG): Bbox {
 
 /** Query value in the proxy's order: south,west,north,east. */
 export const bboxParam = (b: Bbox) => `${b.south},${b.west},${b.north},${b.east}`;
+
+/**
+ * M-U17: from this zoom a station is a badge with its number; zoomed further out it is a small dot on the map's canvas
+ * (a badge is 72 px wide: a province of them covers the map, and each is a DOM element the phone has to move).
+ */
+export const STATION_BADGE_ZOOM = 10;
+export const stationAsBadge = (zoom: number): boolean => zoom >= STATION_BADGE_ZOOM;

@@ -1,26 +1,54 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import L from 'leaflet';
 import { fieldBase } from '../../lib/field/source';
-import { trafficColor } from '../../lib/roadColors';
-import { inPilot, NATIONAL_MIN_ZOOM, ubinLuarPandang, viewTiles } from '../../lib/nasional/ubinView';
+import { opacityFor, trafficColor, weightFor } from '../../lib/roadColors';
+import { inPilot, KODE_KELAS, LABEL_ASAP_NASIONAL, NATIONAL_MIN_ZOOM } from '../../lib/nasional/ubinView';
+import { gambarAsap, pusatUbin, siapkanUbin, UBIN_ASAP_Z, ubinInduk, type UbinSiap } from '../../lib/nasional/gambarAsap';
+import { UBIN_HEMAT } from '../../lib/mapPerf';
 import type { AsapReq, AsapTile } from '../../workers/asapNasional.worker';
+
+/** Computed tiles kept in memory for the hour (a screen needs about a dozen; panning back must not recompute). */
+const SIMPAN = 96;
+
+/** The grid layer: one canvas per map tile, drawn from the computed z14 tiles it needs (gambarAsap.ts). */
+function lapisanAsap(minta: (x: number, y: number) => Promise<UbinSiap>, gaya: Parameters<typeof gambarAsap>[5], hidup: () => boolean): L.GridLayer {
+  const Lapisan = L.GridLayer.extend({
+    createTile(this: L.GridLayer, coords: L.Coords, done: L.DoneCallback) {
+      const size = this.getTileSize();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const c = L.DomUtil.create('canvas') as HTMLCanvasElement;
+      c.width = size.x * dpr; c.height = size.y * dpr;
+      c.style.width = `${size.x}px`; c.style.height = `${size.y}px`;
+      // a pilot region draws its own roads there (the field layer): no second set of lines on top
+      const induk = ubinInduk(coords.z, coords.x, coords.y).filter(([x, y]) => { const [lat, lon] = pusatUbin(x, y); return !inPilot(lat, lon); });
+      if (!induk.length) { setTimeout(() => done(undefined, c), 0); return c; }
+      Promise.all(induk.map(([x, y]) => minta(x, y))).then((ubin) => {
+        const ctx = c.getContext('2d');
+        if (ctx && hidup()) gambarAsap(ctx, ubin, coords, size.x, dpr, gaya);
+        done(undefined, c);
+      }, (e: Error) => done(e, c));
+      return c;
+    },
+  });
+  return new (Lapisan as unknown as new (o: L.GridLayerOptions) => L.GridLayer)({ minZoom: NATIONAL_MIN_ZOOM, maxZoom: 22, pane: 'overlayPane', ...UBIN_HEMAT });
+}
 
 /**
  * N-21: outside the pilot regions, at zoom 13 and closer, colour roads by vehicle exhaust computed on the phone (worker),
- * labelled indicative. `onState` reports what is shown (for the label and tests).
+ * with a plain-words note (M-U15). M-U16: drawn on canvas tiles of a grid layer with the width and opacity of the pilot
+ * roads of the same class and zoom (lib/nasional/gambarAsap.ts), instead of one Leaflet polyline per road. A z14 tile
+ * whose centre lies in a pilot region is left to the pilot's own field layer. `onState` reports what is shown.
  */
 export function useNationalExhaust(map: L.Map | null, enabled: boolean, onState?: (s: { aktif: boolean; ubin: number; ms: number[] }) => void) {
-  const workerRef = useRef<Worker[]>([]);
   useEffect(() => {
     if (!map || !enabled) return;
-    const layer = L.layerGroup().addTo(map);
-    const renderer = L.canvas({ padding: 0.2 });
-    // M-U02: one group per tile, so tiles that leave the view (or every tile, when zoomed out below the threshold) are
-    // removed from the canvas instead of staying under the next view
-    const drawn = new Map<string, L.LayerGroup>();
-    let aktifNow = false;
-    let req = 0;
+    const workers: Worker[] = [];
+    const siap = new Map<string, UbinSiap>();
+    const tunggu = new Map<string, { janji: Promise<UbinSiap>; jadi: (u: UbinSiap) => void }>();
     const ms: number[] = [];
+    let antre: Array<[number, number, number]> = [];
+    let terjadwal = false, idReq = 0, hidup = true;
+
     const label = new L.Control({ position: 'bottomright' });
     let labelEl: HTMLElement | null = null;
     label.onAdd = () => {
@@ -28,66 +56,84 @@ export function useNationalExhaust(map: L.Map | null, enabled: boolean, onState?
       labelEl = d;
       d.setAttribute('data-asap-nasional', '');
       d.style.cssText = 'background:#fffbeb;color:#78350f;border-radius:9999px;padding:2px 8px;font:600 11px system-ui;box-shadow:0 1px 2px rgba(0,0,0,.15)';
-      d.textContent = 'Asap kendaraan di ponsel: indikatif';
+      d.textContent = LABEL_ASAP_NASIONAL;
       return d;
     };
     let labelOn = false;
-    const update = () => {
-      const z = map.getZoom(), c = map.getCenter();
-      const aktif = z >= NATIONAL_MIN_ZOOM && !inPilot(c.lat, c.lng);
-      aktifNow = aktif;
-      if (!aktif) {
-        if (labelOn) { label.remove(); labelOn = false; }
-        for (const g of drawn.values()) g.remove();
-        drawn.clear();
-        req++; // tiles still on their way belong to a view that is gone
-        onState?.({ aktif: false, ubin: 0, ms });
-        return;
-      }
-      if (!labelOn) { label.addTo(map); labelOn = true; }
-      const b = map.getBounds();
-      const now = new Date();
-      const hourLocal = (now.getUTCHours() + Math.round(c.lng / 15) + 24) % 24; // the place's solar hour, WIB/WITA/WIT alike
-      const hourKey = now.toISOString().slice(0, 13);
-      const inView = viewTiles({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() }, { lon: c.lng, lat: c.lat });
-      const viewKeys = new Set(inView.map(([tz, x, y]) => `${tz}/${x}/${y}@${hourKey}`));
-      for (const k of ubinLuarPandang(drawn.keys(), viewKeys)) { drawn.get(k)?.remove(); drawn.delete(k); }
-      const want = inView.filter(([tz, x, y]) => !drawn.has(`${tz}/${x}/${y}@${hourKey}`));
-      if (!want.length) return;
+
+    // the place's solar hour (WIB/WITA/WIT alike) and the hour the result is kept under
+    const jam = () => {
+      const now = new Date(), c = map.getCenter();
+      return { hourLocal: (now.getUTCHours() + Math.round(c.lng / 15) + 24) % 24, hourKey: now.toISOString().slice(0, 13) };
+    };
+    const terima = (ev: MessageEvent<{ id: number; tile?: AsapTile; done?: boolean }>) => {
+      const t = ev.data.tile;
+      if (!t || !hidup) return;
+      const u = siapkanUbin(t);
+      siap.set(t.key, u);
+      if (siap.size > SIMPAN) siap.delete(siap.keys().next().value as string);
+      ms.push(Math.round(t.ms));
+      tunggu.get(t.key)?.jadi(u);
+      tunggu.delete(t.key);
+      // what was drawn and how long each tile took, for the speed check (data-ubin, data-ms)
+      if (labelEl) { labelEl.dataset.ubin = String(siap.size); labelEl.dataset.ms = ms.join(','); }
+      onState?.({ aktif: true, ubin: siap.size, ms });
+    };
+    const kirim = () => {
+      terjadwal = false;
+      if (!hidup || !antre.length) return;
       // two workers on phones with the cores for it: the tiles of a screen are computed side by side
       const n = Math.max(1, Math.min(2, (navigator.hardwareConcurrency || 2) - 1));
-      while (workerRef.current.length < n) workerRef.current.push(new Worker(new URL('../../workers/asapNasional.worker.ts', import.meta.url), { type: 'module' }));
-      const id = ++req;
-      const onTile = (ev: MessageEvent<{ id: number; tile?: AsapTile; done?: boolean }>) => {
-        if (ev.data.id !== id || !ev.data.tile || !aktifNow) return;
-        const t = ev.data.tile;
-        if (drawn.has(t.key)) return;
-        const group = L.layerGroup().addTo(layer);
-        drawn.set(t.key, group);
-        ms.push(Math.round(t.ms));
-        for (let i = 0; i + 1 < t.offs.length; i++) {
-          const pts: L.LatLngExpression[] = [];
-          for (let o = t.offs[i]; o < t.offs[i + 1]; o++) pts.push([t.coords[2 * o + 1], t.coords[2 * o]]);
-          L.polyline(pts, { renderer, color: trafficColor('no2', t.nox[i]), weight: t.k[i] <= 3 ? 4 : t.k[i] <= 5 ? 3 : 2, opacity: 0.85, interactive: false }).addTo(group);
-        }
-        // what was drawn and how long each tile took, for the speed check (data-ubin, data-ms)
-        if (labelEl) { labelEl.dataset.ubin = String(drawn.size); labelEl.dataset.ms = ms.join(','); }
-        onState?.({ aktif: true, ubin: drawn.size, ms });
-      };
-      workerRef.current.forEach((w, j) => {
-        w.onmessage = onTile;
-        const part = want.filter((_, i) => i % workerRef.current.length === j);
-        if (part.length) w.postMessage({ id, base: fieldBase(), tiles: part, hourLocal, hourKey } satisfies AsapReq);
+      while (workers.length < n) {
+        const w = new Worker(new URL('../../workers/asapNasional.worker.ts', import.meta.url), { type: 'module' });
+        w.onmessage = terima;
+        workers.push(w);
+      }
+      const { hourLocal, hourKey } = jam();
+      const semua = antre; antre = [];
+      workers.forEach((w, j) => {
+        const bagian = semua.filter((_, i) => i % workers.length === j);
+        if (bagian.length) w.postMessage({ id: ++idReq, base: fieldBase(), tiles: bagian, hourLocal, hourKey } satisfies AsapReq);
       });
     };
-    map.on('moveend', update);
-    update();
+    /** The computed z14 tile x/y of this hour: from memory, on its way, or asked from a worker with the others of this tick. */
+    const minta = (x: number, y: number): Promise<UbinSiap> => {
+      const key = `${UBIN_ASAP_Z}/${x}/${y}@${jam().hourKey}`;
+      const ada = siap.get(key);
+      if (ada) return Promise.resolve(ada);
+      let t = tunggu.get(key);
+      if (!t) {
+        let jadi!: (u: UbinSiap) => void;
+        const janji = new Promise<UbinSiap>((r) => { jadi = r; });
+        t = { janji, jadi };
+        tunggu.set(key, t);
+        antre.push([UBIN_ASAP_Z, x, y]);
+        if (!terjadwal) { terjadwal = true; setTimeout(kirim, 0); }
+      }
+      return t.janji;
+    };
+    const gaya = (kelas: number, nox: number, z: number) => {
+      const hw = KODE_KELAS[kelas] ?? 'residential';
+      return { color: trafficColor('no2', nox), weight: weightFor(hw, z), opacity: opacityFor(hw, z, 0.9) };
+    };
+
+    const layer = lapisanAsap(minta, gaya, () => hidup);
+    layer.addTo(map);
+
+    const perbarui = () => {
+      const c = map.getCenter();
+      const aktif = map.getZoom() >= NATIONAL_MIN_ZOOM && !inPilot(c.lat, c.lng);
+      if (aktif && !labelOn) { label.addTo(map); labelOn = true; }
+      if (!aktif && labelOn) { label.remove(); labelOn = false; labelEl = null; onState?.({ aktif: false, ubin: 0, ms }); }
+    };
+    map.on('moveend', perbarui);
+    perbarui();
     return () => {
-      map.off('moveend', update);
+      hidup = false;
+      map.off('moveend', perbarui);
       layer.remove();
       if (labelOn) label.remove();
-      workerRef.current.forEach((w) => w.terminate());
-      workerRef.current = [];
+      workers.forEach((w) => w.terminate());
     };
   }, [map, enabled, onState]);
 }
