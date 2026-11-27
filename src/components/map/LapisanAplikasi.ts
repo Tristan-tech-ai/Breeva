@@ -3,6 +3,7 @@ import L from 'leaflet';
 import { fieldBase } from '../../lib/field/source';
 import type { FireFile, FirePoint } from '../../lib/nasional/firms';
 import { gabungApi, gayaApi, radiusApi, radiusGabung, selGabung, teksApi, teksGabung } from '../../lib/nasional/petaPantau';
+import { catatanSekali } from '../../lib/map/catatanSekali';
 import { ikonUsulan, kalimatTitik, kotaLapisan, LEGENDA_BUTA, slugButa, teksTitikKota, type DataTitik, type KotaTitik } from '../../lib/sensorTitik';
 
 /**
@@ -60,14 +61,8 @@ export function useTitikSensorPeta(map: L.Map | null, enabled: boolean) {
     const kanvasKabut = L.canvas({ pane: PANE, padding: 0.3 });
     const kanvasTitik = L.canvas({ padding: 0.3 });
     const g = L.layerGroup().addTo(map);
-    const legenda = new L.Control({ position: 'bottomleft' });
-    legenda.onAdd = () => {
-      const d = L.DomUtil.create('div');
-      d.setAttribute('data-legenda-buta', '');
-      d.style.cssText = 'max-width:230px;background:rgba(255,255,255,.95);color:#1f2937;border-radius:10px;padding:6px 8px;font:500 11px/1.35 system-ui;box-shadow:0 1px 3px rgba(0,0,0,.2)';
-      d.textContent = LEGENDA_BUTA;
-      return d;
-    };
+    // M-U18: read once, closed with "Oke"; the symbols also explain themselves on a tap (tooltips and popups)
+    const { kontrol: legenda } = catatanSekali('legenda_buta', LEGENDA_BUTA, { posisi: 'bottomleft', atribut: 'data-legenda-buta', lebar: 270 });
     legenda.addTo(map);
 
     // the country: kab/kota without a measurement nearby, as one quiet orange wash

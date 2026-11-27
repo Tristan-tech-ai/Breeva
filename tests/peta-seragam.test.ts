@@ -6,6 +6,7 @@ import { KODE_KELAS, LABEL_ASAP_NASIONAL } from '../src/lib/nasional/ubinView';
 import { opacityFor, weightFor } from '../src/lib/roadColors';
 import { stationAsBadge, STATION_BADGE_ZOOM } from '../src/lib/stationBbox';
 import { firstFixView } from '../src/stores/mapStore';
+import { sudahDibaca, tandaiDibaca } from '../src/lib/map/catatanDibaca';
 import { ikonUsulan, LEGENDA_BUTA, SLUG_KABUT_PILOT, slugButa } from '../src/lib/sensorTitik';
 
 // Tristan, 27 Nov 2026 (T6): the pilot regions looked like a different map, the map jumped back on its own, the note on
@@ -51,6 +52,29 @@ describe('national roads drawn like pilot roads (M-U16)', () => {
   it('the note on those roads is plain words', () => {
     expect(LABEL_ASAP_NASIONAL).toMatch(/^Asap kendaraan: perkiraan/);
     expect(LABEL_ASAP_NASIONAL).not.toMatch(/indikatif|ponsel/i);
+  });
+});
+
+describe('notes read once and closed with Oke (M-U18)', () => {
+  it('a closed note stays closed on this device; blocked storage does not break anything', () => {
+    const m = new Map<string, string>();
+    const s = { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
+    expect(sudahDibaca('asap_nasional', s)).toBe(false);
+    tandaiDibaca('asap_nasional', s);
+    expect(sudahDibaca('asap_nasional', s)).toBe(true);
+    expect(sudahDibaca('legenda_buta', s)).toBe(false); // each note on its own
+    const rusak = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+    expect(sudahDibaca('asap_nasional', rusak)).toBe(false);
+    expect(() => tandaiDibaca('asap_nasional', rusak)).not.toThrow();
+    expect(sudahDibaca('asap_nasional', null)).toBe(false);
+  });
+
+  it('both map notes use it, with an Oke button', () => {
+    expect(readFileSync('src/components/map/NationalExhaustLayer.ts', 'utf8')).toMatch(/catatanSekali\('asap_nasional'/);
+    expect(readFileSync('src/components/map/LapisanAplikasi.ts', 'utf8')).toMatch(/catatanSekali\('legenda_buta'/);
+    const src = readFileSync('src/lib/map/catatanSekali.ts', 'utf8');
+    expect(src).toMatch(/textContent = 'Oke'/);
+    expect(src).toMatch(/min-width:44px/);
   });
 });
 

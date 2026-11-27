@@ -5,6 +5,7 @@ import { opacityFor, trafficColor, weightFor } from '../../lib/roadColors';
 import { inPilot, KODE_KELAS, LABEL_ASAP_NASIONAL, NATIONAL_MIN_ZOOM } from '../../lib/nasional/ubinView';
 import { gambarAsap, pusatUbin, siapkanUbin, UBIN_ASAP_Z, ubinInduk, type UbinSiap } from '../../lib/nasional/gambarAsap';
 import { UBIN_HEMAT } from '../../lib/mapPerf';
+import { catatanSekali } from '../../lib/map/catatanSekali';
 import type { AsapReq, AsapTile } from '../../workers/asapNasional.worker';
 
 /** Computed tiles kept in memory for the hour (a screen needs about a dozen; panning back must not recompute). */
@@ -49,16 +50,8 @@ export function useNationalExhaust(map: L.Map | null, enabled: boolean, onState?
     let antre: Array<[number, number, number]> = [];
     let terjadwal = false, idReq = 0, hidup = true;
 
-    const label = new L.Control({ position: 'bottomright' });
-    let labelEl: HTMLElement | null = null;
-    label.onAdd = () => {
-      const d = L.DomUtil.create('div', 'breeva-indikatif');
-      labelEl = d;
-      d.setAttribute('data-asap-nasional', '');
-      d.style.cssText = 'background:#fffbeb;color:#78350f;border-radius:9999px;padding:2px 8px;font:600 11px system-ui;box-shadow:0 1px 2px rgba(0,0,0,.15)';
-      d.textContent = LABEL_ASAP_NASIONAL;
-      return d;
-    };
+    // M-U18 (Tristan, 27 Nov): a note read once and closed with "Oke", not a label that stays on the map
+    const { kontrol: label, ref: labelRef } = catatanSekali('asap_nasional', LABEL_ASAP_NASIONAL, { posisi: 'bottomright', atribut: 'data-asap-nasional' });
     let labelOn = false;
 
     // the place's solar hour (WIB/WITA/WIT alike) and the hour the result is kept under
@@ -76,7 +69,7 @@ export function useNationalExhaust(map: L.Map | null, enabled: boolean, onState?
       tunggu.get(t.key)?.jadi(u);
       tunggu.delete(t.key);
       // what was drawn and how long each tile took, for the speed check (data-ubin, data-ms)
-      if (labelEl) { labelEl.dataset.ubin = String(siap.size); labelEl.dataset.ms = ms.join(','); }
+      if (labelRef.el) { labelRef.el.dataset.ubin = String(siap.size); labelRef.el.dataset.ms = ms.join(','); }
       onState?.({ aktif: true, ubin: siap.size, ms });
     };
     const kirim = () => {
@@ -124,7 +117,7 @@ export function useNationalExhaust(map: L.Map | null, enabled: boolean, onState?
       const c = map.getCenter();
       const aktif = map.getZoom() >= NATIONAL_MIN_ZOOM && !inPilot(c.lat, c.lng);
       if (aktif && !labelOn) { label.addTo(map); labelOn = true; }
-      if (!aktif && labelOn) { label.remove(); labelOn = false; labelEl = null; onState?.({ aktif: false, ubin: 0, ms }); }
+      if (!aktif && labelOn) { label.remove(); labelOn = false; labelRef.el = null; onState?.({ aktif: false, ubin: 0, ms }); }
     };
     map.on('moveend', perbarui);
     perbarui();
