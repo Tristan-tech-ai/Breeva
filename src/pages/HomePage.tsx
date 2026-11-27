@@ -64,7 +64,8 @@ import type { RoadLayerMeta } from '../components/map/RoadPollutionLayer';
 import { FIELD_REGIONS, fetchManifest, fieldBase, pickRegion, rememberRegion } from '../lib/field/source';
 import { parseViewLink } from '../lib/route/share';
 import { deviceRouteAsRoute, deviceRouteStart, fieldRegionOf, routeModeFor, transportFor } from '../lib/route/appRoute';
-import { teksJarak, teksKm } from '../lib/route/perjalanan';
+import { meterAntara, teksJarak, teksKm } from '../lib/route/perjalanan';
+import { BATAS_JALAN_NASIONAL_KM, diIndonesia } from '../lib/nasional/ruteNasional';
 import { tersediaDiPeta } from '../lib/field/tersedia';
 import { pm25ToAQISimple } from '../lib/api';
 import { walkEcoPoints } from '../lib/walkPoints';
@@ -180,18 +181,25 @@ export default function HomePage() {
 
   // ── On-device routes (F1-18): same engine as /peta, inside the field regions only ──
   const destRegion = FIELD_STATIC ? fieldRegionOf(destination) : null;
+  // T9: elsewhere in Indonesia a walking route is still computed, as an estimate on the national road tiles
+  const destNasional = FIELD_STATIC && !destRegion && !!destination && diIndonesia(destination);
+  const bisaRute = !!destRegion || destNasional;
   const destKey = destination ? `${destination.lat},${destination.lng}` : '';
   // the destination the route button was pressed for; a new destination needs a new press
   const [routedKey, setRoutedKey] = useState<string | null>(null);
-  const deviceRouting = !!destRegion && routedKey === destKey && !isTracking;
+  const deviceRouting = bisaRute && routedKey === destKey && !isTracking;
   const [walkState, setWalkState] = useState<WalkRoutingState | null>(null);
   const [routeMode, setRouteMode] = useState<'walk' | 'motor'>(() => routeModeFor(transportMode));
   const [depart, setDepart] = useState<string | null>(null);
-  const routeDest: RouteDest | null = destination && destRegion
+  const routeDest: RouteDest | null = destination && bisaRute
     ? { lat: destination.lat, lng: destination.lng, name: destinationName || 'Tujuan' }
     : null;
-  // GPS start when it lies in the destination's region; otherwise the user taps the start on the map
-  const routeStart = deviceRouteStart(userLocation, destination);
+  // GPS start when it lies in the destination's region (outside the regions: within walking reach); otherwise a tap
+  const routeStart = destNasional
+    ? (userLocation && destination && meterAntara(userLocation, destination) <= BATAS_JALAN_NASIONAL_KM * 1000 ? userLocation : null)
+    : deviceRouteStart(userLocation, destination);
+  /** a route without a background PM2.5 (outside the regions) earns points as an average day */
+  const aqiPoin = (pm25: number) => (Number.isFinite(pm25) ? pm25ToAQISimple(pm25) : 50);
   const [schoolOpen, setSchoolOpen] = useState(false);
   const [schoolRegionName, setSchoolRegionName] = useState<string | null>(null);
   const schoolRegion = schoolRegionName ? pickRegion(schoolRegionName) : fieldRegionOf(userLocation) ?? fieldRegionOf(center) ?? FIELD_REGIONS[0];
@@ -221,7 +229,7 @@ export default function HomePage() {
   const startDeviceWalk = (k: number) => {
     const r = walkState?.routes?.[k];
     if (!r) return;
-    const avgAqi = pm25ToAQISimple(r.pm25Mean);
+    const avgAqi = aqiPoin(r.pm25Mean);
     const last = (walkState?.routes?.length ?? 1) - 1;
     const route = deviceRouteAsRoute(r, {
       id: crypto.randomUUID(), userId: user?.id ?? 'guest', cleanest: k === last && k > 0, avgAqi, points: walkEcoPoints(r.lengthM, avgAqi),
@@ -747,7 +755,7 @@ export default function HomePage() {
               </div>
 
               {FIELD_STATIC ? (
-                destRegion ? (
+                bisaRute ? (
                   deviceRouting ? (
                     /* Routes computed on the device (same engine and cards as /peta) */
                     <div className="space-y-2">
@@ -764,7 +772,7 @@ export default function HomePage() {
                               <Play className="w-4 h-4 fill-current shrink-0" />
                               <span className="truncate">Mulai: {c.label}</span>
                               <span className="ml-auto shrink-0 text-xs opacity-90">
-                                {c.minutes} mnt{routeMode === 'walk' && walkState.routes ? ` · +${walkEcoPoints(walkState.routes[k].lengthM, pm25ToAQISimple(walkState.routes[k].pm25Mean))} poin` : ''}
+                                {c.minutes} mnt{routeMode === 'walk' && walkState.routes ? ` · +${walkEcoPoints(walkState.routes[k].lengthM, aqiPoin(walkState.routes[k].pm25Mean))} poin` : ''}
                               </span>
                             </button>
                           ))}
@@ -793,19 +801,19 @@ export default function HomePage() {
                         Cari rute bersih
                       </button>
                       <p className="mt-2 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
-                        Dihitung di perangkat dari peta udara per jalan {destRegion.label}, tanpa server.{' '}
+                        {destRegion ? `Dihitung di perangkat dari peta udara per jalan ${destRegion.label}, tanpa server.` : 'Perkiraan: dihitung di perangkat dari jenis jalan dan angin (jalan kaki, paling jauh 6 km).'}{' '}
                         {routeStart ? 'Berangkat dari lokasimu sekarang.' : 'Setelah itu ketuk titik berangkat di peta.'}
                       </p>
                     </div>
                   )
                 ) : (
-                  /* Outside the field regions there is no per-road air map: no guessed route */
+                  /* T9: inside Indonesia every walk is routed (an estimate outside the regions); this is only outside Indonesia */
                   <div className="rounded-2xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-900/20 p-4" role="status">
                     <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-900 dark:text-amber-200">
-                      <RouteIcon className="w-4 h-4 shrink-0" /> Rute bersih baru tersedia di {FIELD_REGION_LABELS}
+                      <RouteIcon className="w-4 h-4 shrink-0" /> Rute di perangkat hanya untuk wilayah Indonesia
                     </p>
                     <p className="mt-1 text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
-                      Di luar dua wilayah itu peta belum punya data udara per jalan, jadi Breeva tidak menghitung rute di sini.
+                      Peta asap kendaraan per jalan paling rinci di {FIELD_REGION_LABELS}.
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {FIELD_REGIONS.map((r) => (

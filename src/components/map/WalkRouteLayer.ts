@@ -7,6 +7,7 @@ import { RouteClient, withSoon, type SoonHours, type WalkRoute } from '../../lib
 import { routeCards, type RouteCard } from '../../lib/route/summary';
 import type { RouteLink } from '../../lib/route/share';
 import { chooseDest, onTap, startFrom, type TapState } from '../../lib/route/tapFlow';
+import { bolehRuteNasional, CATATAN_NASIONAL, ruteNasional } from '../../lib/nasional/ruteNasional';
 
 /** A fixed destination chosen from a list ("Ke sekolah"): the next tap is the start. */
 export interface RouteDest { lat: number; lng: number; name: string }
@@ -17,6 +18,8 @@ export interface WalkRoutingState {
   ends?: { from: { lat: number; lng: number }; to: { lat: number; lng: number } };
   /** The routes behind the cards (same order): geometry, length, time and means, e.g. to start a walk along one. */
   routes?: WalkRoute[];
+  /** T9: outside the pilot regions, what the routes' numbers lack (shown above the cards) */
+  catatan?: string;
 }
 
 /**
@@ -92,12 +95,48 @@ export function useWalkRouting(
       }
       return true;
     };
-    const compute = (from: L.LatLng, to: L.LatLng) => {
-      const region = regionOf(from);
-      if (!region || regionOf(to) !== region) {
-        say({ status: 'Rute di perangkat baru tersedia di dalam satu wilayah (Badung–Denpasar atau Kota Bogor).', cards: [] });
+    // T9: a walk outside one pilot region is routed on the national road tiles (an estimate, said on the cards)
+    const computeNasional = (from: L.LatLng, to: L.LatLng) => {
+      if (modeRef.current === 'motor') {
+        say({ status: 'Rute motor baru tersedia di dalam Badung–Denpasar atau Kota Bogor (butuh data permukiman untuk harga hirup). Pilih Jalan kaki untuk rute perkiraan di sini.', cards: [] });
         return;
       }
+      const ok = bolehRuteNasional({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng });
+      if (!ok.boleh) { say({ status: ok.alasan, cards: [] }); return; }
+      busy = true;
+      lastEnds = { from, to };
+      const req = ++reqSeq;
+      lastShownCards = false;
+      say({ status: 'Menghitung asap kendaraan di sekitar rute (perkiraan)…', cards: [] });
+      ruteNasional({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, (selesai, total) => {
+        if (req === reqSeq && !lastShownCards) say({ status: `Menghitung asap kendaraan di sekitar rute: ${selesai} dari ${total} bagian peta (pertama kali di sini bisa belasan detik).`, cards: [] });
+      })
+        .then(({ routes, ms }) => {
+          if (req !== reqSeq) return;
+          const cards = routeCards(routes);
+          const last = cards.length - 1;
+          const order = [...cards.keys()].filter((k) => k !== 0 && k !== last).concat(last > 0 ? [0, last] : [0]);
+          for (const k of cards.length ? order : []) {
+            const ll = routes[k].coords.map(([lon, lat]) => [lat, lon] as L.LatLngTuple);
+            const w = k === 0 || k === last ? 6 : 4;
+            L.polyline(ll, { color: '#ffffff', weight: w + 4, opacity: 0.95, interactive: false }).addTo(group);
+            L.polyline(ll, { color: cards[k].color, weight: w, opacity: 1, interactive: false }).addTo(group);
+          }
+          const again = fixed ? `Ketuk titik berangkat lain untuk rute baru ke ${fixed.name}.` : 'Ketuk lagi untuk rute baru.';
+          lastShownCards = true;
+          say({ status: routes.length ? `${routes.length} rute perkiraan dihitung di perangkat dalam ${(ms / 1000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} detik. ${again}` : 'Tidak ada rute.',
+            cards, ms, ends: { from: { lat: from.lat, lng: from.lng }, to: { lat: to.lat, lng: to.lng } }, routes, catatan: CATATAN_NASIONAL });
+        })
+        .catch((e: Error) => { if (req === reqSeq) say({ status: `Rute gagal: ${e.message}`, cards: [] }); })
+        .finally(() => {
+          busy = false;
+          window.dispatchEvent(new Event(ROUTE_SETTLED_EVENT));
+          if (queued) { const q = queued; queued = null; startAt(q); }
+        });
+    };
+    const compute = (from: L.LatLng, to: L.LatLng) => {
+      const region = regionOf(from);
+      if (!region || regionOf(to) !== region) { computeNasional(from, to); return; }
       busy = true;
       lastEnds = { from, to };
       say({ status: COMPUTING, cards: [] });

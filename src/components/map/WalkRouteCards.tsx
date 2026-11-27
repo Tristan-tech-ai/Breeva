@@ -80,6 +80,9 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = 
           )}
         </p>
       )}
+      {state.catatan && state.cards.length > 0 && (
+        <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-900 dark:bg-amber-900/30 dark:text-amber-100" data-catatan-rute>{state.catatan}</p>
+      )}
       {state.cards.length > 0 && (
         <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {state.cards.map((c, k) => {
@@ -144,7 +147,9 @@ export default function WalkRouteCards({ state, mode = 'walk', onMode, depart = 
               ? 'Motor: biaya rute menghitung paparan diri dan paparan yang ditimbulkan bagi warga sekitar (harga hirup); gang dan jalan lingkungan hanya dipakai dekat titik berangkat dan tujuan (zona napas); pada jam masuk 06.30–07.30 dan pulang 12.00–13.30 jalan kecil di depan sekolah juga dihindari. Rute darurat paling cepat dan tidak memberi poin, tetapi tetap menjauhi gang.'
               : 'Asap kendaraan (gas buang dan jelaga knalpot) paling pekat di jalan ramai dan cepat menipis begitu menjauh, jadi rute dipilih menurut asap kendaraan yang dihirup. Rute paling sedikit asap dicari di antara rute yang paling lama 35% lebih lama dari rute tercepat, dan hanya tampil bila asapnya sedikitnya 5% lebih sedikit.'}
           </p>
-          <p>Udara latar kota (PM2,5 sekitar {Math.round(state.cards[0].pm25)} µg/m³, dari pembakaran dan asap jauh) sama di semua rute dan tidak bisa dihindari lewat pilihan jalan.</p>
+          {Number.isFinite(state.cards[0].pm25)
+            ? <p>Udara latar kota (PM2,5 sekitar {Math.round(state.cards[0].pm25)} µg/m³, dari pembakaran dan asap jauh) sama di semua rute dan tidak bisa dihindari lewat pilihan jalan.</p>
+            : <p>Udara latar kota sama di semua rute dan tidak bisa dihindari lewat pilihan jalan.</p>}
           <p>Angka adalah perkiraan model per ruas pada jam data peta, bukan pengukuran di tempat. {state.status}</p>
         </Rincian>
       )}
