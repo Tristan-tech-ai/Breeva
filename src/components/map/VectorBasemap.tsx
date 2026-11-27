@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import type L from 'leaflet';
 import { TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import type { Basemap } from '../../lib/basemap';
-import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_DATA_ZOOM, BASEMAP_NATIONAL, basemapFile, basemapUrl, breevaFlavor, pendingTileColor, withoutPoiLabels } from '../../lib/basemapVector';
+import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_DATA_ZOOM, BASEMAP_NATIONAL, basemapFile, basemapUrl, breevaFlavor, pendingTileColor, tanpaBatasLokal, withoutPoiLabels } from '../../lib/basemapVector';
 import { fieldBase } from '../../lib/field/source';
 import { readAheadHeader, sharedRangeSource } from '../../lib/cachedRangeSource';
 import { dprPetaDasar, UBIN_HEMAT } from '../../lib/mapPerf';
@@ -47,7 +47,7 @@ export default function BasemapLayer({ raster, dark, vector }: { raster: Basemap
       const l = pl.leafletLayer({
         // ranges kept in Cache Storage by the page itself, also before the service worker controls it (X-W40)
         url: (src ? new pm.PMTiles(src) : new pm.PMTiles(alamat)) as unknown as string,
-        paintRules: pl.paintRules(flavor),
+        paintRules: tanpaBatasLokal(pl.paintRules(flavor)),
         labelRules: withoutPoiLabels(pl.labelRules(flavor, 'id')),
         backgroundColor: flavor.background,
         maxDataZoom: BASEMAP_MAX_DATA_ZOOM,

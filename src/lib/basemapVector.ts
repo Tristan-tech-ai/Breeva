@@ -82,3 +82,23 @@ export function pendingTileColor(f: Pick<Flavor, 'earth' | 'background'>): strin
 export function withoutPoiLabels<T extends { dataLayer: string }>(rules: T[]): T[] {
   return rules.filter((r) => r.dataLayer !== 'pois');
 }
+
+/** Highest OSM admin level the basemap still draws: 2 country, 4 province. */
+export const BATAS_TERTINGGI = 4;
+
+/**
+ * Basemap rules without kabupaten, kecamatan and desa borders (27 Nov, Dalung: a 0.5 px grey line winding between the
+ * streets read as a road; it was the Badung kecamatan and desa border). Country and province borders stay.
+ */
+type SaringBatas = (z: number, f: { props: Record<string, unknown> }) => boolean;
+export function tanpaBatasLokal<T extends { dataLayer: string; filter?: unknown }>(rules: T[]): T[] {
+  return rules.map((r) => {
+    if (r.dataLayer !== 'boundaries') return r;
+    const asal = r.filter as SaringBatas | undefined;
+    const filter: SaringBatas = (z, f) => {
+      const k = f.props.kind_detail;
+      return typeof k === 'number' && k <= BATAS_TERTINGGI && (asal ? asal(z, f) : true);
+    };
+    return { ...r, filter };
+  });
+}

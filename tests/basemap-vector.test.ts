@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DARK, LIGHT, WHITE } from '@protomaps/basemaps';
 import { labelRules, paintRules } from 'protomaps-leaflet';
 import { readFileSync } from 'node:fs';
-import { basemapRegion, basemapUrl, breevaFlavor, pendingTileColor, withoutPoiLabels } from '../src/lib/basemapVector';
+import { basemapRegion, basemapUrl, breevaFlavor, pendingTileColor, tanpaBatasLokal, withoutPoiLabels } from '../src/lib/basemapVector';
 
 // F1-68: Breeva's basemap has one neutral road colour and no POIs (Tristan, 18 Nov 2026: basemap road colours and POI
 // icons clashed with Breeva's own).
@@ -59,5 +59,21 @@ describe('vector basemap', () => {
     const css = readFileSync('src/index.css', 'utf8');
     expect(css).toMatch(/html \.leaflet-container \{\s*background-color: #ffffff;/);
     expect(css).toMatch(/html\.dark \.leaflet-container \{\s*background-color: #1f1f1f;/);
+  });
+});
+
+describe('no kabupaten, kecamatan or desa borders in the basemap (Dalung, 27 Nov)', () => {
+  it('keeps the country and province borders, drops the rest, and leaves other layers alone', () => {
+    const asli = paintRules(breevaFlavor(WHITE, false));
+    const kita = tanpaBatasLokal(asli);
+    expect(kita).toHaveLength(asli.length);
+    const batas = kita.filter((r) => r.dataLayer === 'boundaries');
+    expect(batas.length).toBeGreaterThan(0);
+    const digambar = (k: unknown) => batas.some((r) => (r.filter ? r.filter(15, { props: { kind_detail: k } } as never) : true));
+    expect(digambar(2)).toBe(true); // country
+    expect(digambar(4)).toBe(true); // province
+    for (const k of [5, 6, 7, 8, undefined, '6']) expect(digambar(k)).toBe(false);
+    expect(kita.filter((r) => r.dataLayer !== 'boundaries')).toEqual(asli.filter((r) => r.dataLayer !== 'boundaries'));
+    expect(readFileSync('src/components/map/VectorBasemap.tsx', 'utf8')).toMatch(/paintRules: tanpaBatasLokal\(pl\.paintRules\(flavor\)\)/);
   });
 });
