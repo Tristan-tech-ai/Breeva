@@ -184,6 +184,12 @@ export function pareto(g: WalkGraph, s: number, t: number, o: SearchOptions & { 
  * reduction of 0.50 in both regions (200 seeded pairs each on the published field, t7_bangku_2026-11-27.json).
  */
 export const WALK_BUDGET = 0.35;
+/**
+ * Extra time a walking route may always take, seconds (Tristan, 27 Nov, Dalung: a 10-minute walk had only 3.5 minutes
+ * to spare, so a lane route of 21 minutes with half the exhaust was never offered). The budget is the larger of the share
+ * and this.
+ */
+export const WALK_TAMBAH_S = 720;
 /** An alternative is offered only when its exposure is at least this share below the fastest route's. */
 export const MIN_GAIN = 0.05;
 
@@ -196,6 +202,8 @@ export interface BudgetOptions extends SearchOptions {
   minGain?: number;
   /** Searches spent on finding the last supported route inside the budget. */
   steps?: number;
+  /** Extra seconds always allowed, whatever the share (WALK_TAMBAH_S). */
+  tambahS?: number;
 }
 
 /**
@@ -215,7 +223,7 @@ export function withinBudget(g: WalkGraph, s: number, t: number, o: BudgetOption
   if (!fast) return [];
   // nothing to gain where the fastest route already breathes none (quiet lanes at night): no twin route of the same time
   if (!(fast.exposure > 0)) return [fast];
-  const limit = fast.timeS * (1 + budget);
+  const limit = Math.max(fast.timeS * (1 + budget), fast.timeS + (o.tambahS ?? WALK_TAMBAH_S));
   const key = (r: RouteResult) => r.edges.join(',');
   /** The supported route between a and b at their own exchange rate, or null when there is none. */
   const between = (a: RouteResult, b: RouteResult): RouteResult | null => {

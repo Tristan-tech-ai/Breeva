@@ -28,7 +28,7 @@ export function walkExhaust(x: Float64Array, ref = exhaustRef(x)): (e: number) =
 }
 
 /** The walking routes from node s to node t for the exhaust of one hour: fastest first, least exhaust last. */
-export function walkRoutes(g: WalkGraph, s: number, t: number, x: Float64Array, budget?: number): RouteResult[] {
+export function walkRoutes(g: WalkGraph, s: number, t: number, x: Float64Array, budget?: number, tambahS?: number): RouteResult[] {
   const ref = exhaustRef(x), xOf = walkExhaust(x, ref);
-  return withinBudget(g, s, t, { speed: WALK_SPEED, exposureOf: (e) => xOf(e) / ref, ...(budget == null ? {} : { budget }) });
+  return withinBudget(g, s, t, { speed: WALK_SPEED, exposureOf: (e) => xOf(e) / ref, ...(budget == null ? {} : { budget }), ...(tambahS == null ? {} : { tambahS }) });
 }

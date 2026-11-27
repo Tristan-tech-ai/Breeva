@@ -28,7 +28,7 @@ const X = [2.5, 1.5, 1.5, 1, 1];
 
 describe('walking routes by exhaust within a time budget (T7)', () => {
   it('the route called cleanest takes the lanes, not the street, and not the far path beyond the budget', () => {
-    const rs = walkRoutes(buduk.g, 0, 1, buduk.perEdge(X));
+    const rs = walkRoutes(buduk.g, 0, 1, buduk.perEdge(X), undefined, 0);
     expect(rs).toHaveLength(2);
     expect(buduk.roadsOf(rs[0].edges)).toEqual([STREET]);
     expect(buduk.roadsOf(rs[1].edges).sort()).toEqual(LANE);
@@ -38,8 +38,8 @@ describe('walking routes by exhaust within a time budget (T7)', () => {
 
   it('a budget too small for the lanes leaves only the fastest route; a wide one reaches the far path with the lanes between', () => {
     const x = buduk.perEdge(X);
-    expect(walkRoutes(buduk.g, 0, 1, x, 0.10).map((r) => buduk.roadsOf(r.edges))).toEqual([[STREET]]);
-    const wide = walkRoutes(buduk.g, 0, 1, x, 0.70);
+    expect(walkRoutes(buduk.g, 0, 1, x, 0.10, 0).map((r) => buduk.roadsOf(r.edges))).toEqual([[STREET]]);
+    const wide = walkRoutes(buduk.g, 0, 1, x, 0.70, 0);
     expect(wide.map((r) => buduk.roadsOf(r.edges).sort())).toEqual([[STREET], LANE, FAR]);
     for (let k = 1; k < wide.length; k++) { expect(wide[k].timeS).toBeGreaterThan(wide[k - 1].timeS); expect(wide[k].exposure).toBeLessThan(wide[k - 1].exposure); }
   });
@@ -49,17 +49,17 @@ describe('walking routes by exhaust within a time budget (T7)', () => {
     const no2 = buduk.perEdge(X.map((v) => Math.round(8.5 + v)));
     const old = withinBudget(buduk.g, 0, 1, { speed: WALK_SPEED, exposureOf: (e) => no2[e] / 10, wMax: 8, budget: Infinity, minGain: 0 });
     expect(buduk.roadsOf(old[old.length - 1].edges)).toEqual([STREET]); // 1000 m x (1 + 8 x 1.1) < 1160 m x (1 + 8 x 1.0)
-    const now = walkRoutes(buduk.g, 0, 1, buduk.perEdge(X));
+    const now = walkRoutes(buduk.g, 0, 1, buduk.perEdge(X), undefined, 0);
     expect(buduk.roadsOf(now[now.length - 1].edges).sort()).toEqual(LANE);
   });
 
   it('no alternative when the gain is under 5 %, and never a "cleanest" with more exhaust than the fastest', () => {
     // lanes 16 % longer with 15 % less exhaust: the dose is 1.16 x 0.85 = 0.99 of the street's
-    expect(walkRoutes(buduk.g, 0, 1, buduk.perEdge([3, 2.55, 2.55, 2.9, 2.9]))).toHaveLength(1);
+    expect(walkRoutes(buduk.g, 0, 1, buduk.perEdge([3, 2.55, 2.55, 2.9, 2.9]), undefined, 0)).toHaveLength(1);
     let seed = 7; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
     for (let k = 0; k < 200; k++) {
       const x = buduk.perEdge([0.25, 0.25, 0.25, 0.25, 0.25].map((q) => q * Math.round(1 + rnd() * 40)));
-      const rs = walkRoutes(buduk.g, 0, 1, x);
+      const rs = walkRoutes(buduk.g, 0, 1, x, undefined, 0);
       const dose = (edges: number[]) => edges.reduce((a, e) => a + x[e] * buduk.g.lenDm[e], 0);
       for (const r of rs.slice(1)) {
         expect(dose(r.edges)).toBeLessThanOrEqual(dose(rs[0].edges) * (1 - MIN_GAIN) + 1e-9);
@@ -90,5 +90,12 @@ describe('walking routes by exhaust within a time budget (T7)', () => {
     // street 0.2, lanes 0.1: the reference stays at the floor, both routes are "almost none"; the search may still
     // prefer the lanes, but the reference never drops below the floor
     expect(exhaustRef(buduk.perEdge([0.2, 0.1, 0.1, 0.1, 0.1]))).toBe(EXHAUST_FLOOR);
+  });
+
+  it('a short walk may always take 12 minutes more (Dalung, 27 Nov): the far path is offered when it breathes least', () => {
+    // street 1000 m (12.8 min), lanes 1160 m, far path 1600 m (20.5 min, +7.7 min): beyond 35 %, within 12 minutes
+    const rs = walkRoutes(buduk.g, 0, 1, buduk.perEdge(X));
+    expect(buduk.roadsOf(rs[rs.length - 1].edges).sort()).toEqual(FAR);
+    expect(rs[rs.length - 1].timeS - rs[0].timeS).toBeLessThanOrEqual(720);
   });
 });
