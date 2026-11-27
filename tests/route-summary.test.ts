@@ -7,7 +7,7 @@ describe('walking route cards', () => {
   it('labels fastest and cleanest and compares each route with the fastest', () => {
     // the numbers of the first route test in Denpasar, 16 Nov (route worker, run 2026111610)
     const cards = routeCards([r(2283, 1756, 12.3, 26), r(2293, 1764, 10.1, 25.2), r(2371, 1824, 9.5, 26)]);
-    expect(cards.map((c) => c.label)).toEqual(['Tercepat', 'Alternatif 1', 'Paling sedikit asap kendaraan']);
+    expect(cards.map((c) => c.label)).toEqual(['Tercepat', 'Seimbang', 'Paling sedikit asap kendaraan']);
     expect(cards[0].color).toBe(ROUTE_COLORS.fastest);
     expect(cards[2].color).toBe(ROUTE_COLORS.cleanest);
     expect(cards[0].vsFastest).toBeNull();

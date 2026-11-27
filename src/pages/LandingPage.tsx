@@ -267,15 +267,15 @@ export default function LandingPage() {
               </div>
               <div className="flex-1 p-5 rounded-2xl bg-emerald-50 border border-emerald-200 ring-2 ring-emerald-300">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-bold text-emerald-700">Paling sedikit asap</span>
+                  <span className="text-sm font-bold text-emerald-700">Rute seimbang</span>
                   <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-extrabold text-white">−66% asap</span>
                 </div>
-                <div className="text-3xl font-extrabold text-slate-800 tabular-nums">37 <span className="text-sm font-semibold text-slate-500">menit · +1</span></div>
+                <div className="text-3xl font-extrabold text-slate-800 tabular-nums">36 <span className="text-sm font-semibold text-slate-500">menit · kurang dari 1 menit lebih lama</span></div>
                 <div className="mt-2 h-2.5 w-1/3 rounded-full bg-emerald-600" aria-hidden="true" />
                 <div className="text-xs text-slate-500 mt-1">asap kendaraan dihirup</div>
               </div>
             </div>
-            <p className="text-[11px] text-slate-400 mt-2">Contoh nyata: jalan kaki di Denpasar, breeva.site 25 Nov 2026 pukul 14.00 WITA.</p>
+            <p className="text-[11px] text-slate-400 mt-2">Contoh nyata: jalan kaki di Denpasar, breeva.site 27 Nov 2026 pukul 08.10 WITA. Rute paling sedikit asap pada contoh yang sama: −71% asap, 46 menit.</p>
             <div className="mt-3 rounded-2xl p-4 flex items-start gap-3 text-white shadow-md" style={{ background: 'linear-gradient(135deg,#10b981,#0d9488,#06b6d4)' }}>
               <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
                 <School className="w-5 h-5" />

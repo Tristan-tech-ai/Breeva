@@ -83,7 +83,8 @@ export function routeCards(routes: WalkRoute[]): RouteCard[] {
   const fExh = f.exhMean != null && Number.isFinite(f.exhMean) ? Math.round(f.exhMean * 10) / 10 : null;
   return routes.map((r, k) => {
     const last = k === routes.length - 1 && routes.length > 1;
-    let label = k === 0 ? 'Tercepat' : last ? 'Paling sedikit asap kendaraan' : `Alternatif ${k}`;
+    // T7: at most one route sits between the two (withinBudget): less exhaust than the fastest for less time than the cleanest
+    let label = k === 0 ? 'Tercepat' : last ? 'Paling sedikit asap kendaraan' : routes.length === 3 ? 'Seimbang' : `Alternatif ${k}`;
     let color: string = k === 0 ? ROUTE_COLORS.fastest : last ? ROUTE_COLORS.cleanest : ROUTE_COLORS.other;
     if (r.kind === 'darurat') { label = 'Darurat: tercepat, tanpa poin'; color = ROUTE_COLORS.fastest; }
     if (r.kind === 'dua-angka') { label = 'Dua angka (disarankan)'; color = ROUTE_COLORS.cleanest; }
